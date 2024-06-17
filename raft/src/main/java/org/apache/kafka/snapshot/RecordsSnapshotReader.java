@@ -17,6 +17,9 @@
 
 package org.apache.kafka.snapshot;
 
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.OptionalLong;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -24,10 +27,6 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.internals.RecordsIterator;
 import org.apache.kafka.server.common.serialization.RecordSerde;
-
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.OptionalLong;
 
 public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     private final OffsetAndEpoch snapshotId;

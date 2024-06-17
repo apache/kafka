@@ -27,7 +27,7 @@ import java.util.Objects;
 /**
  * A tuple of (id, acl)
  */
-public final class StandardAclWithId {
+final public class StandardAclWithId {
     public static StandardAclWithId fromRecord(AccessControlEntryRecord record) {
         return new StandardAclWithId(record.id(), StandardAcl.fromRecord(record));
     }

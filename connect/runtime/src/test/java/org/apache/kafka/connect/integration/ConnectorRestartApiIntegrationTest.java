@@ -20,12 +20,15 @@ import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
+import org.apache.kafka.test.IntegrationTest;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
+import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,14 +54,14 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_F
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.util.clusters.ConnectAssertions.CONNECTOR_SETUP_DURATION_MS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Test connectors restart API use cases.
  */
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class ConnectorRestartApiIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ConnectorRestartApiIntegrationTest.class);
 
@@ -75,11 +78,14 @@ public class ConnectorRestartApiIntegrationTest {
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
     private String connectorName;
+    @Rule
+    public TestRule watcher = ConnectIntegrationTestUtils.newTestWatcher(log);
+    @Rule
+    public TestName testName = new TestName();
 
-    @BeforeEach
-    public void setup(TestInfo testInfo) {
-        log.info("Starting test {}", testInfo.getDisplayName());
-        connectorName = CONNECTOR_NAME_PREFIX + testInfo.getTestMethod().get().getName();
+    @Before
+    public void setup() {
+        connectorName = CONNECTOR_NAME_PREFIX + testName.getMethodName();
         // get connector handles before starting test.
         connectorHandle = RuntimeHandles.get().connectorHandle(connectorName);
     }
@@ -107,15 +113,16 @@ public class ConnectorRestartApiIntegrationTest {
             connect.start();
             return connect;
         });
+        connect.assertions().assertExactlyNumWorkersAreUp(numWorkers,
+                "Initial group of workers did not start in time.");
     }
 
-    @AfterEach
-    public void tearDown(TestInfo testInfo) {
-        log.info("Finished test {}", testInfo.getDisplayName());
+    @After
+    public void tearDown() {
         RuntimeHandles.get().deleteConnector(connectorName);
     }
 
-    @AfterAll
+    @AfterClass
     public static void close() {
         // stop all Connect, Kafka and Zk threads.
         CONNECT_CLUSTERS.values().forEach(EmbeddedConnectCluster::stop);
@@ -263,16 +270,16 @@ public class ConnectorRestartApiIntegrationTest {
         }
 
         // Wait for the connector to be stopped
-        assertTrue(stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS),
-                "Failed to stop connector and tasks within "
-                        + CONNECTOR_SETUP_DURATION_MS + "ms");
+        assertTrue("Failed to stop connector and tasks within "
+                        + CONNECTOR_SETUP_DURATION_MS + "ms",
+                stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
 
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connectorName, NUM_TASKS,
                 "Connector tasks are not all in running state.");
         // Expect that the connector has started again
-        assertTrue(startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS),
-                "Failed to start connector and tasks within "
-                        + CONNECTOR_SETUP_DURATION_MS + "ms");
+        assertTrue("Failed to start connector and tasks within "
+                        + CONNECTOR_SETUP_DURATION_MS + "ms",
+                startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
         StartsAndStops afterSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
 
         assertEquals(beforeSnapshot.starts() + expectedConnectorRestarts, afterSnapshot.starts());
@@ -316,9 +323,9 @@ public class ConnectorRestartApiIntegrationTest {
         connect.assertions().assertConnectorIsFailedAndTasksHaveFailed(connectorName, 0,
                 "Connector tasks are not all in running state.");
         // Expect that the connector has started again
-        assertTrue(startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS),
-                "Failed to start connector and tasks after coordinator failure within "
-                        + CONNECTOR_SETUP_DURATION_MS + "ms");
+        assertTrue("Failed to start connector and tasks after coordinator failure within "
+                        + CONNECTOR_SETUP_DURATION_MS + "ms",
+                startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
         StartsAndStops afterSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
 
         assertEquals(beforeSnapshot.starts() + expectedConnectorRestarts, afterSnapshot.starts());
@@ -351,16 +358,16 @@ public class ConnectorRestartApiIntegrationTest {
         }
 
         // Wait for the connector to be stopped
-        assertTrue(stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS),
-                "Failed to stop connector and tasks within "
-                        + CONNECTOR_SETUP_DURATION_MS + "ms");
+        assertTrue("Failed to stop connector and tasks within "
+                        + CONNECTOR_SETUP_DURATION_MS + "ms",
+                stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
 
         connect.assertions().assertConnectorIsRunningAndNumTasksHaveFailed(connectorName, NUM_TASKS, tasksToFail.size(),
                 "Connector tasks are not all in running state.");
         // Expect that the connector has started again
-        assertTrue(startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS),
-                "Failed to start connector and tasks within "
-                        + CONNECTOR_SETUP_DURATION_MS + "ms");
+        assertTrue("Failed to start connector and tasks within "
+                        + CONNECTOR_SETUP_DURATION_MS + "ms",
+                startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
 
         StartsAndStops afterSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
 

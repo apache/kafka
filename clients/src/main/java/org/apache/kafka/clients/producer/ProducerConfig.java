@@ -18,7 +18,6 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.compress.Lz4Compression;
 import org.apache.kafka.common.compress.ZstdCompression;
@@ -529,14 +528,7 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
-                                        TRANSACTIONAL_ID_DOC)
-                                .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
-                                        Type.STRING,
-                                        CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
-                                        ConfigDef.CaseInsensitiveValidString
-                                                .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC);
+                                        TRANSACTIONAL_ID_DOC);
     }
 
     @Override

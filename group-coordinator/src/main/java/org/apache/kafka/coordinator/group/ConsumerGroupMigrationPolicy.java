@@ -59,7 +59,7 @@ public enum ConsumerGroupMigrationPolicy {
         return name;
     }
 
-    private static final Map<String, ConsumerGroupMigrationPolicy> NAME_TO_ENUM = Arrays.stream(values())
+    private final static Map<String, ConsumerGroupMigrationPolicy> NAME_TO_ENUM = Arrays.stream(values())
         .collect(Collectors.toMap(policy -> policy.name.toLowerCase(Locale.ROOT), Function.identity()));
 
     /**

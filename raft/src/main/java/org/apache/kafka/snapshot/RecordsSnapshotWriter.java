@@ -28,8 +28,8 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
+import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
@@ -37,10 +37,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 
-public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
-    private final RawSnapshotWriter snapshot;
-    private final BatchAccumulator<T> accumulator;
-    private final Time time;
+final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
+    final private RawSnapshotWriter snapshot;
+    final private BatchAccumulator<T> accumulator;
+    final private Time time;
 
     private RecordsSnapshotWriter(
         RawSnapshotWriter snapshot,
@@ -140,7 +140,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         }
     }
 
-    public static final class Builder {
+    final public static class Builder {
         private long lastContainedLogTimestamp = 0;
         private Compression compression = Compression.NONE;
         private Time time = Time.SYSTEM;

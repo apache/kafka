@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.utils.LogContext;
@@ -27,16 +26,12 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
-import org.apache.kafka.raft.internals.VoterSet;
-
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -55,7 +50,6 @@ public class LeaderState<T> implements EpochState {
     static final double CHECK_QUORUM_TIMEOUT_FACTOR = 1.5;
 
     private final int localId;
-    private final Uuid localDirectoryId;
     private final int epoch;
     private final long epochStartOffset;
     private final Set<Integer> grantingVoters;
@@ -76,23 +70,21 @@ public class LeaderState<T> implements EpochState {
     protected LeaderState(
         Time time,
         int localId,
-        Uuid localDirectoryId,
         int epoch,
         long epochStartOffset,
-        Map<Integer, VoterSet.VoterNode> voters,
+        Set<Integer> voters,
         Set<Integer> grantingVoters,
         BatchAccumulator<T> accumulator,
         int fetchTimeoutMs,
         LogContext logContext
     ) {
         this.localId = localId;
-        this.localDirectoryId = localDirectoryId;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
 
-        for (Map.Entry<Integer, VoterSet.VoterNode> voter : voters.entrySet()) {
-            boolean hasAcknowledgedLeader = voter.getKey() == localId;
-            this.voterStates.put(voter.getKey(), new ReplicaState(voter.getKey(), voter.getValue().voterKey().directoryId(), hasAcknowledgedLeader));
+        for (int voterId : voters) {
+            boolean hasAcknowledgedLeader = voterId == localId;
+            this.voterStates.put(voterId, new ReplicaState(voterId, hasAcknowledgedLeader));
         }
         this.grantingVoters = Collections.unmodifiableSet(new HashSet<>(grantingVoters));
         this.log = logContext.logger(LeaderState.class);
@@ -207,10 +199,6 @@ public class LeaderState<T> implements EpochState {
         return localId;
     }
 
-    public Uuid localDirectoryId() {
-        return localDirectoryId;
-    }
-
     public Set<Integer> nonAcknowledgingVoters() {
         Set<Integer> nonAcknowledging = new HashSet<>();
         for (ReplicaState state : voterStates.values()) {
@@ -255,9 +243,8 @@ public class LeaderState<T> implements EpochState {
                         );
                         return true;
                     } else if (highWatermarkUpdateOffset < currentHighWatermarkMetadata.offset) {
-                        log.info("The latest computed high watermark {} is smaller than the current " +
-                                "value {}, which should only happen when voter set membership changes. If the voter " +
-                                "set has not changed this suggests that one of the voters has lost committed data. " +
+                        log.error("The latest computed high watermark {} is smaller than the current " +
+                                "value {}, which suggests that one of the voters has lost committed data. " +
                                 "Full voter replication state: {}", highWatermarkUpdateOffset,
                             currentHighWatermarkMetadata.offset, voterStates.values());
                         return false;
@@ -309,22 +296,19 @@ public class LeaderState<T> implements EpochState {
      * Update the local replica state.
      *
      * @param endOffsetMetadata updated log end offset of local replica
-     * @param lastVoters the up-to-date voter set
      * @return true if the high watermark is updated as a result of this call
      */
     public boolean updateLocalState(
-        LogOffsetMetadata endOffsetMetadata,
-        Map<Integer, VoterSet.VoterNode> lastVoters
+        LogOffsetMetadata endOffsetMetadata
     ) {
-        ReplicaState state = getOrCreateReplicaState(localId, localDirectoryId);
+        ReplicaState state = getOrCreateReplicaState(localId);
         state.endOffset.ifPresent(currentEndOffset -> {
             if (currentEndOffset.offset > endOffsetMetadata.offset) {
                 throw new IllegalStateException("Detected non-monotonic update of local " +
                     "end offset: " + currentEndOffset.offset + " -> " + endOffsetMetadata.offset);
             }
         });
-        state.updateLeaderEndOffset(endOffsetMetadata);
-        updateVoterAndObserverStates(lastVoters);
+        state.updateLeaderState(endOffsetMetadata);
         return maybeUpdateHighWatermark();
     }
 
@@ -332,14 +316,12 @@ public class LeaderState<T> implements EpochState {
      * Update the replica state in terms of fetch time and log end offsets.
      *
      * @param replicaId replica id
-     * @param replicaDirectoryId replica directory id
      * @param currentTimeMs current time in milliseconds
      * @param fetchOffsetMetadata new log offset and metadata
      * @return true if the high watermark is updated as a result of this call
      */
     public boolean updateReplicaState(
         int replicaId,
-        Uuid replicaDirectoryId,
         long currentTimeMs,
         LogOffsetMetadata fetchOffsetMetadata
     ) {
@@ -351,7 +333,7 @@ public class LeaderState<T> implements EpochState {
             throw new IllegalStateException("Remote replica ID " + replicaId + " matches the local leader ID");
         }
 
-        ReplicaState state = getOrCreateReplicaState(replicaId, replicaDirectoryId);
+        ReplicaState state = getOrCreateReplicaState(replicaId);
 
         state.endOffset.ifPresent(currentEndOffset -> {
             if (currentEndOffset.offset > fetchOffsetMetadata.offset) {
@@ -359,7 +341,9 @@ public class LeaderState<T> implements EpochState {
                     state.nodeId, currentEndOffset.offset, fetchOffsetMetadata.offset);
             }
         });
-        Optional<LogOffsetMetadata> leaderEndOffsetOpt = getOrCreateReplicaState(localId, localDirectoryId).endOffset;
+
+        Optional<LogOffsetMetadata> leaderEndOffsetOpt =
+            voterStates.get(localId).endOffset;
 
         state.updateFollowerState(
             currentTimeMs,
@@ -400,10 +384,10 @@ public class LeaderState<T> implements EpochState {
         return epochStartOffset;
     }
 
-    private ReplicaState getOrCreateReplicaState(int remoteNodeId, Uuid remoteNodeDirectory) {
+    private ReplicaState getOrCreateReplicaState(int remoteNodeId) {
         ReplicaState state = voterStates.get(remoteNodeId);
         if (state == null) {
-            observerStates.putIfAbsent(remoteNodeId, new ReplicaState(remoteNodeId, Optional.of(remoteNodeDirectory), false));
+            observerStates.putIfAbsent(remoteNodeId, new ReplicaState(remoteNodeId, false));
             return observerStates.get(remoteNodeId);
         }
         return state;
@@ -419,29 +403,6 @@ public class LeaderState<T> implements EpochState {
             .setHighWatermark(highWatermark.map(offsetMetadata -> offsetMetadata.offset).orElse(-1L))
             .setCurrentVoters(describeReplicaStates(voterStates, currentTimeMs))
             .setObservers(describeReplicaStates(observerStates, currentTimeMs));
-    }
-
-    public DescribeQuorumResponseData.NodeCollection nodes(long currentTimeMs) {
-        clearInactiveObservers(currentTimeMs);
-
-        return nodes(voterStates.values(), observerStates.values());
-    }
-
-    private static DescribeQuorumResponseData.NodeCollection nodes(Collection<ReplicaState> voters, Collection<ReplicaState> observers) {
-        DescribeQuorumResponseData.NodeCollection res = new DescribeQuorumResponseData.NodeCollection();
-
-        voters.forEach(replicaState -> node(res, replicaState));
-        observers.forEach(replicaState -> node(res, replicaState));
-
-        return res;
-    }
-
-    private static void node(DescribeQuorumResponseData.NodeCollection res, ReplicaState replicaState) {
-        if (res.find(replicaState.nodeId) != null) {
-            return;
-        }
-
-        res.add(new DescribeQuorumResponseData.Node().setNodeId(replicaState.nodeId));
     }
 
     private List<DescribeQuorumResponseData.ReplicaState> describeReplicaStates(
@@ -468,20 +429,15 @@ public class LeaderState<T> implements EpochState {
         }
         return new DescribeQuorumResponseData.ReplicaState()
             .setReplicaId(replicaState.nodeId)
-            .setReplicaDirectoryId(replicaState.nodeDirectory.orElse(Uuid.ZERO_UUID))
             .setLogEndOffset(replicaState.endOffset.map(md -> md.offset).orElse(-1L))
             .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
             .setLastFetchTimestamp(lastFetchTimestamp);
 
     }
 
-    /**
-     * Clear observer states that have not been active for a while and are not the leader.
-     */
     private void clearInactiveObservers(final long currentTimeMs) {
         observerStates.entrySet().removeIf(integerReplicaStateEntry ->
-            currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp >= OBSERVER_SESSION_TIMEOUT_MS &&
-                integerReplicaStateEntry.getKey() != localId
+            currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp >= OBSERVER_SESSION_TIMEOUT_MS
         );
     }
 
@@ -489,38 +445,16 @@ public class LeaderState<T> implements EpochState {
         return voterStates.containsKey(remoteNodeId);
     }
 
-    private void updateVoterAndObserverStates(Map<Integer, VoterSet.VoterNode> lastVoters) {
-        // Move any replica that is not in the last voter set from voterStates to observerStates
-        for (Iterator<Map.Entry<Integer, ReplicaState>> iter = voterStates.entrySet().iterator(); iter.hasNext(); ) {
-            Map.Entry<Integer, ReplicaState> replica = iter.next();
-            if (!lastVoters.containsKey(replica.getKey())) {
-                observerStates.put(replica.getKey(), replica.getValue());
-                iter.remove();
-            }
-        }
-
-        // Add replicas that are in the last voter set and not in voterStates to voterStates (from observerStates
-        // if they exist)
-        for (Map.Entry<Integer, VoterSet.VoterNode> voter : lastVoters.entrySet()) {
-            if (!voterStates.containsKey(voter.getKey())) {
-                Optional<ReplicaState> existingObserverState = Optional.ofNullable(observerStates.remove(voter.getKey()));
-                voterStates.put(voter.getKey(), existingObserverState.orElse(new ReplicaState(voter.getKey(), voter.getValue().voterKey().directoryId(), false)));
-            }
-        }
-    }
-
     private static class ReplicaState implements Comparable<ReplicaState> {
         final int nodeId;
-        final Optional<Uuid> nodeDirectory;
         Optional<LogOffsetMetadata> endOffset;
         long lastFetchTimestamp;
         long lastFetchLeaderLogEndOffset;
         long lastCaughtUpTimestamp;
         boolean hasAcknowledgedLeader;
 
-        public ReplicaState(int nodeId, Optional<Uuid> nodeDirectory, boolean hasAcknowledgedLeader) {
+        public ReplicaState(int nodeId, boolean hasAcknowledgedLeader) {
             this.nodeId = nodeId;
-            this.nodeDirectory = nodeDirectory;
             this.endOffset = Optional.empty();
             this.lastFetchTimestamp = -1;
             this.lastFetchLeaderLogEndOffset = -1;
@@ -528,7 +462,7 @@ public class LeaderState<T> implements EpochState {
             this.hasAcknowledgedLeader = hasAcknowledgedLeader;
         }
 
-        void updateLeaderEndOffset(
+        void updateLeaderState(
             LogOffsetMetadata endOffsetMetadata
         ) {
             // For the leader, we only update the end offset. The remaining fields
@@ -574,10 +508,9 @@ public class LeaderState<T> implements EpochState {
         @Override
         public String toString() {
             return String.format(
-                "ReplicaState(nodeId=%d, nodeDirectoryId=%s, endOffset=%s, lastFetchTimestamp=%s, " +
+                "ReplicaState(nodeId=%d, endOffset=%s, lastFetchTimestamp=%s, " +
                         "lastCaughtUpTimestamp=%s, hasAcknowledgedLeader=%s)",
                 nodeId,
-                nodeDirectory,
                 endOffset,
                 lastFetchTimestamp,
                 lastCaughtUpTimestamp,
@@ -599,9 +532,8 @@ public class LeaderState<T> implements EpochState {
     @Override
     public String toString() {
         return String.format(
-            "Leader(localId=%d, localDirectoryId=%s, epoch=%d, epochStartOffset=%d, highWatermark=%s, voterStates=%s)",
+            "Leader(localId=%d, epoch=%d, epochStartOffset=%d, highWatermark=%s, voterStates=%s)",
             localId,
-            localDirectoryId,
             epoch,
             epochStartOffset,
             highWatermark,

@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
@@ -76,17 +74,8 @@ public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
         super.init(context);
         this.context = context;
 
-        try {
-            keyDeserializer = prepareKeyDeserializer(keyDeserializer, context, name());
-        } catch (final ConfigException | StreamsException e) {
-            throw new StreamsException(String.format("Failed to initialize key serdes for source node %s", name()), e, context.taskId());
-        }
-
-        try {
-            valDeserializer = prepareValueDeserializer(valDeserializer, context, name());
-        } catch (final ConfigException | StreamsException e) {
-            throw new StreamsException(String.format("Failed to initialize value serdes for source node %s", name()), e, context.taskId());
-        }
+        keyDeserializer = prepareKeyDeserializer(keyDeserializer, context, name());
+        valDeserializer = prepareValueDeserializer(valDeserializer, context, name());
     }
 
 

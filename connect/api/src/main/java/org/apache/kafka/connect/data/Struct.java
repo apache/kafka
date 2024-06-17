@@ -284,3 +284,4 @@ public class Struct {
     }
 
 }
+

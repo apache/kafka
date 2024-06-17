@@ -143,7 +143,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
         OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = new OAuthBearerUnsecuredLoginCallbackHandler();
         callbackHandler.time(mockTime);
         callbackHandler.configure(Collections.emptyMap(), OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-                Collections.singletonList(config.getAppConfigurationEntry("KafkaClient")[0]));
+                Arrays.asList(config.getAppConfigurationEntry("KafkaClient")[0]));
         return callbackHandler;
     }
 

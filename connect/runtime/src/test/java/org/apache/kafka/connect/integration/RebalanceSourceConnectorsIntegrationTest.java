@@ -19,11 +19,13 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
+import org.apache.kafka.test.IntegrationTest;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
+import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,14 +52,14 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompat
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONNECT_PROTOCOL_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Integration tests for incremental cooperative rebalancing between Connect workers
  */
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class RebalanceSourceConnectorsIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(RebalanceSourceConnectorsIntegrationTest.class);
@@ -71,11 +73,12 @@ public class RebalanceSourceConnectorsIntegrationTest {
     private static final String TOPIC_NAME = "sequential-topic";
 
     private EmbeddedConnectCluster connect;
-    
 
-    @BeforeEach
-    public void setup(TestInfo testInfo) {
-        log.info("Starting test {}", testInfo.getDisplayName());
+    @Rule
+    public TestRule watcher = ConnectIntegrationTestUtils.newTestWatcher(log);
+
+    @Before
+    public void setup() {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(CONNECT_PROTOCOL_CONFIG, COMPATIBLE.toString());
@@ -99,9 +102,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.start();
     }
 
-    @AfterEach
-    public void close(TestInfo testInfo) {
-        log.info("Finished test {}", testInfo.getDisplayName());
+    @After
+    public void close() {
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
     }
@@ -113,6 +115,9 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Connect workers did not start in time.");
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
@@ -142,6 +147,9 @@ public class RebalanceSourceConnectorsIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Connect workers did not start in time.");
+
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
 
@@ -153,8 +161,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         int recordNum = connect.kafka().consume(numRecordsProduced, recordTransferDurationMs, TOPIC_NAME).count();
-        assertTrue(recordNum >= numRecordsProduced,
-                "Not enough records produced by source connector. Expected at least: " + numRecordsProduced + " + but got " + recordNum);
+        assertTrue("Not enough records produced by source connector. Expected at least: " + numRecordsProduced + " + but got " + recordNum,
+                recordNum >= numRecordsProduced);
 
         // expect that we're going to restart the connector and its tasks
         StartAndStopLatch restartLatch = connectorHandle.expectedStarts(1);
@@ -164,9 +172,9 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.configureConnector(CONNECTOR_NAME, props);
 
         // Wait for the connector *and tasks* to be restarted
-        assertTrue(restartLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS),
-                "Failed to alter connector configuration and see connector and tasks restart "
-                        + "within " + CONNECTOR_SETUP_DURATION_MS + "ms");
+        assertTrue("Failed to alter connector configuration and see connector and tasks restart "
+                   + "within " + CONNECTOR_SETUP_DURATION_MS + "ms",
+                restartLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
 
         // And wait for the Connect to show the connectors and tasks are running
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
@@ -174,8 +182,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         recordNum = connect.kafka().consume(numRecordsProduced, recordTransferDurationMs, anotherTopic).count();
-        assertTrue(recordNum >= numRecordsProduced,
-                "Not enough records produced by source connector. Expected at least: " + numRecordsProduced + " + but got " + recordNum);
+        assertTrue("Not enough records produced by source connector. Expected at least: " + numRecordsProduced + " + but got " + recordNum,
+                recordNum >= numRecordsProduced);
     }
 
     @Test
@@ -185,6 +193,9 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Connect workers did not start in time.");
 
         // start several source connectors
         IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
@@ -209,6 +220,9 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Connect workers did not start in time.");
 
         // start a source connector
         IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
@@ -236,6 +250,9 @@ public class RebalanceSourceConnectorsIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+                "Connect workers did not start in time.");
+
         // start a source connector
         IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
 
@@ -258,6 +275,9 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+                "Connect workers did not start in time.");
 
         // start a source connector
         IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
@@ -330,16 +350,16 @@ public class RebalanceSourceConnectorsIntegrationTest {
             log.debug("Connector balance: {}", formatAssignment(connectors));
             log.debug("Task balance: {}", formatAssignment(tasks));
 
-            assertNotEquals(0, maxConnectors, "Found no connectors running!");
-            assertNotEquals(0, maxTasks, "Found no tasks running!");
-            assertEquals(connectors.values().size(),
-                    connectors.values().stream().distinct().count(),
-                    "Connector assignments are not unique: " + connectors);
-            assertEquals(tasks.values().size(),
-                    tasks.values().stream().distinct().count(),
-                    "Task assignments are not unique: " + tasks);
-            assertTrue(maxConnectors - minConnectors < 2, "Connectors are imbalanced: " + formatAssignment(connectors));
-            assertTrue(maxTasks - minTasks < 2, "Tasks are imbalanced: " + formatAssignment(tasks));
+            assertNotEquals("Found no connectors running!", maxConnectors, 0);
+            assertNotEquals("Found no tasks running!", maxTasks, 0);
+            assertEquals("Connector assignments are not unique: " + connectors,
+                    connectors.values().size(),
+                    connectors.values().stream().distinct().count());
+            assertEquals("Task assignments are not unique: " + tasks,
+                    tasks.values().size(),
+                    tasks.values().stream().distinct().count());
+            assertTrue("Connectors are imbalanced: " + formatAssignment(connectors), maxConnectors - minConnectors < 2);
+            assertTrue("Tasks are imbalanced: " + formatAssignment(tasks), maxTasks - minTasks < 2);
             return true;
         } catch (Exception e) {
             log.error("Could not check connector state info.", e);

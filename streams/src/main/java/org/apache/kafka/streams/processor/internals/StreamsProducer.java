@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -79,7 +78,6 @@ public class StreamsProducer {
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
     private double oldProducerTotalBlockedTime = 0;
-    private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
     public StreamsProducer(final StreamsConfig config,
                            final String threadId,
@@ -254,10 +252,6 @@ public class StreamsProducer {
                 );
             }
         }
-    }
-
-    AtomicReference<KafkaException> sendException() {
-        return sendException;
     }
 
     Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record,

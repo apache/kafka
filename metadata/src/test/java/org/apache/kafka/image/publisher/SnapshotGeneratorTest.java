@@ -27,11 +27,11 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -88,7 +88,7 @@ public class SnapshotGeneratorTest {
             .numBytes(100);
     }
 
-    private static final MetadataDelta TEST_DELTA;
+    private final static MetadataDelta TEST_DELTA;
 
     static {
         TEST_DELTA = new MetadataDelta.Builder().
@@ -97,7 +97,7 @@ public class SnapshotGeneratorTest {
         TEST_DELTA.replay(RecordTestUtils.testRecord(0).message());
     }
 
-    private static final MetadataImage TEST_IMAGE = TEST_DELTA.apply(MetadataProvenance.EMPTY);
+    private final static MetadataImage TEST_IMAGE = TEST_DELTA.apply(MetadataProvenance.EMPTY);
 
     @Test
     public void testCreateSnapshot() throws Exception {
@@ -118,7 +118,7 @@ public class SnapshotGeneratorTest {
             assertEquals(Collections.emptyList(), emitter.images());
             emitter.setReady();
         }
-        assertEquals(Collections.singletonList(TEST_IMAGE), emitter.images());
+        assertEquals(Arrays.asList(TEST_IMAGE), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
@@ -163,7 +163,7 @@ public class SnapshotGeneratorTest {
             // so this does not trigger a new snapshot.
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().numBytes(150).build());
         }
-        assertEquals(Collections.singletonList(TEST_IMAGE), emitter.images());
+        assertEquals(Arrays.asList(TEST_IMAGE), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 

@@ -25,7 +25,6 @@ import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineLong;
 import org.apache.kafka.timeline.TimelineObject;
-
 import org.slf4j.Logger;
 
 import java.util.Collections;

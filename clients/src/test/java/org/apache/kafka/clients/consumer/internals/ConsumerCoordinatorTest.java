@@ -79,7 +79,7 @@ import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -162,13 +162,13 @@ public abstract class ConsumerCoordinatorTest {
     private final String consumerId2 = "consumer2";
 
     private MockClient client;
-    private final MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+    private MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
         {
             put(topic1, 1);
             put(topic2, 1);
         }
     });
-    private final Node node = metadataResponse.brokers().iterator().next();
+    private Node node = metadataResponse.brokers().iterator().next();
     private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
     private Metrics metrics;
@@ -311,7 +311,8 @@ public abstract class ConsumerCoordinatorTest {
             List<Collection<String>> capturedTopics = topicsCaptor.getAllValues();
 
             // expected the final group subscribed topics to be updated to "topic1"
-            assertEquals(Collections.singleton(topic1), capturedTopics.get(0));
+            Set<String> expectedTopicsGotCalled = new HashSet<>(Arrays.asList(topic1));
+            assertEquals(expectedTopicsGotCalled, capturedTopics.get(0));
         }
 
         Mockito.clearInvocations(mockSubscriptionState);
@@ -388,8 +389,8 @@ public abstract class ConsumerCoordinatorTest {
 
         // simulate the custom cooperative assignor didn't revoke the partition first before assign to other consumer
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
-        assignment.put(consumerId, singletonList(t1p));
-        assignment.put(consumerId2, singletonList(t2p));
+        assignment.put(consumerId, Arrays.asList(t1p));
+        assignment.put(consumerId2, Arrays.asList(t2p));
         partitionAssignor.prepare(assignment);
 
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, false, mockSubscriptionState)) {
@@ -449,8 +450,8 @@ public abstract class ConsumerCoordinatorTest {
 
         // simulate the cooperative sticky assignor do the assignment with out-of-date ownedPartition
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
-        assignment.put(consumerId, singletonList(t1p));
-        assignment.put(consumerId2, singletonList(t2p));
+        assignment.put(consumerId, Arrays.asList(t1p));
+        assignment.put(consumerId2, Arrays.asList(t2p));
         mockCooperativeStickyAssignor.prepare(assignment);
 
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignorsWithCooperativeStickyAssignor, false, mockSubscriptionState)) {
@@ -978,7 +979,7 @@ public abstract class ConsumerCoordinatorTest {
         final String consumerId = "leader";
         final Set<String> subscription = singleton(topic1);
         final List<TopicPartition> owned = Collections.emptyList();
-        final List<TopicPartition> assigned = singletonList(t1p);
+        final List<TopicPartition> assigned = Arrays.asList(t1p);
 
         subscriptions.subscribe(singleton(topic1), Optional.of(rebalanceListener));
 
@@ -1015,9 +1016,9 @@ public abstract class ConsumerCoordinatorTest {
         final String consumerId = "outdated_assignment";
         final List<TopicPartition> owned = Collections.emptyList();
         final List<String> oldSubscription = singletonList(topic2);
-        final List<TopicPartition> oldAssignment = singletonList(t2p);
+        final List<TopicPartition> oldAssignment = Arrays.asList(t2p);
         final List<String> newSubscription = singletonList(topic1);
-        final List<TopicPartition> newAssignment = singletonList(t1p);
+        final List<TopicPartition> newAssignment = Arrays.asList(t1p);
 
         subscriptions.subscribe(toSet(oldSubscription), Optional.of(rebalanceListener));
 
@@ -2050,7 +2051,7 @@ public abstract class ConsumerCoordinatorTest {
 
         // prepare initial rebalance
         Map<String, List<String>> memberSubscriptions = singletonMap(consumerId, topics);
-        partitionAssignor.prepare(singletonMap(consumerId, singletonList(tp1)));
+        partitionAssignor.prepare(singletonMap(consumerId, Arrays.asList(tp1)));
 
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
         client.prepareResponse(body -> {
@@ -2253,7 +2254,7 @@ public abstract class ConsumerCoordinatorTest {
     public void testRejoinGroup() {
         String otherTopic = "otherTopic";
         final List<TopicPartition> owned = Collections.emptyList();
-        final List<TopicPartition> assigned = singletonList(t1p);
+        final List<TopicPartition> assigned = Arrays.asList(t1p);
 
         subscriptions.subscribe(singleton(topic1), Optional.of(rebalanceListener));
 
@@ -2285,7 +2286,7 @@ public abstract class ConsumerCoordinatorTest {
     public void testDisconnectInJoin() {
         subscriptions.subscribe(singleton(topic1), Optional.of(rebalanceListener));
         final List<TopicPartition> owned = Collections.emptyList();
-        final List<TopicPartition> assigned = singletonList(t1p);
+        final List<TopicPartition> assigned = Arrays.asList(t1p);
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
@@ -3587,7 +3588,7 @@ public abstract class ConsumerCoordinatorTest {
     public void shouldLoseAllOwnedPartitionsBeforeRejoiningAfterDroppingOutOfTheGroup() {
         final List<TopicPartition> partitions = singletonList(t1p);
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"), true)) {
-            final Time realTime = Time.SYSTEM;
+            final SystemTime realTime = new SystemTime();
             coordinator.ensureActiveGroup();
 
             prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
@@ -3620,7 +3621,7 @@ public abstract class ConsumerCoordinatorTest {
     public void shouldLoseAllOwnedPartitionsBeforeRejoiningAfterResettingGenerationId() {
         final List<TopicPartition> partitions = singletonList(t1p);
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"), true)) {
-            final Time realTime = Time.SYSTEM;
+            final SystemTime realTime = new SystemTime();
             coordinator.ensureActiveGroup();
 
             prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);

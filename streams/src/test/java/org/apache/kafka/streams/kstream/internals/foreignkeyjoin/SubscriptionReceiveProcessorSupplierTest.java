@@ -40,12 +40,10 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
 
 public class SubscriptionReceiveProcessorSupplierTest {
 
@@ -66,13 +64,13 @@ public class SubscriptionReceiveProcessorSupplierTest {
         Serdes.String()
     );
 
-    @BeforeEach
+    @Before
     public void before() {
         stateDir = TestUtils.tempDirectory();
         context = new MockInternalNewProcessorContext<>(props, new TaskId(0, 0), stateDir);
     }
 
-    @AfterEach
+    @After
     public void after() throws IOException {
         if (stateStore != null) {
             stateStore.close();
@@ -83,7 +81,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
     @Test
     public void shouldDetectVersionChange() {
         // This test serves as a reminder to add new tests once we bump SubscriptionWrapper version.
-        assertEquals(SubscriptionWrapper.VERSION_1, SubscriptionWrapper.CURRENT_VERSION);
+        Assert.assertEquals(SubscriptionWrapper.VERSION_1, SubscriptionWrapper.CURRENT_VERSION);
     }
 
     @Test
@@ -129,9 +127,9 @@ public class SubscriptionReceiveProcessorSupplierTest {
 
         final List<CapturedForward<? extends CombinedKey<String, String>,
                                    ? extends Change<ValueAndTimestamp<SubscriptionWrapper<String>>>>> forwarded = context.forwarded();
-        assertNull(stateStore.get(key));
-        assertEquals(1, forwarded.size());
-        assertEquals(
+        Assert.assertNull(stateStore.get(key));
+        Assert.assertEquals(1, forwarded.size());
+        Assert.assertEquals(
             record.withKey(new CombinedKey<>(FK, PK1))
                   .withValue(new Change<>(newValue, oldValue)),
             forwarded.get(0).record()
@@ -180,9 +178,9 @@ public class SubscriptionReceiveProcessorSupplierTest {
 
         final List<CapturedForward<? extends CombinedKey<String, String>,
             ? extends Change<ValueAndTimestamp<SubscriptionWrapper<String>>>>> forwarded = context.forwarded();
-        assertNull(stateStore.get(key));
-        assertEquals(1, forwarded.size());
-        assertEquals(
+        Assert.assertNull(stateStore.get(key));
+        Assert.assertEquals(1, forwarded.size());
+        Assert.assertEquals(
             record.withKey(new CombinedKey<>(FK, PK1))
                 .withValue(new Change<>(newValue, oldValue)),
             forwarded.get(0).record()
@@ -232,9 +230,9 @@ public class SubscriptionReceiveProcessorSupplierTest {
 
         final List<CapturedForward<? extends CombinedKey<String, String>,
             ? extends Change<ValueAndTimestamp<SubscriptionWrapper<String>>>>> forwarded = context.forwarded();
-        assertNull(stateStore.get(key));
-        assertEquals(1, forwarded.size());
-        assertEquals(
+        Assert.assertNull(stateStore.get(key));
+        Assert.assertEquals(1, forwarded.size());
+        Assert.assertEquals(
             record.withKey(new CombinedKey<>(FK, PK1))
                 .withValue(new Change<>(newValue, oldValue)),
             forwarded.get(0).record()
@@ -284,9 +282,9 @@ public class SubscriptionReceiveProcessorSupplierTest {
 
         final List<CapturedForward<? extends CombinedKey<String, String>,
             ? extends Change<ValueAndTimestamp<SubscriptionWrapper<String>>>>> forwarded = context.forwarded();
-        assertNull(stateStore.get(key));
-        assertEquals(1, forwarded.size());
-        assertEquals(
+        Assert.assertNull(stateStore.get(key));
+        Assert.assertEquals(1, forwarded.size());
+        Assert.assertEquals(
             record.withKey(new CombinedKey<>(FK, PK1))
                 .withValue(new Change<>(newValue, oldValue)),
             forwarded.get(0).record()
@@ -336,9 +334,9 @@ public class SubscriptionReceiveProcessorSupplierTest {
         final List<CapturedForward<? extends CombinedKey<String, String>,
             ? extends Change<ValueAndTimestamp<SubscriptionWrapper<String>>>>> forwarded = context.forwarded();
 
-        assertEquals(newValue, stateStore.get(key));
-        assertEquals(1, forwarded.size());
-        assertEquals(
+        Assert.assertEquals(newValue, stateStore.get(key));
+        Assert.assertEquals(1, forwarded.size());
+        Assert.assertEquals(
             record.withKey(new CombinedKey<>(FK, PK1))
                 .withValue(new Change<>(newValue, oldValue)),
             forwarded.get(0).record()
@@ -388,9 +386,9 @@ public class SubscriptionReceiveProcessorSupplierTest {
         final List<CapturedForward<? extends CombinedKey<String, String>,
             ? extends Change<ValueAndTimestamp<SubscriptionWrapper<String>>>>> forwarded = context.forwarded();
 
-        assertEquals(newValue, stateStore.get(key));
-        assertEquals(1, forwarded.size());
-        assertEquals(
+        Assert.assertEquals(newValue, stateStore.get(key));
+        Assert.assertEquals(1, forwarded.size());
+        Assert.assertEquals(
             record.withKey(new CombinedKey<>(FK, PK1))
                 .withValue(new Change<>(newValue, oldValue)),
             forwarded.get(0).record()
@@ -440,9 +438,9 @@ public class SubscriptionReceiveProcessorSupplierTest {
         final List<CapturedForward<? extends CombinedKey<String, String>,
             ? extends Change<ValueAndTimestamp<SubscriptionWrapper<String>>>>> forwarded = context.forwarded();
 
-        assertEquals(newValue, stateStore.get(key));
-        assertEquals(1, forwarded.size());
-        assertEquals(
+        Assert.assertEquals(newValue, stateStore.get(key));
+        Assert.assertEquals(1, forwarded.size());
+        Assert.assertEquals(
             record.withKey(new CombinedKey<>(FK, PK1))
                 .withValue(new Change<>(newValue, oldValue)),
             forwarded.get(0).record()
@@ -492,9 +490,9 @@ public class SubscriptionReceiveProcessorSupplierTest {
         final List<CapturedForward<? extends CombinedKey<String, String>,
             ? extends Change<ValueAndTimestamp<SubscriptionWrapper<String>>>>> forwarded = context.forwarded();
 
-        assertEquals(newValue, stateStore.get(key));
-        assertEquals(1, forwarded.size());
-        assertEquals(
+        Assert.assertEquals(newValue, stateStore.get(key));
+        Assert.assertEquals(1, forwarded.size());
+        Assert.assertEquals(
             record.withKey(new CombinedKey<>(FK, PK1))
                 .withValue(new Change<>(newValue, oldValue)),
             forwarded.get(0).record()

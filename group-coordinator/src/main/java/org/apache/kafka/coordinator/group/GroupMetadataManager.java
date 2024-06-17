@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
@@ -31,18 +32,18 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
-import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
-import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
+import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
@@ -57,13 +58,9 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
-import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
-import org.apache.kafka.coordinator.group.classic.ClassicGroup;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
@@ -85,16 +82,19 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
-
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -121,6 +121,8 @@ import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
+import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newGroupEpochRecord;
@@ -128,12 +130,8 @@ import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newGro
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord;
-import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
-import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
-import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
-import static org.apache.kafka.coordinator.group.Utils.toTopicPartitions;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
@@ -795,20 +793,21 @@ public class GroupMetadataManager {
      * @return A boolean indicating whether it's valid to online downgrade the consumer group.
      */
     private boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
-        if (!consumerGroup.allMembersUseClassicProtocolExcept(memberId)) {
+        if (!consumerGroupMigrationPolicy.isDowngradeEnabled()) {
+            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
+                consumerGroup.groupId());
+            return false;
+        } else if (!consumerGroup.allMembersUseClassicProtocolExcept(memberId)) {
+            log.debug("Cannot downgrade consumer group {} to classic group because not all its members use the classic protocol.",
+                consumerGroup.groupId());
             return false;
         } else if (consumerGroup.numMembers() <= 1) {
             log.debug("Skip downgrading the consumer group {} to classic group because it's empty.",
                 consumerGroup.groupId());
             return false;
-        } else if (!consumerGroupMigrationPolicy.isDowngradeEnabled()) {
-            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
-                consumerGroup.groupId());
-            return false;
         } else if (consumerGroup.numMembers() - 1 > classicGroupMaxSize) {
             log.info("Cannot downgrade consumer group {} to classic group because its group size is greater than classic group max size.",
                 consumerGroup.groupId());
-            return false;
         }
         return true;
     }
@@ -926,8 +925,8 @@ public class GroupMetadataManager {
 
         // Create the session timeouts for the new members. If the conversion fails, the group will remain a
         // classic group, thus these timers will fail the group type check and do nothing.
-        consumerGroup.members().forEach((memberId, member) ->
-            scheduleConsumerGroupSessionTimeout(consumerGroup.groupId(), memberId, member.classicProtocolSessionTimeout().get())
+        consumerGroup.members().forEach((memberId, __) ->
+            scheduleConsumerGroupSessionTimeout(consumerGroup.groupId(), memberId)
         );
 
         return consumerGroup;
@@ -1287,18 +1286,57 @@ public class GroupMetadataManager {
      * All the protocols have the same subscription, so the method picks a random one.
      *
      * @param protocols The JoinGroupRequestProtocolCollection.
-     * @return The ConsumerProtocolSubscription.
+     * @return The Subscription.
      */
-    private static ConsumerProtocolSubscription deserializeSubscription(
+    private static ConsumerPartitionAssignor.Subscription deserializeSubscription(
         JoinGroupRequestProtocolCollection protocols
     ) {
         try {
-            return ConsumerProtocol.deserializeConsumerProtocolSubscription(
+            return ConsumerProtocol.deserializeSubscription(
                 ByteBuffer.wrap(protocols.iterator().next().metadata())
             );
         } catch (SchemaException e) {
             throw new IllegalStateException("Malformed embedded consumer protocol in subscription deserialization.");
         }
+    }
+
+    /**
+     * @return The ConsumerGroupHeartbeatRequestData.TopicPartitions list converted from the TopicPartitions list.
+     */
+    private static List<ConsumerGroupHeartbeatRequestData.TopicPartitions> toTopicPartitions(
+        List<TopicPartition> partitions,
+        TopicsImage topicsImage
+    ) {
+        Map<Uuid, ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitionMap = new HashMap<>();
+        partitions.forEach(topicPartition -> {
+            TopicImage topicImage = topicsImage.getTopic(topicPartition.topic());
+            if (topicImage != null) {
+                topicPartitionMap
+                    .computeIfAbsent(topicImage.id(), __ -> new ConsumerGroupHeartbeatRequestData.TopicPartitions().setTopicId(topicImage.id()))
+                    .partitions()
+                    .add(topicPartition.partition());
+            }
+        });
+        return new ArrayList<>(topicPartitionMap.values());
+    }
+
+    /**
+     * @return The TopicPartition list converted from the assignment map.
+     */
+    private static List<TopicPartition> toTopicPartitionList(
+        Map<Uuid, Set<Integer>> partitions,
+        TopicsImage topicsImage
+    ) {
+        List<TopicPartition> topicPartitions = new ArrayList<>();
+        partitions.forEach((topicId, partitionSet) -> {
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            if (topicImage != null) {
+                partitionSet.forEach(partition ->
+                    topicPartitions.add(new TopicPartition(topicImage.name(), partition))
+                );
+            }
+        });
+        return topicPartitions;
     }
 
     private ConsumerGroupHeartbeatResponseData.Assignment createResponseAssignment(
@@ -1608,7 +1646,7 @@ public class GroupMetadataManager {
         Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
         Map<String, Integer> subscribedTopicNamesMap = group.subscribedTopicNames();
         SubscriptionType subscriptionType = group.subscriptionType();
-        final ConsumerProtocolSubscription subscription = deserializeSubscription(protocols);
+        final ConsumerPartitionAssignor.Subscription subscription = deserializeSubscription(protocols);
         final List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions =
             toTopicPartitions(subscription.ownedPartitions(), metadataImage.topics());
 
@@ -1619,7 +1657,7 @@ public class GroupMetadataManager {
         // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
         ConsumerGroupMember updatedMember = updatedMemberBuilder
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
-            .maybeUpdateRackId(Utils.toOptional(subscription.rackId()))
+            .maybeUpdateRackId(subscription.rackId())
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(request.rebalanceTimeoutMs()))
             .maybeUpdateServerAssignorName(Optional.empty())
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscription.topics()))
@@ -1866,30 +1904,24 @@ public class GroupMetadataManager {
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
                     .withTopicsImage(metadataImage.topics())
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
-
+            TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;
+            // A new static member is replacing an older one with the same subscriptions.
+            // We just need to remove the older member and add the newer one. The new member should
+            // reuse the target assignment of the older member.
             if (staticMemberReplaced) {
-                // A new static member is replacing an older one with the same subscriptions.
-                // We just need to remove the older member and add the newer one. The new member should
-                // reuse the target assignment of the older member.
-                assignmentResultBuilder.removeMember(member.memberId());
+                assignmentResult = assignmentResultBuilder
+                    .removeMember(member.memberId())
+                    .build();
+            } else {
+                assignmentResult = assignmentResultBuilder
+                    .build();
             }
 
-            long startTimeMs = time.milliseconds();
-            TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
-                assignmentResultBuilder.build();
-            long assignorTimeMs = time.milliseconds() - startTimeMs;
-
-            log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
-                group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs, assignmentResult.targetAssignment());
+            log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor: {}.",
+                group.groupId(), groupEpoch, preferredServerAssignor, assignmentResult.targetAssignment());
 
             records.addAll(assignmentResult.records());
-
-            MemberAssignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
-            if (newMemberAssignment != null) {
-                return new Assignment(newMemberAssignment.partitions());
-            } else {
-                return Assignment.EMPTY;
-            }
+            return assignmentResult.targetAssignment().get(updatedMember.memberId());
         } catch (PartitionAssignorException ex) {
             String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
                 groupEpoch, ex.getMessage());
@@ -4127,10 +4159,7 @@ public class GroupMetadataManager {
     private byte[] prepareAssignment(ConsumerGroupMember member) {
         try {
             return ConsumerProtocol.serializeAssignment(
-                toConsumerProtocolAssignment(
-                    member.assignedPartitions(),
-                    metadataImage.topics()
-                ),
+                new ConsumerPartitionAssignor.Assignment(toTopicPartitionList(member.assignedPartitions(), metadataImage.topics())),
                 ConsumerProtocol.deserializeVersion(
                     ByteBuffer.wrap(member.classicMemberMetadata().get().supportedProtocols().iterator().next().metadata())
                 )

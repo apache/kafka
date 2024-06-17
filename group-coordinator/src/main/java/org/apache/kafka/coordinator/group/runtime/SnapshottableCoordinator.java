@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
-
 import org.slf4j.Logger;
 
 /**

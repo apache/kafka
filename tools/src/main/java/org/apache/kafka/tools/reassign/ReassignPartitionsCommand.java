@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.tools.reassign;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import joptsimple.OptionSpec;
 import org.apache.kafka.admin.AdminUtils;
 import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.clients.admin.Admin;
@@ -47,10 +51,6 @@ import org.apache.kafka.server.util.json.JsonValue;
 import org.apache.kafka.tools.TerseException;
 import org.apache.kafka.tools.ToolsUtils;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-
 import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
@@ -71,8 +71,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
-
-import joptsimple.OptionSpec;
 
 @SuppressWarnings("ClassDataAbstractionCoupling")
 public class ReassignPartitionsCommand {

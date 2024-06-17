@@ -92,12 +92,7 @@ public final class ScramCredentialData {
 
     @Override
     public int hashCode() {
-        return Objects.hash(
-            Arrays.hashCode(salt),
-            Arrays.hashCode(storedKey),
-            Arrays.hashCode(serverKey),
-            iterations
-        );
+        return Objects.hash(salt, storedKey, serverKey, iterations);
     }
 
     @Override

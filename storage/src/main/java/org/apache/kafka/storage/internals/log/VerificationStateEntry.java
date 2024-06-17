@@ -29,8 +29,8 @@ package org.apache.kafka.storage.internals.log;
  */
 public class VerificationStateEntry {
 
-    private final long timestamp;
-    private final VerificationGuard verificationGuard;
+    final private long timestamp;
+    final private VerificationGuard verificationGuard;
     private int lowestSequence;
     private short epoch;
 

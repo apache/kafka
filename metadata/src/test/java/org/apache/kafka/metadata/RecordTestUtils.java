@@ -373,7 +373,7 @@ public class RecordTestUtils {
                 ).iterator()
             )).
             setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                Collections.singletonList(
+                Arrays.asList(
                     new RegisterControllerRecord.ControllerFeature().
                         setName(MetadataVersion.FEATURE_NAME).
                         setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).

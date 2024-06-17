@@ -17,13 +17,11 @@
 
 package org.apache.kafka.shell.command;
 
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.shell.InteractiveShell;
 import org.apache.kafka.shell.glob.GlobVisitor;
 import org.apache.kafka.shell.state.MetadataShellState;
-
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.Namespace;
-
 import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
@@ -34,7 +32,7 @@ import java.util.Optional;
  * Implements the cd command.
  */
 public final class CdCommandHandler implements Commands.Handler {
-    public static final Commands.Type TYPE = new CdCommandType();
+    public final static Commands.Type TYPE = new CdCommandType();
 
     public static class CdCommandType implements Commands.Type {
         private CdCommandType() {
@@ -114,6 +112,7 @@ public final class CdCommandHandler implements Commands.Handler {
     public boolean equals(Object other) {
         if (!(other instanceof CdCommandHandler)) return false;
         CdCommandHandler o = (CdCommandHandler) other;
-        return o.target.equals(target);
+        if (!o.target.equals(target)) return false;
+        return true;
     }
 }

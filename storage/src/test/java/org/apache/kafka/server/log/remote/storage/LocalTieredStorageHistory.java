@@ -18,7 +18,6 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType;
-
 import org.slf4j.Logger;
 
 import java.util.ArrayList;

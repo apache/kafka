@@ -206,21 +206,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeTopicsWithNames(quorum: String): Unit = {
-    client = createAdminClient
-
-    val existingTopic = "existing-topic"
-    client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
-    waitForTopics(client, Seq(existingTopic), List())
-    ensureConsistentKRaftMetadata()
-
-    val existingTopicId = brokers.head.metadataCache.getTopicId(existingTopic)
-    val results = client.describeTopics(TopicCollection.ofTopicNames(Seq(existingTopic).asJava)).topicNameValues()
-    assertEquals(existingTopicId, results.get(existingTopic).get.topicId())
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeCluster(quorum: String): Unit = {
     client = createAdminClient
     val result = client.describeCluster
@@ -2659,8 +2644,7 @@ object PlaintextAdminIntegrationTest {
 
     // Verify that topics were updated correctly
     test.ensureConsistentKRaftMetadata()
-    // Intentionally include duplicate resources to test if describeConfigs can handle them correctly.
-    var describeResult = admin.describeConfigs(Seq(topicResource1, topicResource2, topicResource2).asJava)
+    var describeResult = admin.describeConfigs(Seq(topicResource1, topicResource2).asJava)
     var configs = describeResult.all.get
 
     assertEquals(2, configs.size)

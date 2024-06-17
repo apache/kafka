@@ -17,15 +17,14 @@
 
 package org.apache.kafka.timeline;
 
-import org.apache.kafka.common.utils.LogContext;
-
-import org.slf4j.Logger;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 
 /**
@@ -34,7 +33,7 @@ import java.util.stream.Collectors;
  * Therefore, we use ArrayLists here rather than a data structure with higher overhead.
  */
 public class SnapshotRegistry {
-    public static final long LATEST_EPOCH = Long.MAX_VALUE;
+    public final static long LATEST_EPOCH = Long.MAX_VALUE;
 
     /**
      * Iterate through the list of snapshots in order of creation, such that older

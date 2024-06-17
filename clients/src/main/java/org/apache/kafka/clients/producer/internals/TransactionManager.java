@@ -480,7 +480,7 @@ public class TransactionManager {
         return producerIdAndEpoch;
     }
 
-    public synchronized void maybeUpdateProducerIdAndEpoch(TopicPartition topicPartition) {
+    synchronized public void maybeUpdateProducerIdAndEpoch(TopicPartition topicPartition) {
         if (hasFatalError()) {
             log.debug("Ignoring producer ID and epoch update request since the producer is in fatal error state");
             return;

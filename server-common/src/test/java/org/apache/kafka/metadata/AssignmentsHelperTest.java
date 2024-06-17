@@ -20,7 +20,6 @@ package org.apache.kafka.metadata;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
 import org.apache.kafka.server.common.TopicIdPartition;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

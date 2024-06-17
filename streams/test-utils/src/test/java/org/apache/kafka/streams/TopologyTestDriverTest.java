@@ -30,7 +30,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
@@ -52,7 +52,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -104,10 +103,10 @@ public abstract class TopologyTestDriverTest {
         config.putAll(overrides);
     }
 
-    private static final String SOURCE_TOPIC_1 = "source-topic-1";
-    private static final String SOURCE_TOPIC_2 = "source-topic-2";
-    private static final String SINK_TOPIC_1 = "sink-topic-1";
-    private static final String SINK_TOPIC_2 = "sink-topic-2";
+    private final static String SOURCE_TOPIC_1 = "source-topic-1";
+    private final static String SOURCE_TOPIC_2 = "source-topic-2";
+    private final static String SINK_TOPIC_1 = "sink-topic-1";
+    private final static String SINK_TOPIC_2 = "sink-topic-2";
 
     private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
 
@@ -127,7 +126,7 @@ public abstract class TopologyTestDriverTest {
     private final StringDeserializer stringDeserializer = new StringDeserializer();
     private final LongDeserializer longDeserializer = new LongDeserializer();
 
-    private static final class TTDTestRecord {
+    private final static class TTDTestRecord {
         private final Object key;
         private final Object value;
         private final long timestamp;
@@ -193,7 +192,7 @@ public abstract class TopologyTestDriverTest {
         }
     }
 
-    private static final class Punctuation {
+    private final static class Punctuation {
         private final long intervalMs;
         private final PunctuationType punctuationType;
         private final Punctuator callback;
@@ -207,7 +206,7 @@ public abstract class TopologyTestDriverTest {
         }
     }
 
-    private static final class MockPunctuator implements Punctuator {
+    private final static class MockPunctuator implements Punctuator {
         private final List<Long> punctuatedAt = new LinkedList<>();
 
         @Override
@@ -216,7 +215,7 @@ public abstract class TopologyTestDriverTest {
         }
     }
 
-    private static final class MockProcessor implements Processor<Object, Object, Object, Object> {
+    private final static class MockProcessor implements Processor<Object, Object, Object, Object> {
         private final Collection<Punctuation> punctuations;
         private ProcessorContext<Object, Object> context;
 
@@ -872,14 +871,14 @@ public abstract class TopologyTestDriverTest {
                 Stores.inMemoryKeyValueStore("store"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                Time.SYSTEM),
+                new SystemTime()),
             "processor");
         topology.addGlobalStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("globalStore"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                Time.SYSTEM).withLoggingDisabled(),
+                new SystemTime()).withLoggingDisabled(),
             "sourceProcessorName",
             Serdes.ByteArray().deserializer(),
             Serdes.ByteArray().deserializer(),
@@ -1264,13 +1263,13 @@ public abstract class TopologyTestDriverTest {
                 Stores.inMemoryKeyValueStore("store"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                Time.SYSTEM));
+                new SystemTime()));
         topology.addGlobalStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("globalStore"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                Time.SYSTEM).withLoggingDisabled(),
+                new SystemTime()).withLoggingDisabled(),
             "sourceProcessorName",
             Serdes.ByteArray().deserializer(),
             Serdes.ByteArray().deserializer(),

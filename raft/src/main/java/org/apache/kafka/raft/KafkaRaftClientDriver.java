@@ -21,7 +21,6 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.util.ShutdownableThread;
-
 import org.slf4j.Logger;
 
 import java.util.concurrent.CompletableFuture;
@@ -107,7 +106,6 @@ public class KafkaRaftClientDriver<T> extends ShutdownableThread {
     ) {
         RaftRequest.Inbound inboundRequest = new RaftRequest.Inbound(
             header.correlationId(),
-            header.apiVersion(),
             request,
             createdTimeMs
         );

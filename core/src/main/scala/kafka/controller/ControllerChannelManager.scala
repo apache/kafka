@@ -164,8 +164,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
         time,
         false,
         new ApiVersions,
-        logContext,
-        MetadataRecoveryStrategy.NONE
+        logContext
       )
       (networkClient, reconfigurableChannelBuilder)
     }

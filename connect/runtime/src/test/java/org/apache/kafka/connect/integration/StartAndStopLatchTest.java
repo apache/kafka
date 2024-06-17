@@ -27,15 +27,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.apache.kafka.test.IntegrationTest;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class StartAndStopLatchTest {
 
     private final AtomicBoolean completed = new AtomicBoolean();
@@ -45,13 +46,13 @@ public class StartAndStopLatchTest {
     private ExecutorService waiters;
     private Future<Boolean> future;
 
-    @BeforeEach
+    @Before
     public void setup() {
         clock = new MockTime();
         waiters = Executors.newSingleThreadExecutor();
     }
 
-    @AfterEach
+    @After
     public void teardown() {
         if (waiters != null) {
             waiters.shutdownNow();

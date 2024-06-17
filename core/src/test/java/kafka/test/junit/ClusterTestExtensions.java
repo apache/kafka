@@ -203,7 +203,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     }
 
     @ClusterTestDefaults
-    private static final class EmptyClass {
+    private final static class EmptyClass {
         // Just used as a convenience to get default values from the annotation
     }
 }

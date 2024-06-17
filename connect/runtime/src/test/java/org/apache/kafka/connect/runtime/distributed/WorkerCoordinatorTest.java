@@ -37,7 +37,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.TargetState;
-import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -62,7 +61,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
@@ -173,7 +171,6 @@ public class WorkerCoordinatorTest {
                 Collections.singletonMap(taskId1x0, new HashMap<>()),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.emptyMap(),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -200,7 +197,6 @@ public class WorkerCoordinatorTest {
                 configState2TaskConfigs,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.emptyMap(),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -221,11 +217,6 @@ public class WorkerCoordinatorTest {
         configStateSingleTaskConnectorsTaskConfigs.put(taskId1x0, new HashMap<>());
         configStateSingleTaskConnectorsTaskConfigs.put(taskId2x0, new HashMap<>());
         configStateSingleTaskConnectorsTaskConfigs.put(taskId3x0, new HashMap<>());
-        Map<String, AppliedConnectorConfig> appliedConnectorConfigs = configStateSingleTaskConnectorsConnectorConfigs.entrySet().stream()
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        e -> new AppliedConnectorConfig(e.getValue())
-                ));
         configStateSingleTaskConnectors = new ClusterConfigState(
                 12L,
                 null,
@@ -235,7 +226,6 @@ public class WorkerCoordinatorTest {
                 configStateSingleTaskConnectorsTaskConfigs,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                appliedConnectorConfigs,
                 Collections.emptySet(),
                 Collections.emptySet()
         );

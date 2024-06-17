@@ -17,20 +17,19 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
-import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
-import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
+import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
-import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
-import org.apache.kafka.coordinator.group.consumer.Assignment;
-import org.apache.kafka.coordinator.group.consumer.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.consumer.MemberAssignmentImpl;
-import org.apache.kafka.coordinator.group.consumer.MemberSubscriptionAndAssignmentImpl;
-import org.apache.kafka.coordinator.group.consumer.SubscribedTopicDescriberImpl;
+import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.TopicIds;
+import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
+import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
+
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -61,8 +60,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
-import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -133,9 +132,9 @@ public class ServerSideAssignorBenchmark {
     @Setup(Level.Trial)
     public void setup() {
         Map<Uuid, TopicMetadata> topicMetadata = createTopicMetadata();
-        subscribedTopicDescriber = new SubscribedTopicDescriberImpl(topicMetadata);
+        subscribedTopicDescriber = new SubscribedTopicMetadata(topicMetadata);
 
-        createGroupSpec();
+        createAssignmentSpec();
 
         partitionAssignor = assignorType.assignor();
 
@@ -176,8 +175,8 @@ public class ServerSideAssignorBenchmark {
         return topicMetadata;
     }
 
-    private void createGroupSpec() {
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = new HashMap<>();
+    private void createAssignmentSpec() {
+        Map<String, AssignmentMemberSpec> members = new HashMap<>();
 
         // In the rebalance case, we will add the last member as a trigger.
         // This is done to keep the total members count consistent with the input.
@@ -216,11 +215,7 @@ public class ServerSideAssignorBenchmark {
             }
         }
 
-        this.groupSpec = new GroupSpecImpl(
-            members,
-            subscriptionType,
-            Collections.emptyMap()
-        );
+        this.groupSpec = new GroupSpecImpl(members, subscriptionType, Collections.emptyMap());
     }
 
     private Optional<String> rackId(int memberIndex) {
@@ -228,17 +223,18 @@ public class ServerSideAssignorBenchmark {
     }
 
     private void addMemberSpec(
-        Map<String, MemberSubscriptionAndAssignmentImpl> members,
+        Map<String, AssignmentMemberSpec> members,
         int memberIndex,
         Set<Uuid> subscribedTopicIds
     ) {
         String memberId = "member" + memberIndex;
         Optional<String> rackId = rackId(memberIndex);
 
-        members.put(memberId, new MemberSubscriptionAndAssignmentImpl(
+        members.put(memberId, new AssignmentMemberSpec(
+            Optional.empty(),
             rackId,
             subscribedTopicIds,
-            Assignment.EMPTY
+            Collections.emptyMap()
         ));
     }
 
@@ -260,40 +256,38 @@ public class ServerSideAssignorBenchmark {
 
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(initialAssignment);
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> updatedMemberSpec = new HashMap<>();
+        Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
 
-        for (String memberId : groupSpec.memberIds()) {
+        groupSpec.members().forEach((memberId, assignmentMemberSpec) -> {
             MemberAssignment memberAssignment = members.getOrDefault(
                 memberId,
-                new MemberAssignmentImpl(Collections.emptyMap())
+                new MemberAssignment(Collections.emptyMap())
             );
 
-            updatedMemberSpec.put(memberId, new MemberSubscriptionAndAssignmentImpl(
-                groupSpec.memberSubscription(memberId).rackId(),
-                groupSpec.memberSubscription(memberId).subscribedTopicIds(),
-                new Assignment(Collections.unmodifiableMap(memberAssignment.partitions()))
+            updatedMembers.put(memberId, new AssignmentMemberSpec(
+                assignmentMemberSpec.instanceId(),
+                assignmentMemberSpec.rackId(),
+                assignmentMemberSpec.subscribedTopicIds(),
+                Collections.unmodifiableMap(memberAssignment.targetPartitions())
             ));
-        }
+        });
 
         Set<Uuid> subscribedTopicIdsForNewMember;
         if (subscriptionType == HETEROGENEOUS) {
-            subscribedTopicIdsForNewMember = updatedMemberSpec.get("member" + (memberCount - 2)).subscribedTopicIds();
+            subscribedTopicIdsForNewMember = updatedMembers.get("member" + (memberCount - 2)).subscribedTopicIds();
         } else {
             subscribedTopicIdsForNewMember = new TopicIds(new HashSet<>(allTopicNames), topicsImage);
         }
 
         Optional<String> rackId = rackId(memberCount - 1);
-        updatedMemberSpec.put("newMember", new MemberSubscriptionAndAssignmentImpl(
+        updatedMembers.put("newMember", new AssignmentMemberSpec(
+            Optional.empty(),
             rackId,
             subscribedTopicIdsForNewMember,
-            Assignment.EMPTY
+            Collections.emptyMap()
         ));
 
-        groupSpec = new GroupSpecImpl(
-            updatedMemberSpec,
-            subscriptionType,
-            invertedTargetAssignment
-        );
+        groupSpec = new GroupSpecImpl(updatedMembers, subscriptionType, invertedTargetAssignment);
     }
 
     @Benchmark

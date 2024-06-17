@@ -46,7 +46,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupBuilder;
@@ -372,21 +372,21 @@ public class GroupMetadataManagerTestContext {
     }
 
     public static class Builder {
-        private final MockTime time = new MockTime();
-        private final MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
-        private final LogContext logContext = new LogContext();
-        private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        final private MockTime time = new MockTime();
+        final private MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
+        final private LogContext logContext = new LogContext();
+        final private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         private MetadataImage metadataImage;
         private List<ConsumerGroupPartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
-        private final List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
+        final private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
         private int classicGroupMaxSize = Integer.MAX_VALUE;
         private int classicGroupInitialRebalanceDelayMs = 3000;
-        private final int classicGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
+        final private int classicGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
         private int classicGroupMinSessionTimeoutMs = 10;
         private int classicGroupMaxSessionTimeoutMs = 10 * 60 * 1000;
-        private final GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
+        final private GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
         private ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy = ConsumerGroupMigrationPolicy.DISABLED;
 
         public Builder withMetadataImage(MetadataImage metadataImage) {

@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.SchemaBuilderException;
-
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

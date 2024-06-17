@@ -21,7 +21,6 @@ import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
-
 import org.slf4j.Logger;
 
 import java.util.ArrayList;

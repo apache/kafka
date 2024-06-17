@@ -31,7 +31,6 @@ import org.apache.kafka.server.config.QuotaConfigs;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
-
 import org.slf4j.Logger;
 
 import java.net.InetAddress;

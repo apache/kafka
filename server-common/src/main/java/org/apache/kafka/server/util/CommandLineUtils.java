@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.server.util;
 
+import joptsimple.OptionParser;
+import joptsimple.OptionSet;
+import joptsimple.OptionSpec;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -27,10 +30,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-
-import joptsimple.OptionParser;
-import joptsimple.OptionSet;
-import joptsimple.OptionSpec;
 
 /**
  * Helper functions for dealing with command line utilities.
@@ -199,7 +198,7 @@ public class CommandLineUtils {
     }
 
     static class InitializeBootstrapException extends RuntimeException {
-        private static final long serialVersionUID = 1L;
+        private final static long serialVersionUID = 1L;
 
         InitializeBootstrapException(String message) {
             super(message);

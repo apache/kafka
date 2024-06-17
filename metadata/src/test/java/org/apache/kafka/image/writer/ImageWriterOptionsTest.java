@@ -18,7 +18,6 @@
 package org.apache.kafka.image.writer;
 
 import org.apache.kafka.server.common.MetadataVersion;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

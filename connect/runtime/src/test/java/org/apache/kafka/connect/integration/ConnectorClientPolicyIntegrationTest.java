@@ -24,9 +24,10 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.apache.kafka.test.IntegrationTest;
+import org.junit.After;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -38,17 +39,17 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class ConnectorClientPolicyIntegrationTest {
 
     private static final int NUM_TASKS = 1;
     private static final int NUM_WORKERS = 1;
     private static final String CONNECTOR_NAME = "simple-conn";
 
-    @AfterEach
+    @After
     public void close() {
     }
 
@@ -120,6 +121,8 @@ public class ConnectorClientPolicyIntegrationTest {
 
         // start the clusters
         connect.start();
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
 
         return connect;
     }
@@ -130,7 +133,7 @@ public class ConnectorClientPolicyIntegrationTest {
             connect.configureConnector(CONNECTOR_NAME, props);
             fail("Shouldn't be able to create connector");
         } catch (ConnectRestException e) {
-            assertEquals(400, e.statusCode());
+            assertEquals(e.statusCode(), 400);
         } finally {
             connect.stop();
         }

@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.Uuid;
-
 import java.util.Objects;
 import java.util.Optional;
+import org.apache.kafka.common.Uuid;
 
 public final class ReplicaKey {
     private final int id;
@@ -46,7 +45,9 @@ public final class ReplicaKey {
         ReplicaKey that = (ReplicaKey) o;
 
         if (id != that.id) return false;
-        return Objects.equals(directoryId, that.directoryId);
+        if (!Objects.equals(directoryId, that.directoryId)) return false;
+
+        return true;
     }
 
     @Override

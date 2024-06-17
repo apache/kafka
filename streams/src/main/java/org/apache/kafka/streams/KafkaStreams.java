@@ -176,6 +176,7 @@ public class KafkaStreams implements AutoCloseable {
     private final long totalCacheSize;
     private final StreamStateListener streamStateListener;
     private final DelegatingStateRestoreListener delegatingStateRestoreListener;
+    private final Map<Long, StreamThread.State> threadState;
     private final UUID processId;
     private final KafkaClientSupplier clientSupplier;
     protected final TopologyMetadata topologyMetadata;
@@ -632,13 +633,17 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Class that handles stream thread transitions
      */
-    private final class StreamStateListener implements StreamThread.StateListener {
+    final class StreamStateListener implements StreamThread.StateListener {
         private final Map<Long, StreamThread.State> threadState;
         private GlobalStreamThread.State globalThreadState;
+        // this lock should always be held before the state lock
+        private final Object threadStatesLock;
 
-        StreamStateListener(final GlobalStreamThread.State globalThreadState) {
-            this.threadState = new HashMap<>();
+        StreamStateListener(final Map<Long, StreamThread.State> threadState,
+                            final GlobalStreamThread.State globalThreadState) {
+            this.threadState = threadState;
             this.globalThreadState = globalThreadState;
+            this.threadStatesLock = new Object();
         }
 
         /**
@@ -670,34 +675,32 @@ public class KafkaStreams implements AutoCloseable {
         public synchronized void onChange(final Thread thread,
                                           final ThreadStateTransitionValidator abstractNewState,
                                           final ThreadStateTransitionValidator abstractOldState) {
-            // StreamThreads first
-            if (thread instanceof StreamThread) {
-                final StreamThread.State newState = (StreamThread.State) abstractNewState;
-                threadState.put(thread.getId(), newState);
+            synchronized (threadStatesLock) {
+                // StreamThreads first
+                if (thread instanceof StreamThread) {
+                    final StreamThread.State newState = (StreamThread.State) abstractNewState;
+                    threadState.put(thread.getId(), newState);
 
-                if (newState == StreamThread.State.PARTITIONS_REVOKED || newState == StreamThread.State.PARTITIONS_ASSIGNED) {
-                    setState(State.REBALANCING);
-                } else if (newState == StreamThread.State.RUNNING) {
-                    maybeSetRunning();
-                }
-            } else if (thread instanceof GlobalStreamThread) {
-                // global stream thread has different invariants
-                final GlobalStreamThread.State newState = (GlobalStreamThread.State) abstractNewState;
-                globalThreadState = newState;
+                    if (newState == StreamThread.State.PARTITIONS_REVOKED || newState == StreamThread.State.PARTITIONS_ASSIGNED) {
+                        setState(State.REBALANCING);
+                    } else if (newState == StreamThread.State.RUNNING) {
+                        maybeSetRunning();
+                    }
+                } else if (thread instanceof GlobalStreamThread) {
+                    // global stream thread has different invariants
+                    final GlobalStreamThread.State newState = (GlobalStreamThread.State) abstractNewState;
+                    globalThreadState = newState;
 
-                if (newState == GlobalStreamThread.State.RUNNING) {
-                    maybeSetRunning();
-                } else if (newState == GlobalStreamThread.State.DEAD) {
-                    if (state != State.PENDING_SHUTDOWN) {
-                        log.error("Global thread has died. The streams application or client will now close to ERROR.");
-                        closeToError();
+                    if (newState == GlobalStreamThread.State.RUNNING) {
+                        maybeSetRunning();
+                    } else if (newState == GlobalStreamThread.State.DEAD) {
+                        if (state != State.PENDING_SHUTDOWN) {
+                            log.error("Global thread has died. The streams application or client will now close to ERROR.");
+                            closeToError();
+                        }
                     }
                 }
             }
-        }
-
-        private synchronized void registerStreamThread(final StreamThread streamThread) {
-            threadState.put(streamThread.getId(), streamThread.state());
         }
     }
 
@@ -769,7 +772,7 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    static final class DelegatingStandbyUpdateListener implements StandbyUpdateListener {
+    final static class DelegatingStandbyUpdateListener implements StandbyUpdateListener {
         private StandbyUpdateListener userStandbyListener;
 
         private void throwOnFatalException(final Exception fatalUserException,
@@ -1044,7 +1047,8 @@ public class KafkaStreams implements AutoCloseable {
             globalThreadState = globalStreamThread.state();
         }
 
-        streamStateListener = new StreamStateListener(globalThreadState);
+        threadState = new HashMap<>(numStreamThreads);
+        streamStateListener = new StreamStateListener(threadState, globalThreadState);
 
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(this.topologyMetadata.globalStateStores());
 
@@ -1080,9 +1084,9 @@ public class KafkaStreams implements AutoCloseable {
             KafkaStreams.this::closeToError,
             streamsUncaughtExceptionHandler
         );
-        streamStateListener.registerStreamThread(streamThread);
         streamThread.setStateListener(streamStateListener);
         threads.add(streamThread);
+        threadState.put(streamThread.getId(), streamThread.state());
         queryableStoreProvider.addStoreProviderForThread(streamThread.getName(), new StreamThreadStateStoreProvider(streamThread));
         return streamThread;
     }

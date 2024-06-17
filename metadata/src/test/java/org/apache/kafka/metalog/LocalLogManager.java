@@ -41,7 +41,6 @@ import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,7 +99,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         public boolean equals(Object o) {
             if (!(o instanceof LeaderChangeBatch)) return false;
             LeaderChangeBatch other = (LeaderChangeBatch) o;
-            return other.newLeader.equals(newLeader);
+            if (!other.newLeader.equals(newLeader)) return false;
+            return true;
         }
 
         @Override

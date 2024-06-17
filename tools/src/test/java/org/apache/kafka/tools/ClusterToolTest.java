@@ -18,7 +18,6 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

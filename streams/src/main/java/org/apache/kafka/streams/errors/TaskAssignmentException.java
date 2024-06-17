@@ -23,7 +23,7 @@ package org.apache.kafka.streams.errors;
  */
 public class TaskAssignmentException extends StreamsException {
 
-    private static final long serialVersionUID = 1L;
+    private final static long serialVersionUID = 1L;
 
     public TaskAssignmentException(final String message) {
         super(message);

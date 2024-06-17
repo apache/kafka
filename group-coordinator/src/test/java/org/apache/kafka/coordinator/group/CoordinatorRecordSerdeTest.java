@@ -36,7 +36,6 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

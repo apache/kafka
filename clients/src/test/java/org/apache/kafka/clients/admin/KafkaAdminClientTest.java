@@ -269,7 +269,6 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.admin.KafkaAdminClient.DEFAULT_LEAVE_GROUP_REASON;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -283,6 +282,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * A unit test for KafkaAdminClient.
@@ -294,7 +294,6 @@ public class KafkaAdminClientTest {
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClientTest.class);
     private static final String GROUP_ID = "group-0";
     private static final int THROTTLE = 10;
-    public static final Uuid REPLICA_DIRECTORY_ID = Uuid.randomUuid();
 
     @Test
     public void testDefaultApiTimeoutAndRequestTimeoutConflicts() {
@@ -327,7 +326,7 @@ public class KafkaAdminClientTest {
             setControllerId(includeController ? 0 : -1).
             setEndpointType(EndpointType.CONTROLLER.id()).
             setClusterId("Ek8tjqq1QBWfnaoyHFZqDg").
-            setBrokers(new DescribeClusterResponseData.DescribeClusterBrokerCollection(asList(
+            setBrokers(new DescribeClusterResponseData.DescribeClusterBrokerCollection(Arrays.asList(
                 new DescribeClusterBroker().
                     setBrokerId(0).
                     setHost("controller0.com").
@@ -347,7 +346,7 @@ public class KafkaAdminClientTest {
             assertNull(cluster.controller());
         }
         assertEquals("Ek8tjqq1QBWfnaoyHFZqDg", cluster.clusterResource().clusterId());
-        assertEquals(new HashSet<>(asList(
+        assertEquals(new HashSet<>(Arrays.asList(
             new Node(0, "controller0.com", 9092),
             new Node(1, "controller1.com", 9092),
             new Node(2, "controller2.com", 9092))), new HashSet<>(cluster.nodes()));
@@ -583,7 +582,7 @@ public class KafkaAdminClientTest {
     public static CreatePartitionsResponse prepareCreatePartitionsResponse(int throttleTimeMs, CreatePartitionsTopicResult... topics) {
         CreatePartitionsResponseData data = new CreatePartitionsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setResults(asList(topics));
+            .setResults(Arrays.asList(topics));
         return new CreatePartitionsResponse(data);
     }
 
@@ -733,17 +732,12 @@ public class KafkaAdminClientTest {
 
     private static QuorumInfo defaultQuorumInfo(boolean emptyOptionals) {
         return new QuorumInfo(1, 1, 1L,
-                singletonList(new QuorumInfo.ReplicaState(1,
-                        emptyOptionals ? Uuid.ZERO_UUID : REPLICA_DIRECTORY_ID,
-                        100,
+                singletonList(new QuorumInfo.ReplicaState(1, 100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
-                singletonList(new QuorumInfo.ReplicaState(1,
-                        emptyOptionals ? Uuid.ZERO_UUID : REPLICA_DIRECTORY_ID,
-                        100,
+                singletonList(new QuorumInfo.ReplicaState(1, 100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
-                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
-                singletonMap(1, new QuorumInfo.Node(1, Collections.emptyList())));
+                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))));
     }
 
     private static DescribeQuorumResponse prepareDescribeQuorumResponse(
@@ -755,13 +749,12 @@ public class KafkaAdminClientTest {
             Boolean partitionIndexError,
             Boolean emptyOptionals) {
         String topicName = topicNameError ? "RANDOM" : Topic.CLUSTER_METADATA_TOPIC_NAME;
-        int partitionIndex = partitionIndexError ? 1 : Topic.CLUSTER_METADATA_TOPIC_PARTITION.partition();
+        Integer partitionIndex = partitionIndexError ? 1 : Topic.CLUSTER_METADATA_TOPIC_PARTITION.partition();
         List<DescribeQuorumResponseData.TopicData> topics = new ArrayList<>();
         List<DescribeQuorumResponseData.PartitionData> partitions = new ArrayList<>();
         for (int i = 0; i < (partitionCountError ? 2 : 1); i++) {
             DescribeQuorumResponseData.ReplicaState replica = new DescribeQuorumResponseData.ReplicaState()
                     .setReplicaId(1)
-                    .setReplicaDirectoryId(emptyOptionals ? Uuid.ZERO_UUID : REPLICA_DIRECTORY_ID)
                     .setLogEndOffset(100);
             replica.setLastFetchTimestamp(emptyOptionals ? -1 : 1000);
             replica.setLastCaughtUpTimestamp(emptyOptionals ? -1 : 1000);
@@ -771,17 +764,12 @@ public class KafkaAdminClientTest {
                     .setHighWatermark(1)
                     .setCurrentVoters(singletonList(replica))
                     .setObservers(singletonList(replica))
-                    .setErrorCode(partitionLevelError.code())
-                    .setErrorMessage(partitionLevelError.message()));
+                    .setErrorCode(partitionLevelError.code()));
         }
         for (int i = 0; i < (topicCountError ? 2 : 1); i++) {
             topics.add(new DescribeQuorumResponseData.TopicData().setTopicName(topicName).setPartitions(partitions));
         }
-        return new DescribeQuorumResponse(new DescribeQuorumResponseData()
-            .setTopics(topics)
-            .setErrorCode(topLevelError.code())
-            .setErrorMessage(topLevelError.message())
-            .setNodes(new DescribeQuorumResponseData.NodeCollection(Collections.singleton(new DescribeQuorumResponseData.Node().setNodeId(1)).iterator())));
+        return new DescribeQuorumResponse(new DescribeQuorumResponseData().setTopics(topics).setErrorCode(topLevelError.code()));
     }
 
     /**
@@ -1370,7 +1358,7 @@ public class KafkaAdminClientTest {
         return body -> {
             if (body instanceof DeleteTopicsRequest) {
                 DeleteTopicsRequest request = (DeleteTopicsRequest) body;
-                return request.topicNames().equals(asList(topics));
+                return request.topicNames().equals(Arrays.asList(topics));
             }
             return false;
         };
@@ -1380,7 +1368,7 @@ public class KafkaAdminClientTest {
         return body -> {
             if (body instanceof DeleteTopicsRequest) {
                 DeleteTopicsRequest request = (DeleteTopicsRequest) body;
-                return request.topicIds().equals(asList(topicIds));
+                return request.topicIds().equals(Arrays.asList(topicIds));
             }
             return false;
         };
@@ -1420,7 +1408,7 @@ public class KafkaAdminClientTest {
 
     @SuppressWarnings("NPathComplexity")
     @Test
-    public void testDescribeTopicsWithDescribeTopicPartitionsApiBasic() throws ExecutionException, InterruptedException {
+    public void testDescribeTopicsWithDescribeTopicPartitionsApiBasic() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             String topicName0 = "test-0";
@@ -1438,7 +1426,7 @@ public class KafkaAdminClientTest {
             );
 
             DescribeTopicPartitionsResponseData dataFirstPart = new DescribeTopicPartitionsResponseData();
-            addPartitionToDescribeTopicPartitionsResponse(dataFirstPart, topicName0, topics.get(topicName0), singletonList(0));
+            addPartitionToDescribeTopicPartitionsResponse(dataFirstPart, topicName0, topics.get(topicName0), Arrays.asList(0));
             dataFirstPart.setNextCursor(new DescribeTopicPartitionsResponseData.Cursor()
                 .setTopicName(topicName0)
                 .setPartitionIndex(1));
@@ -1447,12 +1435,13 @@ public class KafkaAdminClientTest {
                 if (request.topics().size() != 2) return false;
                 if (!request.topics().get(0).name().equals(topicName0)) return false;
                 if (!request.topics().get(1).name().equals(topicName1)) return false;
-                return request.cursor() == null;
+                if (request.cursor() != null) return false;
+                return true;
             }, new DescribeTopicPartitionsResponse(dataFirstPart));
 
             DescribeTopicPartitionsResponseData dataSecondPart = new DescribeTopicPartitionsResponseData();
-            addPartitionToDescribeTopicPartitionsResponse(dataSecondPart, topicName0, topics.get(topicName0), singletonList(1));
-            addPartitionToDescribeTopicPartitionsResponse(dataSecondPart, topicName1, topics.get(topicName1), singletonList(0));
+            addPartitionToDescribeTopicPartitionsResponse(dataSecondPart, topicName0, topics.get(topicName0), Arrays.asList(1));
+            addPartitionToDescribeTopicPartitionsResponse(dataSecondPart, topicName1, topics.get(topicName1), Arrays.asList(0));
             env.kafkaClient().prepareResponse(body -> {
                 DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
                 if (request.topics().size() != 2) return false;
@@ -1460,98 +1449,31 @@ public class KafkaAdminClientTest {
                 if (!request.topics().get(1).name().equals(topicName1)) return false;
 
                 DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
-                return cursor != null && cursor.topicName() == topicName0 && cursor.partitionIndex() == 1;
+                if (cursor == null || cursor.topicName() != topicName0 || cursor.partitionIndex() != 1) return false;
+
+                return true;
             }, new DescribeTopicPartitionsResponse(dataSecondPart));
-
-            DescribeTopicsResult result = env.adminClient().describeTopics(
-                asList(topicName0, topicName1), new DescribeTopicsOptions()
-            );
-            Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
-            assertEquals(2, topicDescriptions.size());
-            TopicDescription topicDescription = topicDescriptions.get(topicName0);
-            assertEquals(2, topicDescription.partitions().size());
-            assertEquals(0, topicDescription.partitions().get(0).partition());
-            assertEquals(1, topicDescription.partitions().get(1).partition());
-            topicDescription = topicDescriptions.get(topicName1);
-            assertEquals(1, topicDescription.partitions().size());
-            assertNull(topicDescription.authorizedOperations());
-        }
-    }
-
-    @Test
-    public void testDescribeTopicPartitionsApiWithAuthorizedOps() throws ExecutionException, InterruptedException {
-        try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            String topicName0 = "test-0";
-            Uuid topicId =  Uuid.randomUuid();
-
-            int authorisedOperations = Utils.to32BitField(Utils.mkSet(AclOperation.DESCRIBE.code(), AclOperation.ALTER.code()));
-            env.kafkaClient().prepareResponse(
-                    prepareDescribeClusterResponse(0,
-                            env.cluster().nodes(),
-                            env.cluster().clusterResource().clusterId(),
-                            2,
-                            authorisedOperations)
-            );
-
-            DescribeTopicPartitionsResponseData responseData = new DescribeTopicPartitionsResponseData();
-            responseData.topics().add(new DescribeTopicPartitionsResponseTopic()
-                    .setErrorCode((short) 0)
-                    .setTopicId(topicId)
-                    .setName(topicName0)
-                    .setIsInternal(false)
-                    .setTopicAuthorizedOperations(authorisedOperations));
-            env.kafkaClient().prepareResponse(new DescribeTopicPartitionsResponse(responseData));
-
-            DescribeTopicsResult result = env.adminClient().describeTopics(
-                    singletonList(topicName0), new DescribeTopicsOptions().includeAuthorizedOperations(true)
-            );
-
-            Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
-            TopicDescription topicDescription = topicDescriptions.get(topicName0);
-            assertEquals(new HashSet<>(asList(AclOperation.DESCRIBE, AclOperation.ALTER)),
-                    topicDescription.authorizedOperations());
-        }
-    }
-
-    @Test
-    public void testDescribeTopicPartitionsApiWithoutAuthorizedOps() throws ExecutionException, InterruptedException {
-        try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            String topicName0 = "test-0";
-            Uuid topicId =  Uuid.randomUuid();
-
-            int authorisedOperations = Utils.to32BitField(Utils.mkSet(AclOperation.DESCRIBE.code(), AclOperation.ALTER.code()));
-            env.kafkaClient().prepareResponse(
-                    prepareDescribeClusterResponse(0,
-                            env.cluster().nodes(),
-                            env.cluster().clusterResource().clusterId(),
-                            2,
-                            authorisedOperations)
-            );
-
-            DescribeTopicPartitionsResponseData responseData = new DescribeTopicPartitionsResponseData();
-            responseData.topics().add(new DescribeTopicPartitionsResponseTopic()
-                    .setErrorCode((short) 0)
-                    .setTopicId(topicId)
-                    .setName(topicName0)
-                    .setIsInternal(false)
-                    .setTopicAuthorizedOperations(authorisedOperations));
-            env.kafkaClient().prepareResponse(new DescribeTopicPartitionsResponse(responseData));
-
-            DescribeTopicsResult result = env.adminClient().describeTopics(
-                    singletonList(topicName0), new DescribeTopicsOptions().includeAuthorizedOperations(false)
-            );
-
-            Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
-            TopicDescription topicDescription = topicDescriptions.get(topicName0);
-            assertNull(topicDescription.authorizedOperations());
+            try {
+                DescribeTopicsResult result = env.adminClient().describeTopics(
+                    Arrays.asList(topicName0, topicName1), new DescribeTopicsOptions()
+                );
+                Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
+                assertEquals(2, topicDescriptions.size());
+                TopicDescription topicDescription = topicDescriptions.get(topicName0);
+                assertEquals(2, topicDescription.partitions().size());
+                assertEquals(0, topicDescription.partitions().get(0).partition());
+                assertEquals(1, topicDescription.partitions().get(1).partition());
+                topicDescription = topicDescriptions.get(topicName1);
+                assertEquals(1, topicDescription.partitions().size());
+            } catch (Exception e) {
+                fail("describe using DescribeTopics API should not fail", e);
+            }
         }
     }
 
     @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
     @Test
-    public void testDescribeTopicsWithDescribeTopicPartitionsApiEdgeCase() throws ExecutionException, InterruptedException {
+    public void testDescribeTopicsWithDescribeTopicPartitionsApiEdgeCase() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             String topicName0 = "test-0";
@@ -1571,8 +1493,8 @@ public class KafkaAdminClientTest {
             );
 
             DescribeTopicPartitionsResponseData dataFirstPart = new DescribeTopicPartitionsResponseData();
-            addPartitionToDescribeTopicPartitionsResponse(dataFirstPart, topicName0, topics.get(topicName0), singletonList(0));
-            addPartitionToDescribeTopicPartitionsResponse(dataFirstPart, topicName1, topics.get(topicName1), singletonList(0));
+            addPartitionToDescribeTopicPartitionsResponse(dataFirstPart, topicName0, topics.get(topicName0), Arrays.asList(0));
+            addPartitionToDescribeTopicPartitionsResponse(dataFirstPart, topicName1, topics.get(topicName1), Arrays.asList(0));
             dataFirstPart.setNextCursor(new DescribeTopicPartitionsResponseData.Cursor()
                 .setTopicName(topicName1)
                 .setPartitionIndex(1));
@@ -1582,12 +1504,13 @@ public class KafkaAdminClientTest {
                 if (!request.topics().get(0).name().equals(topicName0)) return false;
                 if (!request.topics().get(1).name().equals(topicName1)) return false;
                 if (!request.topics().get(2).name().equals(topicName2)) return false;
-                return request.cursor() == null;
+                if (request.cursor() != null) return false;
+                return true;
             }, new DescribeTopicPartitionsResponse(dataFirstPart));
 
             DescribeTopicPartitionsResponseData dataSecondPart = new DescribeTopicPartitionsResponseData();
-            addPartitionToDescribeTopicPartitionsResponse(dataSecondPart, topicName1, topics.get(topicName1), singletonList(1));
-            addPartitionToDescribeTopicPartitionsResponse(dataSecondPart, topicName2, topics.get(topicName2), singletonList(0));
+            addPartitionToDescribeTopicPartitionsResponse(dataSecondPart, topicName1, topics.get(topicName1), Arrays.asList(1));
+            addPartitionToDescribeTopicPartitionsResponse(dataSecondPart, topicName2, topics.get(topicName2), Arrays.asList(0));
             dataSecondPart.setNextCursor(new DescribeTopicPartitionsResponseData.Cursor()
                 .setTopicName(topicName2)
                 .setPartitionIndex(1));
@@ -1597,32 +1520,36 @@ public class KafkaAdminClientTest {
                 if (!request.topics().get(0).name().equals(topicName1)) return false;
                 if (!request.topics().get(1).name().equals(topicName2)) return false;
                 DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
-                return cursor != null && cursor.topicName().equals(topicName1) && cursor.partitionIndex() == 1;
+                if (cursor == null || !cursor.topicName().equals(topicName1) || cursor.partitionIndex() != 1) return false;
+                return true;
             }, new DescribeTopicPartitionsResponse(dataSecondPart));
 
             DescribeTopicPartitionsResponseData dataThirdPart = new DescribeTopicPartitionsResponseData();
-            addPartitionToDescribeTopicPartitionsResponse(dataThirdPart, topicName2, topics.get(topicName2), singletonList(1));
+            addPartitionToDescribeTopicPartitionsResponse(dataThirdPart, topicName2, topics.get(topicName2), Arrays.asList(1));
             env.kafkaClient().prepareResponse(body -> {
                 DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
                 if (request.topics().size() != 1) return false;
                 if (!request.topics().get(0).name().equals(topicName2)) return false;
                 DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
-                return cursor != null && cursor.topicName().equals(topicName2) && cursor.partitionIndex() == 1;
+                if (cursor == null || !cursor.topicName().equals(topicName2) || cursor.partitionIndex() != 1) return false;
+                return true;
             }, new DescribeTopicPartitionsResponse(dataThirdPart));
-
-            DescribeTopicsResult result = env.adminClient().describeTopics(
-                asList(topicName1, topicName0, topicName2), new DescribeTopicsOptions()
-            );
-            Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
-            assertEquals(3, topicDescriptions.size());
-            TopicDescription topicDescription = topicDescriptions.get(topicName0);
-            assertEquals(1, topicDescription.partitions().size());
-            assertEquals(0, topicDescription.partitions().get(0).partition());
-            topicDescription = topicDescriptions.get(topicName1);
-            assertEquals(2, topicDescription.partitions().size());
-            topicDescription = topicDescriptions.get(topicName2);
-            assertEquals(2, topicDescription.partitions().size());
-            assertNull(topicDescription.authorizedOperations());
+            try {
+                DescribeTopicsResult result = env.adminClient().describeTopics(
+                    Arrays.asList(topicName1, topicName0, topicName2), new DescribeTopicsOptions()
+                );
+                Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
+                assertEquals(3, topicDescriptions.size());
+                TopicDescription topicDescription = topicDescriptions.get(topicName0);
+                assertEquals(1, topicDescription.partitions().size());
+                assertEquals(0, topicDescription.partitions().get(0).partition());
+                topicDescription = topicDescriptions.get(topicName1);
+                assertEquals(2, topicDescription.partitions().size());
+                topicDescription = topicDescriptions.get(topicName2);
+                assertEquals(2, topicDescription.partitions().size());
+            } catch (Exception e) {
+                fail("describe using DescribeTopics API should not fail", e);
+            }
         }
     }
 
@@ -1632,17 +1559,17 @@ public class KafkaAdminClientTest {
         Uuid topicId,
         List<Integer> partitions) {
         List<DescribeTopicPartitionsResponsePartition> addingPartitions = new ArrayList<>();
-        partitions.forEach(partition ->
+        partitions.forEach(partition -> {
             addingPartitions.add(new DescribeTopicPartitionsResponsePartition()
-                .setIsrNodes(singletonList(0))
+                .setIsrNodes(Arrays.asList(0))
                 .setErrorCode((short) 0)
                 .setLeaderEpoch(0)
                 .setLeaderId(0)
-                .setEligibleLeaderReplicas(singletonList(1))
-                .setLastKnownElr(singletonList(2))
+                .setEligibleLeaderReplicas(Arrays.asList(1))
+                .setLastKnownElr(Arrays.asList(2))
                 .setPartitionIndex(partition)
-                .setReplicaNodes(asList(0, 1, 2)))
-        );
+                .setReplicaNodes(Arrays.asList(0, 1, 2)));
+        });
         data.topics().add(new DescribeTopicPartitionsResponseTopic()
                 .setErrorCode((short) 0)
                 .setTopicId(topicId)
@@ -1653,7 +1580,7 @@ public class KafkaAdminClientTest {
 
     @SuppressWarnings("NPathComplexity")
     @Test
-    public void testDescribeTopicsWithDescribeTopicPartitionsApiErrorHandling() throws InterruptedException {
+    public void testDescribeTopicsWithDescribeTopicPartitionsApiErrorHandling() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             String topicName0 = "test-0";
@@ -1676,15 +1603,15 @@ public class KafkaAdminClientTest {
                 .setTopicId(topics.get(topicName0))
                 .setName(topicName0)
                 .setIsInternal(false)
-                .setPartitions(singletonList(new DescribeTopicPartitionsResponsePartition()
-                    .setIsrNodes(singletonList(0))
+                .setPartitions(Arrays.asList(new DescribeTopicPartitionsResponsePartition()
+                    .setIsrNodes(Arrays.asList(0))
                     .setErrorCode((short) 0)
                     .setLeaderEpoch(0)
                     .setLeaderId(0)
-                    .setEligibleLeaderReplicas(singletonList(1))
-                    .setLastKnownElr(singletonList(2))
+                    .setEligibleLeaderReplicas(Arrays.asList(1))
+                    .setLastKnownElr(Arrays.asList(2))
                     .setPartitionIndex(0)
-                    .setReplicaNodes(asList(0, 1, 2))))
+                    .setReplicaNodes(Arrays.asList(0, 1, 2))))
             );
             dataFirstPart.topics().add(new DescribeTopicPartitionsResponseTopic()
                 .setErrorCode((short) 29)
@@ -1697,14 +1624,17 @@ public class KafkaAdminClientTest {
                 if (request.topics().size() != 2) return false;
                 if (!request.topics().get(0).name().equals(topicName0)) return false;
                 if (!request.topics().get(1).name().equals(topicName1)) return false;
-                return request.cursor() == null;
+                if (request.cursor() != null) return false;
+                return true;
             }, new DescribeTopicPartitionsResponse(dataFirstPart));
             DescribeTopicsResult result = env.adminClient().describeTopics(
-                asList(topicName1, topicName0), new DescribeTopicsOptions()
+                Arrays.asList(topicName1, topicName0), new DescribeTopicsOptions()
             );
-
-            TestUtils.assertFutureError(result.allTopicNames(), TopicAuthorizationException.class);
-
+            try {
+                TestUtils.assertFutureError(result.allTopicNames(), TopicAuthorizationException.class);
+            } catch (Exception e) {
+                fail("describe using DescribeTopics API should not have other exceptions", e);
+            }
         }
     }
 
@@ -1730,7 +1660,7 @@ public class KafkaAdminClientTest {
 
         Map<String, NewPartitions> counts = new HashMap<>();
         counts.put("my_topic", NewPartitions.increaseTo(3));
-        counts.put("other_topic", NewPartitions.increaseTo(3, asList(singletonList(2), singletonList(3))));
+        counts.put("other_topic", NewPartitions.increaseTo(3, asList(asList(2), asList(3))));
         e = assertThrows(ExecutionException.class, () -> env.adminClient().createPartitions(counts).all().get());
         assertInstanceOf(AuthenticationException.class, e.getCause(),
             "Expected an authentication error, but got " + Utils.stackTrace(e));
@@ -1760,9 +1690,9 @@ public class KafkaAdminClientTest {
             "Expected an authentication error, but got " + Utils.stackTrace(e));
 
         ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
-        ClientQuotaAlteration alteration = new ClientQuotaAlteration(entity, singletonList(new ClientQuotaAlteration.Op("consumer_byte_rate", 1000.0)));
+        ClientQuotaAlteration alteration = new ClientQuotaAlteration(entity, asList(new ClientQuotaAlteration.Op("consumer_byte_rate", 1000.0)));
         e = assertThrows(ExecutionException.class,
-            () -> env.adminClient().alterClientQuotas(singletonList(alteration)).all().get());
+            () -> env.adminClient().alterClientQuotas(asList(alteration)).all().get());
 
         assertInstanceOf(AuthenticationException.class, e.getCause(),
             "Expected an authentication error, but got " + Utils.stackTrace(e));
@@ -1888,9 +1818,9 @@ public class KafkaAdminClientTest {
                 .setThrottleTimeMs(0)
                 .setFilterResults(asList(
                     new DeleteAclsResponseData.DeleteAclsFilterResult()
-                        .setMatchingAcls(singletonList(DeleteAclsResponse.matchingAcl(ACL1, ApiError.NONE))),
+                        .setMatchingAcls(asList(DeleteAclsResponse.matchingAcl(ACL1, ApiError.NONE))),
                     new DeleteAclsResponseData.DeleteAclsFilterResult()
-                        .setMatchingAcls(singletonList(DeleteAclsResponse.matchingAcl(ACL2, ApiError.NONE))))),
+                        .setMatchingAcls(asList(DeleteAclsResponse.matchingAcl(ACL2, ApiError.NONE))))),
                     ApiKeys.DELETE_ACLS.latestVersion()));
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             Collection<AclBinding> deleted = results.all().get();
@@ -1964,11 +1894,11 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponseFrom(new DescribeConfigsResponse(
-                    new DescribeConfigsResponseData().setResults(singletonList(new DescribeConfigsResponseData.DescribeConfigsResult()
+                    new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
                             .setResourceName(broker0Resource.name()).setResourceType(broker0Resource.type().id()).setErrorCode(Errors.NONE.code())
                             .setConfigs(emptyList())))), env.cluster().nodeById(0));
             env.kafkaClient().prepareResponseFrom(new DescribeConfigsResponse(
-                    new DescribeConfigsResponseData().setResults(singletonList(new DescribeConfigsResponseData.DescribeConfigsResult()
+                    new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
                             .setResourceName(broker1Resource.name()).setResourceType(broker1Resource.type().id()).setErrorCode(Errors.NONE.code())
                             .setConfigs(emptyList())))), env.cluster().nodeById(1));
             Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
@@ -2009,9 +1939,9 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(new DescribeConfigsResponse(
-                    new DescribeConfigsResponseData().setResults(singletonList(new DescribeConfigsResponseData.DescribeConfigsResult()
-                            .setResourceName(topic.name()).setResourceType(topic.type().id()).setErrorCode(Errors.NONE.code())
-                            .setConfigs(emptyList())))));
+                    new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
+                                    .setResourceName(topic.name()).setResourceType(topic.type().id()).setErrorCode(Errors.NONE.code())
+                                    .setConfigs(emptyList())))));
             Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
                     topic,
                     topic2)).values();
@@ -2034,9 +1964,9 @@ public class KafkaAdminClientTest {
                 new DescribeConfigsResponseData.DescribeConfigsResult()
                         .setResourceName(unrequested.name()).setResourceType(unrequested.type().id()).setErrorCode(Errors.NONE.code())
                         .setConfigs(emptyList())))));
-            Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(singletonList(
+            Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
                     topic)).values();
-            assertEquals(new HashSet<>(singletonList(topic)), result.keySet());
+            assertEquals(new HashSet<>(asList(topic)), result.keySet());
             assertNotNull(result.get(topic).get());
             assertNull(result.get(unrequested));
         }
@@ -2401,10 +2331,10 @@ public class KafkaAdminClientTest {
                                     prepareDescribeLogDirsResult(unexpected, broker1log1, broker1Log1PartitionSize, broker1Log1OffsetLag, true)))),
                     env.cluster().nodeById(expected.brokerId()));
 
-            DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(singletonList(expected));
+            DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(asList(expected));
 
             Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
-            assertEquals(TestUtils.toSet(singletonList(expected)), values.keySet());
+            assertEquals(TestUtils.toSet(asList(expected)), values.keySet());
 
             assertNotNull(values.get(expected));
             assertEquals(broker1log0, values.get(expected).get().getCurrentReplicaLogDir());
@@ -2430,7 +2360,7 @@ public class KafkaAdminClientTest {
 
             Map<String, NewPartitions> counts = new HashMap<>();
             counts.put("my_topic", NewPartitions.increaseTo(3));
-            counts.put("other_topic", NewPartitions.increaseTo(3, asList(singletonList(2), singletonList(3))));
+            counts.put("other_topic", NewPartitions.increaseTo(3, asList(asList(2), asList(3))));
 
             CreatePartitionsResult results = env.adminClient().createPartitions(counts);
             Map<String, KafkaFuture<Void>> values = results.values();
@@ -2714,7 +2644,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDescribeTopicsByIds() throws ExecutionException, InterruptedException {
+    public void testDescribeTopicsByIds() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
@@ -2739,10 +2669,13 @@ public class KafkaAdminClientTest {
                                     singletonList(partitionMetadata), MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED))));
             TopicCollection.TopicIdCollection topicIds = TopicCollection.ofTopicIds(
                     singletonList(topicId));
-
-            DescribeTopicsResult describeTopicsresult = env.adminClient().describeTopics(topicIds);
-            Map<Uuid, TopicDescription> allTopicIds = describeTopicsresult.allTopicIds().get();
-            assertEquals(topicName, allTopicIds.get(topicId).name());
+            try {
+                DescribeTopicsResult result = env.adminClient().describeTopics(topicIds);
+                Map<Uuid, TopicDescription> allTopicIds = result.allTopicIds().get();
+                assertEquals(topicName, allTopicIds.get(topicId).name());
+            } catch (Exception e) {
+                fail("describe with valid topicId should not fail", e);
+            }
 
             // ID not exist in brokers
             Uuid nonExistID = Uuid.randomUuid();
@@ -2752,18 +2685,29 @@ public class KafkaAdminClientTest {
                             env.cluster().clusterResource().clusterId(),
                             env.cluster().controller().id(),
                             emptyList()));
+            try {
+                DescribeTopicsResult result = env.adminClient().describeTopics(
+                        TopicCollection.ofTopicIds(singletonList(nonExistID)));
+                TestUtils.assertFutureError(result.allTopicIds(), UnknownTopicIdException.class);
+                result.allTopicIds().get();
+                fail("describe with non-exist topic ID should throw exception");
+            } catch (Exception e) {
+                assertEquals(
+                        String.format("org.apache.kafka.common.errors.UnknownTopicIdException: TopicId %s not found.", nonExistID),
+                        e.getMessage());
+            }
 
-            DescribeTopicsResult result1 = env.adminClient().describeTopics(
-                    TopicCollection.ofTopicIds(singletonList(nonExistID)));
-            TestUtils.assertFutureError(result1.allTopicIds(), UnknownTopicIdException.class);
-            Exception e = assertThrows(Exception.class, () -> result1.allTopicIds().get(), "describe with non-exist topic ID should throw exception");
-            assertEquals(String.format("org.apache.kafka.common.errors.UnknownTopicIdException: TopicId %s not found.", nonExistID), e.getMessage());
-
-            DescribeTopicsResult result2 = env.adminClient().describeTopics(
-                    TopicCollection.ofTopicIds(singletonList(Uuid.ZERO_UUID)));
-            TestUtils.assertFutureError(result2.allTopicIds(), InvalidTopicException.class);
-            e = assertThrows(Exception.class, () -> result2.allTopicIds().get(), "describe with non-exist topic ID should throw exception");
-            assertEquals("The given topic id 'AAAAAAAAAAAAAAAAAAAAAA' cannot be represented in a request.", e.getCause().getMessage());
+            // Invalid ID
+            try {
+                DescribeTopicsResult result = env.adminClient().describeTopics(
+                        TopicCollection.ofTopicIds(singletonList(Uuid.ZERO_UUID)));
+                TestUtils.assertFutureError(result.allTopicIds(), InvalidTopicException.class);
+                result.allTopicIds().get();
+                fail("describe with Uuid.ZERO_UUID should throw exception");
+            } catch (Exception e) {
+                assertEquals("The given topic id 'AAAAAAAAAAAAAAAAAAAAAA' cannot be represented in a request.",
+                        e.getCause().getMessage());
+            }
 
         }
     }
@@ -2802,7 +2746,7 @@ public class KafkaAdminClientTest {
             assertEquals(env.cluster().clusterResource().clusterId(), result2.clusterId().get());
             assertEquals(new HashSet<>(env.cluster().nodes()), new HashSet<>(result2.nodes().get()));
             assertEquals(3, result2.controller().get().id());
-            assertEquals(new HashSet<>(asList(AclOperation.DESCRIBE, AclOperation.ALTER)),
+            assertEquals(new HashSet<>(Arrays.asList(AclOperation.DESCRIBE, AclOperation.ALTER)),
                 result2.authorizedOperations().get());
         }
     }
@@ -2910,7 +2854,7 @@ public class KafkaAdminClientTest {
                     new ListGroupsResponse(
                             new ListGroupsResponseData()
                             .setErrorCode(Errors.NONE.code())
-                            .setGroups(asList(
+                            .setGroups(Arrays.asList(
                                     new ListGroupsResponseData.ListedGroup()
                                             .setGroupId("group-1")
                                             .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
@@ -2941,7 +2885,7 @@ public class KafkaAdminClientTest {
                     new ListGroupsResponse(
                             new ListGroupsResponseData()
                                     .setErrorCode(Errors.NONE.code())
-                                    .setGroups(asList(
+                                    .setGroups(Arrays.asList(
                                             new ListGroupsResponseData.ListedGroup()
                                                     .setGroupId("group-2")
                                                     .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
@@ -2957,7 +2901,7 @@ public class KafkaAdminClientTest {
                     new ListGroupsResponse(
                             new ListGroupsResponseData()
                                     .setErrorCode(Errors.NONE.code())
-                                    .setGroups(asList(
+                                    .setGroups(Arrays.asList(
                                             new ListGroupsResponseData.ListedGroup()
                                                     .setGroupId("group-3")
                                                     .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
@@ -3027,7 +2971,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponseFrom(
                 new ListGroupsResponse(new ListGroupsResponseData()
                     .setErrorCode(Errors.NONE.code())
-                    .setGroups(asList(
+                    .setGroups(Arrays.asList(
                             new ListGroupsResponseData.ListedGroup()
                                 .setGroupId("group-1")
                                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
@@ -3062,7 +3006,7 @@ public class KafkaAdminClientTest {
                 expectListGroupsRequestWithFilters(singleton(ConsumerGroupState.STABLE.toString()), Collections.emptySet()),
                 new ListGroupsResponse(new ListGroupsResponseData()
                     .setErrorCode(Errors.NONE.code())
-                    .setGroups(singletonList(
+                    .setGroups(Arrays.asList(
                         new ListGroupsResponseData.ListedGroup()
                             .setGroupId("group-1")
                             .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
@@ -3087,7 +3031,7 @@ public class KafkaAdminClientTest {
                 expectListGroupsRequestWithFilters(Collections.emptySet(), singleton(GroupType.CONSUMER.toString())),
                 new ListGroupsResponse(new ListGroupsResponseData()
                     .setErrorCode(Errors.NONE.code())
-                    .setGroups(asList(
+                    .setGroups(Arrays.asList(
                         new ListGroupsResponseData.ListedGroup()
                             .setGroupId("group-1")
                             .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
@@ -3628,7 +3572,7 @@ public class KafkaAdminClientTest {
                 "",
                 "non-consumer",
                 "",
-                emptyList(),
+                asList(),
                 Collections.emptySet()));
 
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
@@ -3667,7 +3611,7 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(asList(
+                    .setCoordinators(Arrays.asList(
                         FindCoordinatorResponse.prepareCoordinatorResponse(Errors.NONE, "grp1", env.cluster().controller()),
                         FindCoordinatorResponse.prepareCoordinatorResponse(Errors.NONE, "grp2", env.cluster().controller())
                     ))
@@ -3675,7 +3619,7 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(new ConsumerGroupDescribeResponse(
                 new ConsumerGroupDescribeResponseData()
-                    .setGroups(asList(
+                    .setGroups(Arrays.asList(
                         new ConsumerGroupDescribeResponseData.DescribedGroup()
                             .setGroupId("grp1")
                             .setGroupState("Stable")
@@ -3743,7 +3687,7 @@ public class KafkaAdminClientTest {
             ));
 
             DescribeConsumerGroupsResult result = env.adminClient()
-                .describeConsumerGroups(asList("grp1", "grp2"));
+                .describeConsumerGroups(Arrays.asList("grp1", "grp2"));
 
             Map<String, ConsumerGroupDescription> expectedResult = new HashMap<>();
             expectedResult.put("grp1", new ConsumerGroupDescription(
@@ -3951,7 +3895,7 @@ public class KafkaAdminClientTest {
     @Test
     public void testListConsumerGroupOffsetsNonRetriableErrors() throws Exception {
         // Non-retriable errors throw an exception
-        final List<Errors> nonRetriableErrors = asList(
+        final List<Errors> nonRetriableErrors = Arrays.asList(
             Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND,
             Errors.UNKNOWN_MEMBER_ID, Errors.STALE_MEMBER_EPOCH);
 
@@ -4058,7 +4002,7 @@ public class KafkaAdminClientTest {
                 .setMaxVersion((short) 7);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster, AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0")) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(asList(findCoordinatorV3, offsetFetchV7)));
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Arrays.asList(findCoordinatorV3, offsetFetchV7)));
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
@@ -4096,7 +4040,7 @@ public class KafkaAdminClientTest {
             ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(groupSpecs);
 
             // The request handler attempts both FindCoordinator and OffsetFetch requests. This seems
-            // ok since we expect this scenario only during upgrades from versions < 3.0.0 where
+            // ok since since we expect this scenario only during upgrades from versions < 3.0.0 where
             // some upgraded brokers could handle batched FindCoordinator while non-upgraded coordinators
             // rejected batched OffsetFetch requests.
             sendFindCoordinatorResponse(env.kafkaClient(), env.cluster().controller());
@@ -4260,7 +4204,7 @@ public class KafkaAdminClientTest {
                 .setMaxVersion(ApiKeys.DELETE_GROUPS.latestVersion());
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(asList(findCoordinatorV3, describeGroups)));
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Arrays.asList(findCoordinatorV3, describeGroups)));
 
             // Retriable FindCoordinatorResponse errors should be retried
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
@@ -4357,7 +4301,7 @@ public class KafkaAdminClientTest {
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(asList(findCoordinatorV3, describeGroups)));
+                    NodeApiVersions.create(Arrays.asList(findCoordinatorV3, describeGroups)));
 
             // Dummy response for MockClient to handle the UnsupportedVersionException correctly to switch from batched to un-batched
             env.kafkaClient().prepareResponse(null);
@@ -4556,7 +4500,7 @@ public class KafkaAdminClientTest {
         // Non-retriable errors throw an exception
 
         final TopicPartition tp1 = new TopicPartition("foo", 0);
-        final List<Errors> nonRetriableErrors = asList(
+        final List<Errors> nonRetriableErrors = Arrays.asList(
             Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
@@ -4715,7 +4659,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NOT_COORDINATOR.code())));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            Collection<MemberToRemove> membersToRemove = asList(new MemberToRemove("instance-1"), new MemberToRemove("instance-2"));
+            Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove("instance-1"), new MemberToRemove("instance-2"));
 
             final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
                 GROUP_ID, new RemoveMembersFromConsumerGroupOptions(membersToRemove));
@@ -4836,7 +4780,7 @@ public class KafkaAdminClientTest {
     public void testRemoveMembersFromGroupNonRetriableErrors() throws Exception {
         // Non-retriable errors throw an exception
 
-        final List<Errors> nonRetriableErrors = asList(
+        final List<Errors> nonRetriableErrors = Arrays.asList(
             Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
@@ -4882,7 +4826,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                                                                          .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())));
 
-            Collection<MemberToRemove> membersToRemove = asList(new MemberToRemove(instanceOne),
+            Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove(instanceOne),
                                                                        new MemberToRemove(instanceTwo));
             final RemoveMembersFromConsumerGroupResult unknownErrorResult = env.adminClient().removeMembersFromConsumerGroup(
                 GROUP_ID,
@@ -4907,7 +4851,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                                                                          .setErrorCode(Errors.NONE.code())
-                                                                         .setMembers(asList(responseOne, responseTwo))));
+                                                                         .setMembers(Arrays.asList(responseOne, responseTwo))));
 
             final RemoveMembersFromConsumerGroupResult memberLevelErrorResult = env.adminClient().removeMembersFromConsumerGroup(
                 GROUP_ID,
@@ -4939,7 +4883,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(
                     new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
-                        asList(responseTwo,
+                        Arrays.asList(responseTwo,
                                       new MemberResponse().setGroupInstanceId(instanceOne).setErrorCode(Errors.NONE.code())
                         ))
             ));
@@ -4953,10 +4897,10 @@ public class KafkaAdminClientTest {
             assertNull(noErrorResult.memberResult(memberTwo).get());
 
             // Test the "removeAll" scenario
-            final List<TopicPartition> topicPartitions = Stream.of(1, 2, 3).map(partition -> new TopicPartition("my_topic", partition))
+            final List<TopicPartition> topicPartitions = Arrays.asList(1, 2, 3).stream().map(partition -> new TopicPartition("my_topic", partition))
                     .collect(Collectors.toList());
             // construct the DescribeGroupsResponse
-            DescribeGroupsResponseData data = prepareDescribeGroupsResponseData(GROUP_ID, asList(instanceOne, instanceTwo), topicPartitions);
+            DescribeGroupsResponseData data = prepareDescribeGroupsResponseData(GROUP_ID, Arrays.asList(instanceOne, instanceTwo), topicPartitions);
 
             // Return with partial failure for "removeAll" scenario
             // 1 prepare response for AdminClient.describeConsumerGroups
@@ -4967,7 +4911,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(
                     new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
-                            asList(responseOne, responseTwo))
+                            Arrays.asList(responseOne, responseTwo))
             ));
             final RemoveMembersFromConsumerGroupResult partialFailureResults = env.adminClient().removeMembersFromConsumerGroup(
                     GROUP_ID,
@@ -4986,7 +4930,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(
                     new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
-                            asList(responseTwo,
+                            Arrays.asList(responseTwo,
                                     new MemberResponse().setGroupInstanceId(instanceOne).setErrorCode(Errors.NONE.code())
                             ))
             ));
@@ -5017,7 +4961,7 @@ public class KafkaAdminClientTest {
                     member -> member.reason().equals(expectedReason)
                 );
             }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
-                asList(
+                Arrays.asList(
                     new MemberResponse().setGroupInstanceId("instance-1"),
                     new MemberResponse().setGroupInstanceId("instance-2")
                 ))
@@ -5026,7 +4970,7 @@ public class KafkaAdminClientTest {
             MemberToRemove memberToRemove1 = new MemberToRemove("instance-1");
             MemberToRemove memberToRemove2 = new MemberToRemove("instance-2");
 
-            RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(asList(
+            RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(Arrays.asList(
                 memberToRemove1,
                 memberToRemove2
             ));
@@ -5070,7 +5014,7 @@ public class KafkaAdminClientTest {
             TopicPartition tp2 = new TopicPartition("B", 0);
             Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments = new HashMap<>();
             reassignments.put(tp1, Optional.empty());
-            reassignments.put(tp2, Optional.of(new NewPartitionReassignment(asList(1, 2, 3))));
+            reassignments.put(tp2, Optional.of(new NewPartitionReassignment(Arrays.asList(1, 2, 3))));
 
             // 1. server returns less responses than number of partitions we sent
             AlterPartitionReassignmentsResponseData responseData1 = new AlterPartitionReassignmentsResponseData();
@@ -5091,7 +5035,7 @@ public class KafkaAdminClientTest {
                     new AlterPartitionReassignmentsResponseData()
                             .setErrorCode(Errors.NOT_CONTROLLER.code())
                             .setErrorMessage(Errors.NOT_CONTROLLER.message())
-                            .setResponses(asList(
+                            .setResponses(Arrays.asList(
                                 new ReassignableTopicResponse()
                                         .setName("A")
                                         .setPartitions(Collections.singletonList(normalPartitionResponse)),
@@ -5103,7 +5047,7 @@ public class KafkaAdminClientTest {
                     env.cluster().clusterResource().clusterId(), 1, Collections.emptyList());
             AlterPartitionReassignmentsResponseData normalResponse =
                     new AlterPartitionReassignmentsResponseData()
-                            .setResponses(asList(
+                            .setResponses(Arrays.asList(
                                     new ReassignableTopicResponse()
                                             .setName("A")
                                             .setPartitions(Collections.singletonList(normalPartitionResponse)),
@@ -5122,7 +5066,7 @@ public class KafkaAdminClientTest {
             // 3. partition-level error
             AlterPartitionReassignmentsResponseData partitionLevelErrData =
                     new AlterPartitionReassignmentsResponseData()
-                            .setResponses(asList(
+                            .setResponses(Arrays.asList(
                                     new ReassignableTopicResponse()
                                             .setName("A")
                                             .setPartitions(Collections.singletonList(new ReassignablePartitionResponse()
@@ -5144,7 +5088,7 @@ public class KafkaAdminClientTest {
                     new AlterPartitionReassignmentsResponseData()
                             .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())
                             .setErrorMessage(errorMessage)
-                            .setResponses(asList(
+                            .setResponses(Arrays.asList(
                                     new ReassignableTopicResponse()
                                             .setName("A")
                                             .setPartitions(Collections.singletonList(normalPartitionResponse)),
@@ -5162,9 +5106,9 @@ public class KafkaAdminClientTest {
             TopicPartition invalidTopicTP = new TopicPartition("", 0);
             TopicPartition invalidPartitionTP = new TopicPartition("ABC", -1);
             Map<TopicPartition, Optional<NewPartitionReassignment>> invalidTopicReassignments = new HashMap<>();
-            invalidTopicReassignments.put(invalidPartitionTP, Optional.of(new NewPartitionReassignment(asList(1, 2, 3))));
-            invalidTopicReassignments.put(invalidTopicTP, Optional.of(new NewPartitionReassignment(asList(1, 2, 3))));
-            invalidTopicReassignments.put(tp1, Optional.of(new NewPartitionReassignment(asList(1, 2, 3))));
+            invalidTopicReassignments.put(invalidPartitionTP, Optional.of(new NewPartitionReassignment(Arrays.asList(1, 2, 3))));
+            invalidTopicReassignments.put(invalidTopicTP, Optional.of(new NewPartitionReassignment(Arrays.asList(1, 2, 3))));
+            invalidTopicReassignments.put(tp1, Optional.of(new NewPartitionReassignment(Arrays.asList(1, 2, 3))));
 
             AlterPartitionReassignmentsResponseData singlePartResponseData =
                     new AlterPartitionReassignmentsResponseData()
@@ -5184,7 +5128,7 @@ public class KafkaAdminClientTest {
                     new AlterPartitionReassignmentsResponseData()
                             .setErrorCode(Errors.NONE.code())
                             .setErrorMessage(Errors.NONE.message())
-                            .setResponses(asList(
+                            .setResponses(Arrays.asList(
                                     new ReassignableTopicResponse()
                                             .setName("A")
                                             .setPartitions(Collections.singletonList(normalPartitionResponse)),
@@ -5208,18 +5152,18 @@ public class KafkaAdminClientTest {
             TopicPartition tp1 = new TopicPartition("A", 0);
             OngoingPartitionReassignment tp1PartitionReassignment = new OngoingPartitionReassignment()
                     .setPartitionIndex(0)
-                    .setRemovingReplicas(asList(1, 2, 3))
-                    .setAddingReplicas(asList(4, 5, 6))
-                    .setReplicas(asList(1, 2, 3, 4, 5, 6));
+                    .setRemovingReplicas(Arrays.asList(1, 2, 3))
+                    .setAddingReplicas(Arrays.asList(4, 5, 6))
+                    .setReplicas(Arrays.asList(1, 2, 3, 4, 5, 6));
             OngoingTopicReassignment tp1Reassignment = new OngoingTopicReassignment().setName("A")
                     .setPartitions(Collections.singletonList(tp1PartitionReassignment));
 
             TopicPartition tp2 = new TopicPartition("B", 0);
             OngoingPartitionReassignment tp2PartitionReassignment = new OngoingPartitionReassignment()
                     .setPartitionIndex(0)
-                    .setRemovingReplicas(asList(1, 2, 3))
-                    .setAddingReplicas(asList(4, 5, 6))
-                    .setReplicas(asList(1, 2, 3, 4, 5, 6));
+                    .setRemovingReplicas(Arrays.asList(1, 2, 3))
+                    .setAddingReplicas(Arrays.asList(4, 5, 6))
+                    .setReplicas(Arrays.asList(1, 2, 3, 4, 5, 6));
             OngoingTopicReassignment tp2Reassignment = new OngoingTopicReassignment().setName("B")
                     .setPartitions(Collections.singletonList(tp2PartitionReassignment));
 
@@ -5230,7 +5174,7 @@ public class KafkaAdminClientTest {
             MetadataResponse controllerNodeResponse = RequestTestUtils.metadataResponse(env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(), 1, Collections.emptyList());
             ListPartitionReassignmentsResponseData reassignmentsData = new ListPartitionReassignmentsResponseData()
-                    .setTopics(asList(tp1Reassignment, tp2Reassignment));
+                    .setTopics(Arrays.asList(tp1Reassignment, tp2Reassignment));
             env.kafkaClient().prepareResponse(new ListPartitionReassignmentsResponse(notControllerData));
             env.kafkaClient().prepareResponse(controllerNodeResponse);
             env.kafkaClient().prepareResponse(new ListPartitionReassignmentsResponse(reassignmentsData));
@@ -5244,12 +5188,12 @@ public class KafkaAdminClientTest {
                     .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
             env.kafkaClient().prepareResponse(new ListPartitionReassignmentsResponse(unknownTpData));
 
-            ListPartitionReassignmentsResult unknownTpResult = env.adminClient().listPartitionReassignments(new HashSet<>(asList(tp1, tp2)));
+            ListPartitionReassignmentsResult unknownTpResult = env.adminClient().listPartitionReassignments(new HashSet<>(Arrays.asList(tp1, tp2)));
             TestUtils.assertFutureError(unknownTpResult.reassignments(), UnknownTopicOrPartitionException.class);
 
             // 3. Success
             ListPartitionReassignmentsResponseData responseData = new ListPartitionReassignmentsResponseData()
-                    .setTopics(asList(tp1Reassignment, tp2Reassignment));
+                    .setTopics(Arrays.asList(tp1Reassignment, tp2Reassignment));
             env.kafkaClient().prepareResponse(new ListPartitionReassignmentsResponse(responseData));
             ListPartitionReassignmentsResult responseResult = env.adminClient().listPartitionReassignments();
 
@@ -5348,7 +5292,7 @@ public class KafkaAdminClientTest {
         // Non-retriable errors throw an exception
 
         final TopicPartition tp1 = new TopicPartition("foo", 0);
-        final List<Errors> nonRetriableErrors = asList(
+        final List<Errors> nonRetriableErrors = Arrays.asList(
             Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND, Errors.STALE_MEMBER_EPOCH);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
@@ -5436,7 +5380,7 @@ public class KafkaAdminClientTest {
         final Cluster cluster =
             new Cluster(
                 "mockClusterId",
-                singletonList(node0),
+                Arrays.asList(node0),
                 pInfos,
                 Collections.emptySet(),
                 Collections.emptySet(),
@@ -5458,7 +5402,7 @@ public class KafkaAdminClientTest {
             ListOffsetsTopicResponse t3 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp3, Errors.NONE, 234567890L, 456L, 654);
             ListOffsetsResponseData responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(asList(t0, t1, t2, t3));
+                    .setTopics(Arrays.asList(t0, t1, t2, t3));
             env.kafkaClient().prepareResponse(new ListOffsetsResponse(responseData));
 
             Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
@@ -5486,7 +5430,10 @@ public class KafkaAdminClientTest {
             assertEquals(offsets.get(tp1), result.partitionResult(tp1).get());
             assertEquals(offsets.get(tp2), result.partitionResult(tp2).get());
             assertEquals(offsets.get(tp3), result.partitionResult(tp3).get());
-            assertThrows(IllegalArgumentException.class, () -> result.partitionResult(new TopicPartition("unknown", 0)).get());
+            try {
+                result.partitionResult(new TopicPartition("unknown", 0)).get();
+                fail("should have thrown IllegalArgumentException");
+            } catch (IllegalArgumentException expected) { }
         }
     }
 
@@ -5495,7 +5442,7 @@ public class KafkaAdminClientTest {
 
         Node node0 = new Node(0, "localhost", 8120);
         Node node1 = new Node(1, "localhost", 8121);
-        List<Node> nodes = asList(node0, node1);
+        List<Node> nodes = Arrays.asList(node0, node1);
         List<PartitionInfo> pInfos = new ArrayList<>();
         pInfos.add(new PartitionInfo("foo", 0, node0, new Node[]{node0, node1}, new Node[]{node0, node1}));
         pInfos.add(new PartitionInfo("foo", 1, node0, new Node[]{node0, node1}, new Node[]{node0, node1}));
@@ -5521,13 +5468,13 @@ public class KafkaAdminClientTest {
             ListOffsetsTopicResponse t1 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp1, Errors.NONE, -1L, 987L, 789);
             ListOffsetsResponseData responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(asList(t0, t1));
+                    .setTopics(Arrays.asList(t0, t1));
             env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(responseData), node0);
             // listoffsets response from broker 1
             ListOffsetsTopicResponse t2 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp2, Errors.NONE, -1L, 456L, 654);
             responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(singletonList(t2));
+                    .setTopics(Arrays.asList(t2));
             env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(responseData), node1);
 
             // metadata refresh because of LEADER_NOT_AVAILABLE
@@ -5536,7 +5483,7 @@ public class KafkaAdminClientTest {
             t0 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp0, Errors.NONE, -1L, 345L, 543);
             responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(singletonList(t0));
+                    .setTopics(Arrays.asList(t0));
             env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(responseData), node0);
 
             Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
@@ -5564,7 +5511,7 @@ public class KafkaAdminClientTest {
 
         Node node0 = new Node(0, "localhost", 8120);
         Node node1 = new Node(1, "localhost", 8121);
-        List<Node> nodes = asList(node0, node1);
+        List<Node> nodes = Arrays.asList(node0, node1);
         List<PartitionInfo> pInfos = new ArrayList<>();
         pInfos.add(new PartitionInfo("foo", 0, node0, new Node[]{node0, node1}, new Node[]{node0, node1}));
         final Cluster cluster =
@@ -5586,7 +5533,7 @@ public class KafkaAdminClientTest {
             ListOffsetsTopicResponse t0 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp0, Errors.TOPIC_AUTHORIZATION_FAILED, -1L, -1L, -1);
             ListOffsetsResponseData responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(singletonList(t0));
+                    .setTopics(Arrays.asList(t0));
             env.kafkaClient().prepareResponse(new ListOffsetsResponse(responseData));
 
             Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
@@ -5656,7 +5603,7 @@ public class KafkaAdminClientTest {
             ListOffsetsTopicResponse topicResponse = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp1, Errors.NONE, -1L, 345L, 543);
             ListOffsetsResponseData responseData = new ListOffsetsResponseData()
                 .setThrottleTimeMs(0)
-                .setTopics(singletonList(topicResponse));
+                .setTopics(Arrays.asList(topicResponse));
             env.kafkaClient().prepareResponseFrom(
                 // ensure that no max timestamp requests are retried
                 request -> request instanceof ListOffsetsRequest && ((ListOffsetsRequest) request).topics().stream()
@@ -5705,13 +5652,13 @@ public class KafkaAdminClientTest {
                 ListOffsetsResponse.singletonListOffsetsTopicResponse(tp1, Errors.NONE, -1L, 345L, 543);
             ListOffsetsResponseData responseDataWithError = new ListOffsetsResponseData()
                 .setThrottleTimeMs(0)
-                .setTopics(asList(tp0ErrorResponse, tp1Response));
+                .setTopics(Arrays.asList(tp0ErrorResponse, tp1Response));
 
             ListOffsetsTopicResponse tp0Response =
                 ListOffsetsResponse.singletonListOffsetsTopicResponse(tp0, Errors.NONE, -1L, 789L, 987);
             ListOffsetsResponseData responseData = new ListOffsetsResponseData()
                 .setThrottleTimeMs(0)
-                .setTopics(asList(tp0Response, tp1Response));
+                .setTopics(Arrays.asList(tp0Response, tp1Response));
 
             // Test that one-too-many timeouts for partition 0 result in partial success overall -
             // timeout for partition 0 and success for partition 1.
@@ -5824,7 +5771,7 @@ public class KafkaAdminClientTest {
             ListOffsetsTopicResponse t0 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp0, Errors.NONE, -1L, 123L, 321);
             ListOffsetsResponseData responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(singletonList(t0));
+                    .setTopics(Arrays.asList(t0));
 
             // listoffsets response from broker 0
             env.kafkaClient().prepareResponse(
@@ -6121,7 +6068,7 @@ public class KafkaAdminClientTest {
     public void testListOffsetsMetadataRetriableErrors() throws Exception {
         Node node0 = new Node(0, "localhost", 8120);
         Node node1 = new Node(1, "localhost", 8121);
-        List<Node> nodes = asList(node0, node1);
+        List<Node> nodes = Arrays.asList(node0, node1);
         List<PartitionInfo> pInfos = new ArrayList<>();
         pInfos.add(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0}));
         pInfos.add(new PartitionInfo("foo", 1, node1, new Node[]{node1}, new Node[]{node1}));
@@ -6149,13 +6096,13 @@ public class KafkaAdminClientTest {
             ListOffsetsTopicResponse t0 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp0, Errors.NONE, -1L, 345L, 543);
             ListOffsetsResponseData responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(singletonList(t0));
+                    .setTopics(Arrays.asList(t0));
             env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(responseData), node0);
             // listoffsets response from broker 1
             ListOffsetsTopicResponse t1 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp1, Errors.NONE, -1L, 789L, 987);
             responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(singletonList(t1));
+                    .setTopics(Arrays.asList(t1));
             env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(responseData), node1);
 
             Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
@@ -6179,13 +6126,13 @@ public class KafkaAdminClientTest {
         Node node0 = new Node(0, "localhost", 8120);
         Node node1 = new Node(1, "localhost", 8121);
         Node node2 = new Node(2, "localhost", 8122);
-        List<Node> nodes = asList(node0, node1, node2);
+        List<Node> nodes = Arrays.asList(node0, node1, node2);
 
         final PartitionInfo oldPInfo1 = new PartitionInfo("foo", 0, node0,
             new Node[]{node0, node1, node2}, new Node[]{node0, node1, node2});
         final PartitionInfo oldPnfo2 = new PartitionInfo("foo", 1, node0,
             new Node[]{node0, node1, node2}, new Node[]{node0, node1, node2});
-        List<PartitionInfo> oldPInfos = asList(oldPInfo1, oldPnfo2);
+        List<PartitionInfo> oldPInfos = Arrays.asList(oldPInfo1, oldPnfo2);
 
         final Cluster oldCluster = new Cluster("mockClusterId", nodes, oldPInfos,
             Collections.emptySet(), Collections.emptySet(), node0);
@@ -6201,14 +6148,14 @@ public class KafkaAdminClientTest {
             ListOffsetsTopicResponse t1 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp1, Errors.LEADER_NOT_AVAILABLE, -2L, 123L, 456);
             ListOffsetsResponseData responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(asList(t0, t1));
+                    .setTopics(Arrays.asList(t0, t1));
             env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(responseData), node0);
 
             final PartitionInfo newPInfo1 = new PartitionInfo("foo", 0, node1,
                 new Node[]{node0, node1, node2}, new Node[]{node0, node1, node2});
             final PartitionInfo newPInfo2 = new PartitionInfo("foo", 1, node2,
                 new Node[]{node0, node1, node2}, new Node[]{node0, node1, node2});
-            List<PartitionInfo> newPInfos = asList(newPInfo1, newPInfo2);
+            List<PartitionInfo> newPInfos = Arrays.asList(newPInfo1, newPInfo2);
 
             final Cluster newCluster = new Cluster("mockClusterId", nodes, newPInfos,
                 Collections.emptySet(), Collections.emptySet(), node0);
@@ -6218,13 +6165,13 @@ public class KafkaAdminClientTest {
             t0 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp0, Errors.NONE, -1L, 345L, 543);
             responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(singletonList(t0));
+                    .setTopics(Arrays.asList(t0));
             env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(responseData), node1);
 
             t1 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp1, Errors.NONE, -2L, 123L, 456);
             responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(singletonList(t1));
+                    .setTopics(Arrays.asList(t1));
             env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(responseData), node2);
 
             Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
@@ -6248,7 +6195,7 @@ public class KafkaAdminClientTest {
         Node node0 = new Node(0, "localhost", 8120);
         Node node1 = new Node(1, "localhost", 8121);
         Node node2 = new Node(2, "localhost", 8122);
-        List<Node> nodes = asList(node0, node1, node2);
+        List<Node> nodes = Arrays.asList(node0, node1, node2);
 
         final PartitionInfo oldPartitionInfo = new PartitionInfo("foo", 0, node0,
             new Node[]{node0, node1, node2}, new Node[]{node0, node1, node2});
@@ -6264,7 +6211,7 @@ public class KafkaAdminClientTest {
             ListOffsetsTopicResponse t0 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1L, 345L, 543);
             ListOffsetsResponseData responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(singletonList(t0));
+                    .setTopics(Arrays.asList(t0));
             env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(responseData), node0);
 
             // updating leader from node0 to node1 and metadata refresh because of NOT_LEADER_OR_FOLLOWER
@@ -6278,7 +6225,7 @@ public class KafkaAdminClientTest {
             t0 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp0, Errors.NONE, -2L, 123L, 456);
             responseData = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(singletonList(t0));
+                    .setTopics(Arrays.asList(t0));
             env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(responseData), node1);
 
             Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
@@ -6302,7 +6249,7 @@ public class KafkaAdminClientTest {
     ) throws Exception {
         Node node0 = new Node(0, "localhost", 8120);
         Node node1 = new Node(1, "localhost", 8121);
-        List<Node> nodes = asList(node0, node1);
+        List<Node> nodes = Arrays.asList(node0, node1);
         List<PartitionInfo> pInfos = new ArrayList<>();
         pInfos.add(new PartitionInfo("foo", 0, node0, new Node[]{node0, node1}, new Node[]{node0, node1}));
         final Cluster cluster =
@@ -6364,7 +6311,7 @@ public class KafkaAdminClientTest {
     public void testListOffsetsPartialResponse() throws Exception {
         Node node0 = new Node(0, "localhost", 8120);
         Node node1 = new Node(1, "localhost", 8121);
-        List<Node> nodes = asList(node0, node1);
+        List<Node> nodes = Arrays.asList(node0, node1);
         List<PartitionInfo> pInfos = new ArrayList<>();
         pInfos.add(new PartitionInfo("foo", 0, node0, new Node[]{node0, node1}, new Node[]{node0, node1}));
         pInfos.add(new PartitionInfo("foo", 1, node0, new Node[]{node0, node1}, new Node[]{node0, node1}));
@@ -6388,7 +6335,7 @@ public class KafkaAdminClientTest {
             ListOffsetsTopicResponse t0 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp0, Errors.NONE, -2L, 123L, 456);
             ListOffsetsResponseData data = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
-                    .setTopics(singletonList(t0));
+                    .setTopics(Arrays.asList(t0));
             env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(data), node0);
 
             Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
@@ -6403,7 +6350,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testGetSubLevelError() {
-        List<MemberIdentity> memberIdentities = asList(
+        List<MemberIdentity> memberIdentities = Arrays.asList(
             new MemberIdentity().setGroupInstanceId("instance-0"),
             new MemberIdentity().setGroupInstanceId("instance-1"));
         Map<MemberIdentity, Errors> errorsMap = new HashMap<>();
@@ -6423,7 +6370,7 @@ public class KafkaAdminClientTest {
         Node node0 = new Node(0, "localhost", 8121);
         nodes.put(0, node0);
         Cluster cluster = new Cluster("mockClusterId", nodes.values(),
-                singletonList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
+                Arrays.asList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
                 Collections.emptySet(), Collections.emptySet(),
                 Collections.emptySet(), nodes.get(0));
 
@@ -6478,7 +6425,7 @@ public class KafkaAdminClientTest {
         Node node0 = new Node(0, "localhost", 8121);
         nodes.put(0, node0);
         Cluster cluster = new Cluster("mockClusterId", nodes.values(),
-                singletonList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
+                Arrays.asList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
                 Collections.emptySet(), Collections.emptySet(),
                 Collections.emptySet(), nodes.get(0));
 
@@ -6527,7 +6474,7 @@ public class KafkaAdminClientTest {
         Node node0 = new Node(0, "localhost", 8121);
         nodes.put(0, node0);
         Cluster cluster = new Cluster("mockClusterId", nodes.values(),
-                singletonList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
+                Arrays.asList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
                 Collections.emptySet(), Collections.emptySet(),
                 Collections.emptySet(), nodes.get(0));
 
@@ -6585,7 +6532,7 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(DescribeClientQuotasResponse.fromQuotaEntities(responseData, 0));
 
-            ClientQuotaFilter filter = ClientQuotaFilter.contains(singletonList(ClientQuotaFilterComponent.ofEntity(ClientQuotaEntity.USER, value)));
+            ClientQuotaFilter filter = ClientQuotaFilter.contains(asList(ClientQuotaFilterComponent.ofEntity(ClientQuotaEntity.USER, value)));
 
             DescribeClientQuotasResult result = env.adminClient().describeClientQuotas(filter);
             Map<ClientQuotaEntity, Map<String, Double>> resultData = result.entities().get();
@@ -6648,9 +6595,6 @@ public class KafkaAdminClientTest {
             result.values().get(goodEntity);
             TestUtils.assertFutureError(result.values().get(unauthorizedEntity), ClusterAuthorizationException.class);
             TestUtils.assertFutureError(result.values().get(invalidEntity), InvalidRequestException.class);
-
-            // ensure immutable
-            assertThrows(UnsupportedOperationException.class, () -> result.values().put(newClientQuotaEntity(ClientQuotaEntity.USER, "user-3"), null));
         }
     }
 
@@ -6785,10 +6729,10 @@ public class KafkaAdminClientTest {
             user1CredentialInfo.setIterations(user1Iterations);
 
             final DescribeUserScramCredentialsResponseData responseData = new DescribeUserScramCredentialsResponseData();
-            responseData.setResults(asList(
+            responseData.setResults(Arrays.asList(
                     new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
                             .setUser(user0Name)
-                            .setCredentialInfos(asList(user0CredentialInfo0, user0CredentialInfo1)),
+                            .setCredentialInfos(Arrays.asList(user0CredentialInfo0, user0CredentialInfo1)),
                     new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
                             .setUser(user1Name)
                             .setCredentialInfos(singletonList(user1CredentialInfo))));
@@ -6832,7 +6776,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testAlterUserScramCredentialsUnknownMechanism() throws ExecutionException, InterruptedException {
+    public void testAlterUserScramCredentialsUnknownMechanism() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
@@ -6846,30 +6790,43 @@ public class KafkaAdminClientTest {
             ScramMechanism user2ScramMechanism0 = ScramMechanism.SCRAM_SHA_256;
 
             AlterUserScramCredentialsResponseData responseData = new AlterUserScramCredentialsResponseData();
-            responseData.setResults(singletonList(
+            responseData.setResults(Arrays.asList(
                     new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult().setUser(user2Name)));
 
             env.kafkaClient().prepareResponse(new AlterUserScramCredentialsResponse(responseData));
 
-            AlterUserScramCredentialsResult result = env.adminClient().alterUserScramCredentials(asList(
+            AlterUserScramCredentialsResult result = env.adminClient().alterUserScramCredentials(Arrays.asList(
                     new UserScramCredentialDeletion(user0Name, user0ScramMechanism0),
                     new UserScramCredentialUpsertion(user1Name, new ScramCredentialInfo(user1ScramMechanism0, 8192), "password"),
                     new UserScramCredentialUpsertion(user2Name, new ScramCredentialInfo(user2ScramMechanism0, 4096), "password")));
             Map<String, KafkaFuture<Void>> resultData = result.values();
             assertEquals(3, resultData.size());
-            Stream.of(user0Name, user1Name).forEach(u -> {
+            Arrays.asList(user0Name, user1Name).stream().forEach(u -> {
                 assertTrue(resultData.containsKey(u));
-                assertThrows(Exception.class, () -> resultData.get(u).get(), "Expected request for user " + u + " to complete exceptionally, but it did not");
+                try {
+                    resultData.get(u).get();
+                    fail("Expected request for user " + u + " to complete exceptionally, but it did not");
+                } catch (Exception expected) {
+                    // ignore
+                }
             });
             assertTrue(resultData.containsKey(user2Name));
-            resultData.get(user2Name).get();
-
-            assertThrows(Exception.class, () -> result.all().get(), "Expected 'result.all().get()' to throw an exception since at least one user failed, but it did not");
+            try {
+                resultData.get(user2Name).get();
+            } catch (Exception e) {
+                fail("Expected request for user " + user2Name + " to NOT complete excdptionally, but it did");
+            }
+            try {
+                result.all().get();
+                fail("Expected 'result.all().get()' to throw an exception since at least one user failed, but it did not");
+            } catch (final Exception expected) {
+                // ignore, expected
+            }
         }
     }
 
     @Test
-    public void testAlterUserScramCredentials() {
+    public void testAlterUserScramCredentials() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
@@ -6881,20 +6838,20 @@ public class KafkaAdminClientTest {
             final String user2Name = "user2";
             ScramMechanism user2ScramMechanism0 = ScramMechanism.SCRAM_SHA_512;
             AlterUserScramCredentialsResponseData responseData = new AlterUserScramCredentialsResponseData();
-            responseData.setResults(Stream.of(user0Name, user1Name, user2Name).map(u ->
+            responseData.setResults(Arrays.asList(user0Name, user1Name, user2Name).stream().map(u ->
                     new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult()
                     .setUser(u).setErrorCode(Errors.NONE.code())).collect(Collectors.toList()));
 
             env.kafkaClient().prepareResponse(new AlterUserScramCredentialsResponse(responseData));
 
-            AlterUserScramCredentialsResult result = env.adminClient().alterUserScramCredentials(asList(
+            AlterUserScramCredentialsResult result = env.adminClient().alterUserScramCredentials(Arrays.asList(
                     new UserScramCredentialDeletion(user0Name, user0ScramMechanism0),
                     new UserScramCredentialUpsertion(user0Name, new ScramCredentialInfo(user0ScramMechanism1, 8192), "password"),
                     new UserScramCredentialUpsertion(user1Name, new ScramCredentialInfo(user1ScramMechanism0, 8192), "password"),
                     new UserScramCredentialDeletion(user2Name, user2ScramMechanism0)));
             Map<String, KafkaFuture<Void>> resultData = result.values();
             assertEquals(3, resultData.size());
-            Stream.of(user0Name, user1Name, user2Name).forEach(u -> {
+            Arrays.asList(user0Name, user1Name, user2Name).stream().forEach(u -> {
                 assertTrue(resultData.containsKey(u));
                 assertFalse(resultData.get(u).isCompletedExceptionally());
             });
@@ -6928,7 +6885,7 @@ public class KafkaAdminClientTest {
                 prepareDescribeLogDirsResponse(Errors.NONE, "/data"),
                 env.cluster().nodeById(1));
 
-            DescribeLogDirsResult result = env.adminClient().describeLogDirs(asList(0, 1));
+            DescribeLogDirsResult result = env.adminClient().describeLogDirs(Arrays.asList(0, 1));
 
             // Wait until the prepared attempt has been consumed
             TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 0,
@@ -7050,7 +7007,7 @@ public class KafkaAdminClientTest {
             Node leader = env.cluster().nodes().iterator().next();
             expectMetadataRequest(env, topicPartition, leader);
 
-            List<ProducerState> expected = asList(
+            List<ProducerState> expected = Arrays.asList(
                 new ProducerState(12345L, 15, 30, env.time().milliseconds(),
                     OptionalInt.of(99), OptionalLong.empty()),
                 new ProducerState(12345L, 15, 30, env.time().milliseconds(),
@@ -7117,7 +7074,7 @@ public class KafkaAdminClientTest {
             Node initialLeader = nodeIterator.next();
             expectMetadataRequest(env, topicPartition, initialLeader);
 
-            List<ProducerState> expected = asList(
+            List<ProducerState> expected = Arrays.asList(
                 new ProducerState(12345L, 15, 30, env.time().milliseconds(),
                     OptionalInt.of(99), OptionalLong.empty()),
                 new ProducerState(12345L, 15, 30, env.time().milliseconds(),
@@ -7210,7 +7167,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                 request -> request instanceof FindCoordinatorRequest,
                 new FindCoordinatorResponse(new FindCoordinatorResponseData()
-                        .setCoordinators(singletonList(new FindCoordinatorResponseData.Coordinator()
+                        .setCoordinators(Arrays.asList(new FindCoordinatorResponseData.Coordinator()
                                 .setKey(transactionalId)
                                 .setErrorCode(Errors.NONE.code())
                                 .setNodeId(coordinator1.id())
@@ -7240,7 +7197,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                 request -> request instanceof FindCoordinatorRequest,
                 new FindCoordinatorResponse(new FindCoordinatorResponseData()
-                        .setCoordinators(singletonList(new FindCoordinatorResponseData.Coordinator()
+                        .setCoordinators(Arrays.asList(new FindCoordinatorResponseData.Coordinator()
                                 .setKey(transactionalId)
                                 .setErrorCode(Errors.NONE.code())
                                 .setNodeId(coordinator2.id())
@@ -7344,14 +7301,14 @@ public class KafkaAdminClientTest {
             MetadataResponseData.MetadataResponseBrokerCollection brokers =
                 new MetadataResponseData.MetadataResponseBrokerCollection();
 
-            env.cluster().nodes().forEach(node ->
+            env.cluster().nodes().forEach(node -> {
                 brokers.add(new MetadataResponseData.MetadataResponseBroker()
                     .setHost(node.host())
                     .setNodeId(node.id())
                     .setPort(node.port())
                     .setRack(node.rack())
-                )
-            );
+                );
+            });
 
             env.kafkaClient().prepareResponse(
                 request -> request instanceof MetadataRequest,
@@ -7359,7 +7316,7 @@ public class KafkaAdminClientTest {
                     MetadataResponseData.HIGHEST_SUPPORTED_VERSION)
             );
 
-            List<TransactionListing> expected = asList(
+            List<TransactionListing> expected = Arrays.asList(
                 new TransactionListing("foo", 12345L, TransactionState.ONGOING),
                 new TransactionListing("bar", 98765L, TransactionState.PREPARE_ABORT),
                 new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
@@ -7668,7 +7625,7 @@ public class KafkaAdminClientTest {
     @Test
     public void testListClientMetricsResources() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            List<ClientMetricsResourceListing> expected = asList(
+            List<ClientMetricsResourceListing> expected = Arrays.asList(
                 new ClientMetricsResourceListing("one"),
                 new ClientMetricsResourceListing("two")
             );
@@ -7708,7 +7665,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testListClientMetricsResourcesNotSupported() {
+    public void testListClientMetricsResourcesNotSupported() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponse(
                 request -> request instanceof ListClientMetricsResourcesRequest,

@@ -19,7 +19,6 @@ package org.apache.kafka.tools;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.runtime.isolation.PluginSource;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -123,7 +122,7 @@ public class ManifestWorkspace {
      * <p>Buffers simulated reads and writes to the plugin path before they can be written to disk.
      * @param <T> The data structure used by the workspace to store in-memory manifests internally.
      */
-    public abstract static class SourceWorkspace<T> {
+    public static abstract class SourceWorkspace<T> {
         private final Path location;
         private final PluginSource.Type type;
         protected final T initial;

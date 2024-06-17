@@ -18,11 +18,11 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
-interface StandbyTaskAssignor extends LegacyTaskAssignor {
+interface StandbyTaskAssignor extends TaskAssignor {
     default boolean isAllowedTaskMovement(final ClientState source, final ClientState destination) {
         return true;
     }
@@ -38,11 +38,11 @@ interface StandbyTaskAssignor extends LegacyTaskAssignor {
     default boolean isAllowedTaskMovement(final ClientState source,
                                           final ClientState destination,
                                           final TaskId sourceTask,
-                                          final Map<ProcessId, ClientState> clientStateMap) {
+                                          final Map<UUID, ClientState> clientStateMap) {
         return true;
     }
 
-    default boolean assign(final Map<ProcessId, ClientState> clients,
+    default boolean assign(final Map<UUID, ClientState> clients,
                            final Set<TaskId> allTaskIds,
                            final Set<TaskId> statefulTaskIds,
                            final RackAwareTaskAssignor rackAwareTaskAssignor,
@@ -50,8 +50,8 @@ interface StandbyTaskAssignor extends LegacyTaskAssignor {
         return assign(clients, allTaskIds, statefulTaskIds, configs);
     }
 
-    boolean assign(final Map<ProcessId, ClientState> clients,
+    boolean assign(final Map<UUID, ClientState> clients,
                    final Set<TaskId> allTaskIds,
                    final Set<TaskId> statefulTaskIds,
-                   final AssignmentConfigs configs);
+                   final AssignorConfiguration.AssignmentConfigs configs);
 }

@@ -45,7 +45,7 @@ public class ChildFirstClassLoader extends URLClassLoader {
         super(classpathToURLs(classPath), parent);
     }
 
-    private static URL[] classpathToURLs(String classPath) {
+    static private URL[] classpathToURLs(String classPath) {
         ArrayList<URL> urls = new ArrayList<>();
         for (String path : classPath.split(File.pathSeparator)) {
             if (path == null || path.trim().isEmpty())

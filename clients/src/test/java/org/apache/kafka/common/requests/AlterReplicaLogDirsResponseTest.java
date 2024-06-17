@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.Collections;
 import java.util.Map;
 
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
@@ -45,7 +44,7 @@ public class AlterReplicaLogDirsResponseTest {
                                                 .setErrorCode(Errors.NONE.code()))),
                         new AlterReplicaLogDirTopicResult()
                                 .setTopicName("t1")
-                                .setPartitions(Collections.singletonList(
+                                .setPartitions(asList(
                                         new AlterReplicaLogDirPartitionResult()
                                                 .setPartitionIndex(0)
                                                 .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())))));

@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
@@ -38,20 +38,14 @@ import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.Assi
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
-import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils.RackAwareOptimizationParams;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
-import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
-import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
 public class StickyTaskAssignor implements TaskAssignor {
     private static final Logger LOG = LoggerFactory.getLogger(StickyTaskAssignor.class);
-
-    public static final int DEFAULT_STICKY_TRAFFIC_COST = 1;
-    public static final int DEFAULT_STICKY_NON_OVERLAP_COST = 10;
 
     private final boolean mustPreserveActiveTaskAssignment;
 
@@ -76,7 +70,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         assignStandby(applicationState, assignmentState);
         optimizeStandby(applicationState, assignmentState);
 
-        final Map<ProcessId, KafkaStreamsAssignment> finalAssignments = assignmentState.newAssignments;
+        final Map<ProcessId, KafkaStreamsAssignment> finalAssignments = assignmentState.buildKafkaStreamsAssignments();
         if (mustPreserveActiveTaskAssignment && !finalAssignments.isEmpty()) {
             // We set the followup deadline for only one of the clients.
             final ProcessId clientId = finalAssignments.entrySet().iterator().next().getKey();
@@ -93,26 +87,23 @@ public class StickyTaskAssignor implements TaskAssignor {
             return;
         }
 
-        final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.newAssignments;
+        final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.buildKafkaStreamsAssignments();
 
-        final RackAwareOptimizationParams statefulTaskParams = RackAwareOptimizationParams.of(applicationState)
-            .withTrafficCostOverride(
-                applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
-            )
-            .withNonOverlapCostOverride(
-                applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
-            )
-            .forStatefulTasks();
-        TaskAssignmentUtils.optimizeRackAwareActiveTasks(statefulTaskParams, currentAssignments);
+        final Set<TaskId> statefulTasks = applicationState.allTasks().values().stream()
+            .filter(TaskInfo::isStateful)
+            .map(TaskInfo::id)
+            .collect(Collectors.toSet());
+        final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignmentsForStatefulTasks = TaskAssignmentUtils.optimizeRackAwareActiveTasks(
+            applicationState, currentAssignments, new TreeSet<>(statefulTasks));
 
-        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
-            RackAwareOptimizationParams.of(applicationState)
-                .forStatelessTasks()
-                .withTrafficCostOverride(RackAwareTaskAssignor.STATELESS_TRAFFIC_COST)
-                .withNonOverlapCostOverride(RackAwareTaskAssignor.STATELESS_NON_OVERLAP_COST),
-            currentAssignments
-        );
-        assignmentState.processOptimizedAssignments(currentAssignments);
+        final Set<TaskId> statelessTasks = applicationState.allTasks().values().stream()
+            .filter(task -> !task.isStateful())
+            .map(TaskInfo::id)
+            .collect(Collectors.toSet());
+        final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignmentsForAllTasks = TaskAssignmentUtils.optimizeRackAwareActiveTasks(
+            applicationState, optimizedAssignmentsForStatefulTasks, new TreeSet<>(statelessTasks));
+
+        assignmentState.processOptimizedAssignments(optimizedAssignmentsForAllTasks);
     }
 
     private void optimizeStandby(final ApplicationState applicationState, final AssignmentState assignmentState) {
@@ -124,17 +115,10 @@ public class StickyTaskAssignor implements TaskAssignor {
             return;
         }
 
-        final Map<ProcessId, KafkaStreamsAssignment> assignments = assignmentState.newAssignments;
-
-        final RackAwareOptimizationParams optimizationParams = RackAwareOptimizationParams.of(applicationState)
-            .withTrafficCostOverride(
-                applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
-            )
-            .withNonOverlapCostOverride(
-                applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
-            );
-        TaskAssignmentUtils.optimizeRackAwareStandbyTasks(optimizationParams, assignments);
-        assignmentState.processOptimizedAssignments(assignments);
+        final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.buildKafkaStreamsAssignments();
+        final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignments = TaskAssignmentUtils.optimizeRackAwareStandbyTasks(
+            applicationState, currentAssignments);
+        assignmentState.processOptimizedAssignments(optimizedAssignments);
     }
 
     private static void assignActive(final ApplicationState applicationState,
@@ -188,7 +172,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static void assignStandby(final ApplicationState applicationState,
                                       final AssignmentState assignmentState) {
         final Set<TaskInfo> statefulTasks = applicationState.allTasks().values().stream()
-            .filter(taskInfo -> taskInfo.topicPartitions().stream().anyMatch(TaskTopicPartition::isChangelog))
+            .filter(TaskInfo::isStateful)
             .collect(Collectors.toSet());
         final int numStandbyReplicas = applicationState.assignmentConfigs().numStandbyReplicas();
         for (final TaskInfo task : statefulTasks) {
@@ -223,7 +207,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static Map<TaskId, Set<ProcessId>> mapPreviousStandbyTasks(final Map<ProcessId, KafkaStreamsState> clients) {
         final Map<TaskId, Set<ProcessId>> previousStandbyTasks = new HashMap<>();
         for (final KafkaStreamsState client : clients.values()) {
-            for (final TaskId taskId : client.previousStandbyTasks()) {
+            for (final TaskId taskId : client.previousActiveTasks()) {
                 previousStandbyTasks.computeIfAbsent(taskId, k -> new HashSet<>());
                 previousStandbyTasks.get(taskId).add(client.processId());
             }
@@ -247,7 +231,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         private final TaskPairs taskPairs;
 
         private Map<TaskId, Set<ProcessId>> newTaskLocations;
-        private Map<ProcessId, KafkaStreamsAssignment> newAssignments;
+        private Map<ProcessId, Set<AssignedTask>> newAssignments;
 
         private AssignmentState(final ApplicationState applicationState,
                                 final Map<ProcessId, KafkaStreamsState> clients,
@@ -261,49 +245,62 @@ public class StickyTaskAssignor implements TaskAssignor {
             final int maxPairs = taskCount * (taskCount - 1) / 2;
             this.taskPairs = new TaskPairs(maxPairs);
 
-            this.newTaskLocations = previousActiveAssignment.keySet().stream()
-                .collect(Collectors.toMap(Function.identity(), taskId -> new HashSet<>()));
-            this.newAssignments = clients.values().stream().collect(Collectors.toMap(
-                KafkaStreamsState::processId,
-                state -> KafkaStreamsAssignment.of(state.processId(), new HashSet<>())
-            ));
+            this.newTaskLocations = new HashMap<>();
+            this.newAssignments = new HashMap<>();
         }
 
-        private void finalizeAssignment(final TaskId taskId, final ProcessId client, final AssignedTask.Type type) {
-            final Set<TaskId> newAssignmentsForClient = newAssignments.get(client).tasks().keySet();
+        public void finalizeAssignment(final TaskId taskId, final ProcessId client, final AssignedTask.Type type) {
+            newAssignments.computeIfAbsent(client, k -> new HashSet<>());
+            newTaskLocations.computeIfAbsent(taskId, k -> new HashSet<>());
+
+            final Set<TaskId> newAssignmentsForClient = newAssignments.get(client)
+                .stream().map(AssignedTask::id).collect(Collectors.toSet());
+
             taskPairs.addPairs(taskId, newAssignmentsForClient);
-
-            newAssignments.get(client).assignTask(new AssignedTask(taskId, type));
-            newTaskLocations.computeIfAbsent(taskId, k -> new HashSet<>()).add(client);
+            newAssignments.get(client).add(new AssignedTask(taskId, type));
+            newTaskLocations.get(taskId).add(client);
         }
 
-        private void processOptimizedAssignments(final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignments) {
+        public Map<ProcessId, KafkaStreamsAssignment> buildKafkaStreamsAssignments() {
+            final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments = new HashMap<>();
+            for (final Map.Entry<ProcessId, Set<AssignedTask>> entry : newAssignments.entrySet()) {
+                final ProcessId processId = entry.getKey();
+                final Set<AssignedTask> assignedTasks = newAssignments.get(processId);
+                final KafkaStreamsAssignment assignment = KafkaStreamsAssignment.of(processId, assignedTasks);
+                kafkaStreamsAssignments.put(processId, assignment);
+            }
+            return kafkaStreamsAssignments;
+        }
+
+        public void processOptimizedAssignments(final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignments) {
             final Map<TaskId, Set<ProcessId>> newTaskLocations = new HashMap<>();
+            final Map<ProcessId, Set<AssignedTask>> newAssignments = new HashMap<>();
 
             for (final Map.Entry<ProcessId, KafkaStreamsAssignment> entry : optimizedAssignments.entrySet()) {
                 final ProcessId processId = entry.getKey();
                 final Set<AssignedTask> assignedTasks = new HashSet<>(optimizedAssignments.get(processId).tasks().values());
+                newAssignments.put(processId, assignedTasks);
 
                 for (final AssignedTask task : assignedTasks) {
-                    newTaskLocations.computeIfAbsent(task.id(), k -> new HashSet<>()).add(processId);
+                    newTaskLocations.computeIfAbsent(task.id(), k -> new HashSet<>());
+                    newTaskLocations.get(task.id()).add(processId);
                 }
             }
 
             this.newTaskLocations = newTaskLocations;
-            this.newAssignments = optimizedAssignments;
+            this.newAssignments = newAssignments;
         }
 
-        private boolean hasRoomForActiveTask(final ProcessId processId, final int activeTasksPerThread) {
+        public boolean hasRoomForActiveTask(final ProcessId processId, final int activeTasksPerThread) {
             final int capacity = clients.get(processId).numProcessingThreads();
-            final int newActiveTaskCount = newAssignments.computeIfAbsent(processId, k -> KafkaStreamsAssignment.of(processId, new HashSet<>()))
-                .tasks().values()
+            final int newActiveTaskCount = newAssignments.computeIfAbsent(processId, k -> new HashSet<>())
                 .stream().filter(assignedTask -> assignedTask.type() == AssignedTask.Type.ACTIVE)
                 .collect(Collectors.toSet())
                 .size();
             return newActiveTaskCount < capacity * activeTasksPerThread;
         }
 
-        private ProcessId findBestClientForTask(final TaskId taskId, final Set<ProcessId> clientsWithin) {
+        public ProcessId findBestClientForTask(final TaskId taskId, final Set<ProcessId> clientsWithin) {
             if (clientsWithin.size() == 1) {
                 return clientsWithin.iterator().next();
             }
@@ -324,21 +321,21 @@ public class StickyTaskAssignor implements TaskAssignor {
             return previousClient;
         }
 
-        private Set<ProcessId> findClientsWithoutAssignedTask(final TaskId taskId) {
-            final Set<ProcessId> unavailableClients = newTaskLocations.get(taskId);
+        public Set<ProcessId> findClientsWithoutAssignedTask(final TaskId taskId) {
+            final Set<ProcessId> unavailableClients = newTaskLocations.computeIfAbsent(taskId, k -> new HashSet<>());
             return clients.values().stream()
                 .map(KafkaStreamsState::processId)
                 .filter(o -> !unavailableClients.contains(o))
                 .collect(Collectors.toSet());
         }
 
-        private double clientLoad(final ProcessId processId) {
+        public double clientLoad(final ProcessId processId) {
             final int capacity = clients.get(processId).numProcessingThreads();
-            final double totalTaskCount = newAssignments.get(processId).tasks().size();
+            final double totalTaskCount = newAssignments.getOrDefault(processId, new HashSet<>()).size();
             return totalTaskCount / capacity;
         }
 
-        private ProcessId findLeastLoadedClient(final TaskId taskId, final Set<ProcessId> clientIds) {
+        public ProcessId findLeastLoadedClient(final TaskId taskId, final Set<ProcessId> clientIds) {
             ProcessId leastLoaded = null;
             for (final ProcessId processId : clientIds) {
                 final double thisClientLoad = clientLoad(processId);
@@ -347,7 +344,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 }
 
                 if (leastLoaded == null || thisClientLoad < clientLoad(leastLoaded)) {
-                    final Set<TaskId> assignedTasks = newAssignments.get(processId).tasks().values()
+                    final Set<TaskId> assignedTasks = newAssignments.getOrDefault(processId, new HashSet<>())
                         .stream().map(AssignedTask::id).collect(Collectors.toSet());
                     if (taskPairs.hasNewPair(taskId, assignedTasks)) {
                         leastLoaded = processId;
@@ -370,8 +367,8 @@ public class StickyTaskAssignor implements TaskAssignor {
             return leastLoaded;
         }
 
-        private ProcessId findLeastLoadedClientWithPreviousActiveOrStandbyTask(final TaskId taskId,
-                                                                               final Set<ProcessId> clientsWithin) {
+        public ProcessId findLeastLoadedClientWithPreviousActiveOrStandbyTask(final TaskId taskId,
+                                                                              final Set<ProcessId> clientsWithin) {
             final ProcessId previous = previousActiveAssignment.get(taskId);
             if (previous != null && clientsWithin.contains(previous)) {
                 return previous;
@@ -379,15 +376,15 @@ public class StickyTaskAssignor implements TaskAssignor {
             return findLeastLoadedClientWithPreviousStandbyTask(taskId, clientsWithin);
         }
 
-        private ProcessId findLeastLoadedClientWithPreviousStandbyTask(final TaskId taskId,
-                                                                       final Set<ProcessId> clientsWithin) {
+        public ProcessId findLeastLoadedClientWithPreviousStandbyTask(final TaskId taskId,
+                                                                      final Set<ProcessId> clientsWithin) {
             final Set<ProcessId> ids = previousStandbyAssignment.getOrDefault(taskId, new HashSet<>());
             final HashSet<ProcessId> constrainTo = new HashSet<>(ids);
             constrainTo.retainAll(clientsWithin);
             return findLeastLoadedClient(taskId, constrainTo);
         }
 
-        private boolean shouldBalanceLoad(final ProcessId client) {
+        public boolean shouldBalanceLoad(final ProcessId client) {
             final double thisClientLoad = clientLoad(client);
             if (thisClientLoad < 1) {
                 return false;

@@ -540,15 +540,27 @@ public class ConsumerGroupMember {
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicId);
-            if (topicImage != null) {
+            String topicName = lookupTopicNameById(topicId, topicsImage);
+            if (topicName != null) {
                 topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
                     .setTopicId(topicId)
-                    .setTopicName(topicImage.name())
+                    .setTopicName(topicName)
                     .setPartitions(new ArrayList<>(partitionSet)));
             }
         });
         return topicPartitions;
+    }
+
+    private static String lookupTopicNameById(
+        Uuid topicId,
+        TopicsImage topicsImage
+    ) {
+        TopicImage topicImage = topicsImage.getTopic(topicId);
+        if (topicImage != null) {
+            return topicImage.name();
+        } else {
+            return null;
+        }
     }
 
     /**

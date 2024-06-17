@@ -64,13 +64,9 @@ public class ContextualRecord {
             Objects.equals(recordContext, that.recordContext);
     }
 
-    /**
-     * See {@link ProcessorRecordContext#hashCode()}
-     */
     @Override
     public int hashCode() {
-        throw new UnsupportedOperationException("ContextualRecord.ProcessorRecordContext is unsafe for use in Hash collections "
-            + "due to the mutable Headers field");
+        return Objects.hash(value, recordContext);
     }
 
     @Override

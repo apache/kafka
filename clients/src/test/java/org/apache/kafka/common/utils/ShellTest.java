@@ -44,7 +44,7 @@ public class ShellTest {
         assertEquals(length, output.length());
     }
 
-    private static final String NONEXISTENT_PATH = "/dev/a/path/that/does/not/exist/in/the/filesystem";
+    private final static String NONEXISTENT_PATH = "/dev/a/path/that/does/not/exist/in/the/filesystem";
 
     @Test
     public void testAttemptToRunNonExistentProgram() {

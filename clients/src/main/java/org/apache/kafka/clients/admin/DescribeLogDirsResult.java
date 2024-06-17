@@ -52,7 +52,7 @@ public class DescribeLogDirsResult {
         return descriptions().entrySet().stream()
             .collect(Collectors.toMap(
                 Map.Entry::getKey,
-                entry -> entry.getValue().thenApply(this::convertMapValues)));
+                entry -> entry.getValue().thenApply(map -> convertMapValues(map))));
     }
 
     @SuppressWarnings("deprecation")
@@ -88,7 +88,7 @@ public class DescribeLogDirsResult {
     @Deprecated
     public KafkaFuture<Map<Integer, Map<String, DescribeLogDirsResponse.LogDirInfo>>> all() {
         return allDescriptions().thenApply(map -> map.entrySet().stream().collect(Collectors.toMap(
-            Map.Entry::getKey,
+            entry -> entry.getKey(),
             entry -> convertMapValues(entry.getValue())
         )));
     }

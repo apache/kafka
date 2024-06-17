@@ -272,7 +272,7 @@ public class SelectorTest {
         return metrics.metrics().entrySet().stream().
             filter(e -> e.getKey().description().
                 contains("The number of connections with this SSL cipher and protocol.")).
-            map(Map.Entry::getValue).
+            map(e -> e.getValue()).
             collect(Collectors.toList());
     }
 
@@ -955,7 +955,7 @@ public class SelectorTest {
         NetworkSend send = new NetworkSend("destination", new ByteBufferSend(ByteBuffer.allocate(0)));
         when(channel.maybeCompleteSend()).thenReturn(send);
         selector.write(channel);
-        assertEquals(Collections.singletonList(send), selector.completedSends());
+        assertEquals(asList(send), selector.completedSends());
     }
 
     /**

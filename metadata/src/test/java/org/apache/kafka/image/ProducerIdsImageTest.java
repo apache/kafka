@@ -22,7 +22,6 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -35,13 +34,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class ProducerIdsImageTest {
-    public static final ProducerIdsImage IMAGE1;
+    public final static ProducerIdsImage IMAGE1;
 
-    static final List<ApiMessageAndVersion> DELTA1_RECORDS;
+    final static List<ApiMessageAndVersion> DELTA1_RECORDS;
 
-    static final ProducerIdsDelta DELTA1;
+    final static ProducerIdsDelta DELTA1;
 
-    static final ProducerIdsImage IMAGE2;
+    final static ProducerIdsImage IMAGE2;
 
     static {
         IMAGE1 = new ProducerIdsImage(123);

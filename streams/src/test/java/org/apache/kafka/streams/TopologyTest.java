@@ -396,7 +396,7 @@ public class TopologyTest {
     }
 
     private static class LocalMockProcessorSupplier implements ProcessorSupplier<Object, Object, Object, Object> {
-        static final String STORE_NAME = "store";
+        final static String STORE_NAME = "store";
 
         @Override
         public Processor<Object, Object, Object, Object> get() {

@@ -165,7 +165,6 @@ public class ActivationRecordsGenerator {
                         throw new RuntimeException("Should not have ZK migrations enabled on a cluster that was " +
                             "created in KRaft mode.");
                     }
-                    logMessageBuilder.append("This is expected because this is a de-novo KRaft cluster.");
                     break;
                 case PRE_MIGRATION:
                     if (!metadataVersion.isMetadataTransactionSupported()) {

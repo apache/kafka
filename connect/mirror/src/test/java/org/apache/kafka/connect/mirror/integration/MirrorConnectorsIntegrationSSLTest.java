@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.connect.mirror.integration;
 
+import java.util.Map;
+import java.util.Properties;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
@@ -27,10 +31,6 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-
-import java.util.Map;
-import java.util.Properties;
-import java.util.stream.Collectors;
 
 /**
  * Tests MM2 replication with SSL enabled at backup kafka cluster
@@ -64,3 +64,4 @@ public class MirrorConnectorsIntegrationSSLTest extends MirrorConnectorsIntegrat
         super.startClusters();
     }
 }
+

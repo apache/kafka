@@ -51,7 +51,6 @@ import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -445,7 +444,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final TaskManager taskManager = new TaskManager(
             time,
             changelogReader,
-            new ProcessId(processId),
+            processId,
             logPrefix,
             activeTaskCreator,
             standbyTaskCreator,

@@ -103,7 +103,7 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
         }
 
         @Override
-        public synchronized void cancel() {
+        synchronized public void cancel() {
             schedule.markCancelled();
         }
     }

@@ -30,7 +30,7 @@ public class ProvenanceNode implements MetadataNode {
     /**
      * The name of this node.
      */
-    public static final String NAME = "provenance";
+    public final static String NAME = "provenance";
 
     /**
      * The metadata provenance.

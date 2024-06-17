@@ -23,7 +23,6 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.server.util.ThroughputThrottler;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,7 +56,7 @@ public class SchemaSourceTask extends SourceTask {
     private boolean multipleSchema;
     private int partitionCount;
 
-    private static final Schema VALUE_SCHEMA = SchemaBuilder.struct().version(1).name("record")
+    private final static Schema VALUE_SCHEMA = SchemaBuilder.struct().version(1).name("record")
         .field("boolean", Schema.BOOLEAN_SCHEMA)
         .field("int", Schema.INT32_SCHEMA)
         .field("long", Schema.INT64_SCHEMA)
@@ -68,7 +67,7 @@ public class SchemaSourceTask extends SourceTask {
         .field("seqno", Schema.INT64_SCHEMA)
         .build();
 
-    private static final Schema VALUE_SCHEMA_2 = SchemaBuilder.struct().version(2).name("record")
+    private final static Schema VALUE_SCHEMA_2 = SchemaBuilder.struct().version(2).name("record")
         .field("boolean", Schema.BOOLEAN_SCHEMA)
         .field("int", Schema.INT32_SCHEMA)
         .field("long", Schema.INT64_SCHEMA)

@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Timeout(120)
 public class ImplicitLinkedHashCollectionTest {
 
-    static final class TestElement implements ImplicitLinkedHashCollection.Element {
+    final static class TestElement implements ImplicitLinkedHashCollection.Element {
         private int prev = ImplicitLinkedHashCollection.INVALID_INDEX;
         private int next = ImplicitLinkedHashCollection.INVALID_INDEX;
         private final int key;
@@ -625,7 +625,13 @@ public class ImplicitLinkedHashCollectionTest {
                 return -1;
             } else if (a.key > b.key) {
                 return 1;
-            } else return Integer.compare(a.val, b.val);
+            } else if (a.val < b.val) {
+                return -1;
+            } else if (a.val > b.val) {
+                return 1;
+            } else {
+                return 0;
+            }
         }
     }
 

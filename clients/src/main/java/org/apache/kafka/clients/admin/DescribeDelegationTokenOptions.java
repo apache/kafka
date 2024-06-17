@@ -32,9 +32,9 @@ public class DescribeDelegationTokenOptions extends AbstractOptions<DescribeDele
     private List<KafkaPrincipal> owners;
 
     /**
-     * If owners is null, all the user owned tokens and tokens where user have Describe permission
+     * if owners is null, all the user owned tokens and tokens where user have Describe permission
      * will be returned.
-     * @param owners The owners that we want to describe delegation tokens for
+     * @param owners
      * @return this instance
      */
     public DescribeDelegationTokenOptions owners(List<KafkaPrincipal> owners) {

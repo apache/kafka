@@ -54,7 +54,6 @@ import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
-
 import org.slf4j.Logger;
 
 import java.util.AbstractMap;
@@ -82,7 +81,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  * brokers being fenced or unfenced, and broker feature versions.
  */
 public class ClusterControlManager {
-    static final long DEFAULT_SESSION_TIMEOUT_NS = NANOSECONDS.convert(9, TimeUnit.SECONDS);
+    final static long DEFAULT_SESSION_TIMEOUT_NS = NANOSECONDS.convert(9, TimeUnit.SECONDS);
 
     static class Builder {
         private LogContext logContext = null;
@@ -259,7 +258,7 @@ public class ClusterControlManager {
      */
     private final boolean zkMigrationEnabled;
 
-    private final BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
+    private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
 
     /**
      * Maps controller IDs to controller registrations.

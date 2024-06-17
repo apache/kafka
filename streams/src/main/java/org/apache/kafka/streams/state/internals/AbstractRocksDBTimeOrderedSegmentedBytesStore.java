@@ -108,7 +108,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
             return KeyValue.pair(getBaseKey(ret.key), value);
         }
 
-        protected abstract Bytes getBaseKey(final Bytes indexKey);
+        abstract protected Bytes getBaseKey(final Bytes indexKey);
     }
 
     AbstractRocksDBTimeOrderedSegmentedBytesStore(final String name,
@@ -135,7 +135,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
         return fetch(key, from, to, false);
     }
 
-    protected abstract IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<KeyValueSegment> segmentIterator);
+    abstract protected IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<KeyValueSegment> segmentIterator);
 
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
                                           final long from,

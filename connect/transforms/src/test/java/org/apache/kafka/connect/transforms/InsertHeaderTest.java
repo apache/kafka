@@ -22,7 +22,6 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -124,3 +123,4 @@ public class InsertHeaderTest {
         assertEquals(AppInfoParser.getVersion(), xform.version());
     }
 }
+

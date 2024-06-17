@@ -19,7 +19,6 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

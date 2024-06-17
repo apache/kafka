@@ -29,7 +29,7 @@ import java.util.Optional;
  */
 public class StreamsException extends KafkaException {
 
-    private static final long serialVersionUID = 1L;
+    private final static long serialVersionUID = 1L;
 
     private TaskId taskId;
 

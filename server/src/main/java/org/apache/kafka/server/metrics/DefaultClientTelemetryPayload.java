@@ -27,10 +27,10 @@ import java.nio.ByteBuffer;
  */
 public class DefaultClientTelemetryPayload implements ClientTelemetryPayload {
 
-    private final Uuid clientInstanceId;
-    private final boolean isClientTerminating;
-    private final String metricsContentType;
-    private final ByteBuffer metricsData;
+    final private Uuid clientInstanceId;
+    final private boolean isClientTerminating;
+    final private String metricsContentType;
+    final private ByteBuffer metricsData;
 
     DefaultClientTelemetryPayload(PushTelemetryRequest request) {
         this.clientInstanceId = request.data().clientInstanceId();

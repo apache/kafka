@@ -19,10 +19,11 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.apache.kafka.test.IntegrationTest;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -50,7 +51,7 @@ import static org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster.DEFA
  * Integration test for source connectors with a focus on topic creation with custom properties by
  * the connector tasks.
  */
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class SourceConnectorsIntegrationTest {
 
     private static final int NUM_WORKERS = 3;
@@ -71,7 +72,7 @@ public class SourceConnectorsIntegrationTest {
     Map<String, String> workerProps = new HashMap<>();
     Properties brokerProps = new Properties();
 
-    @BeforeEach
+    @Before
     public void setup() {
         // setup Connect worker properties
         workerProps.put(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, "All");
@@ -88,7 +89,7 @@ public class SourceConnectorsIntegrationTest {
                 .maskExitProcedures(true); // true is the default, setting here as example
     }
 
-    @AfterEach
+    @After
     public void close() {
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
@@ -101,6 +102,8 @@ public class SourceConnectorsIntegrationTest {
         connect = connectBuilder.brokerProps(brokerProps).workerProps(workerProps).build();
         // start the clusters
         connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
 
         Map<String, String> fooProps = sourceConnectorPropsWithGroups(FOO_TOPIC);
 
@@ -124,6 +127,8 @@ public class SourceConnectorsIntegrationTest {
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
 
         Map<String, String> fooProps = sourceConnectorPropsWithGroups(FOO_TOPIC);
 
@@ -154,6 +159,8 @@ public class SourceConnectorsIntegrationTest {
         connect.assertions().assertTopicsExist(BAR_TOPIC);
         connect.assertions().assertTopicSettings(BAR_TOPIC, DEFAULT_REPLICATION_FACTOR,
                 DEFAULT_PARTITIONS, "Topic " + BAR_TOPIC + " does not have the expected settings");
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
 
         Map<String, String> barProps = defaultSourceConnectorProps(BAR_TOPIC);
         // start a source connector with topic creation properties
@@ -188,7 +195,7 @@ public class SourceConnectorsIntegrationTest {
         workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(true));
 
         IntStream.range(0, 3).forEach(i -> connect.addWorker());
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Workers did not start in time after cluster was rolled.");
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
 
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(FOO_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");

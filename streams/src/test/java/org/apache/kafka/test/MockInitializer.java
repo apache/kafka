@@ -27,5 +27,5 @@ public class MockInitializer {
         }
     }
 
-    public static final Initializer<String> STRING_INIT = new StringInit();
+    public final static Initializer<String> STRING_INIT = new StringInit();
 }

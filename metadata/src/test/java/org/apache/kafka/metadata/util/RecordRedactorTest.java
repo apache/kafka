@@ -17,6 +17,10 @@
 
 package org.apache.kafka.metadata.util;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
@@ -24,18 +28,13 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.metadata.KafkaConfigSchema;
-
 import org.junit.jupiter.api.Test;
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
-public final class RecordRedactorTest {
+final public class RecordRedactorTest {
     public static final Map<ConfigResource.Type, ConfigDef> CONFIGS = new HashMap<>();
 
     static {

@@ -17,6 +17,11 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.LongNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.utils.Scheduler;
@@ -41,13 +46,6 @@ import org.apache.kafka.trogdor.rest.WorkerReceiving;
 import org.apache.kafka.trogdor.rest.WorkerState;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.LongNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -151,23 +149,23 @@ public final class TaskManager {
         /**
          * The task id.
          */
-        private final String id;
+        final private String id;
 
         /**
          * The original task specification as submitted when the task was created.
          */
-        private final TaskSpec originalSpec;
+        final private TaskSpec originalSpec;
 
         /**
          * The effective task specification.
          * The start time will be adjusted to reflect the time when the task was submitted.
          */
-        private final TaskSpec spec;
+        final private TaskSpec spec;
 
         /**
          * The task controller.
          */
-        private final TaskController controller;
+        final private TaskController controller;
 
         /**
          * The task state.

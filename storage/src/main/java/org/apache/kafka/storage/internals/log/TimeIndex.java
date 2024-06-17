@@ -18,7 +18,6 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.errors.InvalidOffsetException;
 import org.apache.kafka.common.record.RecordBatch;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

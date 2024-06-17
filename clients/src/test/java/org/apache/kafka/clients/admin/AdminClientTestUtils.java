@@ -156,7 +156,7 @@ public class AdminClientTestUtils {
     public static ListClientMetricsResourcesResult listClientMetricsResourcesResult(String... names) {
         return new ListClientMetricsResourcesResult(
                 KafkaFuture.completedFuture(Arrays.stream(names)
-                        .map(ClientMetricsResourceListing::new)
+                        .map(name -> new ClientMetricsResourceListing(name))
                         .collect(Collectors.toList())));
     }
 

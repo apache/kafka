@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
  */
 @InterfaceStability.Evolving
 public class CreateTopicsResult {
-    static final int UNKNOWN = -1;
+    final static int UNKNOWN = -1;
 
     private final Map<String, KafkaFuture<TopicMetadataAndConfig>> futures;
 

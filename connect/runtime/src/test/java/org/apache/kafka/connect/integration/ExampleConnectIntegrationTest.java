@@ -19,10 +19,13 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.apache.kafka.test.IntegrationTest;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
+import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,8 +44,8 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * An example integration test that demonstrates how to setup an integration test for Connect.
@@ -50,7 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The following test configures and executes up a sink connector pipeline in a worker, produces messages into
  * the source topic-partitions, and demonstrates how to check the overall behavior of the pipeline.
  */
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class ExampleConnectIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(ExampleConnectIntegrationTest.class);
@@ -68,7 +71,10 @@ public class ExampleConnectIntegrationTest {
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
 
-    @BeforeEach
+    @Rule
+    public TestRule watcher = ConnectIntegrationTestUtils.newTestWatcher(log);
+
+    @Before
     public void setup() {
         // setup Connect worker properties
         Map<String, String> exampleWorkerProps = new HashMap<>();
@@ -94,7 +100,7 @@ public class ExampleConnectIntegrationTest {
         connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
     }
 
-    @AfterEach
+    @After
     public void close() {
         // delete connector handle
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
@@ -150,9 +156,8 @@ public class ExampleConnectIntegrationTest {
         }
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
-        assertEquals(NUM_RECORDS_PRODUCED,
-                connect.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic").count(),
-                "Unexpected number of records consumed");
+        assertEquals("Unexpected number of records consumed", NUM_RECORDS_PRODUCED,
+                connect.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic").count());
 
         // wait for the connector tasks to consume all records.
         connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
@@ -212,8 +217,8 @@ public class ExampleConnectIntegrationTest {
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         int recordNum = connect.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic").count();
-        assertTrue(recordNum >= NUM_RECORDS_PRODUCED,
-                "Not enough records produced by source connector. Expected at least: " + NUM_RECORDS_PRODUCED + " + but got " + recordNum);
+        assertTrue("Not enough records produced by source connector. Expected at least: " + NUM_RECORDS_PRODUCED + " + but got " + recordNum,
+                recordNum >= NUM_RECORDS_PRODUCED);
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);

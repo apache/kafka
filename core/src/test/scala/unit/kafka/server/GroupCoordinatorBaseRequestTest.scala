@@ -421,13 +421,10 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def consumerGroupDescribe(
     groupIds: List[String],
-    includeAuthorizedOperations: Boolean,
     version: Short = ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)
   ): List[ConsumerGroupDescribeResponseData.DescribedGroup] = {
     val consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
-      new ConsumerGroupDescribeRequestData()
-        .setGroupIds(groupIds.asJava)
-        .setIncludeAuthorizedOperations(includeAuthorizedOperations)
+      new ConsumerGroupDescribeRequestData().setGroupIds(groupIds.asJava)
     ).build(version)
 
     val consumerGroupDescribeResponse = connectAndReceive[ConsumerGroupDescribeResponse](consumerGroupDescribeRequest)

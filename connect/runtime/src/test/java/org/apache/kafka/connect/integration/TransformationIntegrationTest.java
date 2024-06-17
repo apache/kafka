@@ -23,10 +23,11 @@ import org.apache.kafka.connect.transforms.predicates.HasHeaderKey;
 import org.apache.kafka.connect.transforms.predicates.RecordIsTombstone;
 import org.apache.kafka.connect.transforms.predicates.TopicNameMatches;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.jupiter.api.Tag;
+import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,13 +49,13 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 /**
  * An integration test for connectors with transformations
  */
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class TransformationIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(TransformationIntegrationTest.class);
@@ -114,6 +115,8 @@ public class TransformationIntegrationTest {
      */
     @Test
     public void testFilterOnTopicNameWithSinkConnector() throws Exception {
+        assertConnectReady();
+
         Map<String, Long> observedRecords = observeRecords();
 
         // create test topics
@@ -158,16 +161,10 @@ public class TransformationIntegrationTest {
         }
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
-        assertEquals(
-                numFooRecords,
-                connect.kafka().consume(numFooRecords, RECORD_TRANSFER_DURATION_MS, fooTopic).count(),
-                "Unexpected number of records consumed"
-        );
-        assertEquals(
-                numBarRecords,
-                connect.kafka().consume(numBarRecords, RECORD_TRANSFER_DURATION_MS, barTopic).count(),
-                "Unexpected number of records consumed"
-        );
+        assertEquals("Unexpected number of records consumed", numFooRecords,
+                connect.kafka().consume(numFooRecords, RECORD_TRANSFER_DURATION_MS, fooTopic).count());
+        assertEquals("Unexpected number of records consumed", numBarRecords,
+                connect.kafka().consume(numBarRecords, RECORD_TRANSFER_DURATION_MS, barTopic).count());
 
         // wait for the connector tasks to consume all records.
         connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
@@ -181,6 +178,12 @@ public class TransformationIntegrationTest {
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);
+    }
+
+    private void assertConnectReady() throws InterruptedException {
+        connect.assertions().assertExactlyNumBrokersAreUp(1, "Brokers did not start in time.");
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS, "Worker did not start in time.");
+        log.info("Completed startup of {} Kafka brokers and {} Connect workers", 1, NUM_WORKERS);
     }
 
     private void assertConnectorRunning() throws InterruptedException {
@@ -209,6 +212,8 @@ public class TransformationIntegrationTest {
      */
     @Test
     public void testFilterOnTombstonesWithSinkConnector() throws Exception {
+        assertConnectReady();
+
         Map<String, Long> observedRecords = observeRecords();
 
         // create test topics
@@ -244,11 +249,8 @@ public class TransformationIntegrationTest {
         }
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
-        assertEquals(
-                numRecords,
-                connect.kafka().consume(numRecords, RECORD_TRANSFER_DURATION_MS, topic).count(),
-                "Unexpected number of records consumed"
-        );
+        assertEquals("Unexpected number of records consumed", numRecords,
+                connect.kafka().consume(numRecords, RECORD_TRANSFER_DURATION_MS, topic).count());
 
         // wait for the connector tasks to consume all records.
         connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
@@ -271,6 +273,8 @@ public class TransformationIntegrationTest {
      */
     @Test
     public void testFilterOnHasHeaderKeyWithSourceConnectorAndTopicCreation() throws Exception {
+        assertConnectReady();
+
         // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
         props.put("name", CONNECTOR_NAME);
@@ -313,7 +317,8 @@ public class TransformationIntegrationTest {
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         for (ConsumerRecord<byte[], byte[]> record : connect.kafka().consume(1, RECORD_TRANSFER_DURATION_MS, "test-topic")) {
-            assertNotNull(record.headers().lastHeader("header-8"), "Expected header to exist");
+            assertNotNull("Expected header to exist",
+                    record.headers().lastHeader("header-8"));
         }
 
         // delete connector

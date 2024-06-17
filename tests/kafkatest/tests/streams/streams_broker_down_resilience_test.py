@@ -157,7 +157,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         configs = self.get_configs(
             extra_configs=",application.id=shutdown_with_broker_down" +
-                          ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor"
+                          ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor"
         )
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
@@ -236,7 +236,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         configs = self.get_configs(
             extra_configs=",application.id=failover_with_broker_down" +
-                          ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor"
+                          ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor"
         )
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)

@@ -126,7 +126,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         }
     }
 
-    protected abstract KeyValue<Bytes, byte[]> getIndexKeyValue(final Bytes baseKey, final byte[] baseValue);
+    abstract protected KeyValue<Bytes, byte[]> getIndexKeyValue(final Bytes baseKey, final byte[] baseValue);
 
     // isTimeFirstWindowSchema true implies ON_WINDOW_CLOSE semantics. There's an edge case
     // when retentionPeriod = grace Period. If we add 1, then actualFrom > to which would

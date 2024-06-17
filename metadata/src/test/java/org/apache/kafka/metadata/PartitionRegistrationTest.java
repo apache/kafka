@@ -17,6 +17,11 @@
 
 package org.apache.kafka.metadata;
 
+import net.jqwik.api.Arbitraries;
+import net.jqwik.api.Arbitrary;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
+import net.jqwik.api.Provide;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -27,13 +32,6 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.UnwritableMetadataException;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
-
-import net.jqwik.api.Arbitraries;
-import net.jqwik.api.Arbitrary;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-import net.jqwik.api.Provide;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -50,8 +48,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
 @Timeout(40)
@@ -76,7 +74,7 @@ public class PartitionRegistrationTest {
             setReplicas(new int[]{1, 2, 3}).setDirectories(DirectoryId.unassignedArray(3)).
             setIsr(new int[]{1}).setLastKnownElr(new int[]{3}).setElr(new int[]{2}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(1).build();
         assertEquals(b, a.merge(new PartitionChangeRecord().
-            setLeader(3).setIsr(Collections.singletonList(3))));
+            setLeader(3).setIsr(Arrays.asList(3))));
         assertEquals("isr: [1, 2] -> [3], leader: 1 -> 3, leaderEpoch: 0 -> 1, partitionEpoch: 0 -> 1",
             b.diff(a));
         assertEquals("isr: [1, 2] -> [1], elr: [] -> [2], lastKnownElr: [] -> [3], partitionEpoch: 0 -> 1",
@@ -155,8 +153,7 @@ public class PartitionRegistrationTest {
         PartitionRegistration partition1 = partition0.merge(new PartitionChangeRecord().
             setRemovingReplicas(Collections.singletonList(3)).
             setAddingReplicas(Collections.singletonList(4)).
-            setReplicas(Arrays.asList(1, 2, 3, 4)).
-            setDirectories(Arrays.asList(dir1, dir2, dir3, DirectoryId.UNASSIGNED)));
+            setReplicas(Arrays.asList(1, 2, 3, 4)));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).
             setDirectories(new Uuid[]{dir1, dir2, dir3, DirectoryId.UNASSIGNED}).
             setIsr(new int[] {1, 2, 3}).setRemovingReplicas(new int[] {3}).setAddingReplicas(new int[] {4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(201).build(), partition1);
@@ -164,8 +161,7 @@ public class PartitionRegistrationTest {
             setIsr(Arrays.asList(1, 2, 4)).
             setRemovingReplicas(Collections.emptyList()).
             setAddingReplicas(Collections.emptyList()).
-            setReplicas(Arrays.asList(1, 2, 4)).
-            setDirectories(Arrays.asList(dir1, dir2, DirectoryId.UNASSIGNED)));
+            setReplicas(Arrays.asList(1, 2, 4)));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 4}).
             setDirectories(new Uuid[]{dir1, dir2, DirectoryId.UNASSIGNED}).
             setIsr(new int[] {1, 2, 4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(202).build(), partition2);
@@ -324,7 +320,7 @@ public class PartitionRegistrationTest {
         if (metadataVersion.isElrSupported()) {
             expectRecord.
                 setEligibleLeaderReplicas(Arrays.asList(2, 3)).
-                setLastKnownElr(Collections.singletonList(4));
+                setLastKnownElr(Arrays.asList(4));
         }
         if (metadataVersion.isDirectoryAssignmentSupported()) {
             expectRecord.setDirectories(Arrays.asList(

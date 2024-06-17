@@ -333,6 +333,10 @@ public final class Lz4BlockOutputStream extends OutputStream {
             return blockChecksum == 1;
         }
 
+        public boolean isBlockIndependenceSet() {
+            return blockIndependence == 1;
+        }
+
         public int getVersion() {
             return version;
         }

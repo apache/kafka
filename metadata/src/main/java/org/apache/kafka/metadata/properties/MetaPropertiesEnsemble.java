@@ -19,7 +19,6 @@ package org.apache.kafka.metadata.properties;
 
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -19,8 +19,8 @@ package org.apache.kafka.raft;
 import java.util.Objects;
 
 public final class ValidOffsetAndEpoch {
-    private final Kind kind;
-    private final OffsetAndEpoch offsetAndEpoch;
+    final private Kind kind;
+    final private OffsetAndEpoch offsetAndEpoch;
 
     private ValidOffsetAndEpoch(Kind kind, OffsetAndEpoch offsetAndEpoch) {
         this.kind = kind;

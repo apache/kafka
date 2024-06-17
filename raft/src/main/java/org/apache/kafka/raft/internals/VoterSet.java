@@ -16,13 +16,6 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.feature.SupportedVersionRange;
-import org.apache.kafka.common.message.VotersRecord;
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.utils.Utils;
-
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,7 +28,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
+
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.VotersRecord;
+import org.apache.kafka.common.utils.Utils;
 
 /**
  * A type for representing the set of voters for a topic partition.
@@ -45,7 +43,7 @@ import java.util.stream.Stream;
  * It provides functionality for converting to and from {@code VotersRecord} and for converting
  * from the static configuration.
  */
-public final class VoterSet {
+final public class VoterSet {
     private final Map<Integer, VoterNode> voters;
 
     VoterSet(Map<Integer, VoterNode> voters) {
@@ -57,41 +55,15 @@ public final class VoterSet {
     }
 
     /**
-     * Returns the node information for all the given voter ids and listener.
+     * Returns the socket address for a given voter at a given listener.
      *
-     * @param voterIds the ids of the voters
-     * @param listenerName the name of the listener
-     * @return the node information for all of the voter ids
-     * @throws IllegalArgumentException if there are missing endpoints
+     * @param voter the id of the voter
+     * @param listener the name of the listener
+     * @return the socket address if it exists, otherwise {@code Optional.empty()}
      */
-    public Set<Node> voterNodes(Stream<Integer> voterIds, ListenerName listenerName) {
-        return voterIds
-            .map(voterId ->
-                voterNode(voterId, listenerName).orElseThrow(() ->
-                    new IllegalArgumentException(
-                        String.format(
-                            "Unable to find endpoint for voter %d and listener %s in %s",
-                            voterId,
-                            listenerName,
-                            voters
-                        )
-                    )
-                )
-            )
-            .collect(Collectors.toSet());
-    }
-
-    /**
-     * Returns the node information for a given voter id and listener.
-     *
-     * @param voterId the id of the voter
-     * @param listenerName the name of the listener
-     * @return the node information if it exists, otherwise {@code Optional.empty()}
-     */
-    public Optional<Node> voterNode(int voterId, ListenerName listenerName) {
-        return Optional.ofNullable(voters.get(voterId))
-            .flatMap(voterNode -> voterNode.address(listenerName))
-            .map(address -> new Node(voterId, address.getHostString(), address.getPort()));
+    public Optional<InetSocketAddress> voterAddress(int voter, String listener) {
+        return Optional.ofNullable(voters.get(voter))
+            .flatMap(voterNode -> voterNode.address(listener));
     }
 
     /**
@@ -136,10 +108,6 @@ public final class VoterSet {
      */
     public Set<Integer> voterIds() {
         return voters.keySet();
-    }
-
-    public Map<Integer, VoterNode> voters() {
-        return voters;
     }
 
     /**
@@ -198,7 +166,7 @@ public final class VoterSet {
                 .stream()
                 .map(entry ->
                     new VotersRecord.Endpoint()
-                        .setName(entry.getKey().value())
+                        .setName(entry.getKey())
                         .setHost(entry.getValue().getHostString())
                         .setPort(entry.getValue().getPort())
                 )
@@ -252,7 +220,9 @@ public final class VoterSet {
             .collect(Collectors.toSet());
 
         if (Utils.diff(HashSet::new, thisReplicaKeys, thatReplicaKeys).size() > 1) return false;
-        return Utils.diff(HashSet::new, thatReplicaKeys, thisReplicaKeys).size() <= 1;
+        if (Utils.diff(HashSet::new, thatReplicaKeys, thisReplicaKeys).size() > 1) return false;
+
+        return true;
     }
 
     @Override
@@ -275,14 +245,14 @@ public final class VoterSet {
         return String.format("VoterSet(voters=%s)", voters);
     }
 
-    public static final class VoterNode {
+    public final static class VoterNode {
         private final ReplicaKey voterKey;
-        private final Map<ListenerName, InetSocketAddress> listeners;
+        private final Map<String, InetSocketAddress> listeners;
         private final SupportedVersionRange supportedKRaftVersion;
 
-        public VoterNode(
+        VoterNode(
             ReplicaKey voterKey,
-            Map<ListenerName, InetSocketAddress> listeners,
+            Map<String, InetSocketAddress> listeners,
             SupportedVersionRange supportedKRaftVersion
         ) {
             this.voterKey = voterKey;
@@ -294,7 +264,7 @@ public final class VoterSet {
             return voterKey;
         }
 
-        Map<ListenerName, InetSocketAddress> listeners() {
+        Map<String, InetSocketAddress> listeners() {
             return listeners;
         }
 
@@ -303,7 +273,7 @@ public final class VoterSet {
         }
 
 
-        Optional<InetSocketAddress> address(ListenerName listener) {
+        Optional<InetSocketAddress> address(String listener) {
             return Optional.ofNullable(listeners.get(listener));
         }
 
@@ -316,7 +286,9 @@ public final class VoterSet {
 
             if (!Objects.equals(voterKey, that.voterKey)) return false;
             if (!Objects.equals(supportedKRaftVersion, that.supportedKRaftVersion)) return false;
-            return Objects.equals(listeners, that.listeners);
+            if (!Objects.equals(listeners, that.listeners)) return false;
+
+            return true;
         }
 
         @Override
@@ -351,12 +323,9 @@ public final class VoterSet {
                 directoryId = Optional.empty();
             }
 
-            Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(voter.endpoints().size());
+            Map<String, InetSocketAddress> listeners = new HashMap<>(voter.endpoints().size());
             for (VotersRecord.Endpoint endpoint : voter.endpoints()) {
-                listeners.put(
-                    ListenerName.normalised(endpoint.name()),
-                    InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
-                );
+                listeners.put(endpoint.name(), InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port()));
             }
 
             voterNodes.put(
@@ -382,7 +351,7 @@ public final class VoterSet {
      * @param voters the socket addresses by voter id
      * @return the voter set
      */
-    public static VoterSet fromInetSocketAddresses(ListenerName listener, Map<Integer, InetSocketAddress> voters) {
+    public static VoterSet fromInetSocketAddresses(String listener, Map<Integer, InetSocketAddress> voters) {
         Map<Integer, VoterNode> voterNodes = voters
             .entrySet()
             .stream()
@@ -398,5 +367,17 @@ public final class VoterSet {
             );
 
         return new VoterSet(voterNodes);
+    }
+
+    public Optional<Node> voterNode(int id, String listener) {
+        VoterNode voterNode = voters.get(id);
+        if (voterNode == null) {
+            return Optional.empty();
+        }
+        InetSocketAddress address = voterNode.listeners.get(listener);
+        if (address == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new Node(id, address.getHostString(), address.getPort()));
     }
 }

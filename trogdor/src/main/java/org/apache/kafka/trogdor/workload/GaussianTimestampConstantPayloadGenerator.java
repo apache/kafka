@@ -17,10 +17,9 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import org.apache.kafka.common.utils.Time;
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.kafka.common.utils.Time;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
