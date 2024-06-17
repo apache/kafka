@@ -474,7 +474,7 @@ class TopologyTest {
   }
 
   private class SimpleProcessorSupplier private[TopologyTest] (val valueList: util.List[String])
-    extends ProcessorSupplier[String, String, Void, Void] {
+      extends ProcessorSupplier[String, String, Void, Void] {
 
     override def get(): Processor[String, String, Void, Void] =
       (record: api.Record[String, String]) => valueList.add(record.value())
