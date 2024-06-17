@@ -810,8 +810,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         return lastEpochSentOnCommit;
     }
 
-
-
     /**
      * Represents a request that can be retried or aborted, based on member ID and epoch
      * information.
