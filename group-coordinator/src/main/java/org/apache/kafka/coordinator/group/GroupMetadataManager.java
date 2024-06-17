@@ -159,6 +159,7 @@ import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics
  * 2) The replay methods which apply records to the hard state. Those are used in the request
  *    handling as well as during the initial loading of the records from the partitions.
  */
+@SuppressWarnings("JavaNCSS")
 public class GroupMetadataManager {
 
     public static class Builder {

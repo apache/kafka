@@ -100,7 +100,7 @@ class GroupCoordinatorAdapterTest {
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
     val ctx = makeContext(ApiKeys.STREAMS_HEARTBEAT, ApiKeys.STREAMS_HEARTBEAT.latestVersion)
-    val request = new StreamsHeartbeatRequestData()()
+    val request = new StreamsHeartbeatRequestData()
       .setGroupId("group")
 
     val future = adapter.streamsHeartbeat(ctx, request)
