@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectorType;
@@ -38,11 +40,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -67,6 +64,7 @@ public class WorkerConnectorTest {
     private static final String VERSION = "1.1";
     public static final String CONNECTOR = "connector";
     public static final Map<String, String> CONFIG = new HashMap<>();
+
     static {
         CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestConnector.class.getName());
         CONFIG.put(ConnectorConfig.NAME_CONFIG, CONNECTOR);
@@ -85,10 +83,6 @@ public class WorkerConnectorTest {
     private Connector connector;
     private CloseableOffsetStorageReader offsetStorageReader;
     private ConnectorOffsetBackingStore offsetStore;
-
-    public static Collection<ConnectorType> parameters() {
-        return Arrays.asList(ConnectorType.SOURCE, ConnectorType.SINK);
-    }
 
     private void setConnector(ConnectorType connectorType) {
         this.connectorType = connectorType;
@@ -120,7 +114,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testInitializeFailure(ConnectorType connectorType) {
         setup(connectorType);
         RuntimeException exception = new RuntimeException();
@@ -171,7 +165,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testStartupAndShutdown(ConnectorType connectorType) {
         setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
@@ -197,7 +191,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testStartupAndPause(ConnectorType connectorType) {
         setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
@@ -228,7 +222,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testStartupAndStop(ConnectorType connectorType) {
         setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
@@ -260,7 +254,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testOnResume(ConnectorType connectorType) {
         setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
@@ -292,7 +286,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testStartupPaused(ConnectorType connectorType) {
         setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
@@ -318,7 +312,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testStartupStopped(ConnectorType connectorType) {
         setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
@@ -344,7 +338,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testStartupFailure(ConnectorType connectorType) {
         setup(connectorType);
         RuntimeException exception = new RuntimeException();
@@ -373,7 +367,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testStopFailure(ConnectorType connectorType) {
         setup(connectorType);
         RuntimeException exception = new RuntimeException();
@@ -417,7 +411,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testShutdownFailure(ConnectorType connectorType) {
         setup(connectorType);
         RuntimeException exception = new RuntimeException();
@@ -447,7 +441,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testTransitionStartedToStarted(ConnectorType connectorType) {
         setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
@@ -476,7 +470,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testTransitionPausedToPaused(ConnectorType connectorType) {
         setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
@@ -509,7 +503,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testTransitionStoppedToStopped(ConnectorType connectorType) {
         setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
@@ -542,7 +536,7 @@ public class WorkerConnectorTest {
     }
 
     @ParameterizedTest
-     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testFailConnectorThatIsNeitherSourceNorSink(ConnectorType connectorType) {
         setup(connectorType);
         Connector badConnector = mock(Connector.class);

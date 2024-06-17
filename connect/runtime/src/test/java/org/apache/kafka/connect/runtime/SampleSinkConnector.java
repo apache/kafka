@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.util.List;
+import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
-
-import java.util.List;
-import java.util.Map;
 
 public class SampleSinkConnector extends SinkConnector {
 

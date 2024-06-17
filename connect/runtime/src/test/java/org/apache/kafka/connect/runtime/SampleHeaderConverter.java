@@ -16,15 +16,14 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.io.IOException;
+import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.storage.HeaderConverter;
-
-import java.io.IOException;
-import java.util.Map;
 
 public class SampleHeaderConverter implements HeaderConverter, Versioned {
     @Override
