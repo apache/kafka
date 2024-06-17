@@ -86,7 +86,7 @@
         </li>
         <li>Once the cluster's behavior and performance has been verified, bump the metadata.version by running
             <code>
-                ./bin/kafka-features.sh upgrade --metadata 3.7
+                bin/kafka-features.sh upgrade --metadata 3.7
             </code>
         </li>
         <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
@@ -192,7 +192,7 @@
         </li>
         <li>Once the cluster's behavior and performance has been verified, bump the metadata.version by running
             <code>
-                ./bin/kafka-features.sh upgrade --metadata 3.6
+                bin/kafka-features.sh upgrade --metadata 3.6
             </code>
         </li>
         <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
@@ -334,7 +334,7 @@
         </li>
         <li>Once the cluster's behavior and performance has been verified, bump the metadata.version by running
             <code>
-                ./bin/kafka-features.sh upgrade --metadata 3.5
+                bin/kafka-features.sh upgrade --metadata 3.5
             </code>
         </li>
         <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
@@ -433,7 +433,7 @@
         </li>
         <li>Once the cluster's behavior and performance has been verified, bump the metadata.version by running
             <code>
-                ./bin/kafka-features.sh upgrade --metadata 3.4
+                bin/kafka-features.sh upgrade --metadata 3.4
             </code>
         </li>
         <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
@@ -503,7 +503,7 @@
     </li>
     <li>Once the cluster's behavior and performance has been verified, bump the metadata.version by running
         <code>
-        ./bin/kafka-features.sh upgrade --metadata 3.3
+            bin/kafka-features.sh upgrade --metadata 3.3
         </code>
     </li>
     <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
@@ -596,7 +596,7 @@
             <a href="https://www.slf4j.org/codes.html#no_tlm">possible compatibility issues originating from the logging framework</a>.</li>
         <li>The example connectors, <code>FileStreamSourceConnector</code> and <code>FileStreamSinkConnector</code>, have been
             removed from the default classpath. To use them in Kafka Connect standalone or distributed mode they need to be
-            explicitly added, for example <code>CLASSPATH=./libs/connect-file-3.2.0.jar ./bin/connect-distributed.sh</code>.</li>
+            explicitly added, for example <code>CLASSPATH=./libs/connect-file-3.2.0.jar bin/connect-distributed.sh</code>.</li>
     </ul>
 
 <h4><a id="upgrade_3_1_0" href="#upgrade_3_1_0">Upgrading to 3.1.0 from any version 0.8.x through 3.0.x</a></h4>
