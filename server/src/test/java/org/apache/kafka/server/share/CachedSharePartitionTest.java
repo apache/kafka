@@ -17,6 +17,7 @@
 package org.apache.kafka.server.share;
 
 import org.apache.kafka.common.Uuid;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -19,6 +19,7 @@ package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
