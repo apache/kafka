@@ -288,6 +288,46 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testCanFetchRecordsWithEmptyCache() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(1).build();
+        assertTrue(sharePartition.canFetchRecords());
+    }
+
+    @Test
+    public void testCanFetchRecordsWithCachedDataAndLimitNotReached() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(6).build();
+        sharePartition.acquire(
+            MEMBER_ID,
+            new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        // Limit not reached as only 6 in-flight messages is the limit.
+        assertTrue(sharePartition.canFetchRecords());
+    }
+
+    @Test
+    public void testCanFetchRecordsWithCachedDataAndLimitReached() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(1).build();
+        sharePartition.acquire(
+            MEMBER_ID,
+            new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        // Limit reached as only one in-flight message is the limit.
+        assertFalse(sharePartition.canFetchRecords());
+    }
+
+    @Test
+    public void testMaybeAcquireAndReleaseFetchLock() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        assertTrue(sharePartition.maybeAcquireFetchLock());
+        // Lock cannot be acquired again, as already acquired.
+        assertFalse(sharePartition.maybeAcquireFetchLock());
+        // Release the lock.
+        sharePartition.releaseFetchLock();
+        // Lock can be acquired again.
+        assertTrue(sharePartition.maybeAcquireFetchLock());
+    }
+
+    @Test
     public void testAcknowledgeSingleRecordBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
@@ -922,6 +962,11 @@ public class SharePartitionTest {
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
         private ReplicaManager replicaManager = REPLICA_MANAGER;
+
+        private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {
+            this.maxInflightMessages = maxInflightMessages;
+            return this;
+        }
 
         public static SharePartitionBuilder builder() {
             return new SharePartitionBuilder();

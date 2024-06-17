@@ -598,24 +598,52 @@ public class SharePartition {
     }
 
     /**
+     * Updates the cached state, start and end offsets of the share partition as per the new log
+     * start offset. The method is called when the log start offset is moved for the share partition.
+     *
+     * @param logStartOffset The new log start offset.
+     */
+    void updateCacheAndOffsets(long logStartOffset) {
+      // TODO: Provide implementation to update cache and offsets on LSO movement.
+    }
+
+    /**
      * Checks if the number of records between startOffset and endOffset exceeds the record max
      * in-flight limit.
      *
-     * @return A boolean which indicates whether the max in-flight limit is reached.
+     * @return A boolean which indicates whether additional messages can be fetched for share partition.
      */
-    public boolean isMaxInFlightLimitReached() {
-        lock.readLock().lock();
-        long numRecords;
-        try {
-            if (cachedState.isEmpty()) {
-                numRecords = 0;
-            } else {
-                numRecords = this.endOffset - this.startOffset + 1;
-            }
-        } finally {
-            lock.readLock().unlock();
+    boolean canFetchRecords() {
+      lock.readLock().lock();
+      long numRecords;
+      try {
+        if (cachedState.isEmpty()) {
+          numRecords = 0;
+        } else {
+          numRecords = this.endOffset - this.startOffset + 1;
         }
-        return numRecords >= maxInFlightMessages;
+      } finally {
+        lock.readLock().unlock();
+      }
+      return numRecords < maxInFlightMessages;
+    }
+
+    /**
+     * Prior to fetching records from the leader, the fetch lock is acquired to ensure that the same
+     * share partition does not enter a fetch queue while another one is being fetched within the queue.
+     * The fetch lock is released once the records are fetched from the leader.
+     *
+     * @return A boolean which indicates whether the fetch lock is acquired.
+     */
+    boolean maybeAcquireFetchLock() {
+      return fetchLock.compareAndSet(false, true);
+    }
+
+    /**
+     * Release the fetch lock once the records are fetched from the leader.
+     */
+    void releaseFetchLock() {
+      fetchLock.set(false);
     }
 
     private void initialize() {
