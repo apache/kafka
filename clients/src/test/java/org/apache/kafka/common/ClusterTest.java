@@ -34,18 +34,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ClusterTest {
 
-    private final static Node[] NODES = new Node[] {
+    private static final Node[] NODES = new Node[] {
         new Node(0, "localhost", 99),
         new Node(1, "localhost", 100),
         new Node(2, "localhost", 101),
         new Node(11, "localhost", 102)
     };
 
-    private final static String TOPIC_A = "topicA";
-    private final static String TOPIC_B = "topicB";
-    private final static String TOPIC_C = "topicC";
-    private final static String TOPIC_D = "topicD";
-    private final static String TOPIC_E = "topicE";
+    private static final String TOPIC_A = "topicA";
+    private static final String TOPIC_B = "topicB";
+    private static final String TOPIC_C = "topicC";
+    private static final String TOPIC_D = "topicD";
+    private static final String TOPIC_E = "topicE";
 
     @Test
     public void testBootstrap() {

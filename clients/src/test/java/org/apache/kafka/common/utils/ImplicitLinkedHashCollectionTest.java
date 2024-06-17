@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Timeout(120)
 public class ImplicitLinkedHashCollectionTest {
 
-    final static class TestElement implements ImplicitLinkedHashCollection.Element {
+    static final class TestElement implements ImplicitLinkedHashCollection.Element {
         private int prev = ImplicitLinkedHashCollection.INVALID_INDEX;
         private int next = ImplicitLinkedHashCollection.INVALID_INDEX;
         private final int key;

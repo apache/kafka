@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.raft.generated.QuorumStateData;
+import org.apache.kafka.server.common.KRaftVersion;
+
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.util.Optional;
-import org.apache.kafka.raft.generated.QuorumStateData;
-import org.apache.kafka.server.common.KRaftVersion;
 
 public class MockQuorumStateStore implements QuorumStateStore {
     private Optional<QuorumStateData> current = Optional.empty();

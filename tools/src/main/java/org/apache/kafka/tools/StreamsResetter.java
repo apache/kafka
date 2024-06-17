@@ -90,7 +90,7 @@ public class StreamsResetter {
     private static final int EXIT_CODE_SUCCESS = 0;
     private static final int EXIT_CODE_ERROR = 1;
 
-    private final static String USAGE = "This tool helps to quickly reset an application in order to reprocess "
+    private static final String USAGE = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
             + "* This tool resets offsets of input topics to the earliest available offset (by default), or to a specific defined position"
             + " and it skips to the end of intermediate topics (topics that are input and output topics, e.g., used by deprecated through() method).\n"

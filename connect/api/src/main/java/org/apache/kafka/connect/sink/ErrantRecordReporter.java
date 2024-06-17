@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.connect.sink;
 
-import java.util.concurrent.Future;
 import org.apache.kafka.connect.errors.ConnectException;
+
+import java.util.concurrent.Future;
 
 /**
  * Component that a {@link SinkTask} can use to report problematic records (and their corresponding problems) as it

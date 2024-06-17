@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.types.TaggedFields;
 import org.apache.kafka.common.utils.Utils;
@@ -25,6 +23,13 @@ import org.apache.kafka.raft.generated.QuorumStateData;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.test.TestUtils;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -36,9 +41,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
 import static org.junit.jupiter.api.Assertions.assertEquals;

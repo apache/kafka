@@ -23,6 +23,8 @@ import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
 import org.apache.kafka.trogdor.rest.UptimeResponse;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
@@ -34,7 +36,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The REST resource for the Agent. This describes the RPCs which the agent can accept.

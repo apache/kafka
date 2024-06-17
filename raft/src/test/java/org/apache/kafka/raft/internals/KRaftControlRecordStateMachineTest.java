@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.util.Optional;
-import java.util.stream.IntStream;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.KRaftVersionRecord;
@@ -29,7 +27,12 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.Optional;
+import java.util.stream.IntStream;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 final class KRaftControlRecordStateMachineTest {

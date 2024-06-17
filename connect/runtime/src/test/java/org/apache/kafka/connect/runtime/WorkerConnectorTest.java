@@ -642,6 +642,6 @@ public class WorkerConnectorTest {
         }
     }
 
-    private static abstract class TestConnector extends Connector {
+    private abstract static class TestConnector extends Connector {
     }
 }

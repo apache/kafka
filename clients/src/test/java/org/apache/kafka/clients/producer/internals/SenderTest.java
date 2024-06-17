@@ -19,7 +19,9 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.LeastLoadedNode;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
@@ -299,7 +301,8 @@ public class SenderTest {
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
-                time, true, new ApiVersions(), throttleTimeSensor, logContext);
+                time, true, new ApiVersions(), throttleTimeSensor, logContext,
+                MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.ZK_BROKER);
@@ -3797,12 +3800,12 @@ public class SenderTest {
         client = new MockClient(time, metadata) {
             volatile boolean canSendMore = true;
             @Override
-            public Node leastLoadedNode(long now) {
+            public LeastLoadedNode leastLoadedNode(long now) {
                 for (Node node : metadata.fetch().nodes()) {
                     if (isReady(node, now) && canSendMore)
-                        return node;
+                        return new LeastLoadedNode(node, true);
                 }
-                return null;
+                return new LeastLoadedNode(null, false);
             }
 
             @Override
@@ -3821,7 +3824,7 @@ public class SenderTest {
         while (!client.ready(node, time.milliseconds()))
             client.poll(0, time.milliseconds());
         client.send(request, time.milliseconds());
-        while (client.leastLoadedNode(time.milliseconds()) != null)
+        while (client.leastLoadedNode(time.milliseconds()).node() != null)
             client.poll(0, time.milliseconds());
     }
 

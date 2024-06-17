@@ -245,7 +245,9 @@ public final class ClientUtils {
                     throttleTimeSensor,
                     logContext,
                     hostResolver,
-                    clientTelemetrySender);
+                    clientTelemetrySender,
+                    MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
+            );
         } catch (Throwable t) {
             closeQuietly(selector, "Selector");
             closeQuietly(channelBuilder, "ChannelBuilder");

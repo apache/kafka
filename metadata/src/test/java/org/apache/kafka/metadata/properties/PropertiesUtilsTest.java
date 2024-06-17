@@ -17,20 +17,21 @@
 
 package org.apache.kafka.metadata.properties;
 
+import org.apache.kafka.test.TestUtils;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Properties;
 
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class PropertiesUtilsTest {
+public final class PropertiesUtilsTest {
     @Test
     public void testReadPropertiesFile() throws IOException {
         File tempFile = TestUtils.tempFile();

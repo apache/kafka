@@ -90,6 +90,10 @@ public class NetworkClientDelegate implements AutoCloseable {
         return unsentRequests;
     }
 
+    public int inflightRequestCount() {
+        return client.inFlightRequestCount();
+    }
+
     /**
      * Check if the node is disconnected and unavailable for immediate reconnection (i.e. if it is in
      * reconnect backoff window following the disconnect).
@@ -181,7 +185,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     boolean doSend(final UnsentRequest r, final long currentTimeMs) {
-        Node node = r.node.orElse(client.leastLoadedNode(currentTimeMs));
+        Node node = r.node.orElse(client.leastLoadedNode(currentTimeMs).node());
         if (node == null || nodeUnavailable(node)) {
             log.debug("No broker available to send the request: {}. Retrying.", r);
             return false;
@@ -226,7 +230,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     public Node leastLoadedNode() {
-        return this.client.leastLoadedNode(time.milliseconds());
+        return this.client.leastLoadedNode(time.milliseconds()).node();
     }
 
     public void wakeup() {

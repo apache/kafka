@@ -103,7 +103,7 @@ public class TimeOrderedWindowStoreTest {
     private static final long DEFAULT_TIMESTAMP = 10L;
     private static final Long WINDOW_SIZE = 10L;
     private static final long SEGMENT_INTERVAL = 100L;
-    private final static String TOPIC = "topic";
+    private static final String TOPIC = "topic";
     private static final String CACHE_NAMESPACE = "0_0-store-name";
 
     private InternalMockProcessorContext context;
