@@ -95,4 +95,21 @@ public class MirrorCheckpointConfigTest {
                 "source1->target2|ConnectorName|" + MirrorCheckpointConfig.OFFSET_SYNCS_TARGET_CONSUMER_ROLE,
                 offsetSyncsTopicTargetConsumerConfig.get("client.id"));
     }
+
+    @Test
+    public void testValidate() {
+        assertFalse(new MirrorCheckpointConfig(makeProps(
+                MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "false",
+                MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED, "false"))
+                .validate());
+
+        assertFalse(new MirrorCheckpointConfig(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
+                MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"))
+                .validate());
+
+        assertTrue(new MirrorCheckpointConfig(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
+                MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
+                MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "true"))
+                .validate());
+    }
 }
