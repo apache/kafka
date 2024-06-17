@@ -18,12 +18,14 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -58,7 +60,13 @@ public class StreamsGroupMember {
         private int rebalanceTimeoutMs = -1;
         private String clientId = "";
         private String clientHost = "";
-        private String serverAssignorName = null;
+        private byte[] topologyHash;
+        private String assignor;
+        private String processId;
+        private StreamsGroupMemberMetadataValue.HostInfo hostInfo;
+        private List<StreamsGroupMemberMetadataValue.KeyValue> clientTags;
+        private byte[] userData;
+        private List<StreamsGroupMemberMetadataValue.KeyValue> assignmentConfigs;
         private Map<String, Set<Integer>> assignedActiveTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedStandbyTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedWarmupTasks = Collections.emptyMap();
@@ -79,6 +87,13 @@ public class StreamsGroupMember {
             this.rebalanceTimeoutMs = member.rebalanceTimeoutMs;
             this.clientId = member.clientId;
             this.clientHost = member.clientHost;
+            this.topologyHash = member.topologyHash;
+            this.assignor = member.assignor;
+            this.processId = member.processId;
+            this.hostInfo = member.hostInfo;
+            this.clientTags = member.clientTags;
+            this.userData = member.userData;
+            this.assignmentConfigs = member.assignmentConfigs;
             this.state = member.state;
             this.assignedActiveTasks = member.assignedActiveTasks;
             this.assignedStandbyTasks = member.assignedStandbyTasks;
@@ -133,6 +148,11 @@ public class StreamsGroupMember {
             return this;
         }
 
+        public StreamsGroupMember.Builder maybeUpdateAssignor(Optional<String> assignor) {
+            this.assignor = assignor.orElse(this.assignor);
+            return this;
+        }
+
         public Builder setClientId(String clientId) {
             this.clientId = clientId;
             return this;
@@ -145,6 +165,41 @@ public class StreamsGroupMember {
 
         public Builder setState(MemberState state) {
             this.state = state;
+            return this;
+        }
+
+        public Builder setTopologyHash(byte[] topologyHash) {
+            this.topologyHash = topologyHash;
+            return this;
+        }
+
+        public Builder setAssignor(String assignor) {
+            this.assignor = assignor;
+            return this;
+        }
+
+        public Builder setProcessId(String processId) {
+            this.processId = processId;
+            return this;
+        }
+
+        public Builder setHostInfo(StreamsGroupMemberMetadataValue.HostInfo hostInfo) {
+            this.hostInfo = hostInfo;
+            return this;
+        }
+
+        public Builder setClientTags(List<StreamsGroupMemberMetadataValue.KeyValue> clientTags) {
+            this.clientTags = clientTags;
+            return this;
+        }
+
+        public Builder setUserData(byte[] userData) {
+            this.userData = userData;
+            return this;
+        }
+
+        public Builder setAssignmentConfigs(List<StreamsGroupMemberMetadataValue.KeyValue> assignmentConfigs) {
+            this.assignmentConfigs = assignmentConfigs;
             return this;
         }
 
@@ -174,6 +229,13 @@ public class StreamsGroupMember {
             setClientId(record.clientId());
             setClientHost(record.clientHost());
             setRebalanceTimeoutMs(record.rebalanceTimeoutMs());
+            setTopologyHash(record.topologyHash());
+            setAssignor(record.assignor());
+            setProcessId(record.processId());
+            setHostInfo(record.hostInfo());
+            setClientTags(record.clientTags());
+            setUserData(record.userData());
+            setAssignmentConfigs(record.assignmentConfigs());
             return this;
         }
 
@@ -206,6 +268,13 @@ public class StreamsGroupMember {
                 rebalanceTimeoutMs,
                 clientId,
                 clientHost,
+                topologyHash,
+                assignor,
+                processId,
+                hostInfo,
+                clientTags,
+                userData,
+                assignmentConfigs,
                 state,
                 assignedActiveTasks,
                 assignedStandbyTasks,
@@ -261,6 +330,41 @@ public class StreamsGroupMember {
     private final String clientHost;
 
     /**
+     * The topology hash
+     */
+    private byte[] topologyHash;
+
+    /**
+     * The assignor
+     */
+    private String assignor;
+
+    /**
+     * The process ID
+     */
+    private String processId;
+
+    /**
+     * The host info
+     */
+    private StreamsGroupMemberMetadataValue.HostInfo hostInfo;
+
+    /**
+     * The client tags
+     */
+    private  List<StreamsGroupMemberMetadataValue.KeyValue> clientTags;
+
+    /**
+     * The user data
+     */
+    private byte[] userData;
+
+    /**
+     * The assignment configs
+     */
+    private  List<StreamsGroupMemberMetadataValue.KeyValue> assignmentConfigs;
+
+    /**
      * Active tasks assigned to this member.
      */
     private final Map<String, Set<Integer>> assignedActiveTasks;
@@ -289,6 +393,13 @@ public class StreamsGroupMember {
         int rebalanceTimeoutMs,
         String clientId,
         String clientHost,
+        byte[] topologyHash,
+        String assignor,
+        String processId,
+        StreamsGroupMemberMetadataValue.HostInfo hostInfo,
+        List<StreamsGroupMemberMetadataValue.KeyValue> clientTags,
+        byte[] userData,
+        List<StreamsGroupMemberMetadataValue.KeyValue> assignmentConfigs,
         MemberState state,
         Map<String, Set<Integer>> assignedActiveTasks,
         Map<String, Set<Integer>> assignedStandbyTasks,
@@ -304,6 +415,13 @@ public class StreamsGroupMember {
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.clientId = clientId;
         this.clientHost = clientHost;
+        this.topologyHash = topologyHash;
+        this.assignor = assignor;
+        this.processId = processId;
+        this.hostInfo = hostInfo;
+        this.clientTags = clientTags;
+        this.userData = userData;
+        this.assignmentConfigs = assignmentConfigs;
         this.assignedActiveTasks = assignedActiveTasks;
         this.assignedStandbyTasks = assignedStandbyTasks;
         this.assignedWarmupTasks = assignedWarmupTasks;
@@ -364,6 +482,52 @@ public class StreamsGroupMember {
      */
     public String clientHost() {
         return clientHost;
+    }
+
+    /**
+     * @return The process ID
+     */
+    public byte[] topologyHash() {
+        return topologyHash;
+    }
+
+    /**
+     * @return The assignor
+     */
+    public Optional<String> assignor() {
+        return Optional.ofNullable(assignor);
+    }
+
+    /**
+     * @return The process ID
+     */
+    public String processId() {
+        return processId;
+    }
+
+    /**
+     * @return The host info
+     */
+    public StreamsGroupMemberMetadataValue.HostInfo hostInfo() {
+        return hostInfo;
+    }
+
+    /**
+     * @return The client tags
+     */
+    public List<StreamsGroupMemberMetadataValue.KeyValue> clientTags() {
+        return clientTags;
+    }
+
+    public byte[] userData() {
+        return userData;
+    }
+
+    /**
+     * @return The assignment configs
+     */
+    public List<StreamsGroupMemberMetadataValue.KeyValue> assignmentConfigs() {
+        return assignmentConfigs;
     }
 
     /**
@@ -444,13 +608,20 @@ public class StreamsGroupMember {
         StreamsGroupMember that = (StreamsGroupMember) o;
         return memberEpoch == that.memberEpoch
             && previousMemberEpoch == that.previousMemberEpoch
-            && state == that.state
             && rebalanceTimeoutMs == that.rebalanceTimeoutMs
             && Objects.equals(memberId, that.memberId)
+            && state == that.state
             && Objects.equals(instanceId, that.instanceId)
             && Objects.equals(rackId, that.rackId)
             && Objects.equals(clientId, that.clientId)
             && Objects.equals(clientHost, that.clientHost)
+            && Objects.deepEquals(topologyHash, that.topologyHash)
+            && Objects.equals(assignor, that.assignor)
+            && Objects.equals(processId, that.processId)
+            && Objects.equals(hostInfo, that.hostInfo)
+            && Objects.equals(clientTags, that.clientTags)
+            && Objects.deepEquals(userData, that.userData)
+            && Objects.equals(assignmentConfigs, that.assignmentConfigs)
             && Objects.equals(assignedActiveTasks, that.assignedActiveTasks)
             && Objects.equals(assignedStandbyTasks, that.assignedStandbyTasks)
             && Objects.equals(assignedWarmupTasks, that.assignedWarmupTasks)
@@ -468,9 +639,17 @@ public class StreamsGroupMember {
         result = 31 * result + rebalanceTimeoutMs;
         result = 31 * result + Objects.hashCode(clientId);
         result = 31 * result + Objects.hashCode(clientHost);
+        result = 31 * result + Arrays.hashCode(topologyHash);
+        result = 31 * result + Objects.hashCode(assignor);
+        result = 31 * result + Objects.hashCode(processId);
+        result = 31 * result + Objects.hashCode(hostInfo);
+        result = 31 * result + Objects.hashCode(clientTags);
+        result = 31 * result + Arrays.hashCode(userData);
+        result = 31 * result + Objects.hashCode(assignmentConfigs);
         result = 31 * result + Objects.hashCode(assignedActiveTasks);
         result = 31 * result + Objects.hashCode(assignedStandbyTasks);
         result = 31 * result + Objects.hashCode(assignedWarmupTasks);
+        result = 31 * result + Objects.hashCode(activeTasksPendingRevocation);
         return result;
     }
 
