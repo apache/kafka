@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -53,7 +52,9 @@ public class TransformationStageTest {
         when(predicate.test(any())).thenReturn(predicateResult);
         @SuppressWarnings("unchecked")
         Transformation<SourceRecord> transformation = mock(Transformation.class);
-        when(transformation.apply(any())).thenReturn(transformed);
+        if (expectedResult == transformed) {
+            when(transformation.apply(any())).thenReturn(transformed);
+        }
         TransformationStage<SourceRecord> stage = new TransformationStage<>(
                 predicate,
                 negate,

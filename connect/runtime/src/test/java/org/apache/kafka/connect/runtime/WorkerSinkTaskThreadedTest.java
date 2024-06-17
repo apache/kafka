@@ -647,7 +647,11 @@ public class WorkerSinkTaskThreadedTest {
                 }
             }
         }).when(sinkTask).preCommit(anyMap());
-
+        //  if the only command has error, consumer don't commit, so we don't need to mock commitAsync.
+        //  or else strictness will throw exception
+        if (commands.length == 1 && commands[0].error != null) {
+            return;
+        }
         doAnswer(new Answer<Object>() {
             int index = 0;
 

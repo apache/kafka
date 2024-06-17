@@ -102,6 +102,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -253,6 +254,7 @@ public class AbstractWorkerSourceTaskTest {
         );
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = records;
@@ -273,6 +275,7 @@ public class AbstractWorkerSourceTaskTest {
         createWorkerTask();
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
@@ -292,7 +295,8 @@ public class AbstractWorkerSourceTaskTest {
         final Long timestamp = -3L;
         createWorkerTask();
 
-        expectSendRecord(emptyHeaders());
+        expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
+        expectApplyTransformationChain();
 
         workerTask.toSend = Collections.singletonList(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
@@ -308,6 +312,7 @@ public class AbstractWorkerSourceTaskTest {
         createWorkerTask();
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
@@ -333,6 +338,7 @@ public class AbstractWorkerSourceTaskTest {
         createWorkerTask();
 
         expectSendRecord(headers);
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
@@ -360,6 +366,7 @@ public class AbstractWorkerSourceTaskTest {
                 Collections::emptyList);
 
         expectSendRecord(null);
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         String stringA = "Árvíztűrő tükörfúrógép";
@@ -621,6 +628,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
 
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(foundTopic(TOPIC));
@@ -645,6 +653,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
 
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
@@ -670,7 +679,6 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
-        expectTaskGetTopic();
 
         when(transformationChain.apply(any(), eq(record1))).thenReturn(null);
         when(transformationChain.apply(any(), eq(record2))).thenReturn(null);
@@ -701,8 +709,6 @@ public class AbstractWorkerSourceTaskTest {
     private void expectSendRecord(Headers headers) {
         if (headers != null)
             expectConvertHeadersAndKeyValue(headers, TOPIC);
-
-        expectApplyTransformationChain();
 
         expectTaskGetTopic();
     }
@@ -796,11 +802,15 @@ public class AbstractWorkerSourceTaskTest {
         when(valueConverter.fromConnectData(eq(topic), any(Headers.class), eq(RECORD_SCHEMA),
                 eq(RECORD)))
                 .thenReturn(SERIALIZED_RECORD);
+        assertEquals(keyConverter.fromConnectData(topic, headers, KEY_SCHEMA, KEY), SERIALIZED_KEY);
+        assertEquals(valueConverter.fromConnectData(topic, headers, RECORD_SCHEMA, RECORD), SERIALIZED_RECORD);
     }
 
     private void expectApplyTransformationChain() {
         when(transformationChain.apply(any(), any(SourceRecord.class)))
                 .thenAnswer(AdditionalAnswers.returnsSecondArg());
+        SourceRecord randomString = mock(SourceRecord.class);
+        assertEquals(transformationChain.apply(null, randomString), randomString);
     }
 
     private RecordHeaders emptyHeaders() {

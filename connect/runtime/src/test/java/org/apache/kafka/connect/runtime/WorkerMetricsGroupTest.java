@@ -18,9 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.CompoundStat;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +31,6 @@ import org.mockito.quality.Strictness;
 
 import java.util.HashMap;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -90,8 +87,6 @@ public class WorkerMetricsGroupTest {
     private Sensor mockSensor(ConnectMetrics.MetricGroup metricGroup, String name) {
         Sensor sensor = mock(Sensor.class);
         when(metricGroup.sensor(name)).thenReturn(sensor);
-        when(sensor.add(any(CompoundStat.class))).thenReturn(true);
-        when(sensor.add(any(MetricName.class), any(CumulativeSum.class))).thenReturn(true);
         return sensor;
     }
     
