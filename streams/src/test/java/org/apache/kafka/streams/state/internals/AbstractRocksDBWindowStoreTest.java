@@ -110,7 +110,6 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
 
     @Test
     public void shouldOnlyIterateOpenSegments() {
-        setup();
         long currentTime = 0;
         windowStore.put(1, "one", currentTime);
 
@@ -135,7 +134,6 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
 
     @Test
     public void testRolling() {
-        setup();
         // to validate segments
         final long startTime = SEGMENT_INTERVAL * 2;
         final long increment = SEGMENT_INTERVAL / 2;
@@ -456,7 +454,6 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
 
     @Test
     public void testSegmentMaintenance() {
-        setup();
         windowStore.close();
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(),
                 Serdes.String());
@@ -542,7 +539,6 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
     @SuppressWarnings("ResultOfMethodCallIgnored")
     @Test
     public void testInitialLoading() {
-        setup();
         final File storeDir = new File(baseDir, STORE_NAME);
 
         new File(storeDir, segments.segmentName(0L)).mkdir();
@@ -589,7 +585,6 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
     @SuppressWarnings("unchecked")
     @Test
     public void testRestore() throws Exception {
-        setup();
         final long startTime = SEGMENT_INTERVAL * 2;
         final long increment = SEGMENT_INTERVAL / 2;
 
@@ -768,7 +763,6 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
 
     @Test
     public void shouldMatchPositionAfterPut() {
-        setup();
         final MeteredWindowStore<Integer, String> meteredSessionStore = (MeteredWindowStore<Integer, String>) windowStore;
         final ChangeLoggingWindowBytesStore changeLoggingSessionBytesStore = (ChangeLoggingWindowBytesStore) meteredSessionStore.wrapped();
         final WrappedStateStore rocksDBWindowStore = (WrappedStateStore) changeLoggingSessionBytesStore.wrapped();
