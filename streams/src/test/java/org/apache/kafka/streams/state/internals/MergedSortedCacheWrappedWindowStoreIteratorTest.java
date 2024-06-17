@@ -32,11 +32,9 @@ import org.apache.kafka.test.KeyValueIteratorStub;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -70,14 +68,6 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
         TIME_FIRST_SCHEMA
     }
 
-    public static Stream<Arguments> data() {
-        return Stream.of(
-                Arguments.of(SchemaType.WINDOW_KEY_SCHEMA),
-                Arguments.of(SchemaType.KEY_FIRST_SCHEMA),
-                Arguments.of(SchemaType.TIME_FIRST_SCHEMA)
-        );
-    }
-
     public void setUp(final SchemaType schemaType) {
         switch (schemaType) {
             case KEY_FIRST_SCHEMA:
@@ -98,7 +88,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldIterateOverValueFromBothIterators(final SchemaType schemaType) {
         setUp(schemaType);
         final List<KeyValue<Long, byte[]>> expectedKvPairs = new ArrayList<>();
@@ -136,7 +126,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
 
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldReverseIterateOverValueFromBothIterators(final SchemaType schemaType) {
         setUp(schemaType);
         final List<KeyValue<Long, byte[]>> expectedKvPairs = new ArrayList<>();
@@ -176,7 +166,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldPeekNextStoreKey(final SchemaType schemaType) {
         setUp(schemaType);
         windowStoreKvPairs.add(KeyValue.pair(10L, "a".getBytes()));
@@ -197,7 +187,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldPeekNextStoreKeyReverse(final SchemaType schemaType) {
         setUp(schemaType);
         windowStoreKvPairs.add(KeyValue.pair(10L, "a".getBytes()));
@@ -220,7 +210,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldPeekNextCacheKey(final SchemaType schemaType) {
         setUp(schemaType);
         windowStoreKvPairs.add(KeyValue.pair(0L, "a".getBytes()));
@@ -247,7 +237,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldPeekNextCacheKeyReverse(final SchemaType schemaType) {
         setUp(schemaType);
         windowStoreKvPairs.add(KeyValue.pair(0L, "a".getBytes()));

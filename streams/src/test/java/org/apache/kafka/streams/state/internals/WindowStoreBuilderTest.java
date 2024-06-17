@@ -54,16 +54,20 @@ public class WindowStoreBuilderTest {
     private WindowStore<Bytes, byte[]> inner;
     private WindowStoreBuilder<String, String> builder;
 
-    public void setUp() {
-        when(supplier.get()).thenReturn(inner);
+    public void setUpWithoutInner() {
         when(supplier.name()).thenReturn("name");
         when(supplier.metricsScope()).thenReturn("metricScope");
 
         builder = new WindowStoreBuilder<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime());
+                supplier,
+                Serdes.String(),
+                Serdes.String(),
+                new MockTime());
+    }
+
+    public void setUp() {
+        when(supplier.get()).thenReturn(inner);
+        setUpWithoutInner();
     }
 
     @Test
@@ -175,14 +179,7 @@ public class WindowStoreBuilderTest {
 
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        when(supplier.name()).thenReturn("name");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-
-        builder = new WindowStoreBuilder<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime());
+        setUpWithoutInner();
         when(supplier.metricsScope()).thenReturn(null);
 
         final Exception e = assertThrows(NullPointerException.class,

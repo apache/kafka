@@ -50,20 +50,7 @@ public class VersionedKeyValueStoreBuilderTest {
 
     private VersionedKeyValueStoreBuilder<String, String> builder;
 
-    public void setUp() {
-        when(supplier.get()).thenReturn(inner);
-        when(supplier.name()).thenReturn(STORE_NAME);
-        when(supplier.metricsScope()).thenReturn(METRICS_SCOPE);
-
-        builder = new VersionedKeyValueStoreBuilder<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-    }
-
-    public void setUpWithoutInner() {
+    private void setUpWithoutInner() {
         when(supplier.name()).thenReturn(STORE_NAME);
         when(supplier.metricsScope()).thenReturn(METRICS_SCOPE);
 
@@ -73,6 +60,11 @@ public class VersionedKeyValueStoreBuilderTest {
                 Serdes.String(),
                 new MockTime()
         );
+    }
+
+    private void setUp() {
+        when(supplier.get()).thenReturn(inner);
+        setUpWithoutInner();
     }
 
     @Test

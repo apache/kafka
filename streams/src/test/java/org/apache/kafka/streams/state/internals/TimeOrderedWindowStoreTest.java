@@ -60,12 +60,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMinutes;
@@ -111,13 +109,6 @@ public class TimeOrderedWindowStoreTest {
     private ThreadCache cache;
     private TimeFirstWindowKeySchema baseKeySchema;
 
-    public static Stream<Arguments> data() {
-        return Stream.of(
-            Arguments.of(true),
-            Arguments.of(false)
-        );
-    }
-
     public void setUp(final boolean hasIndex) {
         baseKeySchema = new TimeFirstWindowKeySchema();
         bytesStore = new RocksDBTimeOrderedWindowSegmentedBytesStore("test", "metrics-scope", 100, SEGMENT_INTERVAL, hasIndex);
@@ -140,7 +131,7 @@ public class TimeOrderedWindowStoreTest {
 
     @SuppressWarnings("deprecation")
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldDelegateDeprecatedInit(final boolean hasIndex) {
         setUp(hasIndex);
         final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
@@ -154,7 +145,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-@MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldDelegateInit(final boolean hasIndex) {
         setUp(hasIndex);
         final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
@@ -169,7 +160,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-@MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldThrowIfWrongStore(final boolean hasIndex) {
         setUp(hasIndex);
         final RocksDBTimestampedWindowStore innerWrong = mock(RocksDBTimestampedWindowStore.class);
@@ -184,7 +175,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldNotReturnDuplicatesInRanges(final boolean hasIndex) {
         setUp(hasIndex);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -285,7 +276,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldPutFetchFromCache(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -308,7 +299,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldMatchPositionAfterPutWithFlushListener(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.setFlushListener(record -> { }, false);
@@ -316,7 +307,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldMatchPositionAfterPutWithoutFlushListener(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.setFlushListener(null, false);
@@ -371,7 +362,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldPutFetchRangeFromCache(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -393,7 +384,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldPutFetchRangeFromCacheForNullKeyFrom(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -418,7 +409,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldPutFetchRangeFromCacheForNullKeyTo(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -443,7 +434,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldPutFetchRangeFromCacheForNullKeyFromKeyTo(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -469,7 +460,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldPutBackwardFetchRangeFromCacheForNullKeyFrom(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -493,7 +484,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldPutBackwardFetchRangeFromCacheForNullKeyTo(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -517,7 +508,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldPutBackwardFetchRangeFromCacheForNullKeyFromKeyTo(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -543,7 +534,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldGetAllFromCache(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -568,7 +559,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldGetAllBackwardFromCache(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -593,7 +584,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldFetchAllWithinTimestampRange(final boolean hasIndex) {
         setUp(hasIndex);
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
@@ -639,7 +630,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldFetchAllBackwardWithinTimestampRange(final boolean hasIndex) {
         setUp(hasIndex);
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
@@ -685,7 +676,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldFlushEvictedItemsIntoUnderlyingStore(final boolean hasIndex) {
         setUp(hasIndex);
         final int added = addItemsToCache();
@@ -703,7 +694,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldForwardDirtyItemsWhenFlushCalled(final boolean hasIndex) {
         setUp(hasIndex);
         final Windowed<String> windowedKey =
@@ -715,7 +706,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldSetFlushListener(final boolean hasIndex) {
         setUp(hasIndex);
         assertTrue(cachingStore.setFlushListener(null, true));
@@ -723,7 +714,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldForwardOldValuesWhenEnabled(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.setFlushListener(cacheListener, true);
@@ -753,7 +744,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldForwardOldValuesWhenDisabled(final boolean hasIndex) {
         setUp(hasIndex);
         final Windowed<String> windowedKey =
@@ -781,7 +772,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldForwardDirtyItemToListenerWhenEvicted(final boolean hasIndex) {
         setUp(hasIndex);
         final int numRecords = addItemsToCache();
@@ -789,7 +780,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldTakeValueFromCacheIfSameTimestampFlushedToRocks(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -804,7 +795,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldIterateAcrossWindows(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -819,7 +810,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldIterateBackwardAcrossWindows(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -834,7 +825,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldIterateCacheAndStore(final boolean hasIndex) {
         setUp(hasIndex);
         final Bytes key = Bytes.wrap("1".getBytes());
@@ -849,7 +840,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldIterateBackwardCacheAndStore(final boolean hasIndex) {
         setUp(hasIndex);
         final Bytes key = Bytes.wrap("1".getBytes());
@@ -864,7 +855,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldIterateCacheAndStoreKeyRange(final boolean hasIndex) {
         setUp(hasIndex);
         final Bytes key = Bytes.wrap("1".getBytes());
@@ -886,7 +877,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldIterateBackwardCacheAndStoreKeyRange(final boolean hasIndex) {
         setUp(hasIndex);
         final Bytes key = Bytes.wrap("1".getBytes());
@@ -908,7 +899,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldClearNamespaceCacheOnClose(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), 0L);
@@ -919,7 +910,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldThrowIfTryingToFetchFromClosedCachingStore(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.close();
@@ -927,7 +918,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldThrowIfTryingToFetchRangeFromClosedCachingStore(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.close();
@@ -935,7 +926,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldThrowIfTryingToWriteToClosedCachingStore(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.close();
@@ -943,7 +934,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldSkipNonExistBaseKeyInCache(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("aa"), bytesValue("0002"), 0);
@@ -992,7 +983,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldFetchAndIterateOverExactKeys(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
@@ -1012,7 +1003,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldBackwardFetchAndIterateOverExactKeys(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
@@ -1032,7 +1023,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldFetchAndIterateOverKeyRange(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
@@ -1085,7 +1076,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldFetchAndIterateOverKeyBackwardRange(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
@@ -1140,7 +1131,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeFetch(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
@@ -1159,7 +1150,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeBackwardFetch(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
@@ -1180,28 +1171,28 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldThrowNullPointerExceptionOnPutNullKey(final boolean hasIndex) {
         setUp(hasIndex);
         assertThrows(NullPointerException.class, () -> cachingStore.put(null, bytesValue("anyValue"), 0L));
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldNotThrowNullPointerExceptionOnPutNullValue(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("a"), null, 0L);
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldThrowNullPointerExceptionOnFetchNullKey(final boolean hasIndex) {
         setUp(hasIndex);
         assertThrows(NullPointerException.class, () -> cachingStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey(final boolean hasIndex) {
         setUp(hasIndex);
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
@@ -1223,7 +1214,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldNotThrowInvalidBackwardRangeExceptionWithNegativeFromKey(final boolean hasIndex) {
         setUp(hasIndex);
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
@@ -1245,7 +1236,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldCloseCacheAndWrappedStoreAfterErrorDuringCacheFlush(final boolean hasIndex) {
         setUp(hasIndex);
         setUpCloseTests();
@@ -1257,7 +1248,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldCloseWrappedStoreAfterErrorDuringCacheClose(final boolean hasIndex) {
         setUp(hasIndex);
         setUpCloseTests();
@@ -1268,7 +1259,7 @@ public class TimeOrderedWindowStoreTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(booleans = {true, false})
     public void shouldCloseCacheAfterErrorDuringStateStoreClose(final boolean hasIndex) {
         setUp(hasIndex);
         setUpCloseTests();

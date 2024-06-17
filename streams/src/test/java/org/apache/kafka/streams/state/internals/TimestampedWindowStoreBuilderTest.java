@@ -28,13 +28,9 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.extension.ExtendWith;
-
 import java.util.Collections;
-import java.util.stream.Stream;
-
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -66,28 +62,6 @@ public class TimestampedWindowStoreBuilderTest {
     private boolean isTimeOrderedStore;
     private WindowStore inner;
 
-    public static Stream<Arguments> data() {
-        return Stream.of(
-            Arguments.of(TIMESTAMP_STORE_NAME),
-            Arguments.of(TIMEORDERED_STORE_NAME)
-        );
-    }
-
-    @SuppressWarnings("unchecked")
-    public void setUp(final String storeName) {
-        isTimeOrderedStore = TIMEORDERED_STORE_NAME.equals(storeName);
-        inner = isTimeOrderedStore ? timeOrderedStore : timestampedStore;
-        when(supplier.get()).thenReturn(inner);
-        when(supplier.name()).thenReturn(STORE_NAME);
-        when(supplier.metricsScope()).thenReturn(METRICS_SCOPE);
-
-        builder = new TimestampedWindowStoreBuilder<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime());
-    }
-
     public void setUpWithoutInner(final String storeName) {
         isTimeOrderedStore = TIMEORDERED_STORE_NAME.equals(storeName);
         when(supplier.name()).thenReturn(STORE_NAME);
@@ -99,8 +73,16 @@ public class TimestampedWindowStoreBuilderTest {
                 Serdes.String(),
                 new MockTime());
     }
+
+    @SuppressWarnings("unchecked")
+    public void setUp(final String storeName) {
+        isTimeOrderedStore = TIMEORDERED_STORE_NAME.equals(storeName);
+        inner = isTimeOrderedStore ? timeOrderedStore : timestampedStore;
+        when(supplier.get()).thenReturn(inner);
+        setUpWithoutInner(storeName);
+    }
     
-    @MethodSource("data")
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @ParameterizedTest
     public void shouldHaveMeteredStoreAsOuterStore(final String storeName) {
         setUp(storeName);
@@ -108,7 +90,7 @@ public class TimestampedWindowStoreBuilderTest {
         assertThat(store, instanceOf(MeteredTimestampedWindowStore.class));
     }
 
-    @MethodSource("data")
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @ParameterizedTest
     public void shouldHaveChangeLoggingStoreByDefault(final String storeName) {
         setUp(storeName);
@@ -117,7 +99,7 @@ public class TimestampedWindowStoreBuilderTest {
         assertThat(next, instanceOf(ChangeLoggingTimestampedWindowBytesStore.class));
     }
 
-    @MethodSource("data")
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @ParameterizedTest
     public void shouldNotHaveChangeLoggingStoreWhenDisabled(final String storeName) {
         setUp(storeName);
@@ -126,7 +108,7 @@ public class TimestampedWindowStoreBuilderTest {
         assertThat(next, CoreMatchers.equalTo(inner));
     }
 
-    @MethodSource("data")
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @ParameterizedTest
     public void shouldHaveCachingStoreWhenEnabled(final String storeName) {
         setUp(storeName);
@@ -140,7 +122,7 @@ public class TimestampedWindowStoreBuilderTest {
         }
     }
 
-    @MethodSource("data")
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @ParameterizedTest
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled(final String storeName) {
         setUp(storeName);
@@ -153,7 +135,7 @@ public class TimestampedWindowStoreBuilderTest {
         assertThat(((WrappedStateStore) wrapped).wrapped(), CoreMatchers.equalTo(inner));
     }
 
-    @MethodSource("data")
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @ParameterizedTest
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled(final String storeName) {
         setUp(storeName);
@@ -173,7 +155,7 @@ public class TimestampedWindowStoreBuilderTest {
         assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
     }
 
-    @MethodSource("data")
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @ParameterizedTest
     public void shouldNotWrapTimestampedByteStore(final String storeName) {
         setUp(storeName);
@@ -194,7 +176,7 @@ public class TimestampedWindowStoreBuilderTest {
         assertThat(((WrappedStateStore) store).wrapped(), instanceOf(RocksDBTimestampedWindowStore.class));
     }
 
-    @MethodSource("data")
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @ParameterizedTest
     public void shouldWrapPlainKeyValueStoreAsTimestampStore(final String storeName) {
         setUp(storeName);
@@ -215,7 +197,7 @@ public class TimestampedWindowStoreBuilderTest {
         assertThat(((WrappedStateStore) store).wrapped(), instanceOf(WindowToTimestampedWindowByteStoreAdapter.class));
     }
 
-    @MethodSource("data")
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @SuppressWarnings("unchecked")
     @ParameterizedTest
     public void shouldDisableCachingWithRetainDuplicates(final String storeName) {
@@ -233,7 +215,7 @@ public class TimestampedWindowStoreBuilderTest {
         assertFalse(((AbstractStoreBuilder<String, String, TimestampedWindowStore<String, String>>) builder).enableCaching);
     }
 
-    @MethodSource("data")
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @SuppressWarnings("all")
     @ParameterizedTest
     public void shouldThrowNullPointerIfInnerIsNull(final String storeName) {
@@ -241,14 +223,14 @@ public class TimestampedWindowStoreBuilderTest {
         assertThrows(NullPointerException.class, () -> new TimestampedWindowStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
     }
 
-    @MethodSource("data")
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @ParameterizedTest
     public void shouldThrowNullPointerIfTimeIsNull(final String storeName) {
         setUpWithoutInner(storeName);
         assertThrows(NullPointerException.class, () -> new TimestampedWindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null));
     }
 
-    @MethodSource("data")
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @ParameterizedTest
     public void shouldThrowNullPointerIfMetricsScopeIsNull(final String storeName) {
         setUpWithoutInner(storeName);

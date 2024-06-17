@@ -32,11 +32,9 @@ import org.apache.kafka.test.KeyValueIteratorStub;
 
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -79,14 +77,6 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
         TIME_FIRST_SCHEMA
     }
 
-    public static Stream<Arguments> data() {
-        return Stream.of(
-                Arguments.of(SchemaType.WINDOW_KEY_SCHEMA),
-                Arguments.of(SchemaType.KEY_FIRST_SCHEMA),
-                Arguments.of(SchemaType.TIME_FIRST_SCHEMA)
-        );
-    }
-
     public void setUp(final SchemaType schemaType) {
         switch (schemaType) {
             case KEY_FIRST_SCHEMA:
@@ -118,7 +108,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldHaveNextFromStore(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
@@ -127,7 +117,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldHaveNextFromReverseStore(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
@@ -136,7 +126,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldGetNextFromStore(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
@@ -145,7 +135,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldGetNextFromReverseStore(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
@@ -154,7 +144,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldPeekNextKeyFromStore(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
@@ -163,7 +153,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldPeekNextKeyFromReverseStore(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
@@ -172,7 +162,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldHaveNextFromCache(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
@@ -181,7 +171,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldHaveNextFromReverseCache(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
@@ -190,7 +180,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldGetNextFromCache(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
@@ -199,7 +189,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldGetNextFromReverseCache(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
@@ -208,7 +198,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldPeekNextKeyFromCache(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
@@ -217,7 +207,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldPeekNextKeyFromReverseCache(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
@@ -226,7 +216,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldIterateBothStoreAndCache(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator iterator = createIterator(storeKvs, cacheKvs, true);
@@ -236,7 +226,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     public void shouldReverseIterateBothStoreAndCache(final SchemaType schemaType) {
         setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator iterator = createIterator(storeKvs, cacheKvs, false);

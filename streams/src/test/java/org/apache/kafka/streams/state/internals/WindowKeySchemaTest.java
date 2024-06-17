@@ -36,12 +36,10 @@ import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFir
 import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
 import org.apache.kafka.test.KeyValueIteratorStub;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -137,14 +135,6 @@ public class WindowKeySchemaTest {
         PrefixedKeyFirstSchema
     }
 
-    public static Stream<Arguments> data() {
-        return Stream.of(
-                Arguments.of(SchemaType.WindowKeySchema),
-                Arguments.of(SchemaType.PrefixedTimeFirstSchema),
-                Arguments.of(SchemaType.PrefixedKeyFirstSchema)
-        );
-    }
-
     public void setup(final SchemaType type) {
         schemaType = type;
         keySchema = SCHEMA_TYPE_MAP.get(type);
@@ -182,7 +172,7 @@ public class WindowKeySchemaTest {
         return SERDE_TO_STORE_BINARY_MAP.get(schemaType);
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void testHasNextConditionUsingNullKeys(final SchemaType type) {
         setup(type);
@@ -206,7 +196,7 @@ public class WindowKeySchemaTest {
         }
     }
     
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void testUpperBoundWithLargeTimestamps(final SchemaType type) {
         setup(type);
@@ -244,7 +234,7 @@ public class WindowKeySchemaTest {
         }
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void testUpperBoundWithKeyBytesLargerThanFirstTimestampByte(final SchemaType type) {
         setup(type);
@@ -272,7 +262,7 @@ public class WindowKeySchemaTest {
         }
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void testUpperBoundWithKeyBytesLargerAndSmallerThanFirstTimestampByte(final SchemaType type) {
         setup(type);
@@ -299,7 +289,7 @@ public class WindowKeySchemaTest {
         }
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void testUpperBoundWithZeroTimestamp(final SchemaType type) {
         setup(type);
@@ -315,7 +305,7 @@ public class WindowKeySchemaTest {
         }
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void testLowerBoundWithZeroTimestamp(final SchemaType type) {
         setup(type);
@@ -344,7 +334,7 @@ public class WindowKeySchemaTest {
         }
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void testLowerBoundWithNonZeroTimestamp(final SchemaType type) {
         setup(type);
@@ -374,7 +364,7 @@ public class WindowKeySchemaTest {
         }
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void testLowerBoundMatchesTrailingZeros(final SchemaType type) {
         setup(type);
@@ -403,7 +393,7 @@ public class WindowKeySchemaTest {
         }
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldSerializeDeserialize(final SchemaType type) {
         setup(type);
@@ -413,7 +403,7 @@ public class WindowKeySchemaTest {
         assertEquals(new Windowed<>(key, new TimeWindow(startTime, Long.MAX_VALUE)), result);
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void testSerializeDeserializeOverflowWindowSize(final SchemaType type) {
         setup(type);
@@ -423,7 +413,7 @@ public class WindowKeySchemaTest {
         assertEquals(new Windowed<>(key, new TimeWindow(startTime, Long.MAX_VALUE)), result);
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldSerializeDeserializeExpectedWindowSize(final SchemaType type) {
         setup(type);
@@ -433,7 +423,7 @@ public class WindowKeySchemaTest {
         assertEquals(windowedKey, result);
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldSerializeDeserializeExpectedChangelogWindowSize(final SchemaType type) {
         setup(type);
@@ -459,28 +449,28 @@ public class WindowKeySchemaTest {
         assertThat(results, equalTo(asList(1L, 10L, 20L)));
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldSerializeNullToNull(final SchemaType type) {
         setup(type);
         assertNull(keySerde.serializer().serialize(topic, null));
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldDeserializeEmptyByteArrayToNull(final SchemaType type) {
         setup(type);
         assertNull(keySerde.deserializer().deserialize(topic, new byte[0]));
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldDeserializeNullToNull(final SchemaType type) {
         setup(type);
         assertNull(keySerde.deserializer().deserialize(topic, null));
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldConvertToBinaryAndBack(final SchemaType type) {
         setup(type);
@@ -500,7 +490,7 @@ public class WindowKeySchemaTest {
         assertEquals(windowedKey, result);
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldExtractSequenceFromBinary(final SchemaType type) {
         setup(type);
@@ -510,7 +500,7 @@ public class WindowKeySchemaTest {
         assertEquals(0, (int) extractStoreSequence.apply(serialized.get()));
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldExtractStartTimeFromBinary(final SchemaType type) {
         setup(type);
@@ -520,7 +510,7 @@ public class WindowKeySchemaTest {
         assertEquals(startTime, (long) extractStoreTimestamp.apply(serialized.get()));
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldExtractWindowFromBinary(final SchemaType type) {
         setup(type);
@@ -530,7 +520,7 @@ public class WindowKeySchemaTest {
         assertEquals(window, extractStoreWindow.apply(serialized.get(), endTime - startTime));
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldExtractKeyBytesFromBinary(final SchemaType type) {
         setup(type);
@@ -540,7 +530,7 @@ public class WindowKeySchemaTest {
         assertArrayEquals(key.getBytes(), extractStoreKeyBytes.apply(serialized.get()));
     }
 
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldExtractBytesKeyFromBinary(final SchemaType type) {
         setup(type);
@@ -551,7 +541,7 @@ public class WindowKeySchemaTest {
         assertEquals(windowedBytesKey, fromStoreBytesKey.apply(serialized.get(), endTime - startTime));
     }
     
-    @MethodSource("data")
+    @EnumSource(SchemaType.class)
     @ParameterizedTest
     public void shouldConvertFromNonPrefixWindowKey(final SchemaType type) {
         setup(type);
