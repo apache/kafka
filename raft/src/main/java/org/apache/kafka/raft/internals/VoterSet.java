@@ -35,6 +35,13 @@ import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.utils.Utils;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.VotersRecord;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Utils;
+
 /**
  * A type for representing the set of voters for a topic partition.
  *

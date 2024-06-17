@@ -4,7 +4,7 @@ Docker Images
 Introduction
 ------------
 
-This directory contains scripts to build, test, push and promote docker image for kafka.
+This directory contains scripts to build, test, push and promote docker image for kafka. It also contains scripts to build, test the JVM-based Docker Official Image, and generate a PR template for the same to be raised under the Docker official images repo. 
 All of the steps can be either performed locally or by using Github Actions.
 
 Github Actions
@@ -135,3 +135,42 @@ Using the image in a docker container
 -------------------------------------
 
 Please check [this](./examples/README.md) for usage guide of the docker image.
+
+Releasing the Docker Official Image
+-----------------------------------
+
+- This is the recommended way to release docker official image.
+- Ensure these steps are being run for a particular version, only once the AK release process for that version has been completed.
+
+- Provide the image type and kafka version to `Docker Prepare Docker Official Image Source` workflow. It will generate a artifact containing the static Dockerfile and assets for that specific version. Download the same from the workflow.
+
+```
+image_type: jvm
+kafka_version: 3.7.0
+```
+
+- Run the `docker/extract_docker_official_image_artifact.py` script, by providing it the path to the downloaded artifact. This will create a new directory under `docker/docker_official_images/kafka_version`. 
+
+```
+python extract_docker_official_image_artifact.py --path_to_downloaded_artifact=path/to/downloaded/artifact
+```
+
+- If there any versions for which Docker Official Images should not be supported, remove the corresponding directories under `docker/docker_official_images`.
+- Commit these changes to AK trunk.
+
+- Provide the image type and kafka version to `Docker Official Image Build Test` workflow. It will generate a test report and CVE report that can be shared with the community.
+
+```
+image_type: jvm
+kafka_version: 3.7.0
+```
+
+- Run the `docker/generate_kafka_pr_template.py` script from trunk, by providing it the image type. Update the existing entry, and raise a new PR in [Docker Hub's Docker Official Repo](https://github.com/docker-library/official-images/tree/master/library/kafka) by using this new PR template.
+
+```
+python generate_kafka_pr_template.py --image-type=jvm
+```
+
+- kafka-version - This is the version to create the Docker official images static Dockerfile and assets for, as well as the version to build and test the Docker official image for.
+- image-type - This is the type of image that we intend to build. This will be dropdown menu type selection in the workflow. `jvm` image type is for official docker image (to be hosted on apache/kafka) as described in [KIP-975](https://cwiki.apache.org/confluence/display/KAFKA/KIP-975%3A+Docker+Image+for+Apache+Kafka). As of now [KIP-1028](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1028%3A+Docker+Official+Image+for+Apache+Kafka) only aims to release JVM based Docker Official Images.
+

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -51,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Utility functions for use in QuorumController integration tests.
  */
 public class QuorumControllerIntegrationTestUtils {
-    private final static Logger log = LoggerFactory.getLogger(QuorumControllerIntegrationTestUtils.class);
+    private static final Logger log = LoggerFactory.getLogger(QuorumControllerIntegrationTestUtils.class);
 
     BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
         return brokerFeatures(MetadataVersion.MINIMUM_KRAFT_VERSION, MetadataVersion.latestTesting());
@@ -100,7 +99,7 @@ public class QuorumControllerIntegrationTestUtils {
                         Uuid.fromString("TESTBROKER" + Integer.toString(100000 + brokerId).substring(1) + "DIRAAAA")
                     ))
                     .setListeners(new ListenerCollection(
-                        Arrays.asList(
+                        Collections.singletonList(
                             new Listener()
                                 .setName("PLAINTEXT")
                                 .setHost("localhost")

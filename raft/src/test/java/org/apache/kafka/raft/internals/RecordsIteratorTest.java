@@ -21,7 +21,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -31,6 +30,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
@@ -204,7 +204,7 @@ public final class RecordsIteratorTest {
     public void testControlRecordIterationWithKraftVersion1() {
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         VoterSet voterSet = new VoterSet(
-            new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true))
+            VoterSetTest.voterMap(IntStream.of(1, 2, 3), true)
         );
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setTime(new MockTime())

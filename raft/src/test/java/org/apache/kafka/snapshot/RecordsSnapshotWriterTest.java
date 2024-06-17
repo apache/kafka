@@ -17,12 +17,11 @@
 
 package org.apache.kafka.snapshot;
 
-
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.IntStream;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
@@ -97,7 +96,7 @@ final class RecordsSnapshotWriterTest {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100, 10);
         int maxBatchSize = 1024;
         VoterSet voterSet = VoterSetTest.voterSet(
-            new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true))
+            new HashMap<>(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true))
         );
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
@@ -117,7 +116,7 @@ final class RecordsSnapshotWriterTest {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100, 10);
         int maxBatchSize = 1024;
         VoterSet voterSet = VoterSetTest.voterSet(
-            new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true))
+            new HashMap<>(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true))
         );
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
