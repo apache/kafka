@@ -40,12 +40,12 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.Test;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
@@ -73,7 +73,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
     protected Properties commonClientConfig;
     private Properties producerConfig;
     protected Properties resultConsumerConfig;
-    private File testFolder;
+    private final File testFolder = TestUtils.tempDirectory();
 
     public static final EmbeddedKafkaCluster CLUSTER;
 
@@ -95,7 +95,6 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
     @BeforeEach
     public void before(final TestInfo testName) throws Exception {
-        testFolder = TestUtils.tempDirectory();
         mockTime = CLUSTER.time;
 
         final String appID = IntegrationTestUtils.safeUniqueTestName(testName);

@@ -54,8 +54,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -63,7 +62,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
@@ -104,14 +102,6 @@ public class SlidingWindowedKStreamIntegrationTest {
     private String outputTopic;
     private String safeTestName;
 
-    public static Stream<Arguments> getEmitStrategy() {
-        return Stream.of(
-                Arguments.of(StrategyType.ON_WINDOW_UPDATE, true),
-                Arguments.of(StrategyType.ON_WINDOW_UPDATE, false),
-                Arguments.of(StrategyType.ON_WINDOW_CLOSE, true),
-                Arguments.of(StrategyType.ON_WINDOW_CLOSE, false));
-    }
-
     @BeforeEach
     public void before(final TestInfo testInfo) throws InterruptedException {
         builder = new StreamsBuilder();
@@ -140,7 +130,7 @@ public class SlidingWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("getEmitStrategy")
+    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
     public void shouldAggregateWindowedWithNoGrace(final StrategyType strategyType, final boolean withCache) throws Exception {
         produceMessages(
             streamOneInput,
@@ -206,7 +196,7 @@ public class SlidingWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("getEmitStrategy")
+    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
     public void shouldAggregateWindowedWithGrace(final StrategyType strategyType, final boolean withCache) throws Exception {
         produceMessages(
             streamOneInput,
@@ -281,7 +271,7 @@ public class SlidingWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("getEmitStrategy")
+    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
     public void shouldRestoreAfterJoinRestart(final StrategyType strategyType, final boolean withCache) throws Exception {
         produceMessages(
             streamOneInput,

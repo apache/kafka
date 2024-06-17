@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -37,12 +36,6 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
-
-import java.io.File;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -59,20 +52,7 @@ import static org.hamcrest.core.IsEqual.equalTo;
 /**
  * Tests all available joins of Kafka Streams DSL.
  */
-@Tag("integration")
 public abstract class AbstractJoinIntegrationTest {
-    private File testFolder = null;
-
-    @BeforeEach
-    public void setup() {
-        testFolder = TestUtils.tempDirectory();
-    }
-
-    @AfterEach
-    public void destroy() throws IOException {
-        Utils.delete(testFolder);
-    }
-
     private final MockTime time = new MockTime();
     private static final Long COMMIT_INTERVAL = 100L;
     static final String INPUT_TOPIC_RIGHT = "inputTopicRight";
@@ -154,7 +134,7 @@ public abstract class AbstractJoinIntegrationTest {
             streamsConfig.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         }
 
-        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getPath());
+        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
 
         return streamsConfig;
     }

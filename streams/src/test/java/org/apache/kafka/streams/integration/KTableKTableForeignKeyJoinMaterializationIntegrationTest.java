@@ -38,14 +38,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.Function;
-import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -70,15 +68,8 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
         ));
     }
 
-    public static Stream<Arguments> data() {
-        return Stream.of(
-                Arguments.of(false, false),
-                Arguments.of(true, false),
-                Arguments.of(true, true));
-    }
-
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({"false, false", "true, false", "true, true"})
     public void shouldEmitTombstoneWhenDeletingNonJoiningRecords(final boolean materialized, final boolean queryable) {
         final Topology topology = getTopology(streamsConfig, "store", materialized, queryable);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {

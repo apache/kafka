@@ -22,12 +22,12 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -42,7 +42,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
@@ -63,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Timeout(600)
 public class JoinStoreIntegrationTest {
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -82,8 +81,6 @@ public class JoinStoreIntegrationTest {
         CLUSTER.stop();
     }
 
-    private File testFolder;
-
     private static final String APP_ID = "join-store-integration-test";
     private static final Long COMMIT_INTERVAL = 100L;
     static final Properties STREAMS_CONFIG = new Properties();
@@ -94,15 +91,14 @@ public class JoinStoreIntegrationTest {
 
     @BeforeEach
     public void prepareTopology() throws InterruptedException {
-        testFolder = TestUtils.tempDirectory();
         CLUSTER.createTopics(INPUT_TOPIC_LEFT, INPUT_TOPIC_RIGHT, OUTPUT_TOPIC);
-        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getPath());
+        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
     }
 
     @AfterEach
     public void cleanup() throws InterruptedException, IOException {
         CLUSTER.deleteAllTopicsAndWait(120000);
-        Utils.delete(testFolder);
+        IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
     }
 
     @Test

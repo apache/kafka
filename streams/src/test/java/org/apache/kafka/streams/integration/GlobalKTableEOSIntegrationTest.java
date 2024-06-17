@@ -52,8 +52,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -64,12 +63,12 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SuppressWarnings("deprecation")
 @Tag("integration")
 @Timeout(600)
 public class GlobalKTableEOSIntegrationTest {
@@ -93,13 +92,6 @@ public class GlobalKTableEOSIntegrationTest {
     @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
-    }
-
-    @SuppressWarnings("deprecation")
-    public static Stream<Arguments> data() {
-        return Stream.of(
-                Arguments.of(StreamsConfig.EXACTLY_ONCE),
-                Arguments.of(StreamsConfig.EXACTLY_ONCE_V2));
     }
 
     private final MockTime mockTime = CLUSTER.time;
@@ -152,7 +144,7 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldKStreamGlobalKTableLeftJoin(final String eosConfig) throws Exception {
         final KStream<String, String> streamTableJoin = stream.leftJoin(globalTable, keyMapper, joiner);
         streamTableJoin.foreach(foreachAction);
@@ -222,7 +214,7 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldKStreamGlobalKTableJoin(final String eosConfig) throws Exception {
         final KStream<String, String> streamTableJoin = stream.join(globalTable, keyMapper, joiner);
         streamTableJoin.foreach(foreachAction);
@@ -291,7 +283,7 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldRestoreTransactionalMessages(final String eosConfig) throws Exception {
         produceInitialGlobalTableValues();
 
@@ -326,13 +318,13 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldSkipOverTxMarkersOnRestore(final String eosConfig) throws Exception {
         shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(false, eosConfig);
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldSkipOverAbortedMessagesOnRestore(final String eosConfig) throws Exception {
         shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(true, eosConfig);
     }
@@ -425,7 +417,7 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldNotRestoreAbortedMessages(final String eosConfig) throws Exception {
         produceAbortedMessages();
         produceInitialGlobalTableValues();

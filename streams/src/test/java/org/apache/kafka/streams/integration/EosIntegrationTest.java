@@ -69,8 +69,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,7 +94,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -113,6 +112,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SuppressWarnings("deprecation")
 @Tag("integration")
 @Timeout(600)
 public class EosIntegrationTest {
@@ -161,25 +161,6 @@ public class EosIntegrationTest {
 
     private String stateTmpDir;
 
-    @SuppressWarnings("deprecation")
-    public static Stream<Arguments> eosConfig() {
-        return Stream.of(
-                Arguments.of(StreamsConfig.AT_LEAST_ONCE),
-                Arguments.of(StreamsConfig.EXACTLY_ONCE),
-                Arguments.of(StreamsConfig.EXACTLY_ONCE_V2));
-    }
-
-    @SuppressWarnings("deprecation")
-    public static Stream<Arguments> data() {
-        return Stream.of(
-                Arguments.of(StreamsConfig.AT_LEAST_ONCE, false),
-                Arguments.of(StreamsConfig.EXACTLY_ONCE, false),
-                Arguments.of(StreamsConfig.EXACTLY_ONCE_V2, false),
-                Arguments.of(StreamsConfig.AT_LEAST_ONCE, true),
-                Arguments.of(StreamsConfig.EXACTLY_ONCE, true),
-                Arguments.of(StreamsConfig.EXACTLY_ONCE_V2, true));
-    }
-
     @BeforeEach
     public void createTopics() throws Exception {
         applicationId = "appId-" + TEST_NUMBER.getAndIncrement();
@@ -196,13 +177,13 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("eosConfig")
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToRunWithEosEnabled(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @ParameterizedTest
-    @MethodSource("eosConfig")
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldCommitCorrectOffsetIfInputTopicIsTransactional(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true, eosConfig);
 
@@ -230,31 +211,31 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("eosConfig")
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToRestartAfterClose(final String eosConfig) throws Exception {
         runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @ParameterizedTest
-    @MethodSource("eosConfig")
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToCommitToMultiplePartitions(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @ParameterizedTest
-    @MethodSource("eosConfig")
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToCommitMultiplePartitionOffsets(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @ParameterizedTest
-    @MethodSource("eosConfig")
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToRunWithTwoSubtopologies(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @ParameterizedTest
-    @MethodSource("eosConfig")
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
@@ -347,7 +328,7 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("eosConfig")
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToPerformMultipleTransactions(final String eosConfig) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
@@ -395,7 +376,14 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({
+            StreamsConfig.AT_LEAST_ONCE + ",true",
+            StreamsConfig.AT_LEAST_ONCE + ",false",
+            StreamsConfig.EXACTLY_ONCE + ",true",
+            StreamsConfig.EXACTLY_ONCE + ",false",
+            StreamsConfig.EXACTLY_ONCE_V2 + ",true",
+            StreamsConfig.EXACTLY_ONCE_V2 + ",false"
+    })
     public void shouldNotViolateEosIfOneTaskFails(final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
         if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
 
@@ -499,7 +487,14 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({
+            StreamsConfig.AT_LEAST_ONCE + ",true",
+            StreamsConfig.AT_LEAST_ONCE + ",false",
+            StreamsConfig.EXACTLY_ONCE + ",true",
+            StreamsConfig.EXACTLY_ONCE + ",false",
+            StreamsConfig.EXACTLY_ONCE_V2 + ",true",
+            StreamsConfig.EXACTLY_ONCE_V2 + ",false"
+    })
     public void shouldNotViolateEosIfOneTaskFailsWithState(final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
         if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
 
@@ -618,7 +613,14 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({
+            StreamsConfig.AT_LEAST_ONCE + ",true",
+            StreamsConfig.AT_LEAST_ONCE + ",false",
+            StreamsConfig.EXACTLY_ONCE + ",true",
+            StreamsConfig.EXACTLY_ONCE + ",false",
+            StreamsConfig.EXACTLY_ONCE_V2 + ",true",
+            StreamsConfig.EXACTLY_ONCE_V2 + ",false"
+    })
     public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances(final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
         if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
 
@@ -781,7 +783,14 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({
+            StreamsConfig.AT_LEAST_ONCE + ",true",
+            StreamsConfig.AT_LEAST_ONCE + ",false",
+            StreamsConfig.EXACTLY_ONCE + ",true",
+            StreamsConfig.EXACTLY_ONCE + ",false",
+            StreamsConfig.EXACTLY_ONCE_V2 + ",true",
+            StreamsConfig.EXACTLY_ONCE_V2 + ",false"
+    })
     public void shouldWriteLatestOffsetsToCheckpointOnShutdown(final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
         final List<KeyValue<Long, Long>> writtenData = prepareData(0L, 10, 0L, 1L);
         final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(writtenData);
@@ -815,14 +824,28 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({
+            StreamsConfig.AT_LEAST_ONCE + ",true",
+            StreamsConfig.AT_LEAST_ONCE + ",false",
+            StreamsConfig.EXACTLY_ONCE + ",true",
+            StreamsConfig.EXACTLY_ONCE + ",false",
+            StreamsConfig.EXACTLY_ONCE_V2 + ",true",
+            StreamsConfig.EXACTLY_ONCE_V2 + ",false"
+    })
     public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterEnabled(
             final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
         shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(eosConfig, processingThreadsEnabled, true);
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({
+            StreamsConfig.AT_LEAST_ONCE + ",true",
+            StreamsConfig.AT_LEAST_ONCE + ",false",
+            StreamsConfig.EXACTLY_ONCE + ",true",
+            StreamsConfig.EXACTLY_ONCE + ",false",
+            StreamsConfig.EXACTLY_ONCE_V2 + ",true",
+            StreamsConfig.EXACTLY_ONCE_V2 + ",false"
+    })
     public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterDisabled(
             final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
         if (!processingThreadsEnabled) {
@@ -830,7 +853,6 @@ public class EosIntegrationTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(
             final String eosConfig,
             final boolean processingThreadsEnabled,
@@ -1015,7 +1037,7 @@ public class EosIntegrationTest {
         return data;
     }
 
-    @SuppressWarnings("deprecation") //the threads should no longer fail one thread one at a time
+    // the threads should no longer fail one thread one at a time
     private KafkaStreams getKafkaStreams(final String dummyHostName,
                                          final boolean withState,
                                          final String appDir,

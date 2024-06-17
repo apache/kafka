@@ -48,8 +48,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -59,7 +58,6 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
@@ -71,19 +69,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * An integration test to verify the conversion of a dirty-closed EOS
  * task towards a standby task is safe across restarts of the application.
  */
+@SuppressWarnings("deprecation")
 @Tag("integration")
 @Timeout(600)
 public class StandbyTaskEOSIntegrationTest {
     private static final long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
     private static final int KEY_0 = 0;
     private static final int KEY_1 = 1;
-
-    @SuppressWarnings("deprecation")
-    public static Stream<Arguments> data() {
-        return Stream.of(
-                Arguments.of(StreamsConfig.EXACTLY_ONCE),
-                Arguments.of(StreamsConfig.EXACTLY_ONCE_V2));
-    }
 
     private final AtomicBoolean skipRecord = new AtomicBoolean(false);
 
@@ -134,7 +126,7 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldSurviveWithOneTaskAsStandby(final String eosConfig) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputTopic,
@@ -198,7 +190,7 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldWipeOutStandbyStateDirectoryIfCheckpointIsMissing(final String eosConfig) throws Exception {
         final long time = System.currentTimeMillis();
         final String base = TestUtils.tempDirectory(appId).getPath();

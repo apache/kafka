@@ -50,8 +50,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +62,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Stream;
 
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
@@ -110,16 +108,8 @@ public class SuppressionDurabilityIntegrationTest {
     private static final long COMMIT_INTERVAL = 100L;
 
     @SuppressWarnings("deprecation")
-    public static Stream<Arguments> data() {
-        return Stream.of(
-                Arguments.of(StreamsConfig.AT_LEAST_ONCE),
-                Arguments.of(StreamsConfig.EXACTLY_ONCE),
-                Arguments.of(StreamsConfig.EXACTLY_ONCE_V2));
-    }
-
     @ParameterizedTest
-    @MethodSource("data")
-    @SuppressWarnings("deprecation")
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldRecoverBufferAfterShutdown(final String processingGuarantee, final TestInfo testInfo) {
         final String testId = safeUniqueTestName(testInfo);
         final String appId = "appId_" + testId;

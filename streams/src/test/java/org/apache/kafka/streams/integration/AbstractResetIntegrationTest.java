@@ -43,7 +43,6 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.StreamsResetter;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
@@ -65,7 +64,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Tag("integration")
 @Timeout(600)
 public abstract class AbstractResetIntegrationTest {
 
@@ -76,9 +74,6 @@ public abstract class AbstractResetIntegrationTest {
     protected static Admin adminClient;
 
     abstract Map<String, Object> getClientSslConfig();
-
-    protected TestInfo testInfo;
-    private File testFolder;
 
     protected Properties commonClientConfig;
     protected Properties streamsConfig;
@@ -136,7 +131,7 @@ public abstract class AbstractResetIntegrationTest {
         resultConsumerConfig.putAll(commonClientConfig);
 
         streamsConfig = new Properties();
-        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getPath());
+        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfig.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
@@ -158,8 +153,6 @@ public abstract class AbstractResetIntegrationTest {
     protected static final int TIMEOUT_MULTIPLIER = 15;
 
     void prepareTest(final TestInfo testInfo) throws Exception {
-        this.testInfo = testInfo;
-        testFolder  = TestUtils.tempDirectory();
         final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         prepareConfigs(appID);
         prepareEnvironment();
@@ -174,7 +167,7 @@ public abstract class AbstractResetIntegrationTest {
 
     void cleanupTest() throws Exception {
         Utils.closeQuietly(streams, "kafka streams");
-        Utils.delete(testFolder);
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
         if (adminClient != null) {
             Utils.closeQuietly(adminClient, "admin client");
             adminClient = null;
@@ -200,7 +193,7 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     @Test
-    public void testResetWhenInternalTopicsAreSpecified() throws Exception {
+    public void testResetWhenInternalTopicsAreSpecified(final TestInfo testInfo) throws Exception {
         final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
@@ -228,7 +221,7 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     @Test
-    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
+    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic(final TestInfo testInfo) throws Exception {
         final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
@@ -260,16 +253,16 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     @Test
-    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
-        testReprocessingFromScratchAfterResetWithIntermediateUserTopic(false);
+    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic(final TestInfo testInfo) throws Exception {
+        testReprocessingFromScratchAfterResetWithIntermediateUserTopic(false, testInfo);
     }
 
     @Test
-    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic() throws Exception {
-        testReprocessingFromScratchAfterResetWithIntermediateUserTopic(true);
+    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic(final TestInfo testInfo) throws Exception {
+        testReprocessingFromScratchAfterResetWithIntermediateUserTopic(true, testInfo);
     }
 
-    private void testReprocessingFromScratchAfterResetWithIntermediateUserTopic(final boolean useRepartitioned) throws Exception {
+    private void testReprocessingFromScratchAfterResetWithIntermediateUserTopic(final boolean useRepartitioned, final TestInfo testInfo) throws Exception {
         if (!useRepartitioned) {
             cluster.createTopic(INTERMEDIATE_USER_TOPIC);
         }

@@ -18,7 +18,6 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreamsWrapper;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -37,7 +36,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Properties;
 
@@ -74,13 +72,11 @@ public class JoinWithIncompleteMetadataIntegrationTest {
     StreamsBuilder builder;
     final ValueJoiner<String, String, String> valueJoiner = (value1, value2) -> value1 + "-" + value2;
     private KTable<Long, String> rightTable;
-    private File testFolder;
 
     @BeforeEach
     public void prepareTopology() throws InterruptedException {
-        testFolder = TestUtils.tempDirectory();
         CLUSTER.createTopics(INPUT_TOPIC_RIGHT, OUTPUT_TOPIC);
-        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getPath());
+        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
 
         builder = new StreamsBuilder();
         rightTable = builder.table(INPUT_TOPIC_RIGHT);
@@ -89,7 +85,7 @@ public class JoinWithIncompleteMetadataIntegrationTest {
     @AfterEach
     public void cleanup() throws InterruptedException, IOException {
         CLUSTER.deleteAllTopicsAndWait(120000);
-        Utils.delete(testFolder);
+        IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
     }
 
     @Test

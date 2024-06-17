@@ -51,8 +51,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -73,7 +72,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.KafkaStreams.State.ERROR;
 import static org.apache.kafka.streams.KafkaStreams.State.REBALANCING;
@@ -108,13 +106,7 @@ public class KStreamRepartitionIntegrationTest {
     private String applicationId;
     private String safeTestName;
     private List<KafkaStreams> kafkaStreamsInstances;
-    private File testFolder;
-
-    private static Stream<Arguments> topologyOptimization() {
-        return Stream.of(
-                Arguments.of(StreamsConfig.OPTIMIZE),
-                Arguments.of(StreamsConfig.NO_OPTIMIZATION));
-    }
+    private final File testFolder = TestUtils.tempDirectory();
 
     @BeforeEach
     public void before(final TestInfo testInfo) throws InterruptedException {
@@ -124,7 +116,6 @@ public class KStreamRepartitionIntegrationTest {
         inputTopic = "input-topic-" + safeTestName;
         outputTopic = "output-topic-" + safeTestName;
         applicationId = "app-" + safeTestName;
-        testFolder = TestUtils.tempDirectory();
 
         CLUSTER.createTopic(inputTopic, 4, 1);
         CLUSTER.createTopic(outputTopic, 1, 1);
@@ -153,7 +144,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationDoNotMatchSourceTopicWhenJoining(final String topologyOptimization) throws InterruptedException {
         final int topicBNumberOfPartitions = 6;
         final String inputTopicRepartitionName = "join-repartition-test";
@@ -191,7 +182,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldDeductNumberOfPartitionsFromRepartitionOperation(final String topologyOptimization) throws Exception {
         final String topicBMapperName = "topic-b-mapper";
         final int topicBNumberOfPartitions = 6;
@@ -244,7 +235,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldDoProperJoiningWhenNumberOfPartitionsAreValidWhenUsingRepartitionOperation(final String topologyOptimization) throws Exception {
         final String topicBRepartitionedName = "topic-b-scale-up";
         final String inputTopicRepartitionedName = "input-topic-scale-up";
@@ -296,7 +287,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldRepartitionToMultiplePartitions(final String topologyOptimization) throws Exception {
         final String repartitionName = "broadcasting-partitioner-test";
         final long timestamp = System.currentTimeMillis();
@@ -371,7 +362,7 @@ public class KStreamRepartitionIntegrationTest {
 
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldUseStreamPartitionerForRepartitionOperation(final String topologyOptimization) throws Exception {
         final int partition = 1;
         final String repartitionName = "partitioner-test";
@@ -413,7 +404,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldPerformSelectKeyWithRepartitionOperation(final String topologyOptimization) throws Exception {
         final long timestamp = System.currentTimeMillis();
 
@@ -449,7 +440,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed(final String topologyOptimization) throws Exception {
         final String repartitionName = "dummy";
         final long timestamp = System.currentTimeMillis();
@@ -486,7 +477,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldPerformKeySelectOperationWhenRepartitionOperationIsUsedWithKeySelector(final String topologyOptimization) throws Exception {
         final String repartitionedName = "new-key";
         final long timestamp = System.currentTimeMillis();
@@ -532,7 +523,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldCreateRepartitionTopicWithSpecifiedNumberOfPartitions(final String topologyOptimization) throws Exception {
         final String repartitionName = "new-partitions";
         final long timestamp = System.currentTimeMillis();
@@ -572,7 +563,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldInheritRepartitionTopicPartitionNumberFromUpstreamTopicWhenNumberOfPartitionsIsNotSpecified(final String topologyOptimization) throws Exception {
         final String repartitionName = "new-topic";
         final long timestamp = System.currentTimeMillis();
@@ -612,7 +603,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldCreateOnlyOneRepartitionTopicWhenRepartitionIsFollowedByGroupByKey(final String topologyOptimization) throws Exception {
         final String repartitionName = "new-partitions";
         final long timestamp = System.currentTimeMillis();
@@ -658,7 +649,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldGenerateRepartitionTopicWhenNameIsNotSpecified(final String topologyOptimization) throws Exception {
         final long timestamp = System.currentTimeMillis();
 
@@ -694,7 +685,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("topologyOptimization")
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldGoThroughRebalancingCorrectly(final String topologyOptimization) throws Exception {
         final String repartitionName = "rebalancing-test";
         final long timestamp = System.currentTimeMillis();

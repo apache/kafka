@@ -52,8 +52,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -67,7 +66,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -97,14 +95,6 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         )
     );
 
-    public static Stream<Arguments> data() {
-        return Stream.of(
-            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE),
-            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC),
-            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)
-        );
-    }
-
     @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
@@ -116,7 +106,10 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(strings = {
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY})
     public void shouldScaleOutWithWarmupTasksAndInMemoryStores(final String rackAwareStrategy, final TestInfo testInfo) throws InterruptedException {
         // NB: this test takes at least a minute to run, because it needs a probing rebalance, and the minimum
         // value is one minute
@@ -124,7 +117,10 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @ValueSource(strings = {
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY})
     public void shouldScaleOutWithWarmupTasksAndPersistentStores(final String rackAwareStrategy, final TestInfo testInfo) throws InterruptedException {
         // NB: this test takes at least a minute to run, because it needs a probing rebalance, and the minimum
         // value is one minute
