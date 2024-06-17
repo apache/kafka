@@ -73,6 +73,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -150,6 +151,35 @@ public class HeartbeatRequestManagerTest {
         if (testBuilder != null) {
             testBuilder.close();
         }
+    }
+
+    @Test
+    public void testHeartBeatRequestStateToStringBase() {
+        long retryBackoffMs = 100;
+        long retryBackoffMaxMs = 1000;
+        LogContext logContext = new LogContext();
+        HeartbeatRequestState heartbeatRequestState = new HeartbeatRequestState(
+                logContext,
+                time,
+                DEFAULT_HEARTBEAT_INTERVAL_MS,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                .2
+        );
+
+        RequestState requestState = new RequestState(
+                logContext,
+                HeartbeatRequestManager.HeartbeatRequestState.class.getName(),
+                retryBackoffMs,
+                retryBackoffMaxMs
+        );
+
+        String target = requestState.toStringBase() +
+                ", heartbeatTimer=" + heartbeatRequestState.heartbeatTimer() +
+                ", heartbeatIntervalMs=" + DEFAULT_HEARTBEAT_INTERVAL_MS;
+
+        assertDoesNotThrow(heartbeatRequestState::toString);
+        assertEquals(target, heartbeatRequestState.toStringBase());
     }
 
     @Test
