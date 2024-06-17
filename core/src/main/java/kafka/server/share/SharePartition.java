@@ -565,7 +565,7 @@ public class SharePartition {
      * @param logStartOffset The new log start offset.
      */
     void updateCacheAndOffsets(long logStartOffset) {
-      // TODO: Provide implementation to update cache and offsets on LSO movement.
+        // TODO: Provide implementation to update cache and offsets on LSO movement.
     }
 
     /**
@@ -1188,44 +1188,45 @@ public class SharePartition {
 
     // Visible for testing
     boolean isWriteShareGroupStateSuccessful(List<PersisterStateBatch> stateBatches) {
+        WriteShareGroupStateResult response;
         try {
-            WriteShareGroupStateResult response = persister.writeState(new WriteShareGroupStateParameters.Builder()
+             response = persister.writeState(new WriteShareGroupStateParameters.Builder()
                 .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
                     .setGroupId(this.groupId)
                     .setTopicsData(Collections.singletonList(new TopicData<>(topicIdPartition.topicId(),
                         Collections.singletonList(PartitionFactory.newPartitionStateBatchData(
                             topicIdPartition.partition(), stateEpoch, startOffset, 0, stateBatches))))
                     ).build()).build()).get();
-
-            if (response == null || response.topicsData() == null || response.topicsData().size() != 1) {
-                log.error("Failed to write the share group state for share partition: {}-{}. Invalid state found: {}",
-                    groupId, topicIdPartition, response);
-                throw new IllegalStateException(String.format("Failed to write the share group state for share partition %s-%s",
-                    groupId, topicIdPartition));
-            }
-
-            TopicData<PartitionErrorData> state = response.topicsData().get(0);
-            if (state.topicId() != topicIdPartition.topicId() || state.partitions().size() != 1
-                || state.partitions().get(0).partition() != topicIdPartition.partition()) {
-                log.error("Failed to write the share group state for share partition: {}-{}. Invalid topic partition response: {}",
-                    groupId, topicIdPartition, response);
-                throw new IllegalStateException(String.format("Failed to write the share group state for share partition %s-%s",
-                    groupId, topicIdPartition));
-            }
-
-            PartitionErrorData partitionData = state.partitions().get(0);
-            if (partitionData.errorCode() != Errors.NONE.code()) {
-                Exception exception = Errors.forCode(partitionData.errorCode()).exception();
-                log.error("Failed to write the share group state for share partition: {}-{} due to exception",
-                    groupId, topicIdPartition, exception);
-                return false;
-            }
-            return true;
         } catch (InterruptedException | ExecutionException e) {
             log.error("Failed to write the share group state for share partition: {}-{}", groupId, topicIdPartition, e);
             throw new IllegalStateException(String.format("Failed to write the share group state for share partition %s-%s",
                 groupId, topicIdPartition), e);
         }
+
+        if (response == null || response.topicsData() == null || response.topicsData().size() != 1) {
+            log.error("Failed to write the share group state for share partition: {}-{}. Invalid state found: {}",
+                groupId, topicIdPartition, response);
+            throw new IllegalStateException(String.format("Failed to write the share group state for share partition %s-%s",
+                groupId, topicIdPartition));
+        }
+
+        TopicData<PartitionErrorData> state = response.topicsData().get(0);
+        if (state.topicId() != topicIdPartition.topicId() || state.partitions().size() != 1
+            || state.partitions().get(0).partition() != topicIdPartition.partition()) {
+            log.error("Failed to write the share group state for share partition: {}-{}. Invalid topic partition response: {}",
+                groupId, topicIdPartition, response);
+            throw new IllegalStateException(String.format("Failed to write the share group state for share partition %s-%s",
+                groupId, topicIdPartition));
+        }
+
+        PartitionErrorData partitionData = state.partitions().get(0);
+        if (partitionData.errorCode() != Errors.NONE.code()) {
+            Exception exception = Errors.forCode(partitionData.errorCode()).exception();
+            log.error("Failed to write the share group state for share partition: {}-{} due to exception",
+                groupId, topicIdPartition, exception);
+            return false;
+        }
+        return true;
     }
 
     private AcquisitionLockTimerTask scheduleAcquisitionLockTimeout(String memberId, long firstOffset, long lastOffset) {
