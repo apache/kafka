@@ -16,12 +16,50 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import kafka.log.UnifiedLog;
+import kafka.server.BrokerTopicStats;
+import kafka.server.RequestLocal;
+
+import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.compress.GzipCompression;
+import org.apache.kafka.common.errors.InvalidTimestampException;
+import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
+import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.DefaultRecordBatch;
+import org.apache.kafka.common.record.EndTransactionMarker;
+import org.apache.kafka.common.record.LegacyRecord;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.RecordValidationStats;
+import org.apache.kafka.common.record.RecordVersion;
+import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.PrimitiveRef;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult;
+import org.apache.kafka.test.TestUtils;
+
+import com.yammer.metrics.core.MetricName;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
@@ -30,44 +68,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.nio.ByteBuffer;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
-
-import kafka.server.BrokerTopicStats;
-import kafka.server.RequestLocal;
-import kafka.log.UnifiedLog;
-import org.apache.kafka.common.compress.GzipCompression;
-import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
-import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
-import org.apache.kafka.common.errors.InvalidTimestampException;
-import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.DefaultRecordBatch;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordValidationStats;
-import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.record.RecordVersion;
-import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.LegacyRecord;
-import org.apache.kafka.common.utils.PrimitiveRef;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
-import org.apache.kafka.server.util.MockTime;
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
-import com.yammer.metrics.core.MetricName;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
