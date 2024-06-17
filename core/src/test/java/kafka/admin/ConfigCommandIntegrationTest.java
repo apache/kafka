@@ -231,7 +231,7 @@ public class ConfigCommandIntegrationTest {
             alterAndVerifyConfig(client, Optional.empty(), singletonMap("message.max.bytes", "140000"));
 
             // Delete config
-            deleteAndVerifyDefaultConfigValue(client, Optional.of(defaultBrokerId), singleton("message.max.bytes"));
+            deleteAndVerifyConfigValue(client, defaultBrokerId, singleton("message.max.bytes"), true);
 
             // Listener configs: should work only with listener name
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
@@ -240,8 +240,8 @@ public class ConfigCommandIntegrationTest {
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithKraft(client, Optional.empty(), 
                             singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks")));
-            deleteAndVerifyDefaultConfigValue(client, Optional.of(defaultBrokerId),
-                    singleton("listener.name.internal.ssl.keystore.location"));
+            deleteAndVerifyConfigValue(client, defaultBrokerId,
+                    singleton("listener.name.internal.ssl.keystore.location"), false);
             alterConfigWithKraft(client, Optional.of(defaultBrokerId),
                     singletonMap("listener.name.external.ssl.keystore.password", "secret"));
 
@@ -517,21 +517,32 @@ public class ConfigCommandIntegrationTest {
                 .flatMap(e -> e.entries().stream());
     }
 
-    private void deleteAndVerifyDefaultConfigValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
+    private void deleteAndVerifyConfigValue(Admin client, 
+                                            String brokerId, 
+                                            Set<String> config, 
+                                            boolean hasDefaultValue) throws Exception {
         ConfigCommand.ConfigCommandOptions deleteOpts =
-                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
+                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", brokerId),
                         asList("--delete-config", String.join(",", config))));
         ConfigCommand.alterConfig(client, deleteOpts);
-        verifyPerBrokerDefaultConfigValue(client, brokerId, config);
+        verifyPerBrokerConfigValue(client, brokerId, config, hasDefaultValue);
     }
 
-    private void verifyPerBrokerDefaultConfigValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
+    private void verifyPerBrokerConfigValue(Admin client,
+                                            String brokerId,
+                                            Set<String> config,
+                                            boolean hasDefaultValue) throws Exception {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId);
         TestUtils.waitForCondition(() -> {
-            Map<String, String> current = getConfigEntryStream(client, configResource)
-                    .filter(configEntry -> Objects.nonNull(configEntry.value()))
-                    .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
-            return config.stream().allMatch(current::containsKey);
+            if (hasDefaultValue) {
+                Map<String, String> current = getConfigEntryStream(client, configResource)
+                        .filter(configEntry -> Objects.nonNull(configEntry.value()))
+                        .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
+                return config.stream().allMatch(current::containsKey);
+            } else {
+                return getConfigEntryStream(client, configResource)
+                        .noneMatch(configEntry -> config.contains(configEntry.name()));
+            }
         }, 5000, config + " are not updated");
     }
 
