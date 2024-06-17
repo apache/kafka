@@ -312,7 +312,7 @@ public class ClusterControlManager {
         }
     }
 
-    String clusterId() {
+    String clusterId() { // Visible for testing
         return clusterId;
     }
 
@@ -344,7 +344,7 @@ public class ClusterControlManager {
      */
     public ControllerResult<BrokerRegistrationReply> registerBroker(
         BrokerRegistrationRequestData request,
-        long brokerEpoch,
+        long newBrokerEpoch,
         FinalizedControllerFeatures finalizedFeatures
     ) {
         if (heartbeatManager == null) {
@@ -357,9 +357,11 @@ public class ClusterControlManager {
         int brokerId = request.brokerId();
         List<ApiMessageAndVersion> records = new ArrayList<>();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
+        Uuid prevIncarnationId = null;
         if (existing != null) {
+            prevIncarnationId = existing.incarnationId();
             if (heartbeatManager.hasValidSession(brokerId)) {
-                if (!existing.incarnationId().equals(request.incarnationId())) {
+                if (!request.incarnationId().equals(prevIncarnationId)) {
                     throw new DuplicateBrokerRegistrationException("Another broker is " +
                         "registered with that broker id.");
                 }
@@ -400,7 +402,6 @@ public class ClusterControlManager {
             setBrokerId(brokerId).
             setIsMigratingZkBroker(request.isMigratingZkBroker()).
             setIncarnationId(request.incarnationId()).
-            setBrokerEpoch(brokerEpoch).
             setRack(request.rack()).
             setEndPoints(listenerInfo.toBrokerRegistrationRecord());
 
@@ -420,23 +421,24 @@ public class ClusterControlManager {
             record.setLogDirs(request.logDirs());
         }
 
-        if (existing == null || !request.incarnationId().equals(existing.incarnationId())) {
-            int prevNumRedcords = records.size();
+        if (!request.incarnationId().equals(prevIncarnationId)) {
+            int prevNumRecords = records.size();
             brokerUncleanShutdownHandler.addRecordsForShutdown(request.brokerId(), records);
-            int numRecordsAdded = records.size() - prevNumRedcords;
+            int numRecordsAdded = records.size() - prevNumRecords;
             if (existing == null) {
-                log.info("No previous registration found for broker ID {}. New incarnation ID is " +
+                log.info("No previous registration found for broker {}. New incarnation ID is " +
                         "{}.  Generated {} record(s) to clean up previous incarnations. New broker " +
-                        "epoch is {}.", brokerId, request.incarnationId(), numRecordsAdded, brokerEpoch);
+                        "epoch is {}.", brokerId, request.incarnationId(), numRecordsAdded, newBrokerEpoch);
             } else {
                 log.info("Registering a new incarnation of broker {}. Previous incarnation ID " +
-                                "was {}; new incarnation ID is {}. Generated {} record(s) to clean up " +
-                                "previous incarnations. Broker epoch will become {}.", brokerId,
+                        "was {}; new incarnation ID is {}. Generated {} record(s) to clean up " +
+                        "previous incarnations. Broker epoch will become {}.", brokerId,
                         existing.incarnationId(), request.incarnationId(), numRecordsAdded,
-                        brokerEpoch);
+                        newBrokerEpoch);
             }
+            record.setBrokerEpoch(newBrokerEpoch);
         } else {
-            log.info("Amending registration of broker {}, incarnation {}. Broker epoch remains {}.",
+            log.info("Amending registration of broker {}, incarnation ID {}. Broker epoch remains {}.",
                     request.brokerId(), request.incarnationId(), existing.epoch());
             record.setFenced(existing.fenced());
             record.setInControlledShutdown(existing.inControlledShutdown());
@@ -445,13 +447,13 @@ public class ClusterControlManager {
         records.add(new ApiMessageAndVersion(record, featureControl.metadataVersion().
             registerBrokerRecordVersion()));
 
-        if (existing != null && (!existing.incarnationId().equals(request.incarnationId()))) {
+        if (!request.incarnationId().equals(prevIncarnationId)) {
             // Remove any existing session for the old broker incarnation.
             heartbeatManager.remove(brokerId);
         }
         heartbeatManager.register(brokerId, record.fenced());
 
-        return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));
+        return ControllerResult.atomicOf(records, new BrokerRegistrationReply(record.brokerEpoch()));
     }
 
     ControllerResult<Void> registerController(ControllerRegistrationRequestData request) {
