@@ -1697,6 +1697,17 @@ public class GroupMetadataManager {
         return new CoordinatorResult<>(records, null, appendFuture, true);
     }
 
+    /**
+     * Gets or creates a new dynamic consumer group member.
+     *
+     * @param group                 The consumer group.
+     * @param memberId              The member id.
+     * @param memberEpoch           The member epoch.
+     * @param ownedTopicPartitions  The owned partitions reported by the member.
+     * @param createIfNotExists     Whether the member should be created or not.
+     *
+     * @return The existing consumer group member or a new one.
+     */
     private ConsumerGroupMember getOrMaybeCreateDynamicConsumerGroupMember(
         ConsumerGroup group,
         String memberId,
@@ -1714,6 +1725,21 @@ public class GroupMetadataManager {
         return member;
     }
 
+    /**
+     * Gets or creates a static consumer group member. This method also replaces the
+     * previous static member if allowed.
+     *
+     * @param group                 The consumer group.
+     * @param memberId              The member id.
+     * @param memberEpoch           The member epoch.
+     * @param instanceId            The instance id.
+     * @param ownedTopicPartitions  The owned partitions reported by the member.
+     * @param createIfNotExists     Whether the member should be created or not.
+     * @param records               The list to accumulate records created to replace
+     *                              the previous static member.
+     *                              
+     * @return The existing consumer group member or a new one.
+     */
     private ConsumerGroupMember getOrMaybeCreateStaticConsumerGroupMember(
         ConsumerGroup group,
         String memberId,
