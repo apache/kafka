@@ -1007,21 +1007,17 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     createTopic(topic)
     client = createAdminClient
 
-    val resources = Collections.singletonList(new ConfigResource(ConfigResource.Type.TOPIC, topic))
-    val includeDescribe = new DescribeConfigsOptions().includeDocumentation(true)
-    var describeConfigs = client.describeConfigs(resources, includeDescribe)
-    val pattern = """documentation=([^,]*?)\)""".r
-    var resourceToConfig = describeConfigs.all().get()
-    var matches = pattern.findAllMatchIn(resourceToConfig.toString)
-    var describes = matches.map(e => e.group(1)).toList
-    describes.foreach(e => assertNotEquals("null", e))
+    val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    val resources = Collections.singletonList(resource)
+    val includeDocumentation = new DescribeConfigsOptions().includeDocumentation(true)
+    var describeConfigs = client.describeConfigs(resources, includeDocumentation)
+    var configEntries = describeConfigs.values().get(resource).get().entries()
+    configEntries.forEach(e => assertNotNull(e.documentation()))
 
-    val excludeDescribe = new DescribeConfigsOptions().includeDocumentation(false)
-    describeConfigs = client.describeConfigs(resources, excludeDescribe)
-    resourceToConfig = describeConfigs.all().get()
-    matches = pattern.findAllMatchIn(resourceToConfig.toString)
-    describes = matches.map(e => e.group(1)).toList
-    describes.foreach(e => assertEquals("null", e))
+    val excludeDocumentation = new DescribeConfigsOptions().includeDocumentation(false)
+    describeConfigs = client.describeConfigs(resources, excludeDocumentation)
+    configEntries = describeConfigs.values().get(resource).get().entries()
+    configEntries.forEach(e => assertNull(e.documentation()))
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
