@@ -24,6 +24,7 @@ import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteL
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -33,8 +34,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.COPY_SEGMENT_STARTED;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RemoteLogMetadataFormatterTest {
     private static final Uuid TOPIC_ID = Uuid.randomUuid();
