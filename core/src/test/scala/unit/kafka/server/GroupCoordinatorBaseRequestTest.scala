@@ -76,7 +76,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     partition: Int,
     offset: Long,
     expectedError: Errors,
-    version: Short
+    version: Short = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
   ): Unit = {
     val request = new OffsetCommitRequest.Builder(
       new OffsetCommitRequestData()
@@ -440,7 +440,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     memberId: String,
     groupInstanceId: String = null,
     expectedError: Errors = Errors.NONE,
-    version: Short
+    version: Short = ApiKeys.HEARTBEAT.latestVersion(isUnstableApiEnabled)
   ): HeartbeatResponseData = {
     val heartbeatRequest = new HeartbeatRequest.Builder(
       new HeartbeatRequestData()

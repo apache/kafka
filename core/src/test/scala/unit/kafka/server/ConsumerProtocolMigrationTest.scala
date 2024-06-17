@@ -19,7 +19,10 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
-import org.apache.kafka.common.message.ListGroupsResponseData
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.{JoinGroupResponseData, ListGroupsResponseData, OffsetFetchResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.coordinator.group.Group
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
@@ -29,6 +32,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
+
+import java.util.Collections
+import scala.jdk.CollectionConverters._
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
@@ -384,6 +390,206 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       listGroups(
         statesFilter = List.empty,
         typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "bidirectional")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testOnlineUpgradeWithEagerAssignmentStrategy(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Classic member 1 joins the classic group.
+    val groupId = "grp"
+    val metadataWithEmptyPartitions = ConsumerProtocol.serializeSubscription(
+      new ConsumerPartitionAssignor.Subscription(
+        Collections.singletonList("foo"),
+        null,
+        Collections.emptyList
+      )
+    ).array
+
+    val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol(
+      groupId = groupId,
+      metadata = metadataWithEmptyPartitions,
+      assignment = ConsumerProtocol.serializeAssignment(
+        new ConsumerPartitionAssignor.Assignment(
+          List(new TopicPartition("foo", 0), new TopicPartition("foo", 1), new TopicPartition("foo", 2)).asJava
+        )
+      ).array
+    )
+
+    // The joining request with a consumer group member 2 is accepted.
+    val memberId2 = consumerGroupHeartbeat(
+      groupId = groupId,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    ).memberId
+
+    // The group has become a consumer group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.RECONCILING.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+
+    // Member 1 heartbeats and gets REBALANCE_IN_PROGRESS.
+    heartbeat(
+      groupId = groupId,
+      generationId = 1,
+      memberId = memberId1,
+      expectedError = Errors.REBALANCE_IN_PROGRESS
+    )
+
+    // Member 1 commits offset. Start from version 1 because version 0 goes to ZK.
+    for (version <- 1 to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
+      for (partitionId <- 0 to 2) {
+        commitOffset(
+          groupId = "grp",
+          memberId = memberId1,
+          memberEpoch = 1,
+          topic = "foo",
+          partition = partitionId,
+          offset = 100L + 10 * version + partitionId,
+          expectedError = Errors.NONE,
+          version = version.toShort
+        )
+      }
+    }
+    val committedOffset = 100L + 10 * ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+
+    // Member 1 fetches offsets. Start from version 1 because version 0 goes to ZK.
+    for (version <- 1 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
+      assertEquals(
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("grp")
+          .setTopics(List(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setName("foo")
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setCommittedOffset(committedOffset),
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(1)
+                  .setCommittedOffset(committedOffset + 1),
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(2)
+                  .setCommittedOffset(committedOffset + 2)
+              ).asJava)
+          ).asJava),
+        fetchOffsets(
+          groupId = "grp",
+          memberId = memberId1,
+          memberEpoch = 1,
+          partitions = List(
+            new TopicPartition("foo", 0),
+            new TopicPartition("foo", 1),
+            new TopicPartition("foo", 2)
+          ),
+          requireStable = false,
+          version = version.toShort
+        )
+      )
+    }
+
+    // Member 1 rejoins with empty owned partitions.
+    assertEquals(
+      new JoinGroupResponseData()
+        .setGenerationId(2)
+        .setProtocolType("consumer")
+        .setProtocolName("consumer-range")
+        .setMemberId(memberId1),
+      sendJoinRequest(
+        groupId = groupId,
+        memberId = memberId1,
+        metadata = metadataWithEmptyPartitions
+      )
+    )
+
+    // Member 2 rejoins to retrieve partitions pending assignment.
+    val partitionsOfMember2 = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberId2,
+      memberEpoch = 2,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    ).assignment.topicPartitions.get(0).partitions
+
+    // The group has been stabilized.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.STABLE.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+
+    // Member 1 syncs.
+    syncGroupWithOldProtocol(
+      groupId = "grp",
+      memberId = memberId1,
+      generationId = 2,
+      expectedAssignment = ConsumerProtocol.serializeAssignment(
+        new ConsumerPartitionAssignor.Assignment(
+          List(0, 1, 2).filter(!partitionsOfMember2.contains(_)).map(new TopicPartition("foo", _)).asJava
+        )
+      ).array
+    )
+
+    // Downgrade the group by leaving member 2.
+    leaveGroupWithNewProtocol(
+      groupId = groupId,
+      memberId = memberId2
+    )
+
+    // The group has become a classic group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ClassicGroupState.PREPARING_REBALANCE.toString)
+          .setGroupType(Group.GroupType.CLASSIC.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CLASSIC.toString)
       )
     )
   }
