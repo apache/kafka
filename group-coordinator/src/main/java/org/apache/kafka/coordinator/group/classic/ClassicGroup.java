@@ -16,10 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.classic;
 
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -44,14 +41,11 @@ import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -67,6 +61,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
@@ -1190,7 +1185,7 @@ public class ClassicGroup implements Group {
                     ByteBuffer buffer = ByteBuffer.wrap(member.metadata(protocolName.get()));
                     ConsumerProtocol.deserializeVersion(buffer);
                     allSubscribedTopics.addAll(new HashSet<>(
-                        ConsumerProtocol.deserializeSubscription(buffer, (short) 0).topics()
+                        ConsumerProtocol.deserializeConsumerProtocolSubscription(buffer, (short) 0).topics()
                     ));
                 });
                 return Optional.of(allSubscribedTopics);
@@ -1418,10 +1413,10 @@ public class ClassicGroup implements Group {
             // Set the assignment with serializing the ConsumerGroup's targetAssignment.
             // The serializing version should align with that of the member's JoinGroupRequestProtocol.
             byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(
-                new ConsumerPartitionAssignor.Assignment(ClassicGroup.topicPartitionListFromMap(
+                toConsumerProtocolAssignment(
                     consumerGroup.targetAssignment().get(classicGroupMember.memberId()).partitions(),
                     metadataImage.topics()
-                )),
+                ),
                 ConsumerProtocol.deserializeVersion(
                     ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().orElse("")))
                 )
@@ -1449,23 +1444,6 @@ public class ClassicGroup implements Group {
         );
 
         records.add(CoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments, metadataVersion));
-    }
-
-    /**
-     * @return The list of TopicPartition converted from the map of topic id and partition set.
-     */
-    private static List<TopicPartition> topicPartitionListFromMap(
-        Map<Uuid, Set<Integer>> topicPartitions,
-        TopicsImage topicsImage
-    ) {
-        List<TopicPartition> topicPartitionList = new ArrayList<>();
-        topicPartitions.forEach((topicId, partitionSet) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicId);
-            if (topicImage != null) {
-                partitionSet.forEach(partition -> topicPartitionList.add(new TopicPartition(topicImage.name(), partition)));
-            }
-        });
-        return topicPartitionList;
     }
 
     /**
