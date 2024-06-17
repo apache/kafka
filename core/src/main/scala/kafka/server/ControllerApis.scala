@@ -435,7 +435,12 @@ class ControllerApis(
           setErrorMessage("Duplicate topic name."))
       }
       topicNames.forEach { name =>
-        if (!authorizedTopicNames.contains(name)) {
+        if (name == Topic.CLUSTER_METADATA_TOPIC_NAME) {
+          response.topics().add(new CreatableTopicResult().
+            setName(name).
+            setErrorCode(INVALID_REQUEST.code).
+            setErrorMessage("Internal topic creation is prohibited."))
+        } else if (!authorizedTopicNames.contains(name)) {
           response.topics().add(new CreatableTopicResult().
             setName(name).
             setErrorCode(TOPIC_AUTHORIZATION_FAILED.code).

@@ -2030,14 +2030,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       )(identity).map(name => name -> results.find(name)).toMap
 
       results.forEach { topic =>
-        if (results.findAll(topic.name).size > 1) {
+        if (topic.name() == Topic.CLUSTER_METADATA_TOPIC_NAME) {
+          topic.setErrorCode(Errors.INVALID_REQUEST.code)
+          topic.setErrorMessage("Internal topic creation is prohibited.")
+        } else if (results.findAll(topic.name).size > 1) {
           topic.setErrorCode(Errors.INVALID_REQUEST.code)
           topic.setErrorMessage("Found multiple entries for this topic.")
         } else if (!authorizedTopics.contains(topic.name)) {
           topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
           topic.setErrorMessage("Authorization failed.")
         }
-        if (!authorizedForDescribeConfigs.contains(topic.name)) {
+        if (!authorizedForDescribeConfigs.contains(topic.name) && topic.name() != Topic.CLUSTER_METADATA_TOPIC_NAME) {
           topic.setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
         }
       }
