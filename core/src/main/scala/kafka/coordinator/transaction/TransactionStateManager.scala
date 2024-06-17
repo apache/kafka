@@ -101,7 +101,7 @@ class TransactionStateManager(brokerId: Int,
     TransactionStateManagerConfigs.METRICS_GROUP,
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
 
-  private def usesFlexibleRecords(): Boolean = {
+  private[transaction] def usesFlexibleRecords(): Boolean = {
     metadataCache.features().finalizedFeatures().getOrDefault(TransactionVersion.FEATURE_NAME, 0.toShort) > 0
   }
 

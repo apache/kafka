@@ -41,6 +41,8 @@ import org.apache.kafka.server.util.MockScheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, LogConfig, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
 import org.mockito.Mockito.{atLeastOnce, mock, reset, times, verify, when}
@@ -1205,5 +1207,24 @@ class TransactionStateManagerTest {
     assertEquals(txnMetadata1.state, txnMetadata.state)
     assertEquals(txnMetadata1.topicPartitions, txnMetadata.topicPartitions)
     assertEquals(1, transactionManager.transactionMetadataCache(partitionId).coordinatorEpoch)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[TransactionVersion])
+  def testUsesFlexibleRecords(transactionVersion: TransactionVersion): Unit = {
+    val metadataCache = mock(classOf[MetadataCache])
+    when(metadataCache.features()).thenReturn {
+      new FinalizedFeatures(
+        MetadataVersion.latestTesting(),
+        Collections.singletonMap(TransactionVersion.FEATURE_NAME, transactionVersion.featureLevel()),
+        0,
+        true
+      )
+    }
+    val transactionManager = new TransactionStateManager(0, scheduler,
+      replicaManager, metadataCache, txnConfig, time, metrics)
+
+    val expectFlexibleRecords = transactionVersion.featureLevel > 0
+    assertEquals(expectFlexibleRecords, transactionManager.usesFlexibleRecords())
   }
 }

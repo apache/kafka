@@ -33,9 +33,9 @@ public enum TransactionVersion implements FeatureVersion {
     private final Map<String, Short> dependencies;
 
     TransactionVersion(
-            int featureLevel,
-            MetadataVersion bootstrapMetadataVersion,
-            Map<String, Short> dependencies
+        int featureLevel,
+        MetadataVersion bootstrapMetadataVersion,
+        Map<String, Short> dependencies
     ) {
         this.featureLevel = (short) featureLevel;
         this.bootstrapMetadataVersion = bootstrapMetadataVersion;
