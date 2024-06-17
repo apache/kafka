@@ -41,20 +41,20 @@ import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.SampleConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
-import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.connect.storage.AppliedConnectorConfig;
-import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.MemoryConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
@@ -1205,16 +1205,16 @@ public class StandaloneHerderTest {
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class
-    private abstract static class BogusSourceConnector extends SourceConnector {
+    private static abstract class BogusSourceConnector extends SourceConnector {
     }
 
-    private abstract static class BogusSourceTask extends SourceTask {
+    private static abstract class BogusSourceTask extends SourceTask {
     }
 
-    private abstract static class BogusSinkConnector extends SinkConnector {
+    private static abstract class BogusSinkConnector extends SinkConnector {
     }
 
-    private abstract static class BogusSinkTask extends SourceTask {
+    private static abstract class BogusSinkTask extends SourceTask {
     }
 
     private void verifyConnectorStatusRestart() {
