@@ -344,7 +344,8 @@ public class ConsumerTaskTest {
     public void testConcurrentAccess() throws InterruptedException {
         // Here we need to test concurrent access. When ConsumerTask is ingesting records,
         // we need to concurrently add partitions and perform close()
-        new Thread(consumerTask).start();
+        Thread thread = new Thread(consumerTask);
+        thread.start();
 
         final CountDownLatch latch = new CountDownLatch(1);
         final TopicIdPartition tpId = getIdPartitions("concurrent", 1).get(0);
@@ -371,6 +372,9 @@ public class ConsumerTaskTest {
         latch.countDown();
         assignmentThread.join();
         closeThread.join();
+
+        thread.join(10_000);
+        assertFalse(thread.isAlive(), "Consumer task thread is still alive");
     }
 
     @Test
