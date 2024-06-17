@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.test.MockClientSupplier;
@@ -48,7 +49,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -69,7 +69,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.configProps;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomNodes;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomReplica;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
@@ -89,15 +89,15 @@ public class TaskAssignorConvergenceTest {
     private static final class Harness {
         private final Set<TaskId> statelessTasks;
         private final Map<TaskId, Long> statefulTaskEndOffsetSums;
-        private final Map<UUID, ClientState> clientStates;
-        private final Map<UUID, ClientState> droppedClientStates;
+        private final Map<ProcessId, ClientState> clientStates;
+        private final Map<ProcessId, ClientState> droppedClientStates;
         private final StringBuilder history = new StringBuilder();
 
         public final Map<TaskId, Set<TopicPartition>> partitionsForTask;
         public final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask;
         public final Map<Subtopology, Set<TaskId>> tasksForTopicGroup;
         public final Cluster fullMetadata;
-        public final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer;
+        public final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer;
         public final InternalTopicManager internalTopicManager;
 
 
@@ -183,10 +183,10 @@ public class TaskAssignorConvergenceTest {
                 Collections.emptySet()
             );
 
-            final Map<UUID, ClientState> clientStates = new TreeMap<>();
-            final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = new HashMap<>();
+            final Map<ProcessId, ClientState> clientStates = new TreeMap<>();
+            final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer = new HashMap<>();
             for (int i = 0; i < numClients; i++) {
-                final UUID uuid = uuidForInt(i);
+                final ProcessId uuid = processIdForInt(i);
                 clientStates.put(uuid, emptyInstance(uuid, statefulTaskEndOffsetSums));
                 final String rack = RACK_PREFIX + random.nextInt(nodes.size());
                 racksForProcessConsumer.put(uuid, mkMap(mkEntry("consumer", Optional.of(rack))));
@@ -197,12 +197,12 @@ public class TaskAssignorConvergenceTest {
 
         private Harness(final Set<TaskId> statelessTasks,
                         final Map<TaskId, Long> statefulTaskEndOffsetSums,
-                        final Map<UUID, ClientState> clientStates,
+                        final Map<ProcessId, ClientState> clientStates,
                         final Cluster fullMetadata,
                         final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                         final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
                         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
-                        final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
+                        final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer,
                         final InternalTopicManager internalTopicManager) {
             this.statelessTasks = statelessTasks;
             this.statefulTaskEndOffsetSums = statefulTaskEndOffsetSums;
@@ -229,7 +229,7 @@ public class TaskAssignorConvergenceTest {
         }
 
         private void addClient() {
-            final UUID uuid = uuidForInt(clientStates.size() + droppedClientStates.size());
+            final ProcessId uuid = processIdForInt(clientStates.size() + droppedClientStates.size());
             history.append("Adding new node ").append(uuid).append('\n');
             clientStates.put(uuid, emptyInstance(uuid, statefulTaskEndOffsetSums));
             final int nodeSize = fullMetadata.nodes().size();
@@ -237,7 +237,7 @@ public class TaskAssignorConvergenceTest {
             racksForProcessConsumer.computeIfAbsent(uuid, k -> new HashMap<>()).put("consumer", Optional.of(rack));
         }
 
-        private static ClientState emptyInstance(final UUID uuid, final Map<TaskId, Long> allTaskEndOffsetSums) {
+        private static ClientState emptyInstance(final ProcessId uuid, final Map<TaskId, Long> allTaskEndOffsetSums) {
             final ClientState clientState = new ClientState(uuid, 1);
             clientState.computeTaskLags(uuid, allTaskEndOffsetSums);
             return clientState;
@@ -250,7 +250,7 @@ public class TaskAssignorConvergenceTest {
                 if (addNew || droppedClientStates.isEmpty()) {
                     addClient();
                 } else {
-                    final UUID uuid = selectRandomElement(prng, droppedClientStates);
+                    final ProcessId uuid = selectRandomElement(prng, droppedClientStates);
                     history.append("Resurrecting node ").append(uuid).append('\n');
                     clientStates.put(uuid, droppedClientStates.get(uuid));
                     droppedClientStates.remove(uuid);
@@ -262,7 +262,7 @@ public class TaskAssignorConvergenceTest {
             if (clientStates.isEmpty()) {
                 throw new NoSuchElementException("There are no nodes to drop");
             } else {
-                final UUID toDrop = clientStates.keySet().iterator().next();
+                final ProcessId toDrop = clientStates.keySet().iterator().next();
                 dropClient(toDrop);
             }
         }
@@ -270,7 +270,7 @@ public class TaskAssignorConvergenceTest {
         private void dropRandomClients(final int numNode, final Random prng) {
             int dropped = 0;
             while (!clientStates.isEmpty() && dropped < numNode) {
-                final UUID toDrop = selectRandomElement(prng, clientStates);
+                final ProcessId toDrop = selectRandomElement(prng, clientStates);
                 dropClient(toDrop);
                 dropped++;
             }
@@ -279,16 +279,16 @@ public class TaskAssignorConvergenceTest {
             formatClientStates(true);
         }
 
-        private void dropClient(final UUID toDrop) {
+        private void dropClient(final ProcessId toDrop) {
             final ClientState clientState = clientStates.remove(toDrop);
             history.append("Dropping node ").append(toDrop).append(": ").append(clientState).append('\n');
             droppedClientStates.put(toDrop, clientState);
         }
 
-        private static UUID selectRandomElement(final Random prng, final Map<UUID, ClientState> clients) {
+        private static ProcessId selectRandomElement(final Random prng, final Map<ProcessId, ClientState> clients) {
             int dropIndex = prng.nextInt(clients.size());
-            UUID toDrop = null;
-            for (final UUID uuid : clients.keySet()) {
+            ProcessId toDrop = null;
+            for (final ProcessId uuid : clients.keySet()) {
                 if (dropIndex == 0) {
                     toDrop = uuid;
                     break;
@@ -303,9 +303,9 @@ public class TaskAssignorConvergenceTest {
          * Flip the cluster states from "assigned" to "subscribed" so they can be used for another round of assignments.
          */
         private void prepareForNextRebalance() {
-            final Map<UUID, ClientState> newClientStates = new TreeMap<>();
-            for (final Map.Entry<UUID, ClientState> entry : clientStates.entrySet()) {
-                final UUID uuid = entry.getKey();
+            final Map<ProcessId, ClientState> newClientStates = new TreeMap<>();
+            for (final Map.Entry<ProcessId, ClientState> entry : clientStates.entrySet()) {
+                final ProcessId uuid = entry.getKey();
                 final ClientState newClientState = new ClientState(uuid, 1);
                 final ClientState clientState = entry.getValue();
                 final Map<TaskId, Long> taskOffsetSums = new TreeMap<>();
@@ -354,7 +354,7 @@ public class TaskAssignorConvergenceTest {
                 final Set<TaskId> unassignedTasks = new TreeSet<>();
                 unassignedTasks.addAll(statefulTaskEndOffsetSums.keySet());
                 unassignedTasks.addAll(statelessTasks);
-                for (final Map.Entry<UUID, ClientState> entry : clientStates.entrySet()) {
+                for (final Map.Entry<ProcessId, ClientState> entry : clientStates.entrySet()) {
                     unassignedTasks.removeAll(entry.getValue().assignedTasks());
                 }
                 history.append("Unassigned Tasks: ").append(unassignedTasks).append('\n');
@@ -561,7 +561,7 @@ public class TaskAssignorConvergenceTest {
 
     private static void verifyBalancedAssignment(final Harness harness, final int skewThreshold) {
         final Set<TaskId> allStatefulTasks = harness.statefulTaskEndOffsetSums.keySet();
-        final Map<UUID, ClientState> clientStates = harness.clientStates;
+        final Map<ProcessId, ClientState> clientStates = harness.clientStates;
         final StringBuilder failureContext = harness.history;
 
         assertBalancedActiveAssignment(clientStates, failureContext);
@@ -581,7 +581,7 @@ public class TaskAssignorConvergenceTest {
     private static void verifyValidAssignment(final int numStandbyReplicas, final Harness harness) {
         final Set<TaskId> statefulTasks = harness.statefulTaskEndOffsetSums.keySet();
         final Set<TaskId> statelessTasks = harness.statelessTasks;
-        final Map<UUID, ClientState> assignedStates = harness.clientStates;
+        final Map<ProcessId, ClientState> assignedStates = harness.clientStates;
         final StringBuilder failureContext = harness.history;
 
         assertValidAssignment(numStandbyReplicas, statefulTasks, statelessTasks, assignedStates, failureContext);

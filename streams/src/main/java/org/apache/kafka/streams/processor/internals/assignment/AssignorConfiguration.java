@@ -242,9 +242,9 @@ public final class AssignorConfiguration {
         return AssignmentConfigs.of(streamsConfig);
     }
 
-    public TaskAssignor taskAssignor() {
+    public LegacyTaskAssignor taskAssignor() {
         try {
-            return Utils.newInstance(internalTaskAssignorClass, TaskAssignor.class);
+            return Utils.newInstance(internalTaskAssignorClass, LegacyTaskAssignor.class);
         } catch (final ClassNotFoundException e) {
             throw new IllegalArgumentException(
                 "Expected an instantiable class name for " + INTERNAL_TASK_ASSIGNOR_CLASS,
@@ -256,6 +256,7 @@ public final class AssignorConfiguration {
     public Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> customTaskAssignor() {
         final String userTaskAssignorClassname = streamsConfig.getString(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
         if (userTaskAssignorClassname == null) {
+            log.info("No custom task assignors found, defaulting to internal task assignment with {}", INTERNAL_TASK_ASSIGNOR_CLASS);
             return Optional.empty();
         }
         try {

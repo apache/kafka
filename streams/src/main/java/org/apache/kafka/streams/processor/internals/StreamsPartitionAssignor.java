@@ -41,8 +41,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
@@ -60,12 +59,12 @@ import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskTopicPartition;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackUtils;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskInfo;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
@@ -87,7 +86,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -95,7 +93,6 @@ import java.util.stream.Collectors;
 
 import static java.util.Collections.unmodifiableSet;
 import static java.util.Map.Entry.comparingByKey;
-import static java.util.UUID.randomUUID;
 import static org.apache.kafka.common.utils.Utils.filterMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsResult;
@@ -147,7 +144,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         private final SortedSet<String> consumers;
         private final Optional<String> rackId;
 
-        ClientMetadata(final UUID processId, final String endPoint, final Map<String, String> clientTags, final Optional<String> rackId) {
+        ClientMetadata(final ProcessId processId, final String endPoint, final Map<String, String> clientTags, final Optional<String> rackId) {
 
             // get the host info, or null if no endpoint is configured (ie endPoint == null)
             hostInfo = HostInfo.buildFromEndpoint(endPoint);
@@ -199,7 +196,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
-    private static final UUID FUTURE_ID = randomUUID();
+    private static final ProcessId FUTURE_ID = ProcessId.randomProcessId();
 
     protected static final Comparator<TopicPartition> PARTITION_COMPARATOR =
         Comparator.comparing(TopicPartition::topic).thenComparingInt(TopicPartition::partition);
@@ -227,7 +224,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private Supplier<Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor>>
         customTaskAssignorSupplier;
-    private Supplier<TaskAssignor> internalTaskAssignorSupplier;
+    private Supplier<LegacyTaskAssignor> legacyTaskAssignorSupplier;
     private byte uniqueField;
     private Map<String, String> clientTags;
 
@@ -262,7 +259,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         customTaskAssignorSupplier = assignorConfiguration::customTaskAssignor;
-        internalTaskAssignorSupplier = assignorConfiguration::taskAssignor;
+        legacyTaskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
         uniqueField = 0;
         clientTags = referenceContainer.clientTags;
@@ -286,7 +283,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     @Override
     public ByteBuffer subscriptionUserData(final Set<String> topics) {
         // Adds the following information to subscription
-        // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
+        // 1. Client ProcessId (a UUID assigned to an instance of KafkaStreams)
         // 2. Map from task id to its overall lag
         // 3. Unique Field to ensure a rebalance when a thread rejoins by forcing the user data to be different
 
@@ -312,7 +309,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         ).encode();
     }
 
-    private Map<String, Assignment> errorAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
+    private Map<String, Assignment> errorAssignment(final Map<ProcessId, ClientMetadata> clientsMetadata,
                                                     final int errorCode) {
         final Map<String, Assignment> assignment = new HashMap<>();
         for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
@@ -355,9 +352,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         // construct the client metadata from the decoded subscription info
 
-        final Map<UUID, ClientMetadata> clientMetadataMap = new HashMap<>();
+        final Map<ProcessId, ClientMetadata> clientMetadataMap = new HashMap<>();
         final Set<TopicPartition> allOwnedPartitions = new HashSet<>();
-        final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = new HashMap<>();
+        final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer = new HashMap<>();
 
         int minReceivedMetadataVersion = LATEST_SUPPORTED_VERSION;
         int minSupportedMetadataVersion = LATEST_SUPPORTED_VERSION;
@@ -377,7 +374,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             minReceivedMetadataVersion = updateMinReceivedVersion(usedVersion, minReceivedMetadataVersion);
             minSupportedMetadataVersion = updateMinSupportedVersion(info.latestSupportedVersion(), minSupportedMetadataVersion);
 
-            final UUID processId;
+            final ProcessId processId;
             if (usedVersion > LATEST_SUPPORTED_VERSION) {
                 futureMetadataVersion = usedVersion;
                 processId = FUTURE_ID;
@@ -505,7 +502,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      *         assignments.
      */
     private ApplicationState buildApplicationState(final TopologyMetadata topologyMetadata,
-                                                   final Map<UUID, ClientMetadata> clientMetadataMap,
+                                                   final Map<ProcessId, ClientMetadata> clientMetadataMap,
                                                    final Map<Subtopology, TopicsInfo> topicGroups,
                                                    final Cluster cluster) {
         final Map<Subtopology, Set<String>> sourceTopicsByGroup = new HashMap<>();
@@ -589,7 +586,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private void processStreamsPartitionAssignment(final org.apache.kafka.streams.processor.assignment.TaskAssignor assignor,
                                                    final TaskAssignment taskAssignment,
                                                    final AssignmentError assignmentError,
-                                                   final Map<UUID, ClientMetadata> clientMetadataMap,
+                                                   final Map<ProcessId, ClientMetadata> clientMetadataMap,
                                                    final GroupSubscription groupSubscription) {
         if (assignmentError == AssignmentError.UNKNOWN_PROCESS_ID || assignmentError == AssignmentError.UNKNOWN_TASK_ID) {
             assignor.onAssignmentComputed(new GroupAssignment(Collections.emptyMap()), groupSubscription, assignmentError);
@@ -601,7 +598,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         taskAssignment.assignment().forEach(kafkaStreamsAssignment -> {
             final ProcessId processId = kafkaStreamsAssignment.processId();
-            final ClientMetadata clientMetadata = clientMetadataMap.get(processId.id());
+            final ClientMetadata clientMetadata = clientMetadataMap.get(processId);
             clientMetadata.state.setAssignedTasks(kafkaStreamsAssignment);
             if (kafkaStreamsAssignment.followupRebalanceDeadline().isPresent()) {
                 clientMetadata.state.setFollowupRebalanceDeadline(kafkaStreamsAssignment.followupRebalanceDeadline().get());
@@ -753,9 +750,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                             final GroupSubscription groupSubscription,
                                                             final Set<String> allSourceTopics,
                                                             final Map<Subtopology, TopicsInfo> topicGroups,
-                                                            final Map<UUID, ClientMetadata> clientMetadataMap,
+                                                            final Map<ProcessId, ClientMetadata> clientMetadataMap,
                                                             final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                                            final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
+                                                            final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer,
                                                             final Set<TaskId> statefulTasks) {
         if (!statefulTasks.isEmpty()) {
             throw new TaskAssignmentException("The stateful tasks should not be populated before assigning tasks to clients");
@@ -773,7 +770,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         );
         changelogTopics.setup();
 
-        final Map<UUID, ClientState> clientStates = new HashMap<>();
+        final Map<ProcessId, ClientState> clientStates = new HashMap<>();
         final boolean lagComputationSuccessful =
             populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogTopics);
 
@@ -808,7 +805,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             );
             final org.apache.kafka.streams.processor.assignment.TaskAssignor assignor = userTaskAssignor.get();
             final TaskAssignment taskAssignment = assignor.assign(applicationState);
-            final AssignmentError assignmentError = validateTaskAssignment(applicationState, taskAssignment);
+            final AssignmentError assignmentError = TaskAssignmentUtils.validateTaskAssignment(applicationState, taskAssignment);
             processStreamsPartitionAssignment(assignor, taskAssignment, assignmentError, clientMetadataMap, groupSubscription);
             customTaskAssignmentListener = (assignment, subscription) -> {
                 assignor.onAssignmentComputed(assignment, subscription, assignmentError);
@@ -820,7 +817,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             };
         } else {
             customTaskAssignmentListener = (assignment, subscription) -> { };
-            final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
+            final LegacyTaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
             final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
                 fullMetadata,
                 partitionsForTask,
@@ -862,10 +859,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return customTaskAssignmentListener;
     }
 
-    private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
-        final TaskAssignor taskAssignor = internalTaskAssignorSupplier.get();
-        if (taskAssignor instanceof StickyTaskAssignor) {
-            // special case: to preserve pre-existing behavior, we invoke the StickyTaskAssignor
+    private LegacyTaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
+        final LegacyTaskAssignor taskAssignor = legacyTaskAssignorSupplier.get();
+        if (taskAssignor instanceof LegacyStickyTaskAssignor) {
+            // special case: to preserve pre-existing behavior, we invoke the LegacyStickyTaskAssignor
             // whether or not lag computation failed.
             return taskAssignor;
         } else if (lagComputationSuccessful) {
@@ -888,8 +885,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      *
      * @return whether we were able to successfully fetch the changelog end offsets and compute each client's lag
      */
-    private boolean populateClientStatesMap(final Map<UUID, ClientState> clientStates,
-                                            final Map<UUID, ClientMetadata> clientMetadataMap,
+    private boolean populateClientStatesMap(final Map<ProcessId, ClientState> clientStates,
+                                            final Map<ProcessId, ClientMetadata> clientMetadataMap,
                                             final Map<TopicPartition, TaskId> taskForPartition,
                                             final ChangelogTopics changelogTopics) {
         boolean fetchEndOffsetsSuccessful;
@@ -921,13 +918,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             fetchEndOffsetsSuccessful = false;
         }
 
-        for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
-            final UUID uuid = entry.getKey();
+        for (final Map.Entry<ProcessId, ClientMetadata> entry : clientMetadataMap.entrySet()) {
+            final ProcessId processId = entry.getKey();
             final ClientState state = entry.getValue().state;
             state.initializePrevTasks(taskForPartition, taskManager.topologyMetadata().hasNamedTopologies());
 
-            state.computeTaskLags(uuid, allTaskEndOffsetSums);
-            clientStates.put(uuid, state);
+            state.computeTaskLags(processId, allTaskEndOffsetSums);
+            clientStates.put(processId, state);
         }
 
         return fetchEndOffsetsSuccessful;
@@ -980,8 +977,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private void populatePartitionsByHostMaps(final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
                                               final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost,
                                               final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                              final Map<UUID, ClientMetadata> clientMetadataMap) {
-        for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
+                                              final Map<ProcessId, ClientMetadata> clientMetadataMap) {
+        for (final Map.Entry<ProcessId, ClientMetadata> entry : clientMetadataMap.entrySet()) {
             final HostInfo hostInfo = entry.getValue().hostInfo;
 
             // if application server is configured, also include host state map
@@ -1010,7 +1007,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * @return the final assignment for each StreamThread consumer
      */
     private Map<String, Assignment> computeNewAssignment(final Set<TaskId> statefulTasks,
-                                                         final Map<UUID, ClientMetadata> clientsMetadata,
+                                                         final Map<ProcessId, ClientMetadata> clientsMetadata,
                                                          final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                                          final Map<HostInfo, Set<TopicPartition>> partitionsByHostState,
                                                          final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost,
@@ -1022,8 +1019,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<String, Assignment> assignment = new HashMap<>();
 
         // within the client, distribute tasks to its owned consumers
-        for (final Map.Entry<UUID, ClientMetadata> clientEntry : clientsMetadata.entrySet()) {
-            final UUID clientId = clientEntry.getKey();
+        for (final Map.Entry<ProcessId, ClientMetadata> clientEntry : clientsMetadata.entrySet()) {
+            final ProcessId clientId = clientEntry.getKey();
             final ClientMetadata clientMetadata = clientEntry.getValue();
             final ClientState state = clientMetadata.state;
             final SortedSet<String> consumers = clientMetadata.consumers;
@@ -1584,68 +1581,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             log.info("No followup rebalance was requested, resetting the rebalance schedule.");
             nextScheduledRebalanceMs.set(Long.MAX_VALUE);
         }
-    }
-
-    // Visible for testing only.
-    AssignmentError validateTaskAssignment(final ApplicationState applicationState,
-                                           final TaskAssignment taskAssignment) {
-        final Collection<KafkaStreamsAssignment> assignments = taskAssignment.assignment();
-        final Map<TaskId, ProcessId> activeTasksInOutput = new HashMap<>();
-        final Map<TaskId, ProcessId> standbyTasksInOutput = new HashMap<>();
-        for (final KafkaStreamsAssignment assignment : assignments) {
-            for (final KafkaStreamsAssignment.AssignedTask task : assignment.tasks().values()) {
-                if (activeTasksInOutput.containsKey(task.id()) && task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
-                    log.error("Assignment is invalid: active task {} was assigned to multiple KafkaStreams clients: {} and {}",
-                        task.id(), assignment.processId().id(), activeTasksInOutput.get(task.id()).id());
-                    return AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES;
-                }
-
-                if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
-                    activeTasksInOutput.put(task.id(), assignment.processId());
-                } else {
-                    standbyTasksInOutput.put(task.id(), assignment.processId());
-                }
-            }
-        }
-
-        for (final TaskInfo task : applicationState.allTasks().values()) {
-            if (!task.isStateful() && standbyTasksInOutput.containsKey(task.id())) {
-                log.error("Assignment is invalid: standby task for stateless task {} was assigned to KafkaStreams client {}",
-                    task.id(), standbyTasksInOutput.get(task.id()).id());
-                return AssignmentError.INVALID_STANDBY_TASK;
-            }
-        }
-
-        final Map<ProcessId, KafkaStreamsState> clientStates = applicationState.kafkaStreamsStates(false);
-        final Set<ProcessId> clientsInOutput = assignments.stream().map(KafkaStreamsAssignment::processId)
-            .collect(Collectors.toSet());
-        for (final Map.Entry<ProcessId, KafkaStreamsState> entry : clientStates.entrySet()) {
-            final ProcessId processIdInInput = entry.getKey();
-            if (!clientsInOutput.contains(processIdInInput)) {
-                log.error("Assignment is invalid: KafkaStreams client {} has no assignment", processIdInInput.id());
-                return AssignmentError.MISSING_PROCESS_ID;
-            }
-        }
-
-        for (final ProcessId processIdInOutput : clientsInOutput) {
-            if (!clientStates.containsKey(processIdInOutput)) {
-                log.error("Assignment is invalid: the KafkaStreams client {} is unknown", processIdInOutput.id());
-                return AssignmentError.UNKNOWN_PROCESS_ID;
-            }
-        }
-
-        final Set<TaskId> taskIdsInInput = applicationState.allTasks().keySet();
-        for (final KafkaStreamsAssignment assignment : assignments) {
-            for (final KafkaStreamsAssignment.AssignedTask task : assignment.tasks().values()) {
-                if (!taskIdsInInput.contains(task.id())) {
-                    log.error("Assignment is invalid: task {} assigned to KafkaStreams client {} was unknown",
-                        task.id(), assignment.processId().id());
-                    return AssignmentError.UNKNOWN_TASK_ID;
-                }
-            }
-        }
-
-        return AssignmentError.NONE;
     }
 
     /**

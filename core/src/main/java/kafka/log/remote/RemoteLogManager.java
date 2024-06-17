@@ -17,6 +17,7 @@
 package kafka.log.remote;
 
 import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.Timer;
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Quota;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
@@ -96,6 +98,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.PrivilegedAction;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -122,6 +125,8 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -131,6 +136,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
 
 /**
@@ -158,6 +164,8 @@ public class RemoteLogManager implements Closeable {
 
     private final RemoteLogMetadataManager remoteLogMetadataManager;
 
+    private final ReentrantLock copyQuotaManagerLock = new ReentrantLock(true);
+    private final Condition copyQuotaManagerLockCondition = copyQuotaManagerLock.newCondition();
     private final RLMQuotaManager rlmCopyQuotaManager;
     private final RLMQuotaManager rlmFetchQuotaManager;
 
@@ -179,6 +187,7 @@ public class RemoteLogManager implements Closeable {
     private boolean closed = false;
 
     private volatile boolean remoteLogManagerConfigured = false;
+    private final Timer remoteReadTimer;
 
     /**
      * Creates RemoteLogManager instance with the given arguments.
@@ -221,12 +230,14 @@ public class RemoteLogManager implements Closeable {
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
 
-        metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName(), new Gauge<Double>() {
+        metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC, new Gauge<Double>() {
             @Override
             public Double value() {
                 return rlmScheduledThreadPool.getIdlePercent();
             }
         });
+        remoteReadTimer = metricsGroup.newTimer(REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC,
+                TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
 
         remoteStorageReaderThreadPool = new RemoteStorageThreadPool(
                 REMOTE_LOG_READER_THREAD_NAME_PREFIX,
@@ -239,9 +250,27 @@ public class RemoteLogManager implements Closeable {
         indexCache.resizeCacheSize(remoteLogIndexFileCacheSize);
     }
 
+    public void updateCopyQuota(long quota) {
+        LOGGER.info("Updating remote copy quota to {} bytes per second", quota);
+        rlmCopyQuotaManager.updateQuota(new Quota(quota, true));
+    }
+
+    public void updateFetchQuota(long quota) {
+        LOGGER.info("Updating remote fetch quota to {} bytes per second", quota);
+        rlmFetchQuotaManager.updateQuota(new Quota(quota, true));
+    }
+
     private void removeMetrics() {
-        metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName());
+        metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC);
+        metricsGroup.removeMetric(REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC);
         remoteStorageReaderThreadPool.removeMetrics();
+    }
+
+    /**
+     * Returns the timeout for the RLM Tasks to wait for the quota to be available
+     */
+    Duration quotaTimeout() {
+        return Duration.ofSeconds(1);
     }
 
     RLMQuotaManager createRLMCopyQuotaManager() {
@@ -383,7 +412,7 @@ public class RemoteLogManager implements Closeable {
                                    Map<String, Uuid> topicIds) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
-        if (this.rlmConfig.enableRemoteStorageSystem() && !isRemoteLogManagerConfigured()) {
+        if (this.rlmConfig.isRemoteStorageSystemEnabled() && !isRemoteLogManagerConfigured()) {
             throw new KafkaException("RemoteLogManager is not configured when remote storage system is enabled");
         }
 
@@ -402,11 +431,14 @@ public class RemoteLogManager implements Closeable {
 
             leaderPartitions.forEach(this::cacheTopicPartitionIds);
             followerPartitions.forEach(this::cacheTopicPartitionIds);
-            followerPartitions.forEach(this::removeRemoteTopicPartitionMetrics);
 
             remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
             followerPartitions.forEach(topicIdPartition ->
                     doHandleLeaderOrFollowerPartitions(topicIdPartition, RLMTask::convertToFollower));
+
+            // If this node was the previous leader for the partition, then the RLMTask might be running in the
+            // background thread and might emit metrics. So, removing the metrics after marking this node as follower.
+            followerPartitions.forEach(this::removeRemoteTopicPartitionMetrics);
 
             leaderPartitionsWithLeaderEpoch.forEach((topicIdPartition, leaderEpoch) ->
                     doHandleLeaderOrFollowerPartitions(topicIdPartition,
@@ -604,7 +636,7 @@ public class RemoteLogManager implements Closeable {
         return Optional.empty();
     }
 
-    private static abstract class CancellableRunnable implements Runnable {
+    private abstract static class CancellableRunnable implements Runnable {
         private volatile boolean cancelled = false;
 
         public void cancel() {
@@ -634,6 +666,15 @@ public class RemoteLogManager implements Closeable {
         } else {
             return Collections.emptyList();
         }
+    }
+
+    // VisibleForTesting
+    RLMTask rlmTask(TopicIdPartition topicIdPartition) {
+        RLMTaskWithFuture task = leaderOrFollowerTasks.get(topicIdPartition);
+        if (task != null) {
+            return task.rlmTask;
+        }
+        return null;
     }
 
     class RLMTask extends CancellableRunnable {
@@ -757,6 +798,23 @@ public class RemoteLogManager implements Closeable {
                                         isCancelled(), isLeader());
                                 return;
                             }
+
+                            copyQuotaManagerLock.lock();
+                            try {
+                                while (rlmCopyQuotaManager.isQuotaExceeded()) {
+                                    logger.debug("Quota exceeded for copying log segments, waiting for the quota to be available.");
+                                    // If the thread gets interrupted while waiting, the InterruptedException is thrown
+                                    // back to the caller. It's important to note that the task being executed is already
+                                    // cancelled before the executing thread is interrupted. The caller is responsible
+                                    // for handling the exception gracefully by checking if the task is already cancelled.
+                                    boolean ignored = copyQuotaManagerLockCondition.await(quotaTimeout().toMillis(), TimeUnit.MILLISECONDS);
+                                }
+                                rlmCopyQuotaManager.record(candidateLogSegment.logSegment.log().sizeInBytes());
+                                // Signal waiting threads to check the quota again
+                                copyQuotaManagerLockCondition.signalAll();
+                            } finally {
+                                copyQuotaManagerLock.unlock();
+                            }
                             copyLogSegment(log, candidateLogSegment.logSegment, candidateLogSegment.nextSegmentOffset);
                         }
                     }
@@ -847,11 +905,18 @@ public class RemoteLogManager implements Closeable {
             logger.info("Copied {} to remote storage with segment-id: {}", logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
 
             long bytesLag = log.onlyLocalLogSegmentsSize() - log.activeSegment().size();
-            String topic = topicIdPartition.topic();
-            int partition = topicIdPartition.partition();
-            long segmentsLag = log.onlyLocalLogSegmentsCount();
-            brokerTopicStats.recordRemoteCopyLagBytes(topic, partition, bytesLag);
-            brokerTopicStats.recordRemoteCopyLagSegments(topic, partition, segmentsLag);
+            long segmentsLag = log.onlyLocalLogSegmentsCount() - 1;
+            recordLagStats(bytesLag, segmentsLag);
+        }
+
+        // VisibleForTesting
+        void recordLagStats(long bytesLag, long segmentsLag) {
+            if (isLeader()) {
+                String topic = topicIdPartition.topic();
+                int partition = topicIdPartition.partition();
+                brokerTopicStats.recordRemoteCopyLagBytes(topic, partition, bytesLag);
+                brokerTopicStats.recordRemoteCopyLagSegments(topic, partition, segmentsLag);
+            }
         }
 
         private Path toPathIfExists(File file) {
@@ -937,7 +1002,9 @@ public class RemoteLogManager implements Closeable {
                     }
                 }
                 if (shouldDeleteSegment) {
-                    logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
+                    if (!logStartOffset.isPresent() || logStartOffset.getAsLong() < metadata.endOffset() + 1) {
+                        logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
+                    }
                     logger.info("About to delete remote log segment {} due to retention size {} breach. Log size after deletion will be {}.",
                             metadata.remoteLogSegmentId(), retentionSizeData.get().retentionSize, remainingBreachedSize + retentionSizeData.get().retentionSize);
                 }
@@ -954,7 +1021,9 @@ public class RemoteLogManager implements Closeable {
                     remainingBreachedSize = Math.max(0, remainingBreachedSize - metadata.segmentSizeInBytes());
                     // It is fine to have logStartOffset as `metadata.endOffset() + 1` as the segment offset intervals
                     // are ascending with in an epoch.
-                    logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
+                    if (!logStartOffset.isPresent() || logStartOffset.getAsLong() < metadata.endOffset() + 1) {
+                        logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
+                    }
                     logger.info("About to delete remote log segment {} due to retention time {}ms breach based on the largest record timestamp in the segment",
                             metadata.remoteLogSegmentId(), retentionTimeData.get().retentionMs);
                 }
@@ -1667,7 +1736,8 @@ public class RemoteLogManager implements Closeable {
      * @throws java.util.concurrent.RejectedExecutionException if the task cannot be accepted for execution (task queue is full)
      */
     public Future<Void> asyncRead(RemoteStorageFetchInfo fetchInfo, Consumer<RemoteLogReadResult> callback) {
-        return remoteStorageReaderThreadPool.submit(new RemoteLogReader(fetchInfo, this, callback, brokerTopicStats, rlmFetchQuotaManager));
+        return remoteStorageReaderThreadPool.submit(
+                new RemoteLogReader(fetchInfo, this, callback, brokerTopicStats, rlmFetchQuotaManager, remoteReadTimer));
     }
 
     void doHandleLeaderOrFollowerPartitions(TopicIdPartition topicPartition,

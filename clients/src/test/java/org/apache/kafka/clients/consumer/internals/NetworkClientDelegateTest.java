@@ -17,9 +17,14 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
@@ -35,6 +40,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -48,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -57,10 +64,14 @@ public class NetworkClientDelegateTest {
     private static final long DEFAULT_REQUEST_TIMEOUT_MS = 500;
     private MockTime time;
     private MockClient client;
+    private Metadata metadata;
+    private BackgroundEventHandler backgroundEventHandler;
 
     @BeforeEach
     public void setup() {
         this.time = new MockTime(0);
+        this.metadata = mock(Metadata.class);
+        this.backgroundEventHandler = mock(BackgroundEventHandler.class);
         this.client = new MockClient(time, Collections.singletonList(mockNode()));
     }
 
@@ -195,6 +206,25 @@ public class NetworkClientDelegateTest {
         }
     }
 
+    @Test
+    public void testPropagateMetadataError() {
+        AuthenticationException authException = new AuthenticationException("Test Auth Exception");
+        doThrow(authException).when(metadata).maybeThrowAnyException();
+
+        LinkedList<BackgroundEvent> backgroundEventQueue = new LinkedList<>();
+        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate();
+
+        assertEquals(0, backgroundEventQueue.size());
+        networkClientDelegate.poll(0, time.milliseconds());
+        assertEquals(1, backgroundEventQueue.size());
+
+        BackgroundEvent event = backgroundEventQueue.poll();
+        assertNotNull(event);
+        assertEquals(BackgroundEvent.Type.ERROR, event.type());
+        assertEquals(authException, ((ErrorEvent) event).error());
+    }
+
     public NetworkClientDelegate newNetworkClientDelegate() {
         LogContext logContext = new LogContext();
         Properties properties = new Properties();
@@ -202,7 +232,12 @@ public class NetworkClientDelegateTest {
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(GROUP_ID_CONFIG, GROUP_ID);
         properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
-        return new NetworkClientDelegate(this.time, new ConsumerConfig(properties), logContext, this.client);
+        return new NetworkClientDelegate(this.time,
+                new ConsumerConfig(properties),
+                logContext,
+                this.client,
+                this.metadata,
+                this.backgroundEventHandler);
     }
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {

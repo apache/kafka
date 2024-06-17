@@ -31,7 +31,7 @@ import org.junit.runners.Parameterized;
 public class RocksDBTimeOrderedWindowSegmentedBytesStoreTest
     extends AbstractDualSchemaRocksDBSegmentedBytesStoreTest<KeyValueSegment> {
 
-    private final static String METRICS_SCOPE = "metrics-scope";
+    private static final String METRICS_SCOPE = "metrics-scope";
 
     private enum SchemaType {
         WindowSchemaWithIndex,

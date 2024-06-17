@@ -358,7 +358,7 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
         super(configDef(), props);
     }
 
-    public boolean enableRemoteStorageSystem() {
+    public boolean isRemoteStorageSystemEnabled() {
         return getBoolean(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP);
     }
 
@@ -469,10 +469,6 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
 
     public int remoteLogManagerFetchQuotaWindowSizeSeconds() {
         return getInt(REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP);
-    }
-
-    public int remoteFetchMaxWaitMs() {
-        return getInt(REMOTE_FETCH_MAX_WAIT_MS_PROP);
     }
 
     public static void main(String[] args) {

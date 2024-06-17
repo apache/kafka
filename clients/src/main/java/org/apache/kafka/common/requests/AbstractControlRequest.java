@@ -51,7 +51,7 @@ public abstract class AbstractControlRequest extends AbstractRequest {
 
     public static final long UNKNOWN_BROKER_EPOCH = -1L;
 
-    public static abstract class Builder<T extends AbstractRequest> extends AbstractRequest.Builder<T> {
+    public abstract static class Builder<T extends AbstractRequest> extends AbstractRequest.Builder<T> {
         protected final int controllerId;
         protected final int controllerEpoch;
         protected final long brokerEpoch;

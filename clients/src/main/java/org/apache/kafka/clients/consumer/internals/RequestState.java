@@ -24,8 +24,8 @@ class RequestState {
 
     private final Logger log;
     protected final String owner;
-    final static int RETRY_BACKOFF_EXP_BASE = 2;
-    final static double RETRY_BACKOFF_JITTER = 0.2;
+    static final int RETRY_BACKOFF_EXP_BASE = 2;
+    static final double RETRY_BACKOFF_JITTER = 0.2;
     protected final ExponentialBackoff exponentialBackoff;
     protected long lastSentMs = -1;
     protected long lastReceivedMs = -1;

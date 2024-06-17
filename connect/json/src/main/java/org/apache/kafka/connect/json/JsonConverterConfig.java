@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.connect.json;
 
-import java.util.Locale;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.connect.storage.ConverterConfig;
 
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -51,7 +51,7 @@ public class JsonConverterConfig extends ConverterConfig {
     private static final String REPLACE_NULL_WITH_DEFAULT_DOC = "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.";
     private static final String REPLACE_NULL_WITH_DEFAULT_DISPLAY = "Replace null with default";
 
-    private final static ConfigDef CONFIG;
+    private static final ConfigDef CONFIG;
 
     static {
         String group = "Schemas";

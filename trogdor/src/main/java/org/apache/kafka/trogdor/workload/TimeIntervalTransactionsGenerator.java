@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.common.utils.Time;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.common.utils.Time;
 
 /**
  * A transactions generator where we commit a transaction every N milliseconds

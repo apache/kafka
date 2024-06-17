@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.LeastLoadedNode;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -734,8 +735,8 @@ public class KafkaProducerTest {
         // let mockClient#leastLoadedNode return the node directly so that we can isolate Metadata calls from KafkaProducer for idempotent producer
         MockClient mockClient = new MockClient(Time.SYSTEM, metadata) {
             @Override
-            public Node leastLoadedNode(long now) {
-                return NODE;
+            public LeastLoadedNode leastLoadedNode(long now) {
+                return new LeastLoadedNode(NODE, true);
             }
         };
 
