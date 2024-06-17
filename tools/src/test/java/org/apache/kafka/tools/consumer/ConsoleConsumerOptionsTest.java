@@ -21,6 +21,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.MockDeserializer;
 import org.apache.kafka.tools.ToolsTestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.File;

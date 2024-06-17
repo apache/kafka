@@ -22,12 +22,14 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -69,7 +71,7 @@ class BatchBuilderTest {
 
         records.forEach(record -> builder.appendRecord(record, null));
         MemoryRecords builtRecordSet = builder.build();
-        assertTrue(builder.bytesNeeded(Arrays.asList("a"), null).isPresent());
+        assertTrue(builder.bytesNeeded(Collections.singletonList("a"), null).isPresent());
         assertThrows(IllegalStateException.class, () -> builder.appendRecord("a", null));
 
         List<MutableRecordBatch> builtBatches = Utils.toList(builtRecordSet.batchIterator());
@@ -113,7 +115,7 @@ class BatchBuilderTest {
 
         String record = "i am a record";
 
-        while (!builder.bytesNeeded(Arrays.asList(record), null).isPresent()) {
+        while (!builder.bytesNeeded(Collections.singletonList(record), null).isPresent()) {
             builder.appendRecord(record, null);
         }
 

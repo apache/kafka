@@ -263,7 +263,8 @@ public class HeartbeatRequestManager implements RequestManager {
         pollTimer.update(pollMs);
         if (pollTimer.isExpired()) {
             logger.warn("Time between subsequent calls to poll() was longer than the configured " +
-                "max.poll.interval.ms, exceeded approximately by {} ms.", pollTimer.isExpiredBy());
+                "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
+                pollTimer.isExpiredBy(), membershipManager.memberId());
             membershipManager.maybeRejoinStaleMember();
         }
         pollTimer.reset(maxPollIntervalMs);
@@ -582,7 +583,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
 
-            // SubscribedTopicNames - only sent if has changed since the last heartbeat
+            // SubscribedTopicNames - only sent if it has changed since the last heartbeat
             TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
             if (sendAllFields || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                 data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));

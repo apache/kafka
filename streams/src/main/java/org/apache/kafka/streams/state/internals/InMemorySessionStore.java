@@ -66,7 +66,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     private final long retentionPeriod;
 
-    private final static String INVALID_RANGE_WARN_MSG =
+    private static final String INVALID_RANGE_WARN_MSG =
         "Returning empty iterator for fetch with invalid key range: from > to. " +
         "This may be due to range arguments set in the wrong order, " +
         "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +

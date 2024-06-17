@@ -78,7 +78,7 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
     /**
      * Returns the set of states to be filtered or empty if no states have been specified.
      *
-     * @return the current set of filtered states (empty means that no states are filtered and all
+     * @return the current set of filtered states (empty means that no states are filtered and
      *         all transactions will be returned)
      */
     public Set<TransactionState> filteredStates() {

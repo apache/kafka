@@ -37,7 +37,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{CoordinatorRecord, GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, CoordinatorRecordSerde}
-import org.apache.kafka.image.publisher.MetadataPublisher
+import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
@@ -139,6 +139,8 @@ class BrokerServer(
 
   var brokerMetadataPublisher: BrokerMetadataPublisher = _
 
+  var brokerRegistrationTracker: BrokerRegistrationTracker = _
+
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault(config.unstableFeatureVersionsEnabled)
 
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
@@ -184,7 +186,7 @@ class BrokerServer(
       kafkaScheduler.startup()
 
       /* register broker metrics */
-      brokerTopicStats = new BrokerTopicStats(config.isRemoteLogStorageSystemEnabled)
+      brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
 
@@ -445,6 +447,7 @@ class BrokerServer(
         rlm.startup()
       }
 
+      metadataPublishers.add(new MetadataVersionConfigValidator(config, sharedServer.metadataPublishingFaultHandler))
       brokerMetadataPublisher = new BrokerMetadataPublisher(config,
         metadataCache,
         logManager,
@@ -478,10 +481,13 @@ class BrokerServer(
           authorizer
         ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
-        sharedServer.metadataPublishingFaultHandler,
-        lifecycleManager
+        sharedServer.metadataPublishingFaultHandler
       )
       metadataPublishers.add(brokerMetadataPublisher)
+      brokerRegistrationTracker = new BrokerRegistrationTracker(config.brokerId,
+        () => lifecycleManager.resendBrokerRegistrationUnlessZkMode())
+      metadataPublishers.add(brokerRegistrationTracker)
+
 
       // Register parts of the broker that can be reconfigured via dynamic configs.  This needs to
       // be done before we publish the dynamic configs, so that we don't miss anything.
@@ -564,6 +570,7 @@ class BrokerServer(
       val serde = new CoordinatorRecordSerde
       val groupCoordinatorConfig = new GroupCoordinatorConfig(
         config.groupCoordinatorNumThreads,
+        config.groupCoordinatorAppendLingerMs,
         config.consumerGroupSessionTimeoutMs,
         config.consumerGroupHeartbeatIntervalMs,
         config.consumerGroupMaxSize,
@@ -613,7 +620,7 @@ class BrokerServer(
   }
 
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
-    if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
+    if (config.remoteLogManagerConfig.isRemoteStorageSystemEnabled()) {
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).asJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {

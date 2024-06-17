@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.snapshot;
 
-import java.util.function.Consumer;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.raft.OffsetAndEpoch;
+
+import java.util.function.Consumer;
 
 /**
  * A thin facade for a {@code RawSnapshotWriter} that notifies a callback when freeze completes successfully.

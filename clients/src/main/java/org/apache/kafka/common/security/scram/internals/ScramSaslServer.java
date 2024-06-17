@@ -70,7 +70,6 @@ public class ScramSaslServer implements SaslServer {
     private final ScramFormatter formatter;
     private final CallbackHandler callbackHandler;
     private State state;
-    private String username;
     private ClientFirstMessage clientFirstMessage;
     private ServerFirstMessage serverFirstMessage;
     private ScramExtensions scramExtensions;
@@ -108,7 +107,7 @@ public class ScramSaslServer implements SaslServer {
                     String serverNonce = formatter.secureRandomString();
                     try {
                         String saslName = clientFirstMessage.saslName();
-                        this.username = ScramFormatter.username(saslName);
+                        String username = ScramFormatter.username(saslName);
                         NameCallback nameCallback = new NameCallback("username", username);
                         ScramCredentialCallback credentialCallback;
                         if (scramExtensions.tokenAuthenticated()) {

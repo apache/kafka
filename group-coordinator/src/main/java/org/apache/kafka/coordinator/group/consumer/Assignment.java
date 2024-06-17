@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 
 import java.util.Collections;
@@ -29,7 +30,7 @@ import java.util.stream.Collectors;
 /**
  * An immutable assignment for a member.
  */
-public class Assignment {
+public class Assignment implements MemberAssignment {
     public static final Assignment EMPTY = new Assignment(Collections.emptyMap());
 
     /**
@@ -46,6 +47,7 @@ public class Assignment {
     /**
      * @return The assigned partitions.
      */
+    @Override
     public Map<Uuid, Set<Integer>> partitions() {
         return partitions;
     }

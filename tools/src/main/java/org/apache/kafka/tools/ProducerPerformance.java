@@ -16,8 +16,20 @@
  */
 package org.apache.kafka.tools;
 
-import static net.sourceforge.argparse4j.impl.Arguments.store;
-import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
+import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.ThroughputThrottler;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
+import net.sourceforge.argparse4j.inf.Namespace;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -25,25 +37,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
-import java.util.Arrays;
 import java.util.SplittableRandom;
 
-import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
-import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
-
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.inf.Namespace;
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.server.util.ThroughputThrottler;
-import org.apache.kafka.common.utils.Utils;
+import static net.sourceforge.argparse4j.impl.Arguments.store;
+import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
 public class ProducerPerformance {
 
@@ -62,7 +62,8 @@ public class ProducerPerformance {
             String topicName = res.getString("topic");
             long numRecords = res.getLong("numRecords");
             Integer recordSize = res.getInt("recordSize");
-            int throughput = res.getInt("throughput");
+            double throughput = res.getDouble("throughput");
+            boolean payloadMonotonic = res.getBoolean("payloadMonotonic");
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
             String payloadFilePath = res.getString("payloadFile");
@@ -104,7 +105,7 @@ public class ProducerPerformance {
             long transactionStartTime = 0;
             for (long i = 0; i < numRecords; i++) {
 
-                payload = generateRandomPayload(recordSize, payloadByteList, payload, random);
+                payload = generateRandomPayload(recordSize, payloadByteList, payload, random, payloadMonotonic, i);
 
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
@@ -170,14 +171,16 @@ public class ProducerPerformance {
     Stats stats;
 
     static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
-            SplittableRandom random) {
+            SplittableRandom random, boolean payloadMonotonic, long recordValue) {
         if (!payloadByteList.isEmpty()) {
             payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
         } else if (recordSize != null) {
             for (int j = 0; j < payload.length; ++j)
                 payload[j] = (byte) (random.nextInt(26) + 65);
+        } else if (payloadMonotonic) {
+            payload = Long.toString(recordValue).getBytes(StandardCharsets.UTF_8);
         } else {
-            throw new IllegalArgumentException("no payload File Path or record Size provided");
+            throw new IllegalArgumentException("no payload File Path or record Size or payload-monotonic option provided");
         }
         return payload;
     }
@@ -258,7 +261,8 @@ public class ProducerPerformance {
                 .type(Integer.class)
                 .metavar("RECORD-SIZE")
                 .dest("recordSize")
-                .help("message size in bytes. Note that you must provide exactly one of --record-size or --payload-file.");
+                .help("message size in bytes. Note that you must provide exactly one of --record-size or --payload-file " +
+                        "or --payload-monotonic.");
 
         payloadOptions.addArgument("--payload-file")
                 .action(store())
@@ -268,7 +272,15 @@ public class ProducerPerformance {
                 .dest("payloadFile")
                 .help("file to read the message payloads from. This works only for UTF-8 encoded text files. " +
                         "Payloads will be read from this file and a payload will be randomly selected when sending messages. " +
-                        "Note that you must provide exactly one of --record-size or --payload-file.");
+                        "Note that you must provide exactly one of --record-size or --payload-file or --payload-monotonic.");
+
+        payloadOptions.addArgument("--payload-monotonic")
+                .action(storeTrue())
+                .type(Boolean.class)
+                .metavar("PAYLOAD-MONOTONIC")
+                .dest("payloadMonotonic")
+                .help("payload is monotonically increasing integer. Note that you must provide exactly one of --record-size " +
+                        "or --payload-file or --payload-monotonic.");
 
         parser.addArgument("--payload-delimiter")
                 .action(store())
@@ -284,7 +296,7 @@ public class ProducerPerformance {
         parser.addArgument("--throughput")
                 .action(store())
                 .required(true)
-                .type(Integer.class)
+                .type(Double.class)
                 .metavar("THROUGHPUT")
                 .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec. Set this to -1 to disable throttling.");
 

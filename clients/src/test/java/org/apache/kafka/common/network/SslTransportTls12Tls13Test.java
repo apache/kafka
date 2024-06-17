@@ -139,7 +139,7 @@ public class SslTransportTls12Tls13Test {
 
     /** Checks connection failed using the specified {@code tlsVersion}. */
     private void checkAuthenticationFailed() throws IOException, InterruptedException {
-        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.3"));
+        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.3"));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect("0", addr, BUFFER_SIZE, BUFFER_SIZE);

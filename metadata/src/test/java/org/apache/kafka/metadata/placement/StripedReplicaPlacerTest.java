@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer.BrokerList;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer.RackList;
 import org.apache.kafka.server.util.MockRandom;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -119,9 +120,9 @@ public class StripedReplicaPlacerTest {
     public void testMultiPartitionTopicPlacementOnSingleUnfencedBroker() {
         MockRandom random = new MockRandom();
         StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
-        assertEquals(new TopicAssignment(Arrays.asList(partitionAssignment(Arrays.asList(0)),
-                partitionAssignment(Arrays.asList(0)),
-                partitionAssignment(Arrays.asList(0)))),
+        assertEquals(new TopicAssignment(Arrays.asList(partitionAssignment(Collections.singletonList(0)),
+                partitionAssignment(Collections.singletonList(0)),
+                partitionAssignment(Collections.singletonList(0)))),
                 place(placer, 0, 3, (short) 1, Arrays.asList(
                         new UsableBroker(0, Optional.empty(), false),
                         new UsableBroker(1, Optional.empty(), true))));

@@ -96,7 +96,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         topic = "foo",
         partition = 0,
         offset = 100L,
-        expectedError = Errors.NONE,
+        expectedError = if (useNewProtocol && version < 9) Errors.UNSUPPORTED_VERSION else Errors.NONE,
         version = version.toShort
       )
 

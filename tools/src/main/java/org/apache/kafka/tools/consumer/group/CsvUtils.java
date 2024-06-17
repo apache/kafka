@@ -23,7 +23,7 @@ import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 
 public class CsvUtils {
-    private final static CsvMapper MAPPER = new CsvMapper();
+    private static final CsvMapper MAPPER = new CsvMapper();
 
     static ObjectReader readerFor(Class<?> clazz) {
         return MAPPER.readerFor(clazz).with(getSchema(clazz));

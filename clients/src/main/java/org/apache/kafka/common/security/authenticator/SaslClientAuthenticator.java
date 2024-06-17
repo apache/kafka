@@ -342,8 +342,7 @@ public class SaslClientAuthenticator implements Authenticator {
         previousSaslClientAuthenticator.close();
         reauthInfo.reauthenticating(apiVersionsResponseFromOriginalAuthentication,
                 reauthenticationContext.reauthenticationBeginNanos());
-        NetworkReceive netInBufferFromChannel = reauthenticationContext.networkReceive();
-        netInBuffer = netInBufferFromChannel;
+        netInBuffer = reauthenticationContext.networkReceive();
         setSaslState(SaslState.REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE); // Will set immediately
         authenticate();
     }

@@ -76,8 +76,8 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class FetchCollectorTest {
 
-    private final static int DEFAULT_RECORD_COUNT = 10;
-    private final static int DEFAULT_MAX_POLL_RECORDS = ConsumerConfig.DEFAULT_MAX_POLL_RECORDS;
+    private static final int DEFAULT_RECORD_COUNT = 10;
+    private static final int DEFAULT_MAX_POLL_RECORDS = ConsumerConfig.DEFAULT_MAX_POLL_RECORDS;
     private final Time time = new MockTime(0, 0, 0);
     private final TopicPartition topicAPartition0 = new TopicPartition("topic-a", 0);
     private final TopicPartition topicAPartition1 = new TopicPartition("topic-a", 1);

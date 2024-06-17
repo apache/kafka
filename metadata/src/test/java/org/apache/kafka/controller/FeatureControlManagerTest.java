@@ -17,17 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -41,9 +30,21 @@ import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonMap;
@@ -169,8 +170,8 @@ public class FeatureControlManagerTest {
             setQuorumFeatures(features("foo", 1, 5, "bar", 0, 3)).
             setSnapshotRegistry(snapshotRegistry).
             setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
-                Arrays.asList(new SimpleImmutableEntry<>(5, Collections.singletonMap("bar", VersionRange.of(0, 3)))),
-                Arrays.asList())).
+                Collections.singletonList(new SimpleImmutableEntry<>(5, singletonMap("bar", VersionRange.of(0, 3)))),
+                emptyList())).
             build();
 
         assertEquals(ControllerResult.atomicOf(emptyList(),
@@ -389,14 +390,14 @@ public class FeatureControlManagerTest {
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, emptyList())).
             setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
-                Arrays.asList(new SimpleImmutableEntry<>(1, Collections.singletonMap("foo", VersionRange.of(0, 3)))),
-                Arrays.asList())).
+                Collections.singletonList(new SimpleImmutableEntry<>(1, singletonMap("foo", VersionRange.of(0, 3)))),
+                emptyList())).
                 build();
         ControllerResult<Map<String, ApiError>> result  = manager.updateFeatures(
                 Collections.singletonMap("foo", (short) 1),
                 Collections.singletonMap("foo", FeatureUpdate.UpgradeType.UPGRADE),
                 false);
-        assertEquals(ControllerResult.atomicOf(Arrays.asList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new FeatureLevelRecord().setName("foo").setFeatureLevel((short) 1), (short) 0)),
                         Collections.singletonMap("foo", ApiError.NONE)), result);
         RecordTestUtils.replayAll(manager, result.records());
@@ -406,7 +407,7 @@ public class FeatureControlManagerTest {
                 Collections.singletonMap("foo", (short) 0),
                 Collections.singletonMap("foo", FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),
                 false);
-        assertEquals(ControllerResult.atomicOf(Arrays.asList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                         new FeatureLevelRecord().setName("foo").setFeatureLevel((short) 0), (short) 0)),
                 Collections.singletonMap("foo", ApiError.NONE)), result2);
         RecordTestUtils.replayAll(manager, result2.records());
