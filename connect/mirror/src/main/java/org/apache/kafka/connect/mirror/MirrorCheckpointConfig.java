@@ -170,23 +170,20 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }
 
-    public boolean validate() {
+    public void validate() {
         Boolean emitCheckpointsValue = this.getBoolean(EMIT_CHECKPOINTS_ENABLED);
         Boolean syncGroupOffsetsValue = this.getBoolean(SYNC_GROUP_OFFSETS_ENABLED);
 
         if (!emitCheckpointsValue && !syncGroupOffsetsValue) {
             LOG.warn("MirrorCheckpointConnector can't run without both " + SYNC_GROUP_OFFSETS_ENABLED + ", " +
                     EMIT_CHECKPOINTS_ENABLED + " set to false");
-            return false;
         }
 
         boolean requireOffsetSyncs = emitCheckpointsValue || syncGroupOffsetsValue;
         if (!"true".equals(Optional.ofNullable(this.originals().get(EMIT_OFFSET_SYNCS_ENABLED)).orElse("true")) & requireOffsetSyncs) {
             LOG.warn("MirrorCheckpointConnector can't run with " + EMIT_OFFSET_SYNCS_ENABLED + " set to false while, " +
                     EMIT_CHECKPOINTS_ENABLED  + " and/o r" + SYNC_GROUP_OFFSETS_ENABLED + " set to true");
-            return false;
         }
-        return true;
     }
 
     private static ConfigDef defineCheckpointConfig(ConfigDef baseConfig) {
