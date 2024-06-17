@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.ReplicaManager;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
@@ -205,11 +204,6 @@ public class SharePartition {
      */
     private int stateEpoch;
 
-    /**
-     * The replica manager is used to get the earliest offset of the share partition, so we can adjust the start offset.
-     */
-    private final ReplicaManager replicaManager;
-
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
@@ -217,8 +211,7 @@ public class SharePartition {
         int maxDeliveryCount,
         int recordLockDurationMs,
         Timer timer,
-        Time time,
-        ReplicaManager replicaManager
+        Time time
     ) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
@@ -231,7 +224,6 @@ public class SharePartition {
         this.recordLockDurationMs = recordLockDurationMs;
         this.timer = timer;
         this.time = time;
-        this.replicaManager = replicaManager;
         // Initialize the partition.
         initialize();
     }
@@ -526,6 +518,20 @@ public class SharePartition {
      */
     void releaseFetchLock() {
         fetchLock.set(false);
+    }
+
+    /**
+     * The end offset of the share partition is the last offset of the fetched records from the leader.
+     *
+     * @return The end offset of the share partition.
+     */
+    long endOffset() {
+        lock.readLock().lock();
+        try {
+            return this.endOffset;
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     private void initialize() {
