@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
@@ -328,11 +327,7 @@ public class RestClientTest {
     }
 
     private String toJsonString(Object obj) {
-        try {
-            return OBJECT_MAPPER.writeValueAsString(obj);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
+        return assertDoesNotThrow(() -> OBJECT_MAPPER.writeValueAsString(obj));
     }
 
     private static class TestDTO {
