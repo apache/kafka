@@ -53,7 +53,6 @@ import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListe
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
-import org.apache.kafka.clients.consumer.internals.events.LeaveOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
@@ -90,7 +89,6 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
@@ -109,7 +107,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
@@ -1233,8 +1230,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
         closeTimer.update();
         // Prepare shutting down the network thread
-        releaseAssignmentAndLeaveGroup(closeTimer, firstException);
-        closeTimer.update();
+        swallow(log, Level.ERROR, "Failed to release assignment before closing consumer",
+            () -> releaseAssignmentAndLeaveGroup(closeTimer), firstException);
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.",
             () -> awaitPendingAsyncCommitsAndExecuteCommitCallbacks(closeTimer, false), firstException);
         if (applicationEventHandler != null)
@@ -1266,10 +1263,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     /**
      * Prior to closing the network thread, we need to make sure the following operations happen in the right sequence:
      * 1. autocommit offsets
-     * 2. revoke all partitions
-     * 3. if partition revocation completes successfully, send leave group
+     * 2. release assignment. This is done via a background unsubscribe event that will
+     * trigger the callbacks, clear the assignment on the subscription state and send the leave group request to the broker
      */
-    void releaseAssignmentAndLeaveGroup(final Timer timer, final AtomicReference<Throwable> firstException) {
+    private void releaseAssignmentAndLeaveGroup(final Timer timer) {
         if (!groupMetadata.get().isPresent())
             return;
 
@@ -1277,10 +1274,19 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             commitSyncAllConsumed(timer);
 
         applicationEventHandler.add(new CommitOnCloseEvent());
-        completeQuietly(() -> maybeRevokePartitions(),
-            "Failed to execute callback to release assignment", firstException);
-        completeQuietly(() -> applicationEventHandler.addAndGet(new LeaveOnCloseEvent(calculateDeadlineMs(timer))),
-            "Failed to send leave group heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
+
+        log.info("Releasing assignment and leaving group before closing consumer");
+        UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(calculateDeadlineMs(timer));
+        applicationEventHandler.add(unsubscribeEvent);
+        try {
+            processBackgroundEvents(unsubscribeEvent.future(), timer);
+            log.info("Completed releasing assignment and sending leave group to close consumer");
+        } catch (TimeoutException e) {
+            log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +
+                "complete it within {} ms. It will proceed to close.", timer.timeoutMs());
+        } finally {
+            timer.update();
+        }
     }
 
     // Visible for testing
@@ -1294,37 +1300,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             log.warn("Synchronous auto-commit of offsets {} failed: {}", allConsumed, e.getMessage());
         }
         timer.update();
-    }
-
-    // Visible for testing
-    void maybeRevokePartitions() {
-        if (!subscriptions.hasAutoAssignedPartitions() || subscriptions.assignedPartitions().isEmpty())
-            return;
-        try {
-            SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(MembershipManagerImpl.TOPIC_PARTITION_COMPARATOR);
-            droppedPartitions.addAll(subscriptions.assignedPartitions());
-            if (subscriptions.rebalanceListener().isPresent())
-                subscriptions.rebalanceListener().get().onPartitionsRevoked(droppedPartitions);
-        } catch (Exception e) {
-            throw new KafkaException(e);
-        } finally {
-            subscriptions.assignFromSubscribed(Collections.emptySet());
-        }
-    }
-
-    // Visible for testing
-    void completeQuietly(final Utils.ThrowingRunnable function,
-                         final String msg,
-                         final AtomicReference<Throwable> firstException) {
-        try {
-            function.run();
-        } catch (TimeoutException e) {
-            log.debug("Timeout expired before the {} operation could complete.", msg);
-            firstException.compareAndSet(null, e);
-        } catch (Exception e) {
-            log.error(msg, e);
-            firstException.compareAndSet(null, e);
-        }
     }
 
     @Override
