@@ -20,12 +20,19 @@ import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.NoSuchFileException;
 import java.util.Collection;
 import java.util.List;
 
 public class CheckpointFileWithFailureHandler<T> {
+    private static final Logger log = LoggerFactory.getLogger(CheckpointFileWithFailureHandler.class);
+
 
     public final File file;
     private final LogDirFailureChannel logDirFailureChannel;
@@ -41,9 +48,21 @@ public class CheckpointFileWithFailureHandler<T> {
         checkpointFile = new CheckpointFile<>(file, version, formatter);
     }
 
-    public void write(Collection<T> entries, boolean sync) {
+    public void write(Collection<T> entries) {
         try {
-            checkpointFile.write(entries, sync);
+            checkpointFile.write(entries);
+        } catch (IOException e) {
+            String msg = "Error while writing to checkpoint file " + file.getAbsolutePath();
+            logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e);
+            throw new KafkaStorageException(msg, e);
+        }
+    }
+
+    public void writeIfDirExists(Collection<T> entries) {
+        try {
+            checkpointFile.write(entries);
+        } catch (FileNotFoundException | NoSuchFileException e) {
+            log.warn("Failed to write to checkpoint file {}. This is ok if the topic/partition is being deleted", file.getAbsolutePath(), e);
         } catch (IOException e) {
             String msg = "Error while writing to checkpoint file " + file.getAbsolutePath();
             logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e);

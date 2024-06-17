@@ -80,10 +80,10 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     private long producerId;
     private short producerEpoch;
     private int baseSequence;
-    private int uncompressedRecordsSizeInBytes = 0; // Number of bytes (excluding the header) written before compression
-    private int numRecords = 0;
-    private float actualCompressionRatio = 1;
-    private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
+    private int uncompressedRecordsSizeInBytes; // Number of bytes (excluding the header) written before compression
+    private int numRecords;
+    private float actualCompressionRatio;
+    private long maxTimestamp;
     private long offsetOfMaxTimestamp = -1;
     private Long lastOffset = null;
     private Long baseTimestamp = null;
@@ -814,7 +814,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
-     * Get an estimate of the number of bytes written (based on the estimation factor hard-coded in {@link CompressionType}.
+     * Get an estimate of the number of bytes written (based on the estimation factor hard-coded in {@link CompressionType}).
      * @return The estimated number of bytes written
      */
     private int estimatedBytesWritten() {
@@ -868,6 +868,18 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
         // Be conservative and not take compression of the new record into consideration.
         return this.writeLimit >= estimatedBytesWritten() + recordSize;
+    }
+
+    /**
+     * Check if we have room for a given number of bytes.
+     */
+    public boolean hasRoomFor(int estimatedRecordsSize) {
+        if (isFull()) return false;
+        return this.writeLimit >= estimatedBytesWritten() + estimatedRecordsSize;
+    }
+
+    public int maxAllowedBytes() {
+        return this.writeLimit - this.batchHeaderSizeInBytes;
     }
 
     public boolean isClosed() {

@@ -23,11 +23,11 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
 
 /**
@@ -37,18 +37,18 @@ import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssi
 public interface RackAwareGraphConstructor<T> {
     int SOURCE_ID = -1;
 
-    int getSinkNodeID(final List<TaskId> taskIdList, final List<UUID> clientList, final Collection<Set<TaskId>> taskSetsPerTopicGroup);
+    int getSinkNodeID(final List<TaskId> taskIdList, final List<ProcessId> clientList, final Collection<Set<TaskId>> taskSetsPerTopicGroup);
 
-    int getClientNodeId(final int clientIndex, final List<TaskId> taskIdList, final List<UUID> clientList, final int topicGroupIndex);
+    int getClientNodeId(final int clientIndex, final List<TaskId> taskIdList, final List<ProcessId> clientList, final int topicGroupIndex);
 
-    int getClientIndex(final int clientNodeId, final List<TaskId> taskIdList, final List<UUID> clientList, final int topicGroupIndex);
+    int getClientIndex(final int clientNodeId, final List<TaskId> taskIdList, final List<ProcessId> clientList, final int topicGroupIndex);
 
     Graph<Integer> constructTaskGraph(
-        final List<UUID> clientList,
+        final List<ProcessId> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, T> clientStates,
-        final Map<TaskId, UUID> taskClientMap,
-        final Map<UUID, Integer> originalAssignedTaskNumber,
+        final Map<ProcessId, T> clientStates,
+        final Map<TaskId, ProcessId> taskClientMap,
+        final Map<ProcessId, Integer> originalAssignedTaskNumber,
         final BiPredicate<T, TaskId> hasAssignedTask,
         final CostFunction costFunction,
         final int trafficCost,
@@ -58,11 +58,11 @@ public interface RackAwareGraphConstructor<T> {
 
     boolean assignTaskFromMinCostFlow(
         final Graph<Integer> graph,
-        final List<UUID> clientList,
+        final List<ProcessId> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, T> clientStates,
-        final Map<UUID, Integer> originalAssignedTaskNumber,
-        final Map<TaskId, UUID> taskClientMap,
+        final Map<ProcessId, T> clientStates,
+        final Map<ProcessId, Integer> originalAssignedTaskNumber,
+        final Map<TaskId, ProcessId> taskClientMap,
         final BiConsumer<T, TaskId> assignTask,
         final BiConsumer<T, TaskId> unAssignTask,
         final BiPredicate<T, TaskId> hasAssignedTask);
@@ -72,10 +72,10 @@ public interface RackAwareGraphConstructor<T> {
         final TaskId taskId,
         final int taskNodeId,
         final int topicGroupIndex,
-        final Map<UUID, T> clientStates,
-        final List<UUID> clientList,
+        final Map<ProcessId, T> clientStates,
+        final List<ProcessId> clientList,
         final List<TaskId> taskIdList,
-        final Map<TaskId, UUID> taskClientMap,
+        final Map<TaskId, ProcessId> taskClientMap,
         final BiConsumer<T, TaskId> assignTask,
         final BiConsumer<T, TaskId> unAssignTask
     ) {
@@ -86,8 +86,8 @@ public interface RackAwareGraphConstructor<T> {
             if (edge.flow > 0) {
                 tasksAssigned++;
                 final int clientIndex = getClientIndex(edge.destination, taskIdList, clientList, topicGroupIndex);
-                final UUID processId = clientList.get(clientIndex);
-                final UUID originalProcessId = taskClientMap.get(taskId);
+                final ProcessId processId = clientList.get(clientIndex);
+                final ProcessId originalProcessId = taskClientMap.get(taskId);
 
                 // Don't need to assign this task to other client
                 if (processId.equals(originalProcessId)) {
@@ -105,8 +105,8 @@ public interface RackAwareGraphConstructor<T> {
     default void validateAssignedTask(
         final List<TaskId> taskIdList,
         final int tasksAssigned,
-        final Map<UUID, T> clientStates,
-        final Map<UUID, Integer> originalAssignedTaskNumber,
+        final Map<ProcessId, T> clientStates,
+        final Map<ProcessId, Integer> originalAssignedTaskNumber,
         final BiPredicate<T, TaskId> hasAssignedTask
     ) {
         // Validate task assigned
@@ -116,9 +116,9 @@ public interface RackAwareGraphConstructor<T> {
         }
 
         // Validate original assigned task number matches
-        final Map<UUID, Integer> assignedTaskNumber = new HashMap<>();
+        final Map<ProcessId, Integer> assignedTaskNumber = new HashMap<>();
         for (final TaskId taskId : taskIdList) {
-            for (final Entry<UUID, T> clientState : clientStates.entrySet()) {
+            for (final Entry<ProcessId, T> clientState : clientStates.entrySet()) {
                 if (hasAssignedTask.test(clientState.getValue(), taskId)) {
                     assignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
                 }
@@ -131,7 +131,7 @@ public interface RackAwareGraphConstructor<T> {
                 + " active tasks after assignment");
         }
 
-        for (final Entry<UUID, Integer> originalCapacity : originalAssignedTaskNumber.entrySet()) {
+        for (final Entry<ProcessId, Integer> originalCapacity : originalAssignedTaskNumber.entrySet()) {
             final int capacity = assignedTaskNumber.getOrDefault(originalCapacity.getKey(), 0);
             if (!Objects.equals(originalCapacity.getValue(), capacity)) {
                 throw new IllegalStateException("There are " + originalCapacity.getValue() + " tasks assigned to"

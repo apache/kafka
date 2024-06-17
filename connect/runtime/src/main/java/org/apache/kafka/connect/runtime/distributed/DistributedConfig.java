@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -95,6 +96,10 @@ public class DistributedConfig extends WorkerConfig {
      */
     public static final String REBALANCE_TIMEOUT_MS_CONFIG = CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG;
     private static final String REBALANCE_TIMEOUT_MS_DOC = CommonClientConfigs.REBALANCE_TIMEOUT_MS_DOC;
+
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
+    private static final String METADATA_RECOVERY_STRATEGY_DOC = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC;
+    public static final String DEFAULT_METADATA_RECOVERY_STRATEGY = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY;
 
     /**
      * <code>worker.sync.timeout.ms</code>
@@ -512,7 +517,14 @@ public class DistributedConfig extends WorkerConfig {
                             (name, value) -> validateVerificationAlgorithms(crypto, name, (List<String>) value),
                             () -> "A list of one or more MAC algorithms, each supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
-                    INTER_WORKER_VERIFICATION_ALGORITHMS_DOC);
+                    INTER_WORKER_VERIFICATION_ALGORITHMS_DOC)
+            .define(METADATA_RECOVERY_STRATEGY_CONFIG,
+                    ConfigDef.Type.STRING,
+                    DEFAULT_METADATA_RECOVERY_STRATEGY,
+                    ConfigDef.CaseInsensitiveValidString
+                            .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
+                    ConfigDef.Importance.LOW,
+                    METADATA_RECOVERY_STRATEGY_DOC);
     }
 
     private final ExactlyOnceSourceSupport exactlyOnceSourceSupport;

@@ -26,7 +26,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -235,12 +234,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private final SubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
+    private int metadataVersionSnapshot;
     private final Metrics metrics;
     private final long retryBackoffMs;
     private final int defaultApiTimeoutMs;
     private final boolean autoCommitEnabled;
     private volatile boolean closed = false;
-    private final List<ConsumerPartitionAssignor> assignors;
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
@@ -256,6 +255,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // and is used to prevent multithreaded access
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refCount = new AtomicInteger(0);
+
+    private FetchCommittedOffsetsEvent pendingOffsetFetchEvent;
 
     AsyncKafkaConsumer(final ConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
@@ -313,6 +314,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.metadata = metadataFactory.build(config, subscriptions, logContext, clusterResourceListeners);
             final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadata.bootstrap(addresses);
+            this.metadataVersionSnapshot = metadata.updateVersion();
 
             FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
@@ -331,7 +333,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     apiVersions,
                     metrics,
                     fetchMetricsManager,
-                    clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
+                    clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
+                    backgroundEventHandler);
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
             this.asyncCommitFenced = new AtomicBoolean(false);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
@@ -373,10 +376,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     rebalanceListenerInvoker
             );
             this.backgroundEventReaper = backgroundEventReaperFactory.build(logContext);
-            this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
-                    config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
-                    config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
-            );
 
             // The FetchCollector is only used on the application thread.
             this.fetchCollector = fetchCollectorFactory.build(logContext,
@@ -424,7 +423,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        ConsumerMetadata metadata,
                        long retryBackoffMs,
                        int defaultApiTimeoutMs,
-                       List<ConsumerPartitionAssignor> assignors,
                        String groupId,
                        boolean autoCommitEnabled) {
         this.log = logContext.logger(getClass());
@@ -441,11 +439,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.metrics = metrics;
         this.groupMetadata.set(initializeGroupMetadata(groupId, Optional.empty()));
         this.metadata = metadata;
+        this.metadataVersionSnapshot = metadata.updateVersion();
         this.retryBackoffMs = retryBackoffMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.deserializers = deserializers;
         this.applicationEventHandler = applicationEventHandler;
-        this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
         this.clientTelemetryReporter = Optional.empty();
         this.autoCommitEnabled = autoCommitEnabled;
@@ -460,8 +458,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        Deserializer<V> valueDeserializer,
                        KafkaClient client,
                        SubscriptionState subscriptions,
-                       ConsumerMetadata metadata,
-                       List<ConsumerPartitionAssignor> assignors) {
+                       ConsumerMetadata metadata) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
@@ -472,10 +469,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.time = time;
         this.metrics = new Metrics(time);
         this.metadata = metadata;
+        this.metadataVersionSnapshot = metadata.updateVersion();
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
-        this.assignors = assignors;
         this.clientTelemetryReporter = Optional.empty();
 
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(CONSUMER_METRIC_GROUP_PREFIX);
@@ -510,7 +507,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             time,
             config,
             logContext,
-            client
+            client,
+            metadata,
+            backgroundEventHandler
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
         this.asyncCommitFenced = new AtomicBoolean(false);
@@ -1237,7 +1236,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
         closeTimer.update();
         // Prepare shutting down the network thread
-        prepareShutdown(closeTimer, firstException);
+        releaseAssignmentAndLeaveGroup(closeTimer, firstException);
         closeTimer.update();
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.",
             () -> awaitPendingAsyncCommitsAndExecuteCommitCallbacks(closeTimer, false), firstException);
@@ -1273,24 +1272,22 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * 2. revoke all partitions
      * 3. if partition revocation completes successfully, send leave group
      */
-    void prepareShutdown(final Timer timer, final AtomicReference<Throwable> firstException) {
+    void releaseAssignmentAndLeaveGroup(final Timer timer, final AtomicReference<Throwable> firstException) {
         if (!groupMetadata.get().isPresent())
             return;
 
         if (autoCommitEnabled)
-            autoCommitSync(timer);
+            commitSyncAllConsumed(timer);
 
         applicationEventHandler.add(new CommitOnCloseEvent());
-        completeQuietly(
-            () -> {
-                maybeRevokePartitions();
-                applicationEventHandler.addAndGet(new LeaveOnCloseEvent(calculateDeadlineMs(timer)));
-            },
-            "Failed to send leaveGroup heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
+        completeQuietly(() -> maybeRevokePartitions(),
+            "Failed to execute callback to release assignment", firstException);
+        completeQuietly(() -> applicationEventHandler.addAndGet(new LeaveOnCloseEvent(calculateDeadlineMs(timer))),
+            "Failed to send leave group heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
     }
 
     // Visible for testing
-    void autoCommitSync(final Timer timer) {
+    void commitSyncAllConsumed(final Timer timer) {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = subscriptions.allConsumed();
         log.debug("Sending synchronous auto-commit of offsets {} on closing", allConsumed);
         try {
@@ -1326,7 +1323,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             function.run();
         } catch (TimeoutException e) {
             log.debug("Timeout expired before the {} operation could complete.", msg);
+            firstException.compareAndSet(null, e);
         } catch (Exception e) {
+            log.error(msg, e);
             firstException.compareAndSet(null, e);
         }
     }
@@ -1478,12 +1477,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * TODO: remove this when we implement the KIP-848 protocol.
-     *
      * <p>
-     * The contents of this method are shamelessly stolen from
-     * {@link ConsumerCoordinator#updatePatternSubscription(Cluster)} and are used here because we won't have access
-     * to a {@link ConsumerCoordinator} in this code. Perhaps it could be moved to a ConsumerUtils class?
+     *
+     * This function evaluates the regex that the consumer subscribed to
+     * against the list of topic names from metadata, and updates
+     * the list of topics in subscription state accordingly
      *
      * @param cluster Cluster from which we get the topics
      */
@@ -1493,7 +1491,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 .collect(Collectors.toSet());
         if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
             applicationEventHandler.add(new SubscriptionChangeEvent());
-            metadata.requestUpdateForNewTopics();
+            this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
         }
     }
 
@@ -1506,7 +1504,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 Timer timer = time.timer(Long.MAX_VALUE);
                 UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(calculateDeadlineMs(timer));
                 applicationEventHandler.add(unsubscribeEvent);
-                log.info("Unsubscribing all topics or patterns and assigned partitions");
+                log.info("Unsubscribing all topics or patterns and assigned partitions {}",
+                    subscriptions.assignedPartitions());
 
                 try {
                     processBackgroundEvents(unsubscribeEvent.future(), timer);
@@ -1516,7 +1515,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
                 resetGroupMetadata();
             }
-            subscriptions.unsubscribe();
+        } catch (Exception e) {
+            log.error("Unsubscribe failed", e);
+            throw e;
         } finally {
             release();
         }
@@ -1670,27 +1671,64 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return true;
 
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
+
+        // The shorter the timeout provided to poll(), the more likely the offsets fetch will time out. To handle
+        // this case, on the first attempt to fetch the committed offsets, a FetchCommittedOffsetsEvent is created
+        // (with potentially a longer timeout) and stored. The event is used for the first attempt, but in the
+        // case it times out, subsequent attempts will also use the event in order to wait for the results.
+        if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
+            // Give the event a reasonable amount of time to complete.
+            final long timeoutMs = Math.max(defaultApiTimeoutMs, timer.remainingMs());
+            final long deadlineMs = calculateDeadlineMs(time, timeoutMs);
+            pendingOffsetFetchEvent = new FetchCommittedOffsetsEvent(initializingPartitions, deadlineMs);
+            applicationEventHandler.add(pendingOffsetFetchEvent);
+        }
+
+        final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = pendingOffsetFetchEvent.future();
+
         try {
-            final FetchCommittedOffsetsEvent event =
-                new FetchCommittedOffsetsEvent(
-                    initializingPartitions,
-                    calculateDeadlineMs(timer));
-            wakeupTrigger.setActiveTask(event.future());
-            final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event);
+            wakeupTrigger.setActiveTask(future);
+            final Map<TopicPartition, OffsetAndMetadata> offsets = ConsumerUtils.getResult(future, timer);
+
+            // Clear the pending event once its result is successfully retrieved.
+            pendingOffsetFetchEvent = null;
+
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
         } catch (TimeoutException e) {
-            log.error("Couldn't refresh committed offsets before timeout expired");
+            log.debug(
+                "The committed offsets for the following partition(s) could not be refreshed within the timeout: {} ",
+                initializingPartitions
+            );
             return false;
+        } catch (InterruptException e) {
+            throw e;
+        } catch (Throwable t) {
+            pendingOffsetFetchEvent = null;
+            throw ConsumerUtils.maybeWrapAsKafkaException(t);
         } finally {
             wakeupTrigger.clearTask();
         }
     }
 
-    private void throwIfNoAssignorsConfigured() {
-        if (assignors.isEmpty())
-            throw new IllegalStateException("Must configure at least one partition assigner class name to " +
-                    ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " configuration property");
+    /**
+     * This determines if the {@link #pendingOffsetFetchEvent pending offset fetch event} can be reused. Reuse
+     * is only possible if all the following conditions are true:
+     *
+     * <ul>
+     *     <li>A pending offset fetch event exists</li>
+     *     <li>The partition set of the pending offset fetch event is the same as the given partition set</li>
+     *     <li>The pending offset fetch event has not expired</li>
+     * </ul>
+     */
+    private boolean canReusePendingOffsetFetchEvent(Set<TopicPartition> partitions) {
+        if (pendingOffsetFetchEvent == null)
+            return false;
+
+        if (!pendingOffsetFetchEvent.partitions().equals(partitions))
+            return false;
+
+        return pendingOffsetFetchEvent.deadlineMs() > time.milliseconds();
     }
 
     private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
@@ -1780,7 +1818,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (pattern == null || pattern.toString().isEmpty())
                 throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
                     "null" : "empty"));
-            throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern);
             subscriptions.subscribe(pattern, listener);
             metadata.requestUpdateForNewTopics();
@@ -1805,8 +1842,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                         throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
                 }
 
-                throwIfNoAssignorsConfigured();
-
                 // Clear the buffered data which are not a part of newly assigned topics
                 final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
 
@@ -1818,7 +1853,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 fetchBuffer.retainAll(currentTopicPartitions);
                 log.info("Subscribed to topic(s): {}", String.join(", ", topics));
                 if (subscriptions.subscribe(new HashSet<>(topics), listener))
-                    metadata.requestUpdateForNewTopics();
+                    this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
 
                 // Trigger subscribe event to effectively join the group if not already part of it,
                 // or just send the new subscription to the broker.
@@ -1996,10 +2031,17 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         return subscriptions;
     }
 
-    private void maybeUpdateSubscriptionMetadata() {
-        if (subscriptions.hasPatternSubscription()) {
-            updatePatternSubscription(metadata.fetch());
-        }
+    boolean hasPendingOffsetFetchEvent() {
+        return pendingOffsetFetchEvent != null;
     }
 
+    private void maybeUpdateSubscriptionMetadata() {
+        if (this.metadataVersionSnapshot < metadata.updateVersion()) {
+            this.metadataVersionSnapshot = metadata.updateVersion();
+            if (subscriptions.hasPatternSubscription()) {
+                updatePatternSubscription(metadata.fetch());
+            }
+        }
+    }
 }
+

@@ -109,10 +109,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         if (truststore != null && truststore.modified()) {
             return true;
         }
-        if (keystore != null && keystore.modified()) {
-            return true;
-        }
-        return false;
+        return keystore != null && keystore.modified();
     }
 
     @Override

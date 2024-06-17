@@ -40,7 +40,7 @@ import static org.mockito.Mockito.verify;
 
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class WakeupTriggerTest {
-    private final static long DEFAULT_TIMEOUT_MS = 1000;
+    private static final long DEFAULT_TIMEOUT_MS = 1000;
     private WakeupTrigger wakeupTrigger;
 
     @BeforeEach

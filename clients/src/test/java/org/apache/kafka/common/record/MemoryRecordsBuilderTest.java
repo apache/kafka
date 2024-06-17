@@ -759,7 +759,7 @@ public class MemoryRecordsBuilderTest {
             // Ignore memory usage during initialization
             if (iterations == 2)
                 startMem = memUsed;
-            else if (iterations > 2 && memUsed < (iterations - 2) * 1024)
+            else if (iterations > 2 && memUsed < (iterations - 2) * 1024L)
                 break;
         }
         assertTrue(iterations < 100, "Memory usage too high: " + memUsed);

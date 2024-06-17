@@ -22,6 +22,7 @@ import org.apache.kafka.common.compress.Lz4Compression;
 import org.apache.kafka.common.compress.SnappyCompression;
 import org.apache.kafka.common.compress.ZstdCompression;
 import org.apache.kafka.common.record.CompressionType;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;

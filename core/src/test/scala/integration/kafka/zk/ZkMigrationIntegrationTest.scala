@@ -73,7 +73,7 @@ object ZkMigrationIntegrationTest {
       MetadataVersion.IBP_3_7_IV2,
       MetadataVersion.IBP_3_7_IV4,
       MetadataVersion.IBP_3_8_IV0,
-      MetadataVersion.IBP_4_0_IVO
+      MetadataVersion.IBP_4_0_IV0
     ).map { mv =>
       val serverProperties = new util.HashMap[String, String]()
       serverProperties.put("inter.broker.listener.name", "EXTERNAL")

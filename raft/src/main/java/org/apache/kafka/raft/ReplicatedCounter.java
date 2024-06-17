@@ -16,14 +16,17 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.Optional;
-import java.util.OptionalInt;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
+
 import org.slf4j.Logger;
+
+import java.util.Optional;
+import java.util.OptionalInt;
+
 import static java.util.Collections.singletonList;
 
 public class ReplicatedCounter implements RaftClient.Listener<Integer> {

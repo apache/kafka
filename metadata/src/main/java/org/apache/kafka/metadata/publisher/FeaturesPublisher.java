@@ -23,6 +23,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.server.common.FinalizedFeatures;
+
 import org.slf4j.Logger;
 
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSION;

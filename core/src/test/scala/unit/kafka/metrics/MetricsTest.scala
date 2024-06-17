@@ -34,8 +34,7 @@ import org.apache.kafka.common.metrics.JmxReporter
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.migration.ZkMigrationState
 import org.apache.kafka.server.config.ServerLogConfigs
-import org.apache.kafka.server.metrics.KafkaMetricsGroup
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -110,7 +109,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   def testLinuxIoMetrics(quorum: String): Unit = {
     // Check if linux-disk-{read,write}-bytes metrics either do or do not exist depending on whether we are or are not
     // able to collect those metrics on the platform where this test is running.
-    val usable = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying).usable()
+    val usable = new LinuxIoMetricsCollector("/proc", Time.SYSTEM).usable()
     val expectedCount = if (usable) 1 else 0
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     Set("linux-disk-read-bytes", "linux-disk-write-bytes").foreach(name =>

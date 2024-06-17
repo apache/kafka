@@ -143,14 +143,14 @@ public class EosIntegrationTest {
 
 
     private String applicationId;
-    private final static int NUM_TOPIC_PARTITIONS = 2;
-    private final static String CONSUMER_GROUP_ID = "readCommitted";
-    private final static String SINGLE_PARTITION_INPUT_TOPIC = "singlePartitionInputTopic";
-    private final static String SINGLE_PARTITION_THROUGH_TOPIC = "singlePartitionThroughTopic";
-    private final static String SINGLE_PARTITION_OUTPUT_TOPIC = "singlePartitionOutputTopic";
-    private final static String MULTI_PARTITION_INPUT_TOPIC = "multiPartitionInputTopic";
-    private final static String MULTI_PARTITION_THROUGH_TOPIC = "multiPartitionThroughTopic";
-    private final static String MULTI_PARTITION_OUTPUT_TOPIC = "multiPartitionOutputTopic";
+    private static final int NUM_TOPIC_PARTITIONS = 2;
+    private static final String CONSUMER_GROUP_ID = "readCommitted";
+    private static final String SINGLE_PARTITION_INPUT_TOPIC = "singlePartitionInputTopic";
+    private static final String SINGLE_PARTITION_THROUGH_TOPIC = "singlePartitionThroughTopic";
+    private static final String SINGLE_PARTITION_OUTPUT_TOPIC = "singlePartitionOutputTopic";
+    private static final String MULTI_PARTITION_INPUT_TOPIC = "multiPartitionInputTopic";
+    private static final String MULTI_PARTITION_THROUGH_TOPIC = "multiPartitionThroughTopic";
+    private static final String MULTI_PARTITION_OUTPUT_TOPIC = "multiPartitionOutputTopic";
     private final String storeName = "store";
 
     private AtomicBoolean errorInjected;

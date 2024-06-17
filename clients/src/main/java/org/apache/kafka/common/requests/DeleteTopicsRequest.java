@@ -92,7 +92,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
     
     public List<String> topicNames() {
         if (version() >= 6)
-            return data.topics().stream().map(topic -> topic.name()).collect(Collectors.toList());
+            return data.topics().stream().map(DeleteTopicState::name).collect(Collectors.toList());
         return data.topicNames(); 
     }
 
@@ -104,7 +104,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
     
     public List<Uuid> topicIds() {
         if (version() >= 6)
-            return data.topics().stream().map(topic -> topic.topicId()).collect(Collectors.toList());
+            return data.topics().stream().map(DeleteTopicState::topicId).collect(Collectors.toList());
         return Collections.emptyList();
     }
     

@@ -107,7 +107,7 @@ public class DeleteAclsResponse extends AbstractResponse {
     }
 
     public static DeleteAclsFilterResult filterResult(AclDeleteResult result) {
-        ApiError error = result.exception().map(e -> ApiError.fromThrowable(e)).orElse(ApiError.NONE);
+        ApiError error = result.exception().map(ApiError::fromThrowable).orElse(ApiError.NONE);
         List<DeleteAclsMatchingAcl> matchingAcls = result.aclBindingDeleteResults().stream()
             .map(DeleteAclsResponse::matchingAcl)
             .collect(Collectors.toList());
@@ -118,7 +118,7 @@ public class DeleteAclsResponse extends AbstractResponse {
     }
 
     private static DeleteAclsMatchingAcl matchingAcl(AclDeleteResult.AclBindingDeleteResult result) {
-        ApiError error = result.exception().map(e -> ApiError.fromThrowable(e)).orElse(ApiError.NONE);
+        ApiError error = result.exception().map(ApiError::fromThrowable).orElse(ApiError.NONE);
         AclBinding acl = result.aclBinding();
         return matchingAcl(acl, error);
     }

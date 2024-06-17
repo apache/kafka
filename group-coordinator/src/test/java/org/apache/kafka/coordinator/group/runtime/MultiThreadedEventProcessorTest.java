@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
@@ -60,8 +61,8 @@ public class MultiThreadedEventProcessorTest {
         }
 
         @Override
-        public CoordinatorEvent take() {
-            CoordinatorEvent event = super.take();
+        public CoordinatorEvent poll(long timeout, TimeUnit unit) {
+            CoordinatorEvent event = super.poll(timeout, unit);
             time.sleep(takeDelayMs);
             return event;
         }

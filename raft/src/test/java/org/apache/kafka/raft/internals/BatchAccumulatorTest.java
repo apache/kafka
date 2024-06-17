@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -493,7 +494,7 @@ class BatchAccumulatorTest {
         List<BatchAccumulator.CompletedBatch<String>> drained = acc.drain();
         assertEquals(1, drained.size());
         assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
-        drained.stream().forEach(completedBatch -> {
+        drained.forEach(completedBatch -> {
             completedBatch.data.batches().forEach(recordBatch -> {
                 assertEquals(leaderEpoch, recordBatch.partitionLeaderEpoch()); });
         });

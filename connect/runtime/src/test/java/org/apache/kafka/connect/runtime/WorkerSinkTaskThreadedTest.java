@@ -697,7 +697,7 @@ public class WorkerSinkTaskThreadedTest {
         return new RecordHeaders();
     }
 
-    private static abstract class TestSinkTask extends SinkTask {
+    private abstract static class TestSinkTask extends SinkTask {
     }
 
     @SuppressWarnings("NewClassNamingConvention")

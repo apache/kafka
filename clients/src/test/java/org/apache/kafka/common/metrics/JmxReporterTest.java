@@ -26,7 +26,7 @@ import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -164,7 +164,7 @@ public class JmxReporterTest {
         JmxReporter reporter = new JmxReporter();
         MetricsContext metricsContext = new KafkaMetricsContext("kafka.server");
         MetricConfig metricConfig = new MetricConfig();
-        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Arrays.asList(reporter)), Time.SYSTEM, metricsContext);
+        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Collections.singletonList(reporter)), Time.SYSTEM, metricsContext);
 
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
@@ -183,7 +183,7 @@ public class JmxReporterTest {
 
         // for backwards compatibility, ensure prefix does not get overridden by the default empty namespace in metricscontext
         MetricConfig metricConfig = new MetricConfig();
-        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Arrays.asList(reporter)), Time.SYSTEM);
+        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Collections.singletonList(reporter)), Time.SYSTEM);
 
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {

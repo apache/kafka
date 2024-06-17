@@ -18,6 +18,7 @@ package org.apache.kafka.tiered.storage.integration;
 
 import kafka.log.LogManager;
 import kafka.server.ReplicaManager;
+
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;

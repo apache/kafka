@@ -77,7 +77,7 @@ public class MetricsTest {
 
     @BeforeEach
     public void setup() {
-        this.metrics = new Metrics(config, Arrays.asList(new JmxReporter()), time, true);
+        this.metrics = new Metrics(config, singletonList(new JmxReporter()), time, true);
     }
 
     @AfterEach
@@ -197,7 +197,7 @@ public class MetricsTest {
         assertEquals(1.0 + c1, p2, EPS);
         assertEquals(1.0 + c1 + c2, p1, EPS);
         assertEquals(Arrays.asList(child1, child2), metrics.childrenSensors().get(parent1));
-        assertEquals(Arrays.asList(child1), metrics.childrenSensors().get(parent2));
+        assertEquals(singletonList(child1), metrics.childrenSensors().get(parent2));
         assertNull(metrics.childrenSensors().get(grandchild));
     }
 
@@ -693,7 +693,7 @@ public class MetricsTest {
         Map<String, String> childTagsWithValues = new HashMap<>();
         childTagsWithValues.put("child-tag", "child-tag-value");
 
-        try (Metrics inherited = new Metrics(new MetricConfig().tags(parentTagsWithValues), Arrays.asList(new JmxReporter()), time, true)) {
+        try (Metrics inherited = new Metrics(new MetricConfig().tags(parentTagsWithValues), singletonList(new JmxReporter()), time, true)) {
             MetricName inheritedMetric = inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, childTagsWithValues);
 
             Map<String, String> filledOutTags = inheritedMetric.tags();
@@ -761,7 +761,7 @@ public class MetricsTest {
     public void testConcurrentReadUpdateReport() {
 
         class LockingReporter implements MetricsReporter {
-            Map<MetricName, KafkaMetric> activeMetrics = new HashMap<>();
+            final Map<MetricName, KafkaMetric> activeMetrics = new HashMap<>();
             @Override
             public synchronized void init(List<KafkaMetric> metrics) {
             }
@@ -793,7 +793,7 @@ public class MetricsTest {
 
         final LockingReporter reporter = new LockingReporter();
         this.metrics.close();
-        this.metrics = new Metrics(config, Arrays.asList(reporter), new MockTime(10), true);
+        this.metrics = new Metrics(config, singletonList(reporter), new MockTime(10), true);
         final Deque<Sensor> sensors = new ConcurrentLinkedDeque<>();
         SensorCreator sensorCreator = new SensorCreator(metrics);
 

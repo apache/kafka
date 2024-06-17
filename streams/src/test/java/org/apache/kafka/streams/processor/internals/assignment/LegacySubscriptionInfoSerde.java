@@ -22,6 +22,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,14 +41,14 @@ public class LegacySubscriptionInfoSerde {
 
     private final int usedVersion;
     private final int latestSupportedVersion;
-    private final UUID processId;
+    private final ProcessId processId;
     private final Set<TaskId> prevTasks;
     private final Set<TaskId> standbyTasks;
     private final String userEndPoint;
 
     public LegacySubscriptionInfoSerde(final int version,
                                        final int latestSupportedVersion,
-                                       final UUID processId,
+                                       final ProcessId processId,
                                        final Set<TaskId> prevTasks,
                                        final Set<TaskId> standbyTasks,
                                        final String userEndPoint) {
@@ -78,7 +79,7 @@ public class LegacySubscriptionInfoSerde {
         return latestSupportedVersion;
     }
 
-    public UUID processId() {
+    public ProcessId processId() {
         return processId;
     }
 
@@ -112,7 +113,7 @@ public class LegacySubscriptionInfoSerde {
 
             buf.putInt(usedVersion); // used version
             buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
-            encodeClientUUID(buf, processId());
+            encodeClientUUID(buf, processId().id());
             encodeTasks(buf, prevTasks, usedVersion);
             encodeTasks(buf, standbyTasks, usedVersion);
             encodeUserEndPoint(buf, endPointBytes);
@@ -132,7 +133,7 @@ public class LegacySubscriptionInfoSerde {
             );
 
             buf.putInt(2); // version
-            encodeClientUUID(buf, processId());
+            encodeClientUUID(buf, processId().id());
             encodeTasks(buf, prevTasks, usedVersion);
             encodeTasks(buf, standbyTasks, usedVersion);
             encodeUserEndPoint(buf, endPointBytes);
@@ -149,7 +150,7 @@ public class LegacySubscriptionInfoSerde {
             );
 
             buf1.putInt(1); // version
-            encodeClientUUID(buf1, processId());
+            encodeClientUUID(buf1, processId().id());
             encodeTasks(buf1, prevTasks, usedVersion);
             encodeTasks(buf1, standbyTasks, usedVersion);
             buf1.rewind();
@@ -201,19 +202,19 @@ public class LegacySubscriptionInfoSerde {
         final int usedVersion = data.getInt();
         if (usedVersion > 2 && usedVersion < 7) {
             final int latestSupportedVersion = data.getInt();
-            final UUID processId = decodeProcessId(data);
+            final ProcessId processId = decodeProcessId(data);
             final Set<TaskId> prevTasks = decodeTasks(data, usedVersion);
             final Set<TaskId> standbyTasks = decodeTasks(data, usedVersion);
             final String userEndPoint = decodeUserEndpoint(data);
             return new LegacySubscriptionInfoSerde(usedVersion, latestSupportedVersion, processId, prevTasks, standbyTasks, userEndPoint);
         } else if (usedVersion == 2) {
-            final UUID processId = decodeProcessId(data);
+            final ProcessId processId = decodeProcessId(data);
             final Set<TaskId> prevTasks = decodeTasks(data, usedVersion);
             final Set<TaskId> standbyTasks = decodeTasks(data, usedVersion);
             final String userEndPoint = decodeUserEndpoint(data);
             return new LegacySubscriptionInfoSerde(2, UNKNOWN, processId, prevTasks, standbyTasks, userEndPoint);
         } else if (usedVersion == 1) {
-            final UUID processId = decodeProcessId(data);
+            final ProcessId processId = decodeProcessId(data);
             final Set<TaskId> prevTasks = decodeTasks(data, usedVersion);
             final Set<TaskId> standbyTasks = decodeTasks(data, usedVersion);
             return new LegacySubscriptionInfoSerde(1, UNKNOWN, processId, prevTasks, standbyTasks, null);
@@ -240,8 +241,8 @@ public class LegacySubscriptionInfoSerde {
         return prevTasks;
     }
 
-    private static UUID decodeProcessId(final ByteBuffer data) {
-        return new UUID(data.getLong(), data.getLong());
+    private static ProcessId decodeProcessId(final ByteBuffer data) {
+        return new ProcessId(new UUID(data.getLong(), data.getLong()));
     }
 
     @Override

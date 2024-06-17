@@ -253,7 +253,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             }
         }
 
-        toClear.forEach(p -> this.records.remove(p));
+        toClear.forEach(records::remove);
         return new ConsumerRecords<>(results);
     }
 
@@ -263,7 +263,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         Set<TopicPartition> currentAssigned = this.subscriptions.assignedPartitions();
         if (!currentAssigned.contains(tp))
             throw new IllegalStateException("Cannot add records for a partition that is not assigned to the consumer");
-        List<ConsumerRecord<K, V>> recs = this.records.computeIfAbsent(tp, k -> new ArrayList<>());
+        List<ConsumerRecord<K, V>> recs = records.computeIfAbsent(tp, k -> new ArrayList<>());
         recs.add(record);
     }
 
@@ -286,8 +286,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         ensureNotClosed();
-        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet())
-            committed.put(entry.getKey(), entry.getValue());
+        committed.putAll(offsets);
         if (callback != null) {
             callback.onComplete(offsets, null);
         }

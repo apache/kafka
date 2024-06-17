@@ -133,17 +133,15 @@ public final class UpdateMetadataRequest extends AbstractControlRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type: UpdateMetadataRequest=").
-                append(", controllerId=").append(controllerId).
-                append(", controllerEpoch=").append(controllerEpoch).
-                append(", kraftController=").append(kraftController).
-                append(", type=").append(updateType).
-                append(", brokerEpoch=").append(brokerEpoch).
-                append(", partitionStates=").append(partitionStates).
-                append(", liveBrokers=").append(liveBrokers.stream().map(UpdateMetadataBroker::toString).collect(Collectors.joining(", "))).
-                append(")");
-            return bld.toString();
+            return "(type: UpdateMetadataRequest=" +
+                    ", controllerId=" + controllerId +
+                    ", controllerEpoch=" + controllerEpoch +
+                    ", kraftController=" + kraftController +
+                    ", type=" + updateType +
+                    ", brokerEpoch=" + brokerEpoch +
+                    ", partitionStates=" + partitionStates +
+                    ", liveBrokers=" + liveBrokers.stream().map(UpdateMetadataBroker::toString).collect(Collectors.joining(", ")) +
+                    ")";
         }
     }
 

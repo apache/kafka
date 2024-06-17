@@ -60,7 +60,7 @@ public class ListOffsetsRequestTest {
     @Test
     public void testGetErrorResponse() {
         for (short version = 1; version <= ApiKeys.LIST_OFFSETS.latestVersion(); version++) {
-            List<ListOffsetsTopic> topics = Arrays.asList(
+            List<ListOffsetsTopic> topics = Collections.singletonList(
                     new ListOffsetsTopic()
                         .setName("topic")
                         .setPartitions(Collections.singletonList(
@@ -93,7 +93,7 @@ public class ListOffsetsRequestTest {
 
     @Test
     public void testGetErrorResponseV0() {
-        List<ListOffsetsTopic> topics = Arrays.asList(
+        List<ListOffsetsTopic> topics = Collections.singletonList(
                 new ListOffsetsTopic()
                     .setName("topic")
                     .setPartitions(Collections.singletonList(
