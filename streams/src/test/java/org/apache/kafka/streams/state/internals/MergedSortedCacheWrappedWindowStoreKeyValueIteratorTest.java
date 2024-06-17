@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Collection;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -30,22 +29,20 @@ import org.apache.kafka.streams.state.internals.MergedSortedCacheWindowStoreKeyV
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 import org.apache.kafka.test.KeyValueIteratorStub;
-import org.junit.Before;
-import org.junit.Test;
 
 import java.util.Collections;
 import java.util.Iterator;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
+import java.util.stream.Stream;
 
-import static java.util.Arrays.asList;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(Parameterized.class)
 public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
 
     @FunctionalInterface
@@ -82,20 +79,15 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
         TIME_FIRST_SCHEMA
     }
 
-    @Parameter
-    public SchemaType schemaType;
-
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return asList(new Object[][] {
-            {SchemaType.WINDOW_KEY_SCHEMA},
-            {SchemaType.KEY_FIRST_SCHEMA},
-            {SchemaType.TIME_FIRST_SCHEMA},
-        });
+    public static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of(SchemaType.WINDOW_KEY_SCHEMA),
+                Arguments.of(SchemaType.KEY_FIRST_SCHEMA),
+                Arguments.of(SchemaType.TIME_FIRST_SCHEMA)
+        );
     }
 
-    @Before
-    public void setUp() {
+    public void setUp(final SchemaType schemaType) {
         switch (schemaType) {
             case KEY_FIRST_SCHEMA:
                 storeKeySerializer = KeyFirstWindowKeySchema::toStoreKeyBinary;
@@ -125,100 +117,128 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
         ).iterator();
     }
 
-    @Test
-    public void shouldHaveNextFromStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldHaveNextFromStore(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
             createIterator(storeKvs, Collections.emptyIterator(), false);
         assertTrue(mergeIterator.hasNext());
     }
 
-    @Test
-    public void shouldHaveNextFromReverseStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldHaveNextFromReverseStore(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
             createIterator(storeKvs, Collections.emptyIterator(), true);
         assertTrue(mergeIterator.hasNext());
     }
 
-    @Test
-    public void shouldGetNextFromStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldGetNextFromStore(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
             createIterator(storeKvs, Collections.emptyIterator(), false);
         assertThat(convertKeyValuePair(mergeIterator.next()), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey)));
     }
 
-    @Test
-    public void shouldGetNextFromReverseStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldGetNextFromReverseStore(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
             createIterator(storeKvs, Collections.emptyIterator(), true);
         assertThat(convertKeyValuePair(mergeIterator.next()), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey)));
     }
 
-    @Test
-    public void shouldPeekNextKeyFromStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldPeekNextKeyFromStore(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
             createIterator(storeKvs, Collections.emptyIterator(), false);
         assertThat(convertWindowedKey(mergeIterator.peekNextKey()), equalTo(new Windowed<>(storeKey, storeWindow)));
     }
 
-    @Test
-    public void shouldPeekNextKeyFromReverseStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldPeekNextKeyFromReverseStore(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
             createIterator(storeKvs, Collections.emptyIterator(), true);
         assertThat(convertWindowedKey(mergeIterator.peekNextKey()), equalTo(new Windowed<>(storeKey, storeWindow)));
     }
 
-    @Test
-    public void shouldHaveNextFromCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldHaveNextFromCache(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
             createIterator(Collections.emptyIterator(), cacheKvs, false);
         assertTrue(mergeIterator.hasNext());
     }
 
-    @Test
-    public void shouldHaveNextFromReverseCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldHaveNextFromReverseCache(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
             createIterator(Collections.emptyIterator(), cacheKvs, true);
         assertTrue(mergeIterator.hasNext());
     }
 
-    @Test
-    public void shouldGetNextFromCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldGetNextFromCache(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
             createIterator(Collections.emptyIterator(), cacheKvs, false);
         assertThat(convertKeyValuePair(mergeIterator.next()), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey)));
     }
 
-    @Test
-    public void shouldGetNextFromReverseCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldGetNextFromReverseCache(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
             createIterator(Collections.emptyIterator(), cacheKvs, true);
         assertThat(convertKeyValuePair(mergeIterator.next()), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey)));
     }
 
-    @Test
-    public void shouldPeekNextKeyFromCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldPeekNextKeyFromCache(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
             createIterator(Collections.emptyIterator(), cacheKvs, false);
         assertThat(convertWindowedKey(mergeIterator.peekNextKey()), equalTo(new Windowed<>(cacheKey, cacheWindow)));
     }
 
-    @Test
-    public void shouldPeekNextKeyFromReverseCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldPeekNextKeyFromReverseCache(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
             createIterator(Collections.emptyIterator(), cacheKvs, true);
         assertThat(convertWindowedKey(mergeIterator.peekNextKey()), equalTo(new Windowed<>(cacheKey, cacheWindow)));
     }
 
-    @Test
-    public void shouldIterateBothStoreAndCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldIterateBothStoreAndCache(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator iterator = createIterator(storeKvs, cacheKvs, true);
         assertThat(convertKeyValuePair(iterator.next()), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey)));
         assertThat(convertKeyValuePair(iterator.next()), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey)));
         assertFalse(iterator.hasNext());
     }
 
-    @Test
-    public void shouldReverseIterateBothStoreAndCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldReverseIterateBothStoreAndCache(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator iterator = createIterator(storeKvs, cacheKvs, false);
         assertThat(convertKeyValuePair(iterator.next()), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey)));
         assertThat(convertKeyValuePair(iterator.next()), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey)));

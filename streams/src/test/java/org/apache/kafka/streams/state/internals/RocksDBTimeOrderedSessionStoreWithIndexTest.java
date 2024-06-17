@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-public class RocksDBSessionStoreTest extends AbstractRocksDBSessionStoreTest {
+public class RocksDBTimeOrderedSessionStoreWithIndexTest extends AbstractRocksDBSessionStoreTest {
 
     @Override
     public StoreType storeType() {
-        return StoreType.RocksDBSessionStore;
+        return StoreType.RocksDBTimeOrderedSessionStoreWithIndex;
     }
 }

@@ -16,10 +16,15 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-public class RocksDBSessionStoreTest extends AbstractRocksDBSessionStoreTest {
+public class RocksDBTimeOrderedSessionSchemaWithoutIndexSegmentedBytesStoreTest extends AbstractRocksDBTimeOrderedWindowSegmentedBytesStoreTest {
 
     @Override
-    public StoreType storeType() {
-        return StoreType.RocksDBSessionStore;
+    protected boolean hasIndex() {
+        return false;
+    }
+
+    @Override
+    protected SchemaType schemaType() {
+        return SchemaType.SessionSchemaWithoutIndex;
     }
 }

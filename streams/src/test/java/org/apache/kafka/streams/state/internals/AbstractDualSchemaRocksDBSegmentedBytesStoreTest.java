@@ -57,9 +57,9 @@ import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.hamcrest.Matchers;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.rocksdb.WriteBatch;
 
 import java.io.File;
@@ -85,11 +85,11 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasEntry;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends Segment> {
@@ -106,8 +106,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
     final long retention = 1000;
     final long segmentInterval = 60_000L;
     final String storeName = "bytes-store";
-
-    @Before
+    
+    @BeforeEach
     public void before() {
         if (getBaseSchema() instanceof TimeFirstSessionKeySchema) {
             windows[0] = new SessionWindow(10L, 10L);
@@ -151,7 +151,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         bytesStore.init((StateStoreContext) context, bytesStore);
     }
 
-    @After
+    @AfterEach
     public void close() {
         bytesStore.close();
     }
