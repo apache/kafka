@@ -39,8 +39,19 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -91,6 +102,35 @@ public class CoordinatorRecordHelpers {
                     .setRebalanceTimeoutMs(member.rebalanceTimeoutMs())
                     .setClassicMemberMetadata(member.classicMemberMetadata().orElse(null)),
                 (short) 0
+            )
+        );
+    }
+
+    public static CoordinatorRecord newStreamsGroupMemberRecord(
+        String groupId,
+        StreamsGroupMember member
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new StreamsGroupMemberMetadataKey()
+                    .setGroupId(groupId)
+                    .setMemberId(member.memberId()),
+                (short) 11
+            ),
+            new ApiMessageAndVersion(
+                new StreamsGroupMemberMetadataValue()
+                    .setRackId(member.rackId())
+                    .setInstanceId(member.instanceId())
+                    .setClientId(member.clientId())
+                    .setClientHost(member.clientHost())
+                    .setRebalanceTimeoutMs(member.rebalanceTimeoutMs())
+                    .setTopologyHash(member.topologyHash())
+                    .setProcessId(member.processId())
+                    .setHostInfo(member.hostInfo())
+                    .setClientTags(member.clientTags())
+                    .setUserData(member.userData())
+                    .setAssignmentConfigs(member.assignmentConfigs()),
+               (short) 0
             )
         );
     }
@@ -205,6 +245,24 @@ public class CoordinatorRecordHelpers {
         );
     }
 
+    public static CoordinatorRecord newStreamsGroupEpochRecord(
+        String groupId,
+        int newGroupEpoch
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new StreamsGroupMetadataKey()
+                    .setGroupId(groupId),
+                (short) 9
+            ),
+            new ApiMessageAndVersion(
+                new StreamsGroupMetadataValue()
+                    .setEpoch(newGroupEpoch),
+                (short) 0
+            )
+        );
+    }
+
     /**
      * Creates a ConsumerGroupMetadata tombstone.
      *
@@ -263,6 +321,55 @@ public class CoordinatorRecordHelpers {
         );
     }
 
+    public static CoordinatorRecord newTargetAssignmentRecord(
+        String groupId,
+        String memberId,
+        Map<String, Set<Integer>> activeTasks,
+        Map<String, Set<Integer>> standbyTasks,
+        Map<String, Set<Integer>> warmupTasks
+    ) {
+        List<StreamsGroupTargetAssignmentMemberValue.TaskIds> activeTaskIds = new ArrayList<>(activeTasks.size());
+        for (Map.Entry<String, Set<Integer>> entry : activeTasks.entrySet()) {
+            activeTaskIds.add(
+                new StreamsGroupTargetAssignmentMemberValue.TaskIds()
+                    .setSubtopology(entry.getKey())
+                    .setPartitions(new ArrayList<>(entry.getValue()))
+            );
+        }
+        List<StreamsGroupTargetAssignmentMemberValue.TaskIds> standbyTaskIds = new ArrayList<>(standbyTasks.size());
+        for (Map.Entry<String, Set<Integer>> entry : standbyTasks.entrySet()) {
+            standbyTaskIds.add(
+                new StreamsGroupTargetAssignmentMemberValue.TaskIds()
+                    .setSubtopology(entry.getKey())
+                    .setPartitions(new ArrayList<>(entry.getValue()))
+            );
+        }
+        List<StreamsGroupTargetAssignmentMemberValue.TaskIds> warmupTaskIds = new ArrayList<>(warmupTasks.size());
+        for (Map.Entry<String, Set<Integer>> entry : warmupTasks.entrySet()) {
+            warmupTaskIds.add(
+                new StreamsGroupTargetAssignmentMemberValue.TaskIds()
+                    .setSubtopology(entry.getKey())
+                    .setPartitions(new ArrayList<>(entry.getValue()))
+            );
+        }
+
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new StreamsGroupTargetAssignmentMemberKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                (short) 13
+            ),
+            new ApiMessageAndVersion(
+                new StreamsGroupTargetAssignmentMemberValue()
+                    .setActiveTasks(activeTaskIds)
+                    .setStandbyTasks(standbyTaskIds)
+                    .setWarmupTasks(warmupTaskIds),
+                (short) 0
+            )
+        );
+    }
+
     /**
      * Creates a ConsumerGroupTargetAssignmentMember tombstone.
      *
@@ -304,6 +411,24 @@ public class CoordinatorRecordHelpers {
             ),
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMetadataValue()
+                    .setAssignmentEpoch(assignmentEpoch),
+                (short) 0
+            )
+        );
+    }
+
+    public static CoordinatorRecord newStreamsTargetAssignmentEpochRecord(
+        String groupId,
+        int assignmentEpoch
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new StreamsGroupTargetAssignmentMetadataKey()
+                    .setGroupId(groupId),
+                (short) 12
+            ),
+            new ApiMessageAndVersion(
+                new StreamsGroupTargetAssignmentMetadataValue()
                     .setAssignmentEpoch(assignmentEpoch),
                 (short) 0
             )
@@ -354,6 +479,31 @@ public class CoordinatorRecordHelpers {
                     .setState(member.state().value())
                     .setAssignedPartitions(toTopicPartitions(member.assignedPartitions()))
                     .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocation())),
+                (short) 0
+            )
+        );
+    }
+
+    public static CoordinatorRecord newCurrentAssignmentRecord(
+        String groupId,
+        StreamsGroupMember member
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new StreamsGroupCurrentMemberAssignmentKey()
+                    .setGroupId(groupId)
+                    .setMemberId(member.memberId()),
+                (short) 14
+            ),
+            new ApiMessageAndVersion(
+                new StreamsGroupCurrentMemberAssignmentValue()
+                    .setMemberEpoch(member.memberEpoch())
+                    .setPreviousMemberEpoch(member.previousMemberEpoch())
+                    .setState(member.state().value())
+                    .setActiveTasks(toTaskIds(member.assignedActiveTasks()))
+                    .setStandbyTasks(toTaskIds(member.assignedStandbyTasks()))
+                    .setWarmupTasks(toTaskIds(member.assignedWarmupTasks()))
+                    .setActiveTasksPendingRevocation(toTaskIds(member.activeTasksPendingRevocation())),
                 (short) 0
             )
         );
@@ -563,6 +713,18 @@ public class CoordinatorRecordHelpers {
                 .setPartitions(new ArrayList<>(partitions)))
         );
         return topics;
+    }
+
+    private static List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> toTaskIds(
+        Map<String, Set<Integer>> tasks
+    ) {
+        List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> taskIds = new ArrayList<>(tasks.size());
+        tasks.forEach((subtopologyId, partitions) ->
+            taskIds.add(new StreamsGroupCurrentMemberAssignmentValue.TaskIds()
+                .setSubtopology(subtopologyId)
+                .setPartitions(new ArrayList<>(partitions)))
+        );
+        return taskIds;
     }
 
     /**
