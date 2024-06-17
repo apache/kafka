@@ -71,9 +71,16 @@ public class ConsumerGroupMember {
         }
 
         public Builder(ConsumerGroupMember member) {
+            this(
+                Objects.requireNonNull(member),
+                member.memberId
+            );
+        }
+
+        public Builder(ConsumerGroupMember member, String newMemberId) {
             Objects.requireNonNull(member);
 
-            this.memberId = member.memberId;
+            this.memberId = Objects.requireNonNull(newMemberId);
             this.memberEpoch = member.memberEpoch;
             this.previousMemberEpoch = member.previousMemberEpoch;
             this.instanceId = member.instanceId;

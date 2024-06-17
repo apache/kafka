@@ -1117,6 +1117,21 @@ public class GroupMetadataManagerTest {
             rejoinResult.response()
         );
 
+        ConsumerGroupMember expectedInitialRejoinedMember = new ConsumerGroupMember.Builder(member2RejoinId)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(0)
+            .setInstanceId(memberId2)
+            .setPreviousMemberEpoch(-1)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 2)))
+            .build();
+
         ConsumerGroupMember expectedRejoinedMember = new ConsumerGroupMember.Builder(member2RejoinId)
             .setState(MemberState.STABLE)
             .setMemberEpoch(10)
@@ -1133,14 +1148,19 @@ public class GroupMetadataManagerTest {
             .build();
 
         List<CoordinatorRecord> expectedRecordsAfterRejoin = Arrays.asList(
+            // The previous member is deleted.
             CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId2),
             CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId2),
             CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId2),
-            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedRejoinedMember),
+
+            // The previous member is replaced by the new one.
+            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedInitialRejoinedMember),
             CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, member2RejoinId, mkAssignment(
                 mkTopicAssignment(fooTopicId, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 2))),
-            CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId, 10),
+            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedInitialRejoinedMember),
+
+            // The new member is updated.
             CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedRejoinedMember)
         );
 
@@ -11240,6 +11260,7 @@ public class GroupMetadataManagerTest {
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(10)
                     .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
+                    .setRebalanceTimeoutMs(500)
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1)))
                     .build())
@@ -11269,6 +11290,17 @@ public class GroupMetadataManagerTest {
         String newMemberId = joinResult.joinFuture.get().memberId();
         assertNotEquals("", newMemberId);
 
+        ConsumerGroupMember expectedInitialMember = new ConsumerGroupMember.Builder(newMemberId)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(-1)
+            .setInstanceId(instanceId)
+            .setState(MemberState.STABLE)
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1)))
+            .setRebalanceTimeoutMs(500)
+            .build();
+
         ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(newMemberId)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(0)
@@ -11283,8 +11315,7 @@ public class GroupMetadataManagerTest {
             .setClassicMemberMetadata(
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                     .setSessionTimeoutMs(request.sessionTimeoutMs())
-                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(request.protocols()))
-            )
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(request.protocols())))
             .build();
 
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
@@ -11293,10 +11324,13 @@ public class GroupMetadataManagerTest {
             CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId),
             CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId),
 
-            // Create the new static member.
-            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
+            // Replace the old static member by the new static member.
+            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedInitialMember),
             CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, newMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1))),
-            CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId, 10),
+            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedInitialMember),
+
+            // Updated the new static member.
+            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
             CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
         );
         assertRecordsEquals(expectedRecords, joinResult.records);

@@ -345,6 +345,7 @@ public class ConsumerGroup implements Group {
      * @return The member id corresponding to the given instance id or null if it does not exist
      */
     public String staticMemberId(String groupInstanceId) {
+        if (groupInstanceId == null) return null;
         return staticMembers.get(groupInstanceId);
     }
 
@@ -455,6 +456,18 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Returns true if the static member exists.
+     *
+     * @param instanceId The instance id.
+     *
+     * @return A boolean indicating whether the member exists or not.
+     */
+    public boolean hasStaticMember(String instanceId) {
+        if (instanceId == null) return false;
+        return staticMembers.containsKey(instanceId);
+    }
+
+    /**
      * @return The number of members.
      */
     public int numMembers() {
@@ -524,6 +537,27 @@ public class ConsumerGroup implements Group {
      */
     public Assignment targetAssignment(String memberId) {
         return targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+    }
+
+    /**
+     * Returns the target assignment of the member or the target assignment
+     * associated to the instance id if it does not exist.
+     *
+     * @param memberId      The member id.
+     * @param instanceId    The instance id.
+     *
+     * @return The Assignment or EMPTY if it does not exist.
+     */
+    public Assignment targetAssignment(String memberId, String instanceId) {
+        if (instanceId == null) {
+            return targetAssignment(memberId);
+        } else {
+            String previousMemberId = staticMemberId(instanceId);
+            if (previousMemberId != null) {
+                return targetAssignment(previousMemberId);
+            }
+        }
+        return Assignment.EMPTY;
     }
 
     /**
