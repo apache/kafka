@@ -12,7 +12,7 @@
   */
 package kafka.api
 
-import kafka.utils.TestInfoUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.common.utils.Utils
@@ -249,6 +249,20 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     consumer.subscribe(Set(topic).asJava)
     val records = awaitNonEmptyRecords(consumer, tp, 0L)
     assertEquals(numMessages, records.count())
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testNoOffsetForPartitionExceptionOnPollZero(quorum: String, groupProtocol: String): Unit = {
+    this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
+    val consumer = createConsumer(configOverrides = this.consumerConfig)
+
+    consumer.assign(List(tp).asJava)
+
+    // continuous poll should eventually fail because there is no offset reset strategy set (fail only when resetting positions after coordinator is known)
+    TestUtils.tryUntilNoAssertionError() {
+      assertThrows(classOf[NoOffsetForPartitionException], () => consumer.poll(Duration.ZERO))
+    }
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {

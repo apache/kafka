@@ -204,38 +204,9 @@ def determineCommitId() {
 def excludedSpotlessModules = [':clients',
                                ':connect:runtime',
                                ':core',
-                               ':metadata',
-                               ':raft',
-                               ':server',
-                               ':storage',
-                               ':storage:storage-api', //  rename in settings.gradle
                                ':streams',
                                ':streams:examples',
-                               ':streams:streams-scala',
-                               ':streams:test-utils',
-                               ':streams:upgrade-system-tests-0100',
-                               ':streams:upgrade-system-tests-0101',
-                               ':streams:upgrade-system-tests-0102',
-                               ':streams:upgrade-system-tests-0110',
-                               ':streams:upgrade-system-tests-10',
-                               ':streams:upgrade-system-tests-11',
-                               ':streams:upgrade-system-tests-20',
-                               ':streams:upgrade-system-tests-21',
-                               ':streams:upgrade-system-tests-22',
-                               ':streams:upgrade-system-tests-23',
-                               ':streams:upgrade-system-tests-24',
-                               ':streams:upgrade-system-tests-25',
-                               ':streams:upgrade-system-tests-26',
-                               ':streams:upgrade-system-tests-27',
-                               ':streams:upgrade-system-tests-28',
-                               ':streams:upgrade-system-tests-30',
-                               ':streams:upgrade-system-tests-31',
-                               ':streams:upgrade-system-tests-32',
-                               ':streams:upgrade-system-tests-33',
-                               ':streams:upgrade-system-tests-34',
-                               ':streams:upgrade-system-tests-35',
-                               ':streams:upgrade-system-tests-36',
-                               ':streams:upgrade-system-tests-37']
+                               ':streams:streams-scala']
 
 
 apply from: file('wrapper.gradle')
@@ -892,6 +863,7 @@ project(':server') {
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
+    implementation project(':storage')
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
     implementation project(':raft')
@@ -1494,6 +1466,10 @@ project(':transaction-coordinator') {
     archivesName = "kafka-transaction-coordinator"
   }
 
+  dependencies {
+    implementation project(':clients')
+
+  }
   sourceSets {
     main {
       java {
@@ -1505,6 +1481,10 @@ project(':transaction-coordinator') {
         srcDirs = ["src/generated/java", "src/test/java"]
       }
     }
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-transaction-coordinator.xml")
   }
 
   javadoc {
