@@ -25,6 +25,15 @@ import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.group.share.GroupTopicPartitionData;
+import org.apache.kafka.server.group.share.PartitionErrorData;
+import org.apache.kafka.server.group.share.PartitionFactory;
+import org.apache.kafka.server.group.share.PartitionStateBatchData;
+import org.apache.kafka.server.group.share.Persister;
+import org.apache.kafka.server.group.share.PersisterStateBatch;
+import org.apache.kafka.server.group.share.TopicData;
+import org.apache.kafka.server.group.share.WriteShareGroupStateParameters;
+import org.apache.kafka.server.group.share.WriteShareGroupStateResult;
 import org.apache.kafka.server.share.ShareAcknowledgementBatch;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
@@ -194,6 +203,11 @@ public class SharePartition {
     private final Time time;
 
     /**
+     * The persister is used to persist the state of the share partition to disk.
+     */
+    private final Persister persister;
+
+    /**
      * The share partition start offset specifies the partition start offset from which the records
      * are cached in the cachedState of the sharePartition.
      */
@@ -223,6 +237,7 @@ public class SharePartition {
         int recordLockDurationMs,
         Timer timer,
         Time time,
+        Persister persister,
         ReplicaManager replicaManager
     ) {
         this.groupId = groupId;
@@ -236,6 +251,7 @@ public class SharePartition {
         this.recordLockDurationMs = recordLockDurationMs;
         this.timer = timer;
         this.time = time;
+        this.persister = persister;
         this.replicaManager = replicaManager;
         // Initialize the partition.
         initialize();
@@ -499,73 +515,18 @@ public class SharePartition {
                     break;
                 }
 
-                // The acknowledgement batch either is exact fetch equivalent batch (mostly), subset
-                // or spans over multiple fetched batches. The state can vary per offset itself from
-                // the fetched batch in case of subset or client sent individual offsets state.
-                for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
-                    InFlightBatch inFlightBatch = entry.getValue();
+                // Acknowledge the records for the batch.
+                Optional<Throwable> ackThrowable = acknowledgementBatchRecords(
+                    memberId,
+                    batch,
+                    recordStateMap,
+                    subMap,
+                    updatedStates,
+                    stateBatches
+                );
 
-                    // If startOffset has moved ahead of the in-flight batch, skip the batch.
-                    if (inFlightBatch.lastOffset() < startOffset) {
-                        log.trace("All offsets in the inflight batch {} are already archived: {}-{}",
-                                inFlightBatch, groupId, topicIdPartition);
-                        continue;
-                    }
-
-                    // Validate if the requested member id is the owner of the batch.
-                    if (inFlightBatch.offsetState() == null) {
-                        throwable = validateAcknowledgementBatchMemberId(memberId, inFlightBatch).orElse(null);
-                        if (throwable != null) {
-                            break;
-                        }
-                    }
-
-                    // Determine if the in-flight batch is a full match from the request batch.
-                    boolean fullMatch = checkForFullMatch(inFlightBatch, batch.firstOffset(), batch.lastOffset());
-                    boolean isPerOffsetClientAck = batch.acknowledgeTypes().size() > 1;
-                    boolean hasStartOffsetMoved = checkForStartOffsetWithinBatch(inFlightBatch.firstOffset, inFlightBatch.lastOffset);
-
-                    // Maintain state per offset if the inflight batch is not a full match or the
-                    // offset state is managed or client sent individual offsets state or
-                    // the start offset is within this in-flight batch.
-                    if (!fullMatch || inFlightBatch.offsetState() != null || isPerOffsetClientAck || hasStartOffsetMoved) {
-                        log.debug("Subset or offset tracked batch record found for acknowledgement,"
-                            + " batch: {}, request offsets - first: {}, last: {}, client per offset"
-                            + "state {} for the share partition: {}-{}", inFlightBatch, batch.firstOffset(),
-                            batch.lastOffset(), isPerOffsetClientAck, groupId, topicIdPartition);
-                        if (inFlightBatch.offsetState() == null) {
-                            // Though the request is a subset of in-flight batch but the offset
-                            // tracking has not been initialized yet which means that we could only
-                            // acknowledge subset of offsets from the in-flight batch but only if the
-                            // complete batch is acquired yet. Hence, do a pre-check to avoid exploding
-                            // the in-flight offset tracking unnecessarily.
-                            if (inFlightBatch.batchState() != RecordState.ACQUIRED) {
-                                log.debug("The batch is not in the acquired state: {} for share partition: {}-{}",
-                                    inFlightBatch, groupId, topicIdPartition);
-                                throwable = new InvalidRecordStateException("The batch cannot be acknowledged. The subset batch is not in the acquired state.");
-                                break;
-                            }
-                            // The request batch is a subset or per offset state is managed hence update
-                            // the offsets state in the in-flight batch.
-                            inFlightBatch.maybeInitializeOffsetStateUpdate();
-                        }
-
-                        throwable = acknowledgePerOffsetBatchRecords(memberId, batch, inFlightBatch,
-                            recordStateMap, updatedStates, stateBatches).orElse(null);
-                        if (throwable != null) {
-                            break;
-                        }
-                    } else {
-                        // The in-flight batch is a full match hence change the state of the complete batch.
-                        throwable = acknowledgeCompleteBatch(batch, inFlightBatch,
-                            recordStateMap.get(batch.firstOffset()), updatedStates, stateBatches).orElse(null);
-                        if (throwable != null) {
-                            break;
-                        }
-                    }
-                }
-
-                if (throwable != null) {
+                if (ackThrowable.isPresent()) {
+                    throwable = ackThrowable.get();
                     break;
                 }
             }
@@ -614,18 +575,18 @@ public class SharePartition {
      * @return A boolean which indicates whether additional messages can be fetched for share partition.
      */
     boolean canFetchRecords() {
-      lock.readLock().lock();
-      long numRecords;
-      try {
-        if (cachedState.isEmpty()) {
-          numRecords = 0;
-        } else {
-          numRecords = this.endOffset - this.startOffset + 1;
+        lock.readLock().lock();
+        long numRecords;
+        try {
+            if (cachedState.isEmpty()) {
+                numRecords = 0;
+            } else {
+                numRecords = this.endOffset - this.startOffset + 1;
+            }
+        } finally {
+            lock.readLock().unlock();
         }
-      } finally {
-        lock.readLock().unlock();
-      }
-      return numRecords < maxInFlightMessages;
+        return numRecords < maxInFlightMessages;
     }
 
     /**
@@ -636,14 +597,14 @@ public class SharePartition {
      * @return A boolean which indicates whether the fetch lock is acquired.
      */
     boolean maybeAcquireFetchLock() {
-      return fetchLock.compareAndSet(false, true);
+        return fetchLock.compareAndSet(false, true);
     }
 
     /**
      * Release the fetch lock once the records are fetched from the leader.
      */
     void releaseFetchLock() {
-      fetchLock.set(false);
+        fetchLock.set(false);
     }
 
     private void initialize() {
@@ -839,13 +800,92 @@ public class SharePartition {
         }
     }
 
+    private Optional<Throwable> acknowledgementBatchRecords(
+        String memberId,
+        ShareAcknowledgementBatch batch,
+        Map<Long, RecordState> recordStateMap,
+        NavigableMap<Long, InFlightBatch> subMap,
+        final List<InFlightState> updatedStates,
+        List<PersisterStateBatch> stateBatches
+    ) {
+        Optional<Throwable> throwable;
+        lock.writeLock().lock();
+        try {
+            // The acknowledgement batch either is exact fetch equivalent batch (mostly), subset
+            // or spans over multiple fetched batches. The state can vary per offset itself from
+            // the fetched batch in case of subset or client sent individual offsets state.
+            for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
+                InFlightBatch inFlightBatch = entry.getValue();
+
+                // If startOffset has moved ahead of the in-flight batch, skip the batch.
+                if (inFlightBatch.lastOffset() < startOffset) {
+                    log.trace("All offsets in the inflight batch {} are already archived: {}-{}",
+                        inFlightBatch, groupId, topicIdPartition);
+                    continue;
+                }
+
+                // Validate if the requested member id is the owner of the batch.
+                if (inFlightBatch.offsetState() == null) {
+                    throwable = validateAcknowledgementBatchMemberId(memberId, inFlightBatch);
+                    if (throwable.isPresent()) {
+                        return throwable;
+                    }
+                }
+
+                // Determine if the in-flight batch is a full match from the request batch.
+                boolean fullMatch = checkForFullMatch(inFlightBatch, batch.firstOffset(), batch.lastOffset());
+                boolean isPerOffsetClientAck = batch.acknowledgeTypes().size() > 1;
+                boolean hasStartOffsetMoved = checkForStartOffsetWithinBatch(inFlightBatch.firstOffset, inFlightBatch.lastOffset);
+
+                // Maintain state per offset if the inflight batch is not a full match or the
+                // offset state is managed or client sent individual offsets state or
+                // the start offset is within this in-flight batch.
+                if (!fullMatch || inFlightBatch.offsetState() != null || isPerOffsetClientAck || hasStartOffsetMoved) {
+                    log.debug("Subset or offset tracked batch record found for acknowledgement,"
+                            + " batch: {}, request offsets - first: {}, last: {}, client per offset"
+                            + "state {} for the share partition: {}-{}", inFlightBatch, batch.firstOffset(),
+                        batch.lastOffset(), isPerOffsetClientAck, groupId, topicIdPartition);
+                    if (inFlightBatch.offsetState() == null) {
+                        // Though the request is a subset of in-flight batch but the offset
+                        // tracking has not been initialized yet which means that we could only
+                        // acknowledge subset of offsets from the in-flight batch but only if the
+                        // complete batch is acquired yet. Hence, do a pre-check to avoid exploding
+                        // the in-flight offset tracking unnecessarily.
+                        if (inFlightBatch.batchState() != RecordState.ACQUIRED) {
+                            log.debug("The batch is not in the acquired state: {} for share partition: {}-{}",
+                                inFlightBatch, groupId, topicIdPartition);
+                            return Optional.of(new InvalidRecordStateException("The batch cannot be acknowledged. The subset batch is not in the acquired state."));
+                        }
+                        // The request batch is a subset or per offset state is managed hence update
+                        // the offsets state in the in-flight batch.
+                        inFlightBatch.maybeInitializeOffsetStateUpdate();
+                    }
+
+                    throwable = acknowledgePerOffsetBatchRecords(memberId, batch, inFlightBatch,
+                        recordStateMap, updatedStates, stateBatches);
+                } else {
+                    // The in-flight batch is a full match hence change the state of the complete batch.
+                    throwable = acknowledgeCompleteBatch(batch, inFlightBatch,
+                        recordStateMap.get(batch.firstOffset()), updatedStates, stateBatches);
+                }
+
+                if (throwable.isPresent()) {
+                    return throwable;
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+        return Optional.empty();
+    }
+
     private Optional<Throwable> validateAcknowledgementBatchMemberId(
         String memberId,
         InFlightBatch inFlightBatch
     ) {
         // EMPTY_MEMBER_ID is used to indicate that the batch is not in acquired state.
         if (inFlightBatch.batchMemberId().equals(EMPTY_MEMBER_ID)) {
-            log.debug("The batch is not in the acquired state: {} for share partition: {}-{}",
+            log.debug("The batch is not in the acquired state: {} for share partition: {}-{}. Empty member id for batch.",
                 inFlightBatch, groupId, topicIdPartition);
             return Optional.of(new InvalidRecordStateException("The batch cannot be acknowledged. The batch is not in the acquired state."));
         }
@@ -1024,93 +1064,126 @@ public class SharePartition {
     private void maybeUpdateCachedStateAndOffsets() {
         lock.writeLock().lock();
         try {
-            boolean canMoveStartOffset = false;
-            // The Share Partition Start Offset can be moved after acknowledgement is complete when the following 2 conditions are true -
-            // 1. When the cachedState is not empty
-            // 2. When the acknowledgement type for the startOffset is either ACCEPT or REJECT
-            if (!cachedState.isEmpty()) {
-                RecordState startOffsetState = cachedState.floorEntry(startOffset).getValue().offsetState == null ?
-                    cachedState.floorEntry(startOffset).getValue().batchState() :
-                    cachedState.floorEntry(startOffset).getValue().offsetState.get(startOffset).state;
-                if (startOffsetState == RecordState.ACKNOWLEDGED || startOffsetState == RecordState.ARCHIVED) {
-                    canMoveStartOffset = true;
+            if (!canMoveStartOffset()) {
+                return;
+            }
+
+            // This will help to find the next position for the startOffset.
+            // The new position of startOffset will be lastOffsetAcknowledged + 1
+            long lastOffsetAcknowledged = findLastOffsetAcknowledged();
+            // If lastOffsetAcknowledged is -1, this means we cannot move out startOffset ahead
+            if (lastOffsetAcknowledged == -1) {
+                return;
+            }
+
+            // This is true if all records in the cachedState have been acknowledged (either Accept or Reject).
+            // The resulting action should be to empty the cachedState altogether
+            long lastCachedOffset = cachedState.lastEntry().getValue().lastOffset();
+            if (lastOffsetAcknowledged == lastCachedOffset) {
+                startOffset = lastCachedOffset + 1; // The next offset that will be fetched and acquired in the share partition
+                endOffset = lastCachedOffset + 1;
+                cachedState.clear();
+                // Nothing further to do.
+                return;
+            }
+
+            /*
+             The cachedState contains some records that are yet to be acknowledged, and thus should
+             not be removed. Only a subMap will be removed from the cachedState. The logic to remove
+             batches from cachedState is as follows:
+             a) Only full batches can be removed from the cachedState, For example if there is batch (0-99)
+             and 0-49 records are acknowledged (ACCEPT or REJECT), the first 50 records will not be removed
+             from the cachedState. Instead, the startOffset will be moved to 50, but the batch will only
+             be removed once all the messages (0-99) are acknowledged (ACCEPT or REJECT).
+            */
+
+            // Since only a subMap will be removed, we need to find the first and last keys of that subMap
+            long firstKeyToRemove = cachedState.firstKey();
+            long lastKeyToRemove;
+            NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(lastOffsetAcknowledged);
+            if (lastOffsetAcknowledged == entry.getValue().lastOffset()) {
+                startOffset = cachedState.higherKey(lastOffsetAcknowledged);
+                lastKeyToRemove = entry.getKey();
+            } else {
+                startOffset = lastOffsetAcknowledged + 1;
+                if (entry.getKey().equals(cachedState.firstKey())) {
+                    // If the first batch in cachedState has some records yet to be acknowledged,
+                    // then nothing should be removed from cachedState
+                    lastKeyToRemove = -1;
+                } else {
+                    lastKeyToRemove = cachedState.lowerKey(entry.getKey());
                 }
             }
-            if (canMoveStartOffset) {
-                // This will help to find the next position for the startOffset.
-                // The new position of startOffset will be lastOffsetAcknowledged + 1
-                long lastOffsetAcknowledged = -1;
-                for (NavigableMap.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
-                    InFlightBatch inFlightBatch = entry.getValue();
-                    if (inFlightBatch.offsetState == null) {
-                        if (inFlightBatch.batchState() == RecordState.ACKNOWLEDGED ||
-                            inFlightBatch.batchState() == RecordState.ARCHIVED) {
-                            lastOffsetAcknowledged = inFlightBatch.lastOffset;
-                        } else {
-                            break;
-                        }
-                    } else {
-                        boolean toBreak = false;
-                        for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
-                            if (offsetState.getValue().state == RecordState.ACKNOWLEDGED ||
-                                offsetState.getValue().state == RecordState.ARCHIVED) {
-                                lastOffsetAcknowledged = offsetState.getKey();
-                            } else {
-                                toBreak = true;
-                                break;
-                            }
-                        }
-                        if (toBreak) break;
-                    }
-                }
 
-                // If lastOffsetAcknowledged is -1, this means we cannot move out startOffset ahead
-                if (lastOffsetAcknowledged != -1) {
-                    // This is true if all records in the cachedState have been acknowledged (either Accept or Reject).
-                    // The resulting action should be to empty the cachedState altogether
-                    if (lastOffsetAcknowledged == cachedState.lastEntry().getValue().lastOffset()) {
-                        startOffset = cachedState.lastEntry().getValue().lastOffset() + 1; // The next offset that will be fetched and acquired in the share partition
-                        endOffset = cachedState.lastEntry().getValue().lastOffset() + 1;
-                        cachedState.clear();
-                    } else {
-                        // If the code arrives in this else block, then the cachedState contains some records that are
-                        // yet to be acknowledged, and thus should not be removed. Only a subMap will be removed from the
-                        // cachedState. The logic to remove batches from cachedState is as follows -
-                        //    Only full batches can be removed from the cachedState, For example if there is batch (0-99)
-                        //    and 0-49 records are acknowledged (ACCEPT or REJECT), the first 50 records will not be removed
-                        //    from the cachedState. Instead, the startOffset will be moved to 50, but the batch will only
-                        //    be removed once all the messages (0-99) are acknowledged (ACCEPT or REJECT)
-
-                        // Since only a subMap will be removed, we need to find the first and last keys of that subMap
-                        long firstKeyToRemove = cachedState.firstKey();
-                        long lastKeyToRemove;
-                        NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(lastOffsetAcknowledged);
-                        if (lastOffsetAcknowledged == entry.getValue().lastOffset) {
-                            startOffset = cachedState.higherKey(lastOffsetAcknowledged);
-                            lastKeyToRemove = entry.getKey();
-                        } else {
-                            startOffset = lastOffsetAcknowledged + 1;
-                            if (entry.getKey().equals(cachedState.firstKey())) {
-                                // If the first batch in cachedState has some records yet to be acknowledged,
-                                // then nothing should be removed from cachedState
-                                lastKeyToRemove = -1;
-                            } else {
-                                lastKeyToRemove = cachedState.lowerKey(entry.getKey());
-                            }
-                        }
-
-                        if (lastKeyToRemove != -1) {
-                            NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(firstKeyToRemove, true, lastKeyToRemove, true);
-                            for (Long key : subMap.keySet()) {
-                                cachedState.remove(key);
-                            }
-                        }
-                    }
+            if (lastKeyToRemove != -1) {
+                NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(firstKeyToRemove, true, lastKeyToRemove, true);
+                for (Long key : subMap.keySet()) {
+                    cachedState.remove(key);
                 }
             }
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    private boolean canMoveStartOffset() {
+        // The Share Partition Start Offset may be moved after acknowledgement request is complete.
+        // The following conditions need to be met to move the startOffset:
+        // 1. When the cachedState is not empty.
+        // 2. When the acknowledgement type for the records is either ACCEPT or REJECT.
+        // 3. When all the previous records have been acknowledged (ACCEPT or REJECT).
+        if (cachedState.isEmpty()) {
+            return false;
+        }
+
+        NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(startOffset);
+        if (entry == null) {
+            log.error("The start offset: {} is not found in the cached state for share partition: {}-{}."
+                + " Cannot move the start offset.", startOffset, groupId, topicIdPartition);
+            return false;
+        }
+        RecordState startOffsetState = entry.getValue().offsetState == null ?
+            entry.getValue().batchState() :
+            entry.getValue().offsetState().get(startOffset).state();
+        return isRecordStateAcknowledged(startOffsetState);
+    }
+
+    /**
+     * The record state is considered acknowledged if it is either acknowledged or archived.
+     * These are terminal states for the record.
+     *
+     * @param recordState The record state to check.
+     *
+     * @return True if the record state is acknowledged or archived, false otherwise.
+     */
+    private boolean isRecordStateAcknowledged(RecordState recordState) {
+        return recordState == RecordState.ACKNOWLEDGED || recordState == RecordState.ARCHIVED;
+    }
+
+    private long findLastOffsetAcknowledged() {
+        lock.readLock().lock();
+        long lastOffsetAcknowledged = -1;
+        try {
+            for (NavigableMap.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
+                InFlightBatch inFlightBatch = entry.getValue();
+                if (inFlightBatch.offsetState() == null) {
+                    if (!isRecordStateAcknowledged(inFlightBatch.batchState())) {
+                        return lastOffsetAcknowledged;
+                    }
+                    lastOffsetAcknowledged = inFlightBatch.lastOffset();
+                } else {
+                    for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
+                        if (!isRecordStateAcknowledged(offsetState.getValue().state())) {
+                            return lastOffsetAcknowledged;
+                        }
+                        lastOffsetAcknowledged = offsetState.getKey();
+                    }
+                }
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
+        return lastOffsetAcknowledged;
     }
 
     // Visible for testing

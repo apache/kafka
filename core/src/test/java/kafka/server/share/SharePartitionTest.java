@@ -31,6 +31,8 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.group.share.NoOpShareStatePersister;
+import org.apache.kafka.server.group.share.Persister;
 import org.apache.kafka.server.share.ShareAcknowledgementBatch;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
@@ -961,10 +963,16 @@ public class SharePartitionTest {
         private int acquisitionLockTimeoutMs = 30000;
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
+        private Persister persister = NoOpShareStatePersister.getInstance();
         private ReplicaManager replicaManager = REPLICA_MANAGER;
 
         private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {
             this.maxInflightMessages = maxInflightMessages;
+            return this;
+        }
+
+        private SharePartitionBuilder withPersister(Persister persister) {
+            this.persister = persister;
             return this;
         }
 
@@ -974,7 +982,7 @@ public class SharePartitionTest {
 
         public SharePartition build() {
             return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, maxInflightMessages, maxDeliveryCount,
-                acquisitionLockTimeoutMs, mockTimer, MOCK_TIME, replicaManager);
+                acquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister, replicaManager);
         }
     }
 }
