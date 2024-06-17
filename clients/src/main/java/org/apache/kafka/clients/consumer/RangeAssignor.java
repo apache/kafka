@@ -133,13 +133,15 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         subscriptions.keySet().forEach(memberId -> assignment.put(memberId, new ArrayList<>()));
 
         boolean useRackAware = topicAssignmentStates.stream().anyMatch(t -> t.needsRackAwareAssignment);
-        if (useRackAware)
+        if (useRackAware){
             assignWithRackMatching(topicAssignmentStates, assignment);
+        }
 
         topicAssignmentStates.forEach(t -> assignRanges(t, (c, tp) -> true, assignment));
 
-        if (useRackAware)
+        if (useRackAware){
             assignment.values().forEach(list -> list.sort(PARTITION_COMPARATOR));
+        }
         return assignment;
     }
 
@@ -154,14 +156,16 @@ public class RangeAssignor extends AbstractPartitionAssignor {
                               BiFunction<String, TopicPartition, Boolean> mayAssign,
                               Map<String, List<TopicPartition>> assignment) {
         for (String consumer : assignmentState.consumers.keySet()) {
-            if (assignmentState.unassignedPartitions.isEmpty())
+            if (assignmentState.unassignedPartitions.isEmpty()){
                 break;
+            }
             List<TopicPartition> assignablePartitions = assignmentState.unassignedPartitions.stream()
                     .filter(tp -> mayAssign.apply(consumer, tp))
                     .limit(assignmentState.maxAssignable(consumer))
                     .collect(Collectors.toList());
-            if (assignablePartitions.isEmpty())
+            if (assignablePartitions.isEmpty()){
                 continue;
+            }
 
             assign(consumer, assignablePartitions, assignmentState, assignment);
         }
@@ -172,18 +176,20 @@ public class RangeAssignor extends AbstractPartitionAssignor {
 
         assignmentStates.stream().collect(Collectors.groupingBy(t -> t.consumers)).forEach((consumers, states) ->
             states.stream().collect(Collectors.groupingBy(t -> t.partitionRacks.size())).forEach((numPartitions, coPartitionedStates) -> {
-                if (coPartitionedStates.size() > 1)
+                if (coPartitionedStates.size() > 1){
                     assignCoPartitionedWithRackMatching(consumers, numPartitions, coPartitionedStates, assignment);
+                }
                 else {
                     TopicAssignmentState state = coPartitionedStates.get(0);
-                    if (state.needsRackAwareAssignment)
+                    if (state.needsRackAwareAssignment){
                         assignRanges(state, state::racksMatch, assignment);
+                    }
                 }
             })
         );
     }
 
-    private void assignCoPartitionedWithRackMatching(LinkedHashMap<String, Optional<String>> consumers,
+    private void assignCoPartitionedWithRackMatching(Map<String, Optional<String>> consumers,
                                                      int numPartitions,
                                                      Collection<TopicAssignmentState> assignmentStates,
                                                      Map<String, List<TopicPartition>> assignment) {
@@ -201,8 +207,9 @@ public class RangeAssignor extends AbstractPartitionAssignor {
 
                 if (assignmentStates.stream().noneMatch(t -> t.maxAssignable(consumer) > 0)) {
                     remainingConsumers.remove(consumer);
-                    if (remainingConsumers.isEmpty())
+                    if (remainingConsumers.isEmpty()){
                         break;
+                    }
                 }
             }
         }
@@ -222,7 +229,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
 
     private class TopicAssignmentState {
         private final String topic;
-        private final LinkedHashMap<String, Optional<String>> consumers;
+        private final Map<String, Optional<String>> consumers;
         private final boolean needsRackAwareAssignment;
         private final Map<TopicPartition, Set<String>> partitionRacks;
 
@@ -279,8 +286,9 @@ public class RangeAssignor extends AbstractPartitionAssignor {
 
         void onAssigned(String consumer, List<TopicPartition> newlyAssignedPartitions) {
             int numAssigned = numAssignedByConsumer.compute(consumer, (c, n) -> n + newlyAssignedPartitions.size());
-            if (numAssigned > numPartitionsPerConsumer)
+            if (numAssigned > numPartitionsPerConsumer){
                 remainingConsumersWithExtraPartition--;
+            }
             unassignedPartitions.removeAll(newlyAssignedPartitions);
         }
 
