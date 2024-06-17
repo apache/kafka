@@ -468,10 +468,10 @@ public class StoreChangelogReaderTest {
             assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
         } else {
             if (!properties.containsKey(InternalConfig.STATE_UPDATER_ENABLED)
-                    || (boolean) properties.get(InternalConfig.STATE_UPDATER_ENABLED)) {
-                assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
-            } else {
+                    || !((boolean) properties.get(InternalConfig.STATE_UPDATER_ENABLED))) {
                 assertEquals(Duration.ZERO, consumer.lastPollTimeout());
+            } else {
+                assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
             }
         }
     }

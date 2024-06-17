@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.util.Objects;
@@ -50,6 +51,7 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
  */
 public class CoordinatorRequestManager implements RequestManager {
     private static final long COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS = 60 * 1000;
+    private final Time time;
     private final Logger log;
     private final BackgroundEventHandler backgroundEventHandler;
     private final String groupId;
@@ -60,6 +62,7 @@ public class CoordinatorRequestManager implements RequestManager {
     private Node coordinator;
 
     public CoordinatorRequestManager(
+        final Time time,
         final LogContext logContext,
         final long retryBackoffMs,
         final long retryBackoffMaxMs,
@@ -67,6 +70,7 @@ public class CoordinatorRequestManager implements RequestManager {
         final String groupId
     ) {
         Objects.requireNonNull(groupId);
+        this.time = time;
         this.log = logContext.logger(this.getClass());
         this.backgroundEventHandler = errorHandler;
         this.groupId = groupId;

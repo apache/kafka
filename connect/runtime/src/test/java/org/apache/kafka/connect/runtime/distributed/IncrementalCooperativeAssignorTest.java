@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.ConnectorsAndTasks;
-import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -1397,11 +1396,6 @@ public class IncrementalCooperativeAssignorTest {
                         Function.identity(),
                         connectorTaskId -> Collections.emptyMap()
                 ));
-        Map<String, AppliedConnectorConfig> appliedConnectorConfigs = connectorConfigs.entrySet().stream()
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        e -> new AppliedConnectorConfig(e.getValue())
-                ));
         return new ClusterConfigState(
                 CONFIG_OFFSET,
                 null,
@@ -1411,7 +1405,6 @@ public class IncrementalCooperativeAssignorTest {
                 taskConfigs,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                appliedConnectorConfigs,
                 Collections.emptySet(),
                 Collections.emptySet());
     }

@@ -112,7 +112,7 @@ class RaftControllerNodeProvider(
   val saslMechanism: String
 ) extends ControllerNodeProvider with Logging {
 
-  private def idToNode(id: Int): Option[Node] = raftManager.voterNode(id, listenerName)
+  private def idToNode(id: Int): Option[Node] = raftManager.voterNode(id, listenerName.value())
 
   override def getControllerInfo(): ControllerInformation =
     ControllerInformation(raftManager.leaderAndEpoch.leaderId.asScala.flatMap(idToNode),
@@ -191,8 +191,7 @@ class NodeToControllerChannelManagerImpl(
         time,
         true,
         apiVersions,
-        logContext,
-        MetadataRecoveryStrategy.NONE
+        logContext
       )
     }
     val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"

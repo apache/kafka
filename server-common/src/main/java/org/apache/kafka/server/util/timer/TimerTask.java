@@ -32,10 +32,6 @@ public abstract class TimerTask implements Runnable {
         }
     }
 
-    public boolean isCancelled() {
-        return timerTaskEntry == null;
-    }
-
     final void setTimerTaskEntry(TimerTaskEntry entry) {
         synchronized (this) {
             // if this timerTask is already held by an existing timer task entry,

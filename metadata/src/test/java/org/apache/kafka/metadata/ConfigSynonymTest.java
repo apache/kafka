@@ -18,7 +18,6 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.server.config.ConfigSynonym;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

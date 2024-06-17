@@ -81,7 +81,7 @@ import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LIS
 
 @SuppressWarnings("deprecation") // Needed for Scala 2.12 compatibility
 public class KafkaClusterTestKit implements AutoCloseable {
-    private static final Logger log = LoggerFactory.getLogger(KafkaClusterTestKit.class);
+    private final static Logger log = LoggerFactory.getLogger(KafkaClusterTestKit.class);
 
     /**
      * This class manages a future which is completed with the proper value for
@@ -239,15 +239,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     ThreadUtils.createThreadFactory("kafka-cluster-test-kit-executor-%d", false));
                 for (ControllerNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
-                    SharedServer sharedServer = new SharedServer(
-                        createNodeConfig(node),
-                        node.initialMetaPropertiesEnsemble(),
-                        Time.SYSTEM,
-                        new Metrics(),
-                        connectFutureManager.future,
-                        Collections.emptyList(),
-                        faultHandlerFactory
-                    );
+                    SharedServer sharedServer = new SharedServer(createNodeConfig(node),
+                            node.initialMetaPropertiesEnsemble(),
+                            Time.SYSTEM,
+                            new Metrics(),
+                            connectFutureManager.future,
+                            faultHandlerFactory);
                     ControllerServer controller = null;
                     try {
                         controller = new ControllerServer(
@@ -270,18 +267,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     jointServers.put(node.id(), sharedServer);
                 }
                 for (BrokerNode node : nodes.brokerNodes().values()) {
-                    SharedServer sharedServer = jointServers.computeIfAbsent(
-                        node.id(),
-                        id -> new SharedServer(
-                            createNodeConfig(node),
+                    SharedServer sharedServer = jointServers.computeIfAbsent(node.id(),
+                        id -> new SharedServer(createNodeConfig(node),
                             node.initialMetaPropertiesEnsemble(),
                             Time.SYSTEM,
                             new Metrics(),
                             connectFutureManager.future,
-                            Collections.emptyList(),
-                            faultHandlerFactory
-                        )
-                    );
+                            faultHandlerFactory));
                     BrokerServer broker = null;
                     try {
                         broker = new BrokerServer(sharedServer);
@@ -338,7 +330,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             return "broker";
         }
 
-        private static void setupNodeDirectories(File baseDirectory,
+        static private void setupNodeDirectories(File baseDirectory,
                                                  String metadataDirectory,
                                                  Collection<String> logDataDirectories) throws Exception {
             Files.createDirectories(new File(baseDirectory, "local").toPath());

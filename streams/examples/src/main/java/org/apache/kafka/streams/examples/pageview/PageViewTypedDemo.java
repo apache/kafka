@@ -144,29 +144,29 @@ public class PageViewTypedDemo {
     }
 
     // POJO classes
-    public static class PageView implements JSONSerdeCompatible {
+    static public class PageView implements JSONSerdeCompatible {
         public String user;
         public String page;
         public Long timestamp;
     }
 
-    public static class UserProfile implements JSONSerdeCompatible {
+    static public class UserProfile implements JSONSerdeCompatible {
         public String region;
         public Long timestamp;
     }
 
-    public static class PageViewByRegion implements JSONSerdeCompatible {
+    static public class PageViewByRegion implements JSONSerdeCompatible {
         public String user;
         public String page;
         public String region;
     }
 
-    public static class WindowedPageViewByRegion implements JSONSerdeCompatible {
+    static public class WindowedPageViewByRegion implements JSONSerdeCompatible {
         public long windowStart;
         public String region;
     }
 
-    public static class RegionCount implements JSONSerdeCompatible {
+    static public class RegionCount implements JSONSerdeCompatible {
         public long count;
         public String region;
     }

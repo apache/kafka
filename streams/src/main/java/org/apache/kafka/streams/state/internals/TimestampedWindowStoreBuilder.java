@@ -119,7 +119,7 @@ public class TimestampedWindowStoreBuilder<K, V>
     }
 
 
-    private static final class InMemoryTimestampedWindowStoreMarker
+    private final static class InMemoryTimestampedWindowStoreMarker
         extends WrappedStateStore<WindowStore<Bytes, byte[]>, Bytes, byte[]>
         implements WindowStore<Bytes, byte[]>, TimestampedBytesStore {
 

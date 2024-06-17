@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiMessage;
 
 public abstract class RaftResponse implements RaftMessage {
-    private final int correlationId;
-    private final ApiMessage data;
+    protected final int correlationId;
+    protected final ApiMessage data;
 
     protected RaftResponse(int correlationId, ApiMessage data) {
         this.correlationId = correlationId;
@@ -34,50 +33,43 @@ public abstract class RaftResponse implements RaftMessage {
     }
 
     @Override
-    public short apiVersion() {
-        return data().highestSupportedVersion();
-    }
-
-    @Override
     public ApiMessage data() {
         return data;
     }
 
-    public static final class Inbound extends RaftResponse {
-        private final Node source;
+    public static class Inbound extends RaftResponse {
+        private final int sourceId;
 
-        public Inbound(int correlationId, ApiMessage data, Node source) {
+        public Inbound(int correlationId, ApiMessage data, int sourceId) {
             super(correlationId, data);
-            this.source = source;
+            this.sourceId = sourceId;
         }
 
-        public Node source() {
-            return source;
+        public int sourceId() {
+            return sourceId;
         }
 
         @Override
         public String toString() {
-            return String.format(
-                "InboundResponse(correlationId=%d, data=%s, source=%s)",
-                correlationId(),
-                data(),
-                source
-            );
+            return "InboundResponse(" +
+                    "correlationId=" + correlationId +
+                    ", data=" + data +
+                    ", sourceId=" + sourceId +
+                    ')';
         }
     }
 
-    public static final class Outbound extends RaftResponse {
+    public static class Outbound extends RaftResponse {
         public Outbound(int requestId, ApiMessage data) {
             super(requestId, data);
         }
 
         @Override
         public String toString() {
-            return String.format(
-                "OutboundResponse(correlationId=%d, data=%s)",
-                correlationId(),
-                data()
-            );
+            return "OutboundResponse(" +
+                    "correlationId=" + correlationId +
+                    ", data=" + data +
+                    ')';
         }
     }
 }

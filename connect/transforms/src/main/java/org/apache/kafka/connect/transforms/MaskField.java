@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import java.util.ArrayList;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.components.Versioned;
@@ -30,7 +31,6 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;

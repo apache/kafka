@@ -113,7 +113,9 @@ public class AbstractConfig {
         this.originals = resolveConfigVariables(configProviderProps, originalMap);
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
-        this.values.putAll(configUpdates);
+        for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
+            this.values.put(update.getKey(), update.getValue());
+        }
         definition.parse(this.values);
         this.definition = definition;
         if (doLog)

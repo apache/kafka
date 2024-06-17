@@ -17,14 +17,13 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.trogdor.common.JsonUtil;
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.trogdor.common.JsonUtil;
+import org.apache.kafka.common.utils.Time;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,7 +56,7 @@ public class TimestampRecordProcessor implements RecordProcessor {
 
     private final Logger log = LoggerFactory.getLogger(TimestampRecordProcessor.class);
 
-    static final float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
+    final static float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
 
     @JsonCreator
     public TimestampRecordProcessor(@JsonProperty("histogramMaxMs") int histogramMaxMs,
@@ -127,7 +126,7 @@ public class TimestampRecordProcessor implements RecordProcessor {
          * The percentiles to use when calculating the histogram data.
          * These should match up with the p50LatencyMs, p95LatencyMs, etc. fields.
          */
-        static final float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
+        final static float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
 
         @JsonCreator
         StatusData(@JsonProperty("averageLatencyMs") float averageLatencyMs,

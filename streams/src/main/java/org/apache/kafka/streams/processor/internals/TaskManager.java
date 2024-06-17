@@ -40,7 +40,6 @@ import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
@@ -63,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -74,9 +74,9 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.pars
 
 public class TaskManager {
 
-    private static final String BUG_ERROR_MESSAGE = "This indicates a bug. " +
+    private final static String BUG_ERROR_MESSAGE = "This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the dev-mailing list (https://kafka.apache.org/contact).";
-    private static final String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. " + BUG_ERROR_MESSAGE;
+    private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. " + BUG_ERROR_MESSAGE;
 
     // initialize the task list
     // activeTasks needs to be concurrent as it can be accessed
@@ -84,7 +84,7 @@ public class TaskManager {
     private final Logger log;
     private final Time time;
     private final TasksRegistry tasks;
-    private final ProcessId processId;
+    private final UUID processId;
     private final String logPrefix;
     private final Admin adminClient;
     private final StateDirectory stateDirectory;
@@ -109,7 +109,7 @@ public class TaskManager {
     private final DefaultTaskManager schedulingTaskManager;
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
-                final ProcessId processId,
+                final UUID processId,
                 final String logPrefix,
                 final ActiveTaskCreator activeTaskCreator,
                 final StandbyTaskCreator standbyTaskCreator,
@@ -153,7 +153,7 @@ public class TaskManager {
         return activeTaskCreator.totalProducerBlockedTime();
     }
 
-    public ProcessId processId() {
+    public UUID processId() {
         return processId;
     }
 

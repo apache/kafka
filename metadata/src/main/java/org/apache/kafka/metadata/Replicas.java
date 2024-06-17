@@ -28,7 +28,7 @@ public class Replicas {
     /**
      * An empty replica array.
      */
-    public static final int[] NONE = new int[0];
+    public final static int[] NONE = new int[0];
 
     /**
      * Convert an array of integers to a list of ints.

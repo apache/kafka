@@ -17,19 +17,16 @@
 
 package org.apache.kafka.server.fault;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Exit.Procedure;
-
 import org.junit.jupiter.api.Test;
-
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public final class ProcessTerminatingFaultHandlerTest {
+final public class ProcessTerminatingFaultHandlerTest {
     private static Procedure terminatingProcedure(AtomicBoolean called) {
         return (statusCode, message) -> {
             assertEquals(1, statusCode);

@@ -22,7 +22,6 @@ import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.MetadataVersion;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -50,11 +49,11 @@ public class ClusterImageBrokersNodeTest {
                     setInControlledShutdown(false).build()),
             Collections.emptyMap());
 
-    private static final ClusterImageBrokersNode NODE = new ClusterImageBrokersNode(TEST_IMAGE);
+    private final static ClusterImageBrokersNode NODE = new ClusterImageBrokersNode(TEST_IMAGE);
 
     @Test
     public void testChildNames() {
-        assertEquals(Collections.singletonList("1"), NODE.childNames());
+        assertEquals(Arrays.asList("1"), NODE.childNames());
     }
 
     @Test

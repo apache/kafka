@@ -17,10 +17,9 @@
 
 package org.apache.kafka.trogdor.task;
 
-import org.apache.kafka.trogdor.common.JsonUtil;
-
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import org.apache.kafka.trogdor.common.JsonUtil;
 
 import java.util.Collections;
 import java.util.Map;
@@ -39,7 +38,7 @@ public abstract class TaskSpec {
      * point rounding.  (Objects serialized as JSON canonically contain only floating point numbers,
      * because JavaScript did not support integers.)
      */
-    public static final long MAX_TASK_DURATION_MS = 1000000000000000L;
+    public final static long MAX_TASK_DURATION_MS = 1000000000000000L;
 
     /**
      * When the time should start in milliseconds.

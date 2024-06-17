@@ -1460,8 +1460,8 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldReturnTaskAssignorClass() {
-        props.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, "LegacyStickyTaskAssignor");
-        assertEquals("LegacyStickyTaskAssignor", new StreamsConfig(props).getString(TASK_ASSIGNOR_CLASS_CONFIG));
+        props.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, "StickyTaskAssignor");
+        assertEquals("StickyTaskAssignor", new StreamsConfig(props).getString(TASK_ASSIGNOR_CLASS_CONFIG));
     }
 
     @Test
@@ -1583,33 +1583,6 @@ public class StreamsConfigTest {
         assertNull(
             streamsConfig.getGlobalConsumerConfigs("clientId")
                 .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
-        );
-    }
-
-    @Test
-    public void shouldGetDefaultValueProcessingExceptionHandler() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-
-        assertEquals("org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler",   streamsConfig.processingExceptionHandler().getClass().getName());
-    }
-
-    @Test
-    public void shouldOverrideDefaultProcessingExceptionHandler() {
-        props.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, "org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-
-        assertEquals("org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler",   streamsConfig.processingExceptionHandler().getClass().getName());
-    }
-
-    @Test
-    public void testInvalidProcessingExceptionHandler() {
-        props.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, "org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler");
-        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
-
-        assertThat(
-                exception.getMessage(),
-                containsString("Invalid value org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler " +
-                        "for configuration processing.exception.handler: Class org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler could not be found.")
         );
     }
 

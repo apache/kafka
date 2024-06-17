@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -39,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Timeout(40)
 public class BootstrapDirectoryTest {
-    static final List<ApiMessageAndVersion> SAMPLE_RECORDS1 = unmodifiableList(asList(
+    final static List<ApiMessageAndVersion> SAMPLE_RECORDS1 = unmodifiableList(asList(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                     setName(MetadataVersion.FEATURE_NAME).
                     setFeatureLevel((short) 7), (short) 0),

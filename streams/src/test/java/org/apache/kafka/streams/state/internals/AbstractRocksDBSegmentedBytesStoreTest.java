@@ -29,6 +29,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -788,7 +789,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig)
         );
-        final Time time = Time.SYSTEM;
+        final Time time = new SystemTime();
         context.setSystemTimeMs(time.milliseconds());
         bytesStore.init((StateStoreContext) context, bytesStore);
 

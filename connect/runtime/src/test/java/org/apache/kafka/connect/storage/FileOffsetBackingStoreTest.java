@@ -21,13 +21,11 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.Callback;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,10 +40,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadPoolExecutor;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.isNull;
@@ -54,8 +51,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.STRICT_STUBS)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class FileOffsetBackingStoreTest {
 
     private FileOffsetBackingStore store;
@@ -73,14 +69,14 @@ public class FileOffsetBackingStoreTest {
         FIRST_SET.put(null, null);
     }
 
-    @BeforeEach
-    public void setup() {
+    @Before
+    public void setup() throws IOException {
         converter = mock(Converter.class);
         // This is only needed for storing deserialized connector partitions, which we don't test in most of the cases here
         when(converter.toConnectData(anyString(), any(byte[].class))).thenReturn(new SchemaAndValue(null,
                 Arrays.asList("connector", Collections.singletonMap("partitionKey", "dummy"))));
         store = new FileOffsetBackingStore(converter);
-        tempFile = assertDoesNotThrow(() -> File.createTempFile("fileoffsetbackingstore", null));
+        tempFile = File.createTempFile("fileoffsetbackingstore", null);
         Map<String, String> props = new HashMap<>();
         props.put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, tempFile.getAbsolutePath());
         props.put(StandaloneConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
@@ -88,11 +84,9 @@ public class FileOffsetBackingStoreTest {
         config = new StandaloneConfig(props);
         store.configure(config);
         store.start();
-        assertTrue(((ThreadPoolExecutor) store.executor).getThreadFactory()
-                .newThread(EMPTY_RUNNABLE).getName().startsWith(FileOffsetBackingStore.class.getSimpleName()));
     }
 
-    @AfterEach
+    @After
     public void teardown() throws IOException {
         Files.deleteIfExists(tempFile.toPath());
     }
@@ -125,6 +119,12 @@ public class FileOffsetBackingStoreTest {
         Map<ByteBuffer, ByteBuffer> values = restore.get(Collections.singletonList(buffer("key"))).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
         verify(setCallback).onCompletion(isNull(), isNull());
+    }
+
+    @Test
+    public void testThreadName() {
+        assertTrue(((ThreadPoolExecutor) store.executor).getThreadFactory()
+                .newThread(EMPTY_RUNNABLE).getName().startsWith(FileOffsetBackingStore.class.getSimpleName()));
     }
 
     @Test

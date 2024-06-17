@@ -27,3 +27,4 @@ public class RemoteLogReadResult {
         this.error = error;
     }
 }
+

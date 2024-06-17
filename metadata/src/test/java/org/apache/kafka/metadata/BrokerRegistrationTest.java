@@ -25,7 +25,6 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -49,7 +48,7 @@ public class BrokerRegistrationTest {
             setId(0).
             setEpoch(0).
             setIncarnationId(Uuid.fromString("pc1GhUlBS92cGGaKXl6ipw")).
-            setListeners(Collections.singletonList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+            setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
             setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
             setRack(Optional.empty()).
             setFenced(false).
@@ -58,7 +57,7 @@ public class BrokerRegistrationTest {
             setId(1).
             setEpoch(0).
             setIncarnationId(Uuid.fromString("3MfdxWlNSn2UDYsmDP1pYg")).
-            setListeners(Collections.singletonList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9091))).
+            setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9091))).
             setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
             setRack(Optional.empty()).
             setFenced(true).
@@ -67,7 +66,7 @@ public class BrokerRegistrationTest {
             setId(2).
             setEpoch(0).
             setIncarnationId(Uuid.fromString("eY7oaG1RREie5Kk9uy1l6g")).
-            setListeners(Collections.singletonList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+            setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
             setSupportedFeatures(Stream.of(new SimpleEntry<>("foo", VersionRange.of((short) 2, (short) 3)),
                 new SimpleEntry<>("bar", VersionRange.of((short) 1, (short) 4))).collect(
                         Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
@@ -78,14 +77,14 @@ public class BrokerRegistrationTest {
             setId(3).
             setEpoch(0).
             setIncarnationId(Uuid.fromString("1t8VyWx2TCSTpUWuqj-FOw")).
-            setListeners(Collections.singletonList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
             setSupportedFeatures(Stream.of(new SimpleEntry<>("metadata.version", VersionRange.of((short) 7, (short) 7)))
                 .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
             setRack(Optional.empty()).
             setFenced(false).
             setInControlledShutdown(true).
             setIsMigratingZkBroker(true).
-            setDirectories(Collections.singletonList(Uuid.fromString("r4HpEsMuST6nQ4rznIEJVA"))).
+            setDirectories(Arrays.asList(Uuid.fromString("r4HpEsMuST6nQ4rznIEJVA"))).
             build());
 
     @Test
@@ -173,7 +172,7 @@ public class BrokerRegistrationTest {
                 setId(0).
                 setEpoch(0).
                 setIncarnationId(Uuid.fromString("ik32HZbLTW6ulw1yyrC8jQ")).
-                setListeners(Collections.singletonList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+                setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
                 setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
                 setRack(Optional.empty()).
                 setFenced(false).
@@ -203,7 +202,7 @@ public class BrokerRegistrationTest {
                 setId(0).
                 setEpoch(0).
                 setIncarnationId(Uuid.fromString("m6CiJvfITZeKVC6UuhlZew")).
-                setListeners(Collections.singletonList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+                setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
                 setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
                 setRack(Optional.empty()).
                 setFenced(false).

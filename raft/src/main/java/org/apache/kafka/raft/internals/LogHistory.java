@@ -76,7 +76,7 @@ public interface LogHistory<T> {
      */
     void clear();
 
-    final class Entry<T> {
+    final static class Entry<T> {
         private final long offset;
         private final T value;
 
@@ -101,7 +101,9 @@ public interface LogHistory<T> {
             Entry<?> that = (Entry<?>) o;
 
             if (offset != that.offset) return false;
-            return Objects.equals(value, that.value);
+            if (!Objects.equals(value, that.value)) return false;
+
+            return true;
         }
 
         @Override

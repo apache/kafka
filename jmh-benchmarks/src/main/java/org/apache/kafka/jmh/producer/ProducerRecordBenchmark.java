@@ -18,7 +18,6 @@
 package org.apache.kafka.jmh.producer;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
-
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;

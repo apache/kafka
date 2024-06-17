@@ -17,13 +17,11 @@
 
 package org.apache.kafka.shell.command;
 
-import org.apache.kafka.shell.InteractiveShell;
-import org.apache.kafka.shell.state.MetadataShellState;
-
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
-
+import org.apache.kafka.shell.InteractiveShell;
+import org.apache.kafka.shell.state.MetadataShellState;
 import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
@@ -36,7 +34,7 @@ import java.util.Optional;
 public final class ManCommandHandler implements Commands.Handler {
     private final String cmd;
 
-    public static final Commands.Type TYPE = new ManCommandType();
+    public final static Commands.Type TYPE = new ManCommandType();
 
     public static class ManCommandType implements Commands.Type {
         private ManCommandType() {
@@ -112,6 +110,7 @@ public final class ManCommandHandler implements Commands.Handler {
     public boolean equals(Object other) {
         if (!(other instanceof ManCommandHandler)) return false;
         ManCommandHandler o = (ManCommandHandler) other;
-        return o.cmd.equals(cmd);
+        if (!o.cmd.equals(cmd)) return false;
+        return true;
     }
 }

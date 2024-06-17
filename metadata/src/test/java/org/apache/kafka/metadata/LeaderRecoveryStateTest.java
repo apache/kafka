@@ -17,18 +17,16 @@
 
 package org.apache.kafka.metadata;
 
-import org.junit.jupiter.api.Test;
-
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
-
+import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public final class LeaderRecoveryStateTest {
+final public class LeaderRecoveryStateTest {
     private static final byte NO_CHANGE = (byte) -1;
 
     @Test

@@ -23,7 +23,7 @@ import org.apache.kafka.common.serialization.Serializer;
 
 public class WindowedSerdes {
 
-    public static class TimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
+    static public class TimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
         // Default constructor needed for reflection object creation
         public TimeWindowedSerde() {
             super(new TimeWindowedSerializer<>(), new TimeWindowedDeserializer<>());
@@ -47,7 +47,7 @@ public class WindowedSerdes {
         }
     }
 
-    public static class SessionWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
+    static public class SessionWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
         // Default constructor needed for reflection object creation
         public SessionWindowedSerde() {
             super(new SessionWindowedSerializer<>(), new SessionWindowedDeserializer<>());
@@ -62,7 +62,7 @@ public class WindowedSerdes {
      * Construct a {@code TimeWindowedSerde} object for the specified inner class type.
      */
     @Deprecated
-    public static <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type) {
+    static public <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type) {
         return new TimeWindowedSerde<>(Serdes.serdeFrom(type));
     }
 
@@ -70,14 +70,14 @@ public class WindowedSerdes {
      * Construct a {@code TimeWindowedSerde} object to deserialize changelog topic
      * for the specified inner class type and window size.
      */
-    public static <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type, final long windowSize) {
+    static public <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type, final long windowSize) {
         return new TimeWindowedSerde<>(Serdes.serdeFrom(type), windowSize);
     }
 
     /**
      * Construct a {@code SessionWindowedSerde} object for the specified inner class type.
      */
-    public static <T> Serde<Windowed<T>> sessionWindowedSerdeFrom(final Class<T> type) {
+    static public <T> Serde<Windowed<T>> sessionWindowedSerdeFrom(final Class<T> type) {
         return new SessionWindowedSerde<>(Serdes.serdeFrom(type));
     }
 

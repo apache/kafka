@@ -114,11 +114,13 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
         Long issuedAt = ClaimValidationUtils.validateIssuedAt(ISSUED_AT_CLAIM_NAME,
             issuedAtRaw != null ? issuedAtRaw.longValue() * 1000L : null);
 
-        return new BasicOAuthBearerToken(accessToken,
+        OAuthBearerToken token = new BasicOAuthBearerToken(accessToken,
             scopes,
             expiration,
             subject,
             issuedAt);
+
+        return token;
     }
 
     private Object getClaim(Map<String, Object> payload, String claimName) {

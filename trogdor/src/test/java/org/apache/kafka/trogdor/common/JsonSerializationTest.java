@@ -17,6 +17,8 @@
 
 package org.apache.kafka.trogdor.common;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 import org.apache.kafka.trogdor.fault.FilesUnreadableFaultSpec;
 import org.apache.kafka.trogdor.fault.Kibosh;
 import org.apache.kafka.trogdor.fault.NetworkPartitionFaultSpec;
@@ -31,16 +33,13 @@ import org.apache.kafka.trogdor.workload.ProduceBenchSpec;
 import org.apache.kafka.trogdor.workload.RoundTripWorkloadSpec;
 import org.apache.kafka.trogdor.workload.TopicsSpec;
 
-import org.junit.jupiter.api.Test;
-
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import org.junit.jupiter.api.Test;
 
 public class JsonSerializationTest {
     @Test

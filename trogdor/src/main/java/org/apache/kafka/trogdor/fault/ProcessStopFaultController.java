@@ -19,7 +19,6 @@ package org.apache.kafka.trogdor.fault;
 
 import org.apache.kafka.trogdor.common.Topology;
 import org.apache.kafka.trogdor.task.TaskController;
-
 import java.util.Set;
 
 public class ProcessStopFaultController implements TaskController {

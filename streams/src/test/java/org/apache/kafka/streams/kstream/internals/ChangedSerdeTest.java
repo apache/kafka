@@ -22,7 +22,8 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.junit.jupiter.api.Test;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -31,7 +32,7 @@ import java.util.Map;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.Assert.assertThrows;
 
 public class ChangedSerdeTest {
     private static final String TOPIC = "some-topic";
@@ -106,7 +107,7 @@ public class ChangedSerdeTest {
         buffer.position(serialized.length - 1);
         buffer.put((byte) -1);
 
-        assertThrows(
+        Assert.assertThrows(
             StreamsException.class,
             () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, serialized));
     }

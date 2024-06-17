@@ -236,7 +236,8 @@ public class StickyAssignor extends AbstractStickyAssignor {
             topicAssignments.add(topicAssignment);
         }
         struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        memberData.generation.ifPresent(integer -> struct.set(GENERATION_KEY_NAME, integer));
+        if (memberData.generation.isPresent())
+            struct.set(GENERATION_KEY_NAME, memberData.generation.get());
         ByteBuffer buffer = ByteBuffer.allocate(STICKY_ASSIGNOR_USER_DATA_V1.sizeOf(struct));
         STICKY_ASSIGNOR_USER_DATA_V1.write(buffer, struct);
         buffer.flip();

@@ -38,11 +38,12 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.function.Executable;
+import org.apache.kafka.test.IntegrationTest;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
+import org.junit.function.ThrowingRunnable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,16 +68,16 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_C
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests situations during which certain connector operations, such as start, validation,
  * configuration and others, take longer than expected.
  */
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class BlockingConnectorTest {
 
     private static final Logger log = LoggerFactory.getLogger(BlockingConnectorTest.class);
@@ -120,7 +121,7 @@ public class BlockingConnectorTest {
     private EmbeddedConnectCluster connect;
     private ConnectorHandle normalConnectorHandle;
 
-    @BeforeEach
+    @Before
     public void setup() throws Exception {
         // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
@@ -133,9 +134,14 @@ public class BlockingConnectorTest {
 
         // start the clusters
         connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(
+                NUM_WORKERS,
+                "Initial group of workers did not start in time"
+        );
     }
 
-    @AfterEach
+    @After
     public void close() {
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
@@ -353,26 +359,26 @@ public class BlockingConnectorTest {
         normalConnectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
     }
 
-    private void assertRequestTimesOut(String requestDescription, Executable request, String expectedTimeoutMessage) {
+    private void assertRequestTimesOut(String requestDescription, ThrowingRunnable request, String expectedTimeoutMessage) {
         // Artificially reduce the REST request timeout so that these don't take 90 seconds
         connect.requestTimeout(REDUCED_REST_REQUEST_TIMEOUT);
         ConnectRestException exception = assertThrows(
-                ConnectRestException.class, request,
-                "Should have failed to " + requestDescription
+                "Should have failed to " + requestDescription,
+                ConnectRestException.class, request
         );
         assertEquals(
-                Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), exception.statusCode(),
-                "Should have gotten 500 error from trying to " + requestDescription
+                "Should have gotten 500 error from trying to " + requestDescription,
+                Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), exception.statusCode()
         );
         assertTrue(
-                exception.getMessage().contains("Request timed out"),
                 "Should have gotten timeout message from trying to " + requestDescription
-                        + "; instead, message was: " + exception.getMessage()
+                        + "; instead, message was: " + exception.getMessage(),
+                exception.getMessage().contains("Request timed out")
         );
         if (expectedTimeoutMessage != null) {
             assertTrue(
-                    exception.getMessage().contains(expectedTimeoutMessage),
-                    "Timeout error message '" + exception.getMessage() + "' does not match expected format"
+                    "Timeout error message '" + exception.getMessage() + "' does not match expected format",
+                    exception.getMessage().contains(expectedTimeoutMessage)
             );
         }
         // Reset the REST request timeout so that other requests aren't impacted
@@ -509,8 +515,8 @@ public class BlockingConnectorTest {
                 CountDownLatch blockLatch;
                 synchronized (Block.class) {
                     assertNotNull(
-                            awaitBlockLatch,
-                            "Block was reset prematurely"
+                            "Block was reset prematurely",
+                            awaitBlockLatch
                     );
                     awaitBlockLatch.countDown();
                     blockLatch = newBlockLatch();

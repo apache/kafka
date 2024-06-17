@@ -28,5 +28,5 @@ import java.util.Set;
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public final class ElectLeadersOptions extends AbstractOptions<ElectLeadersOptions> {
+final public class ElectLeadersOptions extends AbstractOptions<ElectLeadersOptions> {
 }

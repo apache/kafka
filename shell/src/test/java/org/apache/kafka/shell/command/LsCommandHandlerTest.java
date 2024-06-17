@@ -17,6 +17,8 @@
 
 package org.apache.kafka.shell.command;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import org.apache.kafka.shell.command.LsCommandHandler.ColumnSchema;
 import org.apache.kafka.shell.command.LsCommandHandler.TargetDirectory;
 
@@ -30,8 +32,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.OptionalInt;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 120)
 public class LsCommandHandlerTest {
@@ -95,3 +95,4 @@ public class LsCommandHandlerTest {
         }
     }
 }
+

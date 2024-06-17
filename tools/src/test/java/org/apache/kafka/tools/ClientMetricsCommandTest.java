@@ -17,7 +17,6 @@
 package org.apache.kafka.tools;
 
 import kafka.utils.Exit;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
@@ -27,7 +26,6 @@ import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.ListClientMetricsResourcesResult;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.Errors;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

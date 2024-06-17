@@ -38,13 +38,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * A simple server that takes size delimited byte arrays and just echos them back to the sender.
  */
 class EchoServer extends Thread {
-    // JDK has a bug where sockets may get blocked on a read operation if they are closed during a TLS handshake.
-    // While rare, this would cause the CI pipeline to hang. We set a reasonably high SO_TIMEOUT to avoid blocking reads
-    // indefinitely.
-    // The JDK bug is similar to JDK-8274524, but it affects the else branch of SSLSocketImpl::bruteForceCloseInput
-    // which wasn't fixed in it. Please refer to the comments in KAFKA-16219 for more information.
-    private static final int SO_TIMEOUT_MS = 30_000;
-
     public final int port;
     private final ServerSocket serverSocket;
     private final List<Thread> threads;
@@ -60,7 +53,6 @@ class EchoServer extends Thread {
                 this.sslFactory.configure(configs);
                 SSLContext sslContext = ((DefaultSslEngineFactory) this.sslFactory.sslEngineFactory()).sslContext();
                 this.serverSocket = sslContext.getServerSocketFactory().createServerSocket(0);
-                this.serverSocket.setSoTimeout(SO_TIMEOUT_MS);
                 break;
             case PLAINTEXT:
                 this.serverSocket = new ServerSocket(0);
@@ -83,9 +75,6 @@ class EchoServer extends Thread {
         try {
             while (!closing) {
                 final Socket socket = serverSocket.accept();
-                if (sslFactory != null) {
-                    socket.setSoTimeout(SO_TIMEOUT_MS);
-                }
                 synchronized (sockets) {
                     if (closing) {
                         break;

@@ -17,7 +17,6 @@
 package org.apache.kafka.jmh.common;
 
 import org.apache.kafka.common.internals.Topic;
-
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;

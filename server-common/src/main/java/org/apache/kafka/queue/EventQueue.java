@@ -127,7 +127,7 @@ public interface EventQueue extends AutoCloseable {
     }
 
     class VoidEvent implements Event {
-        public static final VoidEvent INSTANCE = new VoidEvent();
+        public final static VoidEvent INSTANCE = new VoidEvent();
 
         @Override
         public void run() throws Exception {

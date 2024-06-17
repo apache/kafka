@@ -26,7 +26,7 @@ import java.util.Map;
 
 public final class Utils {
 
-    static final class PartitionComparator implements Comparator<TopicPartition>, Serializable {
+    final static class PartitionComparator implements Comparator<TopicPartition>, Serializable {
         private static final long serialVersionUID = 1L;
         private final Map<String, List<String>> map;
 
@@ -46,7 +46,7 @@ public final class Utils {
         }
     }
 
-    public static final class TopicPartitionComparator implements Comparator<TopicPartition>, Serializable {
+    public final static class TopicPartitionComparator implements Comparator<TopicPartition>, Serializable {
         private static final long serialVersionUID = 1L;
 
         @Override
@@ -62,7 +62,7 @@ public final class Utils {
         }
     }
 
-    public static final class TopicIdPartitionComparator implements Comparator<TopicIdPartition>, Serializable {
+    public final static class TopicIdPartitionComparator implements Comparator<TopicIdPartition>, Serializable {
         private static final long serialVersionUID = 1L;
 
         /**

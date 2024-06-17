@@ -26,7 +26,6 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.connect.errors.ConnectException;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

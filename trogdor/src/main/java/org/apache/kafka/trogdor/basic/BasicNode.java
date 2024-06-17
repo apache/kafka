@@ -17,9 +17,8 @@
 
 package org.apache.kafka.trogdor.basic;
 
-import org.apache.kafka.trogdor.common.Node;
-
 import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.kafka.trogdor.common.Node;
 
 import java.util.Collections;
 import java.util.HashMap;

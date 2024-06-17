@@ -17,7 +17,6 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.raft.RaftMessage;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 

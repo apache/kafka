@@ -96,8 +96,7 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       time,
       false,
       new ApiVersions,
-      logContext,
-      MetadataRecoveryStrategy.NONE
+      logContext
     )
     (networkClient, reconfigurableChannelBuilder)
   }

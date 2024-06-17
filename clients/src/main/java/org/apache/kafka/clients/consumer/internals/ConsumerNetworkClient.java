@@ -139,7 +139,7 @@ public class ConsumerNetworkClient implements Closeable {
     public Node leastLoadedNode() {
         lock.lock();
         try {
-            return client.leastLoadedNode(time.milliseconds()).node();
+            return client.leastLoadedNode(time.milliseconds());
         } finally {
             lock.unlock();
         }

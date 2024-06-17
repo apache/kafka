@@ -33,7 +33,7 @@ import javax.security.sasl.SaslException;
  */
 public class ScramMessages {
 
-    abstract static class AbstractScramMessage {
+    static abstract class AbstractScramMessage {
 
         static final String ALPHA = "[A-Za-z]+";
         static final String VALUE_SAFE = "[\\x01-\\x7F&&[^=,]]+";

@@ -19,7 +19,6 @@ package org.apache.kafka.tools.consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.record.TimestampType;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

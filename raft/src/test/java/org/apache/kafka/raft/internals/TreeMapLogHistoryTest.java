@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.junit.jupiter.api.Test;
-
 import java.util.Optional;
-
+import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public final class TreeMapLogHistoryTest {
+final public class TreeMapLogHistoryTest {
     @Test
     void testEmpty() {
         TreeMapLogHistory<String> history = new TreeMapLogHistory<>();

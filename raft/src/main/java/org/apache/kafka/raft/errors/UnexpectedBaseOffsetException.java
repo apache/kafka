@@ -21,7 +21,7 @@ package org.apache.kafka.raft.errors;
  * unexpected base offset.
  */
 public class UnexpectedBaseOffsetException extends RaftException {
-    private static final long serialVersionUID = 1L;
+    private final static long serialVersionUID = 1L;
 
     public UnexpectedBaseOffsetException(String s) {
         super(s);

@@ -26,12 +26,12 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.Assert.fail;
 
 public class GraphGraceSearchUtilTest {
     @Test

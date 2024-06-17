@@ -51,11 +51,8 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -309,20 +306,6 @@ public class RestClientTest {
             assertThrows(RuntimeException.class, () -> httpRequest(
                     httpClient, httpsUrl, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
             ));
-        }
-
-        @Test
-        public void testHttpRequestInterrupted() throws ExecutionException, InterruptedException, TimeoutException {
-            Request req = mock(Request.class);
-            doThrow(new InterruptedException()).when(req).send();
-            doReturn(req).when(req).header(anyString(), anyString());
-            doReturn(req).when(httpClient).newRequest(anyString());
-            ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(
-                    httpClient, MOCK_URL, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
-            ));
-            assertIsInternalServerError(e);
-            assertInstanceOf(InterruptedException.class, e.getCause());
-            assertTrue(Thread.interrupted());
         }
     }
 

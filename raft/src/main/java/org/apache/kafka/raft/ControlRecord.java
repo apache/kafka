@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Objects;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
@@ -23,8 +24,6 @@ import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.record.ControlRecordType;
-
-import java.util.Objects;
 
 public final class ControlRecord {
     private final ControlRecordType recordType;

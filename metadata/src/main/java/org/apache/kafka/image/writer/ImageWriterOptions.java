@@ -94,3 +94,4 @@ public final class ImageWriterOptions {
         lossHandler.accept(new UnwritableMetadataException(requestedMetadataVersion, loss));
     }
 }
+

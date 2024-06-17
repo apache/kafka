@@ -44,7 +44,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -53,6 +52,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.OptionalLong;
@@ -64,7 +64,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV1;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_5_IV0;
@@ -250,17 +249,17 @@ public class MetadataLoaderTest {
                 setFaultHandler(faultHandler).
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0L)).
                 build()) {
-            loader.installPublishers(singletonList(publisher)).get();
+            loader.installPublishers(asList(publisher)).get();
             if (loadSnapshot) {
                 MockSnapshotReader snapshotReader = new MockSnapshotReader(
                     new MetadataProvenance(200, 100, 4000),
-                    singletonList(
+                    asList(
                         Batch.control(
                             200,
                             100,
                             4000,
                             10,
-                            singletonList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                            asList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
                         )
                     )
                 );
@@ -278,13 +277,13 @@ public class MetadataLoaderTest {
                 assertEquals("testPublisherCannotBeInstalledMoreThanOnce: Attempted to install " +
                     "publisher MockPublisher, which is already installed.",
                         assertThrows(ExecutionException.class,
-                                () -> loader.installPublishers(singletonList(publisher)).get()).
+                                () -> loader.installPublishers(asList(publisher)).get()).
                                 getCause().getMessage());
             } else {
                 assertEquals("testPublisherCannotBeInstalledMoreThanOnce: Attempted to install " +
                     "a new publisher named MockPublisher, but there is already a publisher with that name.",
                         assertThrows(ExecutionException.class,
-                                () -> loader.installPublishers(singletonList(new MockPublisher())).get()).
+                                () -> loader.installPublishers(asList(new MockPublisher())).get()).
                                 getCause().getMessage());
             }
         }
@@ -307,7 +306,7 @@ public class MetadataLoaderTest {
             loader.removeAndClosePublisher(publishers.get(1)).get();
             MockSnapshotReader snapshotReader = MockSnapshotReader.fromRecordLists(
                 new MetadataProvenance(100, 50, 2000),
-                singletonList(singletonList(new ApiMessageAndVersion(
+                asList(asList(new ApiMessageAndVersion(
                     new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
                         setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0))));
@@ -335,7 +334,7 @@ public class MetadataLoaderTest {
     public void testLoadEmptySnapshot() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testLoadEmptySnapshot");
         MockTime time = new MockTime();
-        List<MockPublisher> publishers = singletonList(new MockPublisher());
+        List<MockPublisher> publishers = asList(new MockPublisher());
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setTime(time).
@@ -365,13 +364,13 @@ public class MetadataLoaderTest {
     ) throws Exception {
         MockSnapshotReader snapshotReader = new MockSnapshotReader(
             new MetadataProvenance(offset, 100, 4000),
-            singletonList(
+            asList(
                 Batch.control(
                     200,
                     100,
                     4000,
                     10,
-                    singletonList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                    asList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
                 )
             )
         );
@@ -394,7 +393,7 @@ public class MetadataLoaderTest {
             List<ApiMessageAndVersion> records
         ) {
             return new MockBatchReader(batchBaseOffset,
-                singletonList(newBatch(batchBaseOffset, epoch, records)));
+                Collections.singletonList(newBatch(batchBaseOffset, epoch, records)));
         }
 
         static Batch<ApiMessageAndVersion> newBatch(
@@ -453,7 +452,7 @@ public class MetadataLoaderTest {
     public void testLoadEmptyBatch() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testLoadEmptyBatch");
         MockTime time = new MockTime();
-        List<MockPublisher> publishers = singletonList(new MockPublisher());
+        List<MockPublisher> publishers = asList(new MockPublisher());
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setTime(time).
@@ -464,13 +463,13 @@ public class MetadataLoaderTest {
             publishers.get(0).firstPublish.get(10, TimeUnit.SECONDS);
             MockBatchReader batchReader = new MockBatchReader(
                 300,
-                singletonList(
+                asList(
                     Batch.control(
                         300,
                         100,
                         4000,
                         10,
-                        singletonList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                        asList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
                     )
                 )
             ).setTime(time);
@@ -509,10 +508,10 @@ public class MetadataLoaderTest {
             loader.installPublishers(publishers).get();
             loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
                 new MetadataProvenance(200, 100, 4000), asList(
-                    singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                    asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
                         setFeatureLevel(IBP_3_3_IV1.featureLevel()), (short) 0)),
-                    singletonList(new ApiMessageAndVersion(new TopicRecord().
+                    asList(new ApiMessageAndVersion(new TopicRecord().
                         setName("foo").
                         setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
                 )));
@@ -521,8 +520,8 @@ public class MetadataLoaderTest {
             }
             loader.waitForAllEventsToBeHandled();
             assertEquals(200L, loader.lastAppliedOffset());
-            loader.handleCommit(new MockBatchReader(201, singletonList(
-                MockBatchReader.newBatch(201, 100, singletonList(
+            loader.handleCommit(new MockBatchReader(201, asList(
+                MockBatchReader.newBatch(201, 100, asList(
                     new ApiMessageAndVersion(new RemoveTopicRecord().
                         setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))))));
             loader.waitForAllEventsToBeHandled();
@@ -579,10 +578,10 @@ public class MetadataLoaderTest {
     ) throws Exception {
         loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
                 new MetadataProvenance(offset, 100, 4000), asList(
-                        singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                        asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                                 setName(MetadataVersion.FEATURE_NAME).
                                 setFeatureLevel(IBP_3_3_IV1.featureLevel()), (short) 0)),
-                        singletonList(new ApiMessageAndVersion(new TopicRecord().
+                        asList(new ApiMessageAndVersion(new TopicRecord().
                                 setName("foo").
                                 setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
                 )));
@@ -595,10 +594,10 @@ public class MetadataLoaderTest {
     ) throws Exception {
         loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
                 new MetadataProvenance(offset, 100, 4000), asList(
-                        singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                        asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                                 setName(MetadataVersion.FEATURE_NAME).
                                 setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0)),
-                        singletonList(new ApiMessageAndVersion(new TopicRecord().
+                        asList(new ApiMessageAndVersion(new TopicRecord().
                                 setName("bar").
                                 setTopicId(Uuid.fromString("VcL2Mw-cT4aL6XV9VujzoQ")), (short) 0))
                 )));
@@ -611,7 +610,7 @@ public class MetadataLoaderTest {
     @Test
     public void testReloadSnapshot() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testLastAppliedOffset");
-        List<MockPublisher> publishers = singletonList(new MockPublisher("a"));
+        List<MockPublisher> publishers = asList(new MockPublisher("a"));
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0)).
@@ -638,8 +637,8 @@ public class MetadataLoaderTest {
             assertFalse(publishers.get(0).latestImage.topics().topicsByName().containsKey("foo"));
             assertTrue(publishers.get(0).latestImage.topics().topicsByName().containsKey("bar"));
 
-            loader.handleCommit(new MockBatchReader(500, singletonList(
-                MockBatchReader.newBatch(500, 100, singletonList(
+            loader.handleCommit(new MockBatchReader(500, asList(
+                MockBatchReader.newBatch(500, 100, asList(
                     new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
                         setFeatureLevel(IBP_3_5_IV0.featureLevel()), (short) 0))))));
@@ -655,7 +654,7 @@ public class MetadataLoaderTest {
     public void testPublishTransaction(boolean abortTxn) throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testTransactions");
         MockPublisher publisher = new MockPublisher("testTransactions");
-        List<MockPublisher> publishers = singletonList(publisher);
+        List<MockPublisher> publishers = Collections.singletonList(publisher);
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0)).
@@ -691,7 +690,7 @@ public class MetadataLoaderTest {
 
             if (abortTxn) {
                 loader.handleCommit(
-                    MockBatchReader.newSingleBatchReader(500, 100, singletonList(
+                    MockBatchReader.newSingleBatchReader(500, 100, Arrays.asList(
                         new ApiMessageAndVersion(new AbortTransactionRecord(), (short) 0)
                     )));
                 loader.waitForAllEventsToBeHandled();
@@ -700,7 +699,7 @@ public class MetadataLoaderTest {
                     "Topic should not be visible since the transaction was aborted");
             } else {
                 loader.handleCommit(
-                    MockBatchReader.newSingleBatchReader(500, 100, singletonList(
+                    MockBatchReader.newSingleBatchReader(500, 100, Arrays.asList(
                         new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0)
                     )));
                 loader.waitForAllEventsToBeHandled();
@@ -716,7 +715,7 @@ public class MetadataLoaderTest {
     public void testPublishTransactionWithinBatch() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testPublishTransactionWithinBatch");
         MockPublisher publisher = new MockPublisher("testPublishTransactionWithinBatch");
-        List<MockPublisher> publishers = singletonList(publisher);
+        List<MockPublisher> publishers = Collections.singletonList(publisher);
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0)).
@@ -747,7 +746,7 @@ public class MetadataLoaderTest {
     public void testSnapshotDuringTransaction() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testSnapshotDuringTransaction");
         MockPublisher publisher = new MockPublisher("testSnapshotDuringTransaction");
-        List<MockPublisher> publishers = singletonList(publisher);
+        List<MockPublisher> publishers = Collections.singletonList(publisher);
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0)).
@@ -769,8 +768,8 @@ public class MetadataLoaderTest {
 
             // loading a snapshot discards any in-flight transaction
             loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
-                new MetadataProvenance(600, 101, 4000), singletonList(
-                    singletonList(new ApiMessageAndVersion(new TopicRecord().
+                new MetadataProvenance(600, 101, 4000), asList(
+                    asList(new ApiMessageAndVersion(new TopicRecord().
                         setName("foo").
                         setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
                 )));
@@ -805,9 +804,9 @@ public class MetadataLoaderTest {
                 setFaultHandler(faultHandler).
                 setHighWaterMarkAccessor(() -> OptionalLong.of(1)).
                 build()) {
-            loader.installPublishers(singletonList(capturingPublisher)).get();
+            loader.installPublishers(Collections.singletonList(capturingPublisher)).get();
             loader.handleCommit(
-                MockBatchReader.newSingleBatchReader(0, 1, singletonList(
+                MockBatchReader.newSingleBatchReader(0, 1, Collections.singletonList(
                     // Any record will work here
                     new ApiMessageAndVersion(new ConfigRecord()
                         .setResourceType(ConfigResource.Type.BROKER.id())

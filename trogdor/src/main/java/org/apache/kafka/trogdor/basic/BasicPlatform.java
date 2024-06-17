@@ -17,14 +17,12 @@
 
 package org.apache.kafka.trogdor.basic;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.Topology;
-
-import com.fasterxml.jackson.databind.JsonNode;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

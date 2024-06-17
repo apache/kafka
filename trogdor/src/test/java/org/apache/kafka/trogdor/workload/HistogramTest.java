@@ -17,9 +17,9 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
 
 public class HistogramTest {
     private static Histogram createHistogram(int maxValue, int... values) {
@@ -83,3 +83,4 @@ public class HistogramTest {
         assertEquals(200, summary.percentiles().get(2).value());
     }
 }
+

@@ -174,9 +174,10 @@ public class NodeApiVersions {
         // which may happen when the remote is too old.
         for (ApiKeys apiKey : ApiKeys.clientApis()) {
             if (!apiKeysText.containsKey(apiKey.id)) {
-                String bld = apiKey.name + "(" +
-                        apiKey.id + "): " + "UNSUPPORTED";
-                apiKeysText.put(apiKey.id, bld);
+                StringBuilder bld = new StringBuilder();
+                bld.append(apiKey.name).append("(").
+                        append(apiKey.id).append("): ").append("UNSUPPORTED");
+                apiKeysText.put(apiKey.id, bld.toString());
             }
         }
         String separator = lineBreaks ? ",\n\t" : ", ";

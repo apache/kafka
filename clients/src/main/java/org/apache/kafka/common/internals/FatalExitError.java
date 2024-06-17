@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.Exit;
  */
 public class FatalExitError extends Error {
 
-    private static final long serialVersionUID = 1L;
+    private final static long serialVersionUID = 1L;
 
     private final int statusCode;
 

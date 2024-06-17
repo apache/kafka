@@ -17,29 +17,28 @@
 
 package kafka.integration
 
-import java.util.Properties
-import java.util.concurrent.ExecutionException
+import org.apache.kafka.common.config.{ConfigException, ConfigResource}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+
 import scala.util.Random
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
-import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
+import org.apache.log4j.{Level, Logger}
+import java.util.Properties
+import java.util.concurrent.ExecutionException
+
+import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.{InvalidConfigurationException, TimeoutException}
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsResult, ConfigEntry}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigsResult, Config, ConfigEntry}
 import org.apache.kafka.server.config.ReplicationConfigs
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.log4j.{Level, Logger}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
-import com.yammer.metrics.core.Meter
+
+import scala.annotation.nowarn
 
 class UncleanLeaderElectionTest extends QuorumTestHarness {
   val brokerId1 = 0
@@ -53,14 +52,11 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   var configProps2: Properties = _
 
   var configs: Seq[KafkaConfig] = Seq.empty[KafkaConfig]
-  var brokers: Seq[KafkaBroker] = Seq.empty[KafkaBroker]
-
-  var admin: Admin = _
+  var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 
   val random = new Random()
   val topic = "topic" + random.nextLong()
   val partitionId = 0
-  val topicPartition = new TopicPartition(topic, partitionId)
 
   val kafkaApisLogger = Logger.getLogger(classOf[kafka.server.KafkaApis])
   val networkProcessorLogger = Logger.getLogger(classOf[kafka.network.Processor])
@@ -69,8 +65,8 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
 
-    configProps1 = createBrokerConfig(brokerId1, zkConnectOrNull)
-    configProps2 = createBrokerConfig(brokerId2, zkConnectOrNull)
+    configProps1 = createBrokerConfig(brokerId1, zkConnect)
+    configProps2 = createBrokerConfig(brokerId2, zkConnect)
 
     for (configProps <- List(configProps1, configProps2)) {
       configProps.put("controlled.shutdown.enable", enableControlledShutdown.toString)
@@ -85,14 +81,12 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
 
   @AfterEach
   override def tearDown(): Unit = {
-    brokers.foreach(broker => shutdownBroker(broker))
-    brokers.foreach(broker => CoreUtils.delete(broker.config.logDirs))
+    servers.foreach(server => shutdownServer(server))
+    servers.foreach(server => CoreUtils.delete(server.config.logDirs))
 
     // restore log levels
     kafkaApisLogger.setLevel(Level.ERROR)
     networkProcessorLogger.setLevel(Level.ERROR)
-
-    admin.close()
 
     super.tearDown()
   }
@@ -100,42 +94,37 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   private def startBrokers(cluster: Seq[Properties]): Unit = {
     for (props <- cluster) {
       val config = KafkaConfig.fromProps(props)
-      val broker = createBroker(config = config)
+      val server = createServer(config)
       configs ++= List(config)
-      brokers ++= List(broker)
+      servers ++= List(server)
     }
-
-    val adminConfigs = new Properties
-    admin = TestUtils.createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), adminConfigs)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testUncleanLeaderElectionEnabled(quorum: String): Unit = {
+  @Test
+  def testUncleanLeaderElectionEnabled(): Unit = {
     // enable unclean leader election
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")
     startBrokers(Seq(configProps1, configProps2))
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, replicaAssignment =  Map(partitionId -> Seq(brokerId1, brokerId2)))
+    TestUtils.createTopic(zkClient, topic, Map(partitionId -> Seq(brokerId1, brokerId2)), servers)
+
     verifyUncleanLeaderElectionEnabled()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
+  @Test
   def testUncleanLeaderElectionDisabled(): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, replicaAssignment =  Map(partitionId -> Seq(brokerId1, brokerId2)))
+    TestUtils.createTopic(zkClient, topic, Map(partitionId -> Seq(brokerId1, brokerId2)), servers)
 
     verifyUncleanLeaderElectionDisabled()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
+  @Test
   def testUncleanLeaderElectionEnabledByTopicOverride(): Unit = {
     // disable unclean leader election globally, but enable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "false")
@@ -144,14 +133,13 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
 
     // create topic with 1 partition, 2 replicas, one on each broker, and unclean leader election enabled
     val topicProps = new Properties()
-    topicProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, replicaAssignment = Map(partitionId -> Seq(brokerId1, brokerId2)), topicConfig = topicProps)
+    topicProps.put("unclean.leader.election.enable", "true")
+    TestUtils.createTopic(zkClient, topic, Map(partitionId -> Seq(brokerId1, brokerId2)), servers, topicProps)
 
     verifyUncleanLeaderElectionEnabled()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
+  @Test
   def testUncleanLeaderElectionDisabledByTopicOverride(): Unit = {
     // enable unclean leader election globally, but disable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "true")
@@ -160,72 +148,27 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
 
     // create topic with 1 partition, 2 replicas, one on each broker, and unclean leader election disabled
     val topicProps = new Properties()
-    topicProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, replicaAssignment = Map(partitionId -> Seq(brokerId1, brokerId2)), topicConfig = topicProps)
+    topicProps.put("unclean.leader.election.enable", "false")
+    TestUtils.createTopic(zkClient, topic, Map(partitionId -> Seq(brokerId1, brokerId2)), servers, topicProps)
 
     verifyUncleanLeaderElectionDisabled()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
+  @Test
   def testUncleanLeaderElectionInvalidTopicOverride(): Unit = {
     startBrokers(Seq(configProps1))
 
     // create topic with an invalid value for unclean leader election
     val topicProps = new Properties()
-    topicProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "invalid")
+    topicProps.put("unclean.leader.election.enable", "invalid")
 
-    val e = assertThrows(classOf[ExecutionException],
-      () => TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, replicaAssignment = Map(partitionId -> Seq(brokerId1, brokerId2)), topicConfig = topicProps))
-
-    assertEquals(classOf[InvalidConfigurationException], e.getCause.getClass)
+    assertThrows(classOf[ConfigException],
+      () => TestUtils.createTopic(zkClient, topic, Map(partitionId -> Seq(brokerId1)), servers, topicProps))
   }
 
   def verifyUncleanLeaderElectionEnabled(): Unit = {
     // wait until leader is elected
-    val leaderId = awaitLeaderChange(brokers, topicPartition)
-    debug("Leader for " + topic + " is elected to be: %s".format(leaderId))
-    assertTrue(leaderId == brokerId1 || leaderId == brokerId2,
-      "Leader id is set to expected value for topic: " + topic)
-
-    // the non-leader broker is the follower
-    val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
-    debug("Follower for " + topic + " is: %s".format(followerId))
-
-    produceMessage(brokers, topic, "first")
-    waitForPartitionMetadata(brokers, topic, partitionId)
-    assertEquals(List("first"), consumeAllMessages(topic, 1))
-
-    // shutdown follower server
-    brokers.filter(broker => broker.config.brokerId == followerId).map(broker => shutdownBroker(broker))
-
-    produceMessage(brokers, topic, "second")
-    assertEquals(List("first", "second"), consumeAllMessages(topic, 2))
-
-    //verify that unclean election metric count is 0
-    val uncleanLeaderElectionsPerSecGauge = getGauge("UncleanLeaderElectionsPerSec")
-    @volatile var uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 0)
-
-    // shutdown leader and then restart follower
-    brokers.filter(_.config.brokerId == leaderId).map(shutdownBroker)
-    val followerBroker = brokers.find(_.config.brokerId == followerId).get
-    followerBroker.startup()
-
-    // wait until new leader is (uncleanly) elected
-    awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(followerId), timeout = 30000)
-    uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 1)
-
-    produceMessage(brokers, topic, "third")
-
-    // second message was lost due to unclean election
-    assertEquals(List("first", "third"), consumeAllMessages(topic, 2))
-  }
-
-  def verifyUncleanLeaderElectionDisabled(): Unit = {
-    // wait until leader is elected
-    val leaderId = awaitLeaderChange(brokers, topicPartition)
+    val leaderId = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
     debug("Leader for " + topic  + " is elected to be: %s".format(leaderId))
     assertTrue(leaderId == brokerId1 || leaderId == brokerId2,
       "Leader id is set to expected value for topic: " + topic)
@@ -234,70 +177,99 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
     debug("Follower for " + topic  + " is: %s".format(followerId))
 
-    produceMessage(brokers, topic, "first")
-    waitForPartitionMetadata(brokers, topic, partitionId)
+    produceMessage(servers, topic, "first")
+    waitForPartitionMetadata(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic, 1))
 
     // shutdown follower server
-    brokers.filter(broker => broker.config.brokerId == followerId).map(broker => shutdownBroker(broker))
+    servers.filter(server => server.config.brokerId == followerId).map(server => shutdownServer(server))
 
-    produceMessage(brokers, topic, "second")
+    produceMessage(servers, topic, "second")
     assertEquals(List("first", "second"), consumeAllMessages(topic, 2))
 
     //remove any previous unclean election metric
-    val uncleanLeaderElectionsPerSecGauge = getGauge("UncleanLeaderElectionsPerSec")
-    @volatile var uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 0)
+    servers.map(_.kafkaController.controllerContext.stats.removeMetric("UncleanLeaderElectionsPerSec"))
 
     // shutdown leader and then restart follower
-    brokers.filter(_.config.brokerId == leaderId).map(shutdownBroker)
-    val followerServer = brokers.find(_.config.brokerId == followerId).get
+    servers.filter(_.config.brokerId == leaderId).map(shutdownServer)
+    val followerServer = servers.find(_.config.brokerId == followerId).get
+    followerServer.startup()
+
+    // wait until new leader is (uncleanly) elected
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, newLeaderOpt = Some(followerId))
+    assertEquals(1, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.count())
+
+    produceMessage(servers, topic, "third")
+
+    // second message was lost due to unclean election
+    assertEquals(List("first", "third"), consumeAllMessages(topic, 2))
+  }
+
+  def verifyUncleanLeaderElectionDisabled(): Unit = {
+    // wait until leader is elected
+    val leaderId = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
+    debug("Leader for " + topic  + " is elected to be: %s".format(leaderId))
+    assertTrue(leaderId == brokerId1 || leaderId == brokerId2,
+      "Leader id is set to expected value for topic: " + topic)
+
+    // the non-leader broker is the follower
+    val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
+    debug("Follower for " + topic  + " is: %s".format(followerId))
+
+    produceMessage(servers, topic, "first")
+    waitForPartitionMetadata(servers, topic, partitionId)
+    assertEquals(List("first"), consumeAllMessages(topic, 1))
+
+    // shutdown follower server
+    servers.filter(server => server.config.brokerId == followerId).foreach(server => shutdownServer(server))
+
+    produceMessage(servers, topic, "second")
+    assertEquals(List("first", "second"), consumeAllMessages(topic, 2))
+
+    //remove any previous unclean election metric
+    servers.foreach(server => server.kafkaController.controllerContext.stats.removeMetric("UncleanLeaderElectionsPerSec"))
+
+    // shutdown leader and then restart follower
+    servers.filter(server => server.config.brokerId == leaderId).foreach(server => shutdownServer(server))
+    val followerServer = servers.find(_.config.brokerId == followerId).get
     followerServer.startup()
 
     // verify that unclean election to non-ISR follower does not occur
-    awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(leaderId))
-    uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, newLeaderOpt = Some(-1))
+    assertEquals(0, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.count())
 
     // message production and consumption should both fail while leader is down
-    val e = assertThrows(classOf[ExecutionException], () => produceMessage(brokers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000))
+    val e = assertThrows(classOf[ExecutionException], () => produceMessage(servers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000))
     assertEquals(classOf[TimeoutException], e.getCause.getClass)
 
     assertEquals(List.empty[String], consumeAllMessages(topic, 0))
 
     // restart leader temporarily to send a successfully replicated message
-    brokers.find(_.config.brokerId == leaderId).get.startup()
-    awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(leaderId))
+    servers.filter(server => server.config.brokerId == leaderId).foreach(server => server.startup())
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, newLeaderOpt = Some(leaderId))
 
-    produceMessage(brokers, topic, "third")
+    produceMessage(servers, topic, "third")
     //make sure follower server joins the ISR
     TestUtils.waitUntilTrue(() => {
       val partitionInfoOpt = followerServer.metadataCache.getPartitionInfo(topic, partitionId)
       partitionInfoOpt.isDefined && partitionInfoOpt.get.isr.contains(followerId)
     }, "Inconsistent metadata after first server startup")
 
-    brokers.filter(_.config.brokerId == leaderId).map(shutdownBroker)
-
+    servers.filter(server => server.config.brokerId == leaderId).foreach(server => shutdownServer(server))
     // verify clean leader transition to ISR follower
-    awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(followerId))
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, newLeaderOpt = Some(followerId))
+
     // verify messages can be consumed from ISR follower that was just promoted to leader
     assertEquals(List("first", "second", "third"), consumeAllMessages(topic, 3))
   }
 
-  private def getGauge(metricName: String) = {
-    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .find { case (k, _) => k.getName.endsWith(metricName) }
-      .getOrElse(throw new AssertionError("Unable to find metric " + metricName))
-      ._2.asInstanceOf[Meter]
-  }
-
-  private def shutdownBroker(broker: KafkaBroker) = {
-    broker.shutdown()
-    broker.awaitShutdown()
+  private def shutdownServer(server: KafkaServer): Unit = {
+    server.shutdown()
+    server.awaitShutdown()
   }
 
   private def consumeAllMessages(topic: String, numMessages: Int): Seq[String] = {
-    val brokerList = TestUtils.plaintextBootstrapServers(brokers)
+    val brokerList = TestUtils.plaintextBootstrapServers(servers)
     // Don't rely on coordinator as it may be down when this method is called
     val consumer = TestUtils.createConsumer(brokerList,
       groupId = "group" + random.nextLong(),
@@ -311,48 +283,42 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     } finally consumer.close()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testTopicUncleanLeaderElectionEnableWithAlterTopicConfigs(): Unit = {
+  @Test
+  def testTopicUncleanLeaderElectionEnable(): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, replicaAssignment = Map(partitionId -> Seq(brokerId1, brokerId2)))
+    adminZkClient.createTopicWithAssignment(topic, config = new Properties(), Map(partitionId -> Seq(brokerId1, brokerId2)))
 
     // wait until leader is elected
-    val leaderId = awaitLeaderChange(brokers, topicPartition)
+    val leaderId = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
 
     // the non-leader broker is the follower
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
 
-    produceMessage(brokers, topic, "first")
-    waitForPartitionMetadata(brokers, topic, partitionId)
+    produceMessage(servers, topic, "first")
+    waitForPartitionMetadata(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic, 1))
 
     // shutdown follower server
-    brokers.filter(broker => broker.config.brokerId == followerId).map(broker => shutdownBroker(broker))
+    servers.filter(server => server.config.brokerId == followerId).map(server => shutdownServer(server))
 
-    produceMessage(brokers, topic, "second")
+    produceMessage(servers, topic, "second")
     assertEquals(List("first", "second"), consumeAllMessages(topic, 2))
 
-    //verify that unclean election metric count is 0
-    val uncleanLeaderElectionsPerSecGauge = getGauge("UncleanLeaderElectionsPerSec")
-    @volatile var uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 0)
+    //remove any previous unclean election metric
+    servers.map(server => server.kafkaController.controllerContext.stats.removeMetric("UncleanLeaderElectionsPerSec"))
 
     // shutdown leader and then restart follower
-    brokers.filter(_.config.brokerId == leaderId).map(shutdownBroker)
-    val followerBroker = brokers.find(_.config.brokerId == followerId).get
-    followerBroker.startup()
+    servers.filter(server => server.config.brokerId == leaderId).map(server => shutdownServer(server))
+    val followerServer = servers.find(_.config.brokerId == followerId).get
+    followerServer.startup()
 
-    // leader should not change
-    awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(leaderId), timeout = 30000)
-    uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 0)
+    assertEquals(0, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.count())
 
     // message production and consumption should both fail while leader is down
-    val e = assertThrows(classOf[ExecutionException], () => produceMessage(brokers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000))
+    val e = assertThrows(classOf[ExecutionException], () => produceMessage(servers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000))
     assertEquals(classOf[TimeoutException], e.getCause.getClass)
 
     assertEquals(List.empty[String], consumeAllMessages(topic, 0))
@@ -365,26 +331,26 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     adminClient.close()
 
     // wait until new leader is (uncleanly) elected
-    awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(followerId), timeout = 30000)
-    uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
-    assert(uncleanLeaderElectionsPerSec == 1)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, newLeaderOpt = Some(followerId))
+    assertEquals(1, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.count())
 
-    produceMessage(brokers, topic, "third")
+    produceMessage(servers, topic, "third")
 
     // second message was lost due to unclean election
     assertEquals(List("first", "third"), consumeAllMessages(topic, 2))
   }
 
+  @nowarn("cat=deprecation")
   private def alterTopicConfigs(adminClient: Admin, topic: String, topicConfigs: Properties): AlterConfigsResult = {
     val configEntries = topicConfigs.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
-    adminClient.incrementalAlterConfigs(Map(new ConfigResource(ConfigResource.Type.TOPIC, topic) ->
-      configEntries.asScala.map((e: ConfigEntry) => new AlterConfigOp(e, AlterConfigOp.OpType.SET)).toSeq
-        .asJavaCollection).asJava)
+    val newConfig = new Config(configEntries)
+    val configs = Map(new ConfigResource(ConfigResource.Type.TOPIC, topic) -> newConfig).asJava
+    adminClient.alterConfigs(configs)
   }
 
   private def createAdminClient(): Admin = {
     val config = new Properties
-    val bootstrapServers = TestUtils.plaintextBootstrapServers(brokers)
+    val bootstrapServers = TestUtils.plaintextBootstrapServers(servers)
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
     Admin.create(config)

@@ -21,10 +21,11 @@ import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectStandalone;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.apache.kafka.test.IntegrationTest;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -42,13 +43,13 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_C
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class StandaloneWorkerIntegrationTest {
 
     private static final String CONNECTOR_NAME = "test-connector";
@@ -57,14 +58,14 @@ public class StandaloneWorkerIntegrationTest {
 
     private EmbeddedConnectStandalone connect;
 
-    @BeforeEach
+    @Before
     public void setup() {
         connect = new EmbeddedConnectStandalone.Builder()
                 .build();
         connect.start();
     }
 
-    @AfterEach
+    @After
     public void cleanup() {
         connect.stop();
     }
@@ -72,15 +73,15 @@ public class StandaloneWorkerIntegrationTest {
     @Test
     public void testDynamicLogging() {
         Map<String, LoggerLevel> initialLevels = connect.allLogLevels();
-        assertFalse(initialLevels.isEmpty(), "Connect REST API did not list any known loggers");
+        assertFalse("Connect REST API did not list any known loggers", initialLevels.isEmpty());
         Map<String, LoggerLevel> invalidModifiedLoggers = Utils.filterMap(
                 initialLevels,
                 StandaloneWorkerIntegrationTest::isModified
         );
         assertEquals(
+                "No loggers should have a non-null last-modified timestamp",
                 Collections.emptyMap(),
-                invalidModifiedLoggers,
-                "No loggers should have a non-null last-modified timestamp"
+                invalidModifiedLoggers
         );
 
         // Tests with no scope
@@ -102,9 +103,9 @@ public class StandaloneWorkerIntegrationTest {
         connect.setLogLevel(namespace2, level2, "worker");
         LoggerLevel currentLoggerLevel = connect.getLogLevel(namespace2);
         assertEquals(
+                "Log level and last-modified timestamp should not be affected by consecutive identical requests",
                 priorLoggerLevel,
-                currentLoggerLevel,
-                "Log level and last-modified timestamp should not be affected by consecutive identical requests"
+                currentLoggerLevel
         );
 
         // Tests with scope=cluster
@@ -124,8 +125,8 @@ public class StandaloneWorkerIntegrationTest {
         List<String> affectedLoggers = connect.setLogLevel(namespace, level, scope);
         if ("cluster".equals(scope)) {
             assertNull(
-                    affectedLoggers,
-                    "Modifying log levels with scope=cluster should result in an empty response"
+                    "Modifying log levels with scope=cluster should result in an empty response",
+                    affectedLoggers
             );
         } else {
             assertTrue(affectedLoggers.contains(namespace));
@@ -133,10 +134,10 @@ public class StandaloneWorkerIntegrationTest {
                     .filter(l -> !l.startsWith(namespace))
                     .collect(Collectors.toList());
             assertEquals(
-                    Collections.emptyList(),
-                    invalidAffectedLoggers,
                     "No loggers outside the namespace '" + namespace
-                            + "' should have been included in the response for a request to modify that namespace"
+                            + "' should have been included in the response for a request to modify that namespace",
+                    Collections.emptyList(),
+                    invalidAffectedLoggers
             );
         }
 
@@ -147,9 +148,9 @@ public class StandaloneWorkerIntegrationTest {
         assertEquals(level, loggerLevel.level());
         assertNotNull(loggerLevel.lastModified());
         assertTrue(
-                loggerLevel.lastModified() >= requestTime,
                 "Last-modified timestamp for logger level is " + loggerLevel.lastModified()
-                        + ", which is before " + requestTime + ", the most-recent time the level was adjusted"
+                        + ", which is before " + requestTime + ", the most-recent time the level was adjusted",
+                loggerLevel.lastModified() >= requestTime
         );
 
         // Verify information for all listed loggers
@@ -165,23 +166,23 @@ public class StandaloneWorkerIntegrationTest {
                         )
         );
         assertEquals(
-                Collections.emptyMap(),
-                invalidAffectedLoggerLevels,
                 "At least one logger in the affected namespace '" + namespace
                         + "' does not have the expected level of '" + level
                         + "', has a null last-modified timestamp, or has a last-modified timestamp "
                         + "that is less recent than " + requestTime
-                        + ", which is when the namespace was last adjusted"
+                        + ", which is when the namespace was last adjusted",
+                Collections.emptyMap(),
+                invalidAffectedLoggerLevels
         );
 
         Set<String> droppedLoggers = Utils.diff(HashSet::new, initialLevels.keySet(), newLevels.keySet());
         assertEquals(
-                Collections.emptySet(),
-                droppedLoggers,
                 "At least one logger was present in the listing of all loggers "
                         + "before the logging level for namespace '" + namespace
                         + "' was set to '" + level
-                        + "' that is no longer present"
+                        + "' that is no longer present",
+                Collections.emptySet(),
+                droppedLoggers
         );
 
         Map<String, LoggerLevel> invalidUnaffectedLoggerLevels = Utils.filterMap(
@@ -189,12 +190,12 @@ public class StandaloneWorkerIntegrationTest {
                 e -> !hasNamespace(e, namespace) && !e.getValue().equals(initialLevels.get(e.getKey()))
         );
         assertEquals(
-                Collections.emptyMap(),
-                invalidUnaffectedLoggerLevels,
                 "At least one logger outside of the affected namespace '" + namespace
                         + "' has a different logging level or last-modified timestamp than it did "
                         + "before the namespace was set to level '" + level
-                        + "'; none of these loggers should have been affected"
+                        + "'; none of these loggers should have been affected",
+                Collections.emptyMap(),
+                invalidUnaffectedLoggerLevels
         );
 
         return newLevels;

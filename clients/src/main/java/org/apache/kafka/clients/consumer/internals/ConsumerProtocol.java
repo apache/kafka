@@ -125,25 +125,6 @@ public class ConsumerProtocol {
         return deserializeSubscription(buffer, deserializeVersion(buffer));
     }
 
-    public static ConsumerProtocolSubscription deserializeConsumerProtocolSubscription(
-        final ByteBuffer buffer,
-        short version
-    ) {
-        version = checkSubscriptionVersion(version);
-
-        try {
-            return new ConsumerProtocolSubscription(new ByteBufferAccessor(buffer), version);
-        } catch (BufferUnderflowException e) {
-            throw new SchemaException("Buffer underflow while parsing consumer protocol's subscription", e);
-        }
-    }
-
-    public static ConsumerProtocolSubscription deserializeConsumerProtocolSubscription(
-        final ByteBuffer buffer
-    ) {
-        return deserializeConsumerProtocolSubscription(buffer, deserializeVersion(buffer));
-    }
-
     public static ByteBuffer serializeAssignment(final Assignment assignment) {
         return serializeAssignment(assignment, ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION);
     }
@@ -162,11 +143,6 @@ public class ConsumerProtocol {
             partition.partitions().add(tp.partition());
         });
         return MessageUtil.toVersionPrefixedByteBuffer(version, data);
-    }
-
-    public static ByteBuffer serializeAssignment(final ConsumerProtocolAssignment assignment, short version) {
-        version = checkAssignmentVersion(version);
-        return MessageUtil.toVersionPrefixedByteBuffer(version, assignment);
     }
 
     public static Assignment deserializeAssignment(final ByteBuffer buffer, short version) {
@@ -193,23 +169,6 @@ public class ConsumerProtocol {
 
     public static Assignment deserializeAssignment(final ByteBuffer buffer) {
         return deserializeAssignment(buffer, deserializeVersion(buffer));
-    }
-
-    public static ConsumerProtocolAssignment deserializeConsumerProtocolAssignment(
-        final ByteBuffer buffer,
-        short version
-    ) {
-        version = checkAssignmentVersion(version);
-
-        try {
-            return new ConsumerProtocolAssignment(new ByteBufferAccessor(buffer), version);
-        } catch (BufferUnderflowException e) {
-            throw new SchemaException("Buffer underflow while parsing consumer protocol's assignment", e);
-        }
-    }
-
-    public static ConsumerProtocolAssignment deserializeConsumerProtocolAssignment(final ByteBuffer buffer) {
-        return deserializeConsumerProtocolAssignment(buffer, deserializeVersion(buffer));
     }
 
     private static short checkSubscriptionVersion(final short version) {

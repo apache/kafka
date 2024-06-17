@@ -25,7 +25,6 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -41,13 +40,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class AclsImageTest {
-    public static final AclsImage IMAGE1;
+    public final static AclsImage IMAGE1;
 
-    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
 
-    static final AclsDelta DELTA1;
+    final static AclsDelta DELTA1;
 
-    static final AclsImage IMAGE2;
+    final static AclsImage IMAGE2;
 
     static {
         Map<Uuid, StandardAcl> map = new HashMap<>();

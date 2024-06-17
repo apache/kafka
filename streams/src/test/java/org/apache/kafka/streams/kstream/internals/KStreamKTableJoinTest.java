@@ -19,8 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -52,12 +52,12 @@ import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 public class KStreamKTableJoinTest {
-    private static final KeyValueTimestamp<?, ?>[] EMPTY = new KeyValueTimestamp[0];
+    private final static KeyValueTimestamp<?, ?>[] EMPTY = new KeyValueTimestamp[0];
 
     private final String streamTopic = "streamTopic";
     private final String tableTopic = "tableTopic";
@@ -70,7 +70,7 @@ public class KStreamKTableJoinTest {
     private StreamsBuilder builder;
     private final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
-    @BeforeEach
+    @Before
     public void setUp() {
         builder = new StreamsBuilder();
 
@@ -89,7 +89,7 @@ public class KStreamKTableJoinTest {
         processor = supplier.theCapturedProcessor();
     }
 
-    @AfterEach
+    @After
     public void cleanup() {
         driver.close();
     }

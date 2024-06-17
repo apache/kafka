@@ -32,7 +32,7 @@ import java.time.Instant;
 
 public class SmokeTestUtil {
 
-    static final int END = Integer.MAX_VALUE;
+    final static int END = Integer.MAX_VALUE;
 
     static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic) {
         return printProcessorSupplier(topic, "");

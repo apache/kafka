@@ -1398,7 +1398,6 @@ $ bin/kafka-acls.sh \
     <li>commit=num_secs: This tunes the frequency with which ext4 commits to its metadata journal. Setting this to a lower value reduces the loss of unflushed data during a crash. Setting this to a higher value will improve throughput.
     <li>nobh: This setting controls additional ordering guarantees when using data=writeback mode. This should be safe with Kafka as we do not depend on write ordering and improves throughput and latency.
     <li>delalloc: Delayed allocation means that the filesystem avoid allocating any blocks until the physical write occurs. This allows ext4 to allocate a large extent instead of smaller pages and helps ensure the data is written sequentially. This feature is great for throughput. It does seem to involve some locking in the filesystem which adds a bit of latency variance.
-    <li>fast_commit: Added in Linux 5.10, <a href="https://lwn.net/Articles/842385/">fast_commit</a> is a lighter-weight journaling method which can be used with data=ordered journaling mode. Enabling it seems to significantly reduce latency.
   </ul>
 
   <h4 class="anchor-heading"><a id="replace_disk" class="anchor-link"></a><a href="#replace_disk">Replace KRaft Controller Disk</a></h4>
@@ -3095,26 +3094,15 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <td>The fraction of time the stream thread spent on processing this task among all assigned active tasks.</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
-      <tr>
-        <td>input-buffer-bytes-total</td>
-        <td>The total number of bytes accumulated by this task,</td>
-        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>cache-size-bytes-total</td>
-        <td>The cache size in bytes accumulated by this task.</td>
-        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
-      </tr>
  </tbody>
 </table>
 
  <h5 class="anchor-heading"><a id="kafka_streams_node_monitoring" class="anchor-link"></a><a href="#kafka_streams_node_monitoring">Processor Node Metrics</a></h5>
  The following metrics are only available on certain types of nodes, i.e., the process-* metrics are only available for
- source processor nodes, the <code>suppression-emit-*</code> metrics are only available for suppression operation nodes,
- <code>emit-final-*</code> metrics are only available for windowed aggregations nodes, and the
- <code>record-e2e-latency-*</code> metrics are only available for source processor nodes and terminal nodes (nodes without successor
+ source processor nodes, the suppression-emit-* metrics are only available for suppression operation nodes, and the
+ record-e2e-latency-* metrics are only available for source processor nodes and terminal nodes (nodes without successor
  nodes).
- All of the metrics have a recording level of <code>debug</code>, except for the <code>record-e2e-latency-*</code> metrics which have
+ All of the metrics have a recording level of <code>debug</code>, except for the record-e2e-latency-* metrics which have
  a recording level of <code>info</code>:
  <table class="data-table">
       <tbody>
@@ -3151,26 +3139,6 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
       <tr>
         <td>suppression-emit-total</td>
         <td>The total number of records that have been emitted downstream from suppression operation nodes.</td>
-        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>emit-final-latency-max</td>
-        <td>The max latency to emit final records when a record could be emitted.</td>
-        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>emit-final-latency-avg</td>
-        <td>The avg latency to emit final records when a record could be emitted.</td>
-        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>emit-final-records-rate</td>
-        <td>The rate of records emitted when records could be emitted.</td>
-        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>emit-final-records-total</td>
-        <td>The total number of records emitted.</td>
         <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -3280,28 +3248,18 @@ for built-in state stores, currently we have:
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>all-latency-max, from iterator create to close time.</td>
+        <td>all-latency-max</td>
         <td>The maximum all operation execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>range-latency-avg, from iterator create to close time.</td>
-        <td>The average range execution time in ns, from iterator create to close time.</td>
+        <td>range-latency-avg</td>
+        <td>The average range execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>range-latency-max, from iterator create to close time.</td>
+        <td>range-latency-max</td>
         <td>The maximum range execution time in ns.</td>
-        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>prefix-scan-latency-avg</td>
-        <td>The average prefix-scan execution time in ns, from iterator create to close time.</td>
-        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>prefix-scan-latency-max</td>
-        <td>The maximum prefix-scan execution time in ns, from iterator create to close time.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
        <tr>
@@ -3357,11 +3315,6 @@ for built-in state stores, currently we have:
       <tr>
         <td>range-rate</td>
         <td>The average range rate for this store.</td>
-        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>prefix-scan-rate</td>
-        <td>The average prefix-scan rate for this store.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>

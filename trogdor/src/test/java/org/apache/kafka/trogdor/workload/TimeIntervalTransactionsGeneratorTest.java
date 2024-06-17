@@ -17,11 +17,10 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import org.apache.kafka.common.utils.MockTime;
-
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.apache.kafka.common.utils.MockTime;
+import org.junit.jupiter.api.Test;
 
 public class TimeIntervalTransactionsGeneratorTest {
     @Test

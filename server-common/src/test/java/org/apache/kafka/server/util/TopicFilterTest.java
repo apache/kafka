@@ -18,11 +18,10 @@ package org.apache.kafka.server.util;
 
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.server.util.TopicFilter.IncludeList;
-
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class TopicFilterTest {
     @Test

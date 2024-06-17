@@ -20,7 +20,6 @@ package org.apache.kafka.server.util;
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
-
 import org.slf4j.Logger;
 
 import java.util.concurrent.CountDownLatch;

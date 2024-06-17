@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_1_IV0;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
@@ -42,14 +49,7 @@ import org.apache.kafka.common.utils.PrimitiveRef.LongRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_1_IV0;
 
 public class LogValidator {
 

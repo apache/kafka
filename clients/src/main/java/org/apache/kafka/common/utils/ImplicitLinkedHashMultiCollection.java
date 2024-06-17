@@ -119,7 +119,7 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
      *
      * @return          All of the matching elements.
      */
-    public final List<E> findAll(E key) {
+    final public List<E> findAll(E key) {
         if (key == null || size() == 0) {
             return Collections.emptyList();
         }

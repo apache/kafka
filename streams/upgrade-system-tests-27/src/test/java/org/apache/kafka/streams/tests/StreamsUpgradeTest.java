@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.tests;
 
+import static org.apache.kafka.streams.tests.SmokeTestUtil.intSerde;
+import static org.apache.kafka.streams.tests.SmokeTestUtil.stringSerde;
+
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -29,9 +32,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.util.Properties;
-
-import static org.apache.kafka.streams.tests.SmokeTestUtil.intSerde;
-import static org.apache.kafka.streams.tests.SmokeTestUtil.stringSerde;
 
 public class StreamsUpgradeTest {
 

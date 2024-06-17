@@ -319,7 +319,7 @@ public class MockClient implements KafkaClient {
         checkTimeoutOfPendingRequests(now);
 
         // We skip metadata updates if all nodes are currently blacked out
-        if (metadataUpdater.isUpdateNeeded() && leastLoadedNode(now).node() != null) {
+        if (metadataUpdater.isUpdateNeeded() && leastLoadedNode(now) != null) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
             if (metadataUpdate != null) {
                 metadataUpdater.update(time, metadataUpdate);
@@ -588,13 +588,13 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public LeastLoadedNode leastLoadedNode(long now) {
+    public Node leastLoadedNode(long now) {
         // Consistent with NetworkClient, we do not return nodes awaiting reconnect backoff
         for (Node node : metadataUpdater.fetchNodes()) {
             if (!connectionState(node.idString()).isBackingOff(now))
-                return new LeastLoadedNode(node, true);
+                return node;
         }
-        return new LeastLoadedNode(null, false);
+        return null;
     }
 
     public void setWakeupHook(Runnable wakeupHook) {

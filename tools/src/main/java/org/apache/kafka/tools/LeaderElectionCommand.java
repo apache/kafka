@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.tools;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
+import joptsimple.AbstractOptionSpec;
+import joptsimple.ArgumentAcceptingOptionSpec;
+import joptsimple.OptionSpecBuilder;
+import joptsimple.util.EnumConverter;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.ElectionType;
@@ -33,9 +38,6 @@ import org.apache.kafka.server.util.Json;
 import org.apache.kafka.server.util.json.DecodeJson;
 import org.apache.kafka.server.util.json.JsonObject;
 import org.apache.kafka.server.util.json.JsonValue;
-
-import com.fasterxml.jackson.databind.JsonMappingException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,11 +56,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
-
-import joptsimple.AbstractOptionSpec;
-import joptsimple.ArgumentAcceptingOptionSpec;
-import joptsimple.OptionSpecBuilder;
-import joptsimple.util.EnumConverter;
 
 public class LeaderElectionCommand {
     private static final Logger LOG = LoggerFactory.getLogger(LeaderElectionCommand.class);

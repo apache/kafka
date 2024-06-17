@@ -29,7 +29,7 @@ public class ConfigurationsImageNode implements MetadataNode {
     /**
      * The name of this node.
      */
-    public static final String NAME = "configs";
+    public final static String NAME = "configs";
 
     /**
      * The configurations image.

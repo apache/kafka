@@ -790,9 +790,8 @@ https://kafka.apache.org/KEYS
 https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/
 
 <USE docker/README.md FOR STEPS TO CREATE RELEASE CANDIDATE DOCKER IMAGE>
-* Docker release artifact to be voted upon(apache/kafka-native is supported from 3.8+ release.):
+* Docker release artifact to be voted upon:
 apache/kafka:%(rc_tag)s
-apache/kafka-native:%(rc_tag)s
 
 * Maven artifacts to be voted upon:
 https://repository.apache.org/content/groups/staging/org/apache/kafka/
@@ -814,11 +813,7 @@ Unit/integration tests: https://ci-builds.apache.org/job/Kafka/job/kafka/job/%(d
 System tests: https://jenkins.confluent.io/job/system-test-kafka/job/%(dev_branch)s/<BUILD_NUMBER>/
 
 <USE docker/README.md FOR STEPS TO RUN DOCKER BUILD TEST GITHUB ACTIONS>
-* Successful JVM based Apache Kafka Docker Image Github Actions Pipeline for %(dev_branch)s branch:
-Docker Build Test Pipeline: https://github.com/apache/kafka/actions/runs/<RUN_NUMBER>
-
-* Successful GraalVM based Native Apache Kafka Docker Image Github Actions Pipeline for %(dev_branch)s branch:
-* NOTE: GraalVM based Native Apache Kafka Docker Image is supported from 3.8+ release. 
+* Successful Docker Image Github Actions Pipeline for %(dev_branch)s branch:
 Docker Build Test Pipeline: https://github.com/apache/kafka/actions/runs/<RUN_NUMBER>
 
 /**************************************

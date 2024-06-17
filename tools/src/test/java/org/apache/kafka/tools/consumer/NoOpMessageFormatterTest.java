@@ -18,7 +18,6 @@ package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
-
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;

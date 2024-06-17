@@ -16,23 +16,22 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
-import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
@@ -55,10 +54,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.Utils.toOptional;
-import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
-import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
-import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.RECONCILING;
@@ -795,36 +792,21 @@ public class ConsumerGroup implements Group {
      * @param memberEpoch       The member epoch.
      * @param isTransactional   Whether the offset commit is transactional or not. It has no
      *                          impact when a consumer group is used.
-     * @param apiVersion        The api version.
-     * @throws UnknownMemberIdException     If the member is not found.
-     * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
-     *                                      member epoch doesn't match the actual member epoch.
-     * @throws IllegalGenerationException   If the member uses the classic protocol and the provided
-     *                                      generation id is not equal to the member epoch.
      */
     @Override
     public void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int memberEpoch,
-        boolean isTransactional,
-        short apiVersion
-    ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
+        boolean isTransactional
+    ) throws UnknownMemberIdException, StaleMemberEpochException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
         // the request can commit offsets if the group is empty.
         if (memberEpoch < 0 && members().isEmpty()) return;
 
         final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
-
-        // If the commit is not transactional and the member uses the new consumer protocol (KIP-848),
-        // the member should be using the OffsetCommit API version >= 9.
-        if (!isTransactional && !member.useClassicProtocol() && apiVersion < 9) {
-            throw new UnsupportedVersionException("OffsetCommit version 9 or above must be used " +
-                "by members using the consumer group protocol");
-        }
-
-        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
+        validateMemberEpoch(memberEpoch, member.memberEpoch());
     }
 
     /**
@@ -833,18 +815,13 @@ public class ConsumerGroup implements Group {
      * @param memberId              The member id for consumer groups.
      * @param memberEpoch           The member epoch for consumer groups.
      * @param lastCommittedOffset   The last committed offsets in the timeline.
-     * @throws UnknownMemberIdException     If the member is not found.
-     * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
-     *                                      member epoch doesn't match the actual member epoch.
-     * @throws IllegalGenerationException   If the member uses the classic protocol and the provided
-     *                                      generation id is not equal to the member epoch.
      */
     @Override
     public void validateOffsetFetch(
         String memberId,
         int memberEpoch,
         long lastCommittedOffset
-    ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
+    ) throws UnknownMemberIdException, StaleMemberEpochException {
         // When the member id is null and the member epoch is -1, the request either comes
         // from the admin client or from a client which does not provide them. In this case,
         // the fetch request is accepted.
@@ -855,7 +832,7 @@ public class ConsumerGroup implements Group {
             throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
                 memberId, groupId));
         }
-        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
+        validateMemberEpoch(memberEpoch, member.memberEpoch());
     }
 
     /**
@@ -919,27 +896,16 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Throws an exception if the received member epoch does not match the expected member epoch.
-     *
-     * @param receivedMemberEpoch   The received member epoch or generation id.
-     * @param expectedMemberEpoch   The expected member epoch.
-     * @param useClassicProtocol    The boolean indicating whether the checked member uses the classic protocol.
-     * @throws StaleMemberEpochException    if the member with unmatched member epoch uses the consumer protocol.
-     * @throws IllegalGenerationException   if the member with unmatched generation id uses the classic protocol.
+     * Throws a StaleMemberEpochException if the received member epoch does not match
+     * the expected member epoch.
      */
     private void validateMemberEpoch(
         int receivedMemberEpoch,
-        int expectedMemberEpoch,
-        boolean useClassicProtocol
-    ) throws StaleMemberEpochException, IllegalGenerationException {
+        int expectedMemberEpoch
+    ) throws StaleMemberEpochException {
         if (receivedMemberEpoch != expectedMemberEpoch) {
-            if (useClassicProtocol) {
-                throw new IllegalGenerationException(String.format("The received generation id %d does not match " +
-                    "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
-            } else {
-                throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
-                    + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
-            }
+            throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
+                + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
         }
     }
 
@@ -1312,13 +1278,12 @@ public class ConsumerGroup implements Group {
         consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
-            Map<Uuid, Set<Integer>> assignedPartitions = toTopicPartitionMap(
-                ConsumerProtocol.deserializeConsumerProtocolAssignment(
-                    ByteBuffer.wrap(classicGroupMember.assignment())
-                ),
-                topicsImage
+            ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(
+                ByteBuffer.wrap(classicGroupMember.assignment())
             );
-            ConsumerProtocolSubscription subscription = ConsumerProtocol.deserializeConsumerProtocolSubscription(
+            Map<Uuid, Set<Integer>> partitions = topicPartitionMapFromList(assignment.partitions(), topicsImage);
+
+            ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(
                 ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().get()))
             );
 
@@ -1331,12 +1296,12 @@ public class ConsumerGroup implements Group {
                 .setState(MemberState.STABLE)
                 .setPreviousMemberEpoch(classicGroup.generationId())
                 .setInstanceId(classicGroupMember.groupInstanceId().orElse(null))
-                .setRackId(toOptional(subscription.rackId()).orElse(null))
+                .setRackId(subscription.rackId().orElse(null))
                 .setRebalanceTimeoutMs(classicGroupMember.rebalanceTimeoutMs())
                 .setClientId(classicGroupMember.clientId())
                 .setClientHost(classicGroupMember.clientHost())
                 .setSubscribedTopicNames(subscription.topics())
-                .setAssignedPartitions(assignedPartitions)
+                .setAssignedPartitions(partitions)
                 .setClassicMemberMetadata(
                     new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                         .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())
@@ -1345,7 +1310,7 @@ public class ConsumerGroup implements Group {
                         ))
                 )
                 .build();
-            consumerGroup.updateTargetAssignment(newMember.memberId(), new Assignment(assignedPartitions));
+            consumerGroup.updateTargetAssignment(newMember.memberId(), new Assignment(partitions));
             consumerGroup.updateMember(newMember);
         });
 
@@ -1379,6 +1344,25 @@ public class ConsumerGroup implements Group {
         members().forEach((__, consumerGroupMember) ->
             records.add(CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId(), consumerGroupMember))
         );
+    }
+
+    /**
+     * @return The map of topic id and partition set converted from the list of TopicPartition.
+     */
+    private static Map<Uuid, Set<Integer>> topicPartitionMapFromList(
+        List<TopicPartition> partitions,
+        TopicsImage topicsImage
+    ) {
+        Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
+        partitions.forEach(topicPartition -> {
+            TopicImage topicImage = topicsImage.getTopic(topicPartition.topic());
+            if (topicImage != null) {
+                topicPartitionMap
+                    .computeIfAbsent(topicImage.id(), __ -> new HashSet<>())
+                    .add(topicPartition.partition());
+            }
+        });
+        return topicPartitionMap;
     }
 
     /**

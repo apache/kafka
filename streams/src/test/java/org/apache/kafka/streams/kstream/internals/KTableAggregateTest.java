@@ -45,7 +45,8 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -59,16 +60,14 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.Assert.assertEquals;
 
 public class KTableAggregateTest {
     private final Serde<String> stringSerde = Serdes.String();
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
     private final Grouped<String, String> stringSerialized = Grouped.with(stringSerde, stringSerde);
     private final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
-    private static final Properties CONFIG = mkProperties(mkMap(
+    private final static Properties CONFIG = mkProperties(mkMap(
         mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())));
 
     @Test
@@ -480,8 +479,8 @@ public class KTableAggregateTest {
 
             final NoEqualsImpl a = new NoEqualsImpl("1");
             final NoEqualsImpl b = new NoEqualsImpl("1");
-            assertNotEquals(a, b);
-            assertNotSame(a, b);
+            Assert.assertNotEquals(a, b);
+            Assert.assertNotSame(a, b);
 
             inputTopic.pipeInput(a, a, 8);
             inputTopic.pipeInput(b, b, 9);

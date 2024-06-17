@@ -17,12 +17,10 @@
 
 package org.apache.kafka.shell.command;
 
-import org.apache.kafka.shell.InteractiveShell;
-import org.apache.kafka.shell.state.MetadataShellState;
-
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
-
+import org.apache.kafka.shell.InteractiveShell;
+import org.apache.kafka.shell.state.MetadataShellState;
 import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
@@ -35,7 +33,7 @@ import java.util.Optional;
  * Implements the history command.
  */
 public final class HistoryCommandHandler implements Commands.Handler {
-    public static final Commands.Type TYPE = new HistoryCommandType();
+    public final static Commands.Type TYPE = new HistoryCommandType();
 
     public static class HistoryCommandType implements Commands.Type {
         private HistoryCommandType() {

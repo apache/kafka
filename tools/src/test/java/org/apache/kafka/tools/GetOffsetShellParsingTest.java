@@ -19,7 +19,6 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.server.util.TopicPartitionFilter;
-
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;

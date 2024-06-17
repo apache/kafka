@@ -52,7 +52,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     private static final SinkRecord DUMMY_RECORD = new SinkRecord(null, 0, null, null, null, null, 0L);
 
-    public abstract static class TestConnector extends Connector {
+    public static abstract class TestConnector extends Connector {
     }
 
     public static class SimpleTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
@@ -393,7 +393,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         }
     }
 
-    public abstract static class AbstractTestPredicate<R extends ConnectRecord<R>> implements Predicate<R>, Versioned {
+    public static abstract class AbstractTestPredicate<R extends ConnectRecord<R>> implements Predicate<R>, Versioned {
 
         @Override
         public String version() {
@@ -404,7 +404,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     }
 
-    public abstract static class AbstractTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
+    public static abstract class AbstractTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
 
         @Override
         public String version() {
@@ -413,7 +413,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     }
 
-    public abstract static class AbstractKeyValueTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
+    public static abstract class AbstractKeyValueTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
         @Override
         public R apply(R record) {
             return null;

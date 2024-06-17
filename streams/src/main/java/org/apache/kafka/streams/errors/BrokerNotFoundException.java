@@ -25,7 +25,7 @@ package org.apache.kafka.streams.errors;
  */
 public class BrokerNotFoundException extends StreamsException {
 
-    private static final long serialVersionUID = 1L;
+    private final static long serialVersionUID = 1L;
 
     public BrokerNotFoundException(final String message) {
         super(message);

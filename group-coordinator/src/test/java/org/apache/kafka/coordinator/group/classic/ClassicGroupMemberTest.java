@@ -20,7 +20,6 @@ package org.apache.kafka.coordinator.group.classic;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

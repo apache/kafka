@@ -17,11 +17,10 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 
 /**
  * RecordProcessor allows for acting on data polled from ConsumeBench workloads.
@@ -34,3 +33,4 @@ public interface RecordProcessor {
     void processRecords(ConsumerRecords<byte[], byte[]> consumerRecords);
     JsonNode processorStatus();
 }
+

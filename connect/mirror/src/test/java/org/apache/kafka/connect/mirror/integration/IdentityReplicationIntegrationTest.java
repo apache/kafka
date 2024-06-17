@@ -18,10 +18,11 @@ package org.apache.kafka.connect.mirror.integration;
 
 import org.apache.kafka.connect.mirror.IdentityReplicationPolicy;
 
-import org.junit.jupiter.api.BeforeEach;
+import java.util.HashMap;
+
 import org.junit.jupiter.api.Tag;
 
-import java.util.HashMap;
+import org.junit.jupiter.api.BeforeEach;
 
 /**
  * Tests MM2 replication and failover logic for {@link IdentityReplicationPolicy}.

@@ -28,7 +28,7 @@ public class ClusterImageControllersNode implements MetadataNode {
     /**
      * The name of this node.
      */
-    public static final String NAME = "controllers";
+    public final static String NAME = "controllers";
 
     /**
      * The cluster image.

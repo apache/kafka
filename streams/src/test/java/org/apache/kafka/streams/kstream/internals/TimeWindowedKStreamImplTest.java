@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -43,24 +45,25 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.Arguments;
+import org.junit.Before;
+import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.Collections;
-import java.util.stream.Stream;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 
 import static java.time.Duration.ofMillis;
 import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
+@RunWith(Parameterized.class)
 public class TimeWindowedKStreamImplTest {
     private static final String TOPIC = "input";
     private static final Windowed<String> KEY_1_WINDOW_0 = new Windowed<>("1", new TimeWindow(0L, 500L));
@@ -72,25 +75,27 @@ public class TimeWindowedKStreamImplTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private TimeWindowedKStream<String, String> windowedStream;
 
+    @Parameter
     public StrategyType type;
 
+    @Parameter(1)
     public boolean withCache;
 
     private EmitStrategy emitStrategy;
     private boolean emitFinal;
 
-    public static Stream<Arguments> data() {
-        return Stream.of(
-            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true),
-            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false),
-            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true),
-            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false)
-        );
+    @Parameterized.Parameters(name = "{0}_cache:{1}")
+    public static Collection<Object[]> data() {
+        return asList(new Object[][] {
+            {StrategyType.ON_WINDOW_UPDATE, true},
+            {StrategyType.ON_WINDOW_UPDATE, false},
+            {StrategyType.ON_WINDOW_CLOSE, true},
+            {StrategyType.ON_WINDOW_CLOSE, false}
+        });
     }
 
-    public void setup(final StrategyType inputType, final boolean inputWithCache) {
-        type = inputType;
-        withCache = inputWithCache;
+    @Before
+    public void before() {
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
         emitStrategy = StrategyType.forType(type);
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
@@ -98,10 +103,8 @@ public class TimeWindowedKStreamImplTest {
             .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L)));
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldCountWindowed(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldCountWindowed() {
         final MockApiProcessorSupplier<Windowed<String>, Long, Void, Void> supplier = new MockApiProcessorSupplier<>();
         windowedStream
             .emitStrategy(emitStrategy)
@@ -138,10 +141,8 @@ public class TimeWindowedKStreamImplTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldReduceWindowed(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldReduceWindowed() {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         windowedStream
             .emitStrategy(emitStrategy)
@@ -178,10 +179,8 @@ public class TimeWindowedKStreamImplTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldAggregateWindowed(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldAggregateWindowed() {
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         windowedStream
             .emitStrategy(emitStrategy)
@@ -222,10 +221,8 @@ public class TimeWindowedKStreamImplTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldMaterializeCount(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldMaterializeCount() {
         windowedStream
             .emitStrategy(emitStrategy)
             .count(
@@ -289,10 +286,8 @@ public class TimeWindowedKStreamImplTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldMaterializeReduced(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldMaterializeReduced() {
         windowedStream.reduce(
             MockReducer.STRING_ADDER,
             setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
@@ -341,10 +336,8 @@ public class TimeWindowedKStreamImplTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldMaterializeAggregated(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldMaterializeAggregated() {
         windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
@@ -393,41 +386,31 @@ public class TimeWindowedKStreamImplTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldThrowNullPointerOnAggregateIfInitializerIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldThrowNullPointerOnAggregateIfInitializerIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(null, MockAggregator.TOSTRING_ADDER));
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(MockInitializer.STRING_INIT, null));
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldThrowNullPointerOnReduceIfReducerIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldThrowNullPointerOnReduceIfReducerIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(null));
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
             null,
             MockAggregator.TOSTRING_ADDER,
             setMaterializedCache(Materialized.as("store"))));
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             null,
@@ -435,48 +418,38 @@ public class TimeWindowedKStreamImplTest {
     }
 
     @SuppressWarnings("unchecked")
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             (Materialized) null));
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(
             null,
             setMaterializedCache(Materialized.as("store"))));
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
+    @Test
     @SuppressWarnings("unchecked")
-    public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(
             MockReducer.STRING_ADDER,
             (Materialized) null));
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(
             MockReducer.STRING_ADDER,
             (Named) null));
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void shouldThrowNullPointerOnCountIfMaterializedIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    @Test
+    public void shouldThrowNullPointerOnCountIfMaterializedIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.count((Materialized<String, Long, WindowStore<Bytes, byte[]>>) null));
     }
 

@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Optional;
-import java.util.Set;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
@@ -27,16 +25,15 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
-import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
-import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
@@ -56,27 +53,23 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
-import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getInfo;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 @Category({IntegrationTest.class})
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class StreamsAssignmentScaleTest {
-    static final long MAX_ASSIGNMENT_DURATION = 120 * 1000L; // we should stay below `max.poll.interval.ms`
-    static final String APPLICATION_ID = "streams-assignment-scale-test";
+    final static long MAX_ASSIGNMENT_DURATION = 120 * 1000L; // we should stay below `max.poll.interval.ms`
+    final static String APPLICATION_ID = "streams-assignment-scale-test";
 
     private final Logger log = LoggerFactory.getLogger(StreamsAssignmentScaleTest.class);
 
@@ -102,26 +95,26 @@ public class StreamsAssignmentScaleTest {
         completeLargeAssignment(1_000, 10, 1000, 1, HighAvailabilityTaskAssignor.class);
     }
 
-    /* LegacyStickyTaskAssignor tests */
+    /* StickyTaskAssignor tests */
 
     @Test(timeout = 300 * 1000)
     public void testStickyTaskAssignorLargePartitionCount() {
-        completeLargeAssignment(2_000, 2, 1, 1, LegacyStickyTaskAssignor.class);
+        completeLargeAssignment(2_000, 2, 1, 1, StickyTaskAssignor.class);
     }
 
     @Test(timeout = 300 * 1000)
     public void testStickyTaskAssignorLargeNumConsumers() {
-        completeLargeAssignment(1_000, 1_000, 1, 1, LegacyStickyTaskAssignor.class);
+        completeLargeAssignment(1_000, 1_000, 1, 1, StickyTaskAssignor.class);
     }
 
     @Test(timeout = 300 * 1000)
     public void testStickyTaskAssignorManyStandbys() {
-        completeLargeAssignment(1_000, 100, 1, 20, LegacyStickyTaskAssignor.class);
+        completeLargeAssignment(1_000, 100, 1, 20, StickyTaskAssignor.class);
     }
 
     @Test(timeout = 300 * 1000)
     public void testStickyTaskAssignorManyThreadsPerClient() {
-        completeLargeAssignment(1_000, 10, 1000, 1, LegacyStickyTaskAssignor.class);
+        completeLargeAssignment(1_000, 10, 1000, 1, StickyTaskAssignor.class);
     }
 
     /* FallbackPriorTaskAssignor tests */
@@ -150,7 +143,7 @@ public class StreamsAssignmentScaleTest {
                                          final int numClients,
                                          final int numThreadsPerClient,
                                          final int numStandbys,
-                                         final Class<? extends LegacyTaskAssignor> taskAssignor) {
+                                         final Class<? extends TaskAssignor> taskAssignor) {
         final List<String> topic = singletonList("topic");
 
         final Map<TopicPartition, Long> changelogEndOffsets = new HashMap<>();
@@ -197,35 +190,11 @@ public class StreamsAssignmentScaleTest {
         configMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         configMap.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbys);
 
-        configMap.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
-
-        final MockInternalTopicManager mockInternalTopicManager = spy(new MockInternalTopicManager(
+        final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             new MockTime(),
             new StreamsConfig(configMap),
             new MockClientSupplier().restoreConsumer,
             false
-        ));
-
-        lenient().when(mockInternalTopicManager.getTopicPartitionInfo(anySet())).thenAnswer(
-            invocation -> {
-                final Map<String, List<TopicPartitionInfo>> answer = new HashMap<>();
-                final Set<String> topics = invocation.getArgument(0);
-                for (final String thisTopic : topics) {
-                    final List<TopicPartitionInfo> topicPartitionInfos = new ArrayList<>();
-                    partitionInfos.forEach(info -> {
-                        final TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
-                            info.partition(),
-                            info.leader(),
-                            singletonList(new Node(1, "host1", 80, "rack-1")),
-                            asList(info.inSyncReplicas())
-                        );
-                        topicPartitionInfos.add(topicPartitionInfo);
-                    });
-                    answer.put(thisTopic, topicPartitionInfos);
-                }
-                return answer;
-            }
         );
 
         final StreamsPartitionAssignor partitionAssignor = new StreamsPartitionAssignor();
@@ -237,13 +206,7 @@ public class StreamsAssignmentScaleTest {
             for (int i = 0; i < numThreadsPerClient; ++i) {
                 subscriptions.put(
                     getConsumerName(i, client),
-                    new Subscription(
-                        topic,
-                        getInfo(processIdForInt(client), EMPTY_TASKS, EMPTY_TASKS).encode(),
-                        Collections.emptyList(),
-                        DEFAULT_GENERATION,
-                        Optional.of(String.format("rack-%d", client % 31))
-                    )
+                    new Subscription(topic, getInfo(uuidForInt(client), EMPTY_TASKS, EMPTY_TASKS).encode())
                 );
             }
         }
@@ -270,7 +233,7 @@ public class StreamsAssignmentScaleTest {
                     consumer,
                     new Subscription(
                         topic,
-                        getInfo(processIdForInt(client), new HashSet<>(info.activeTasks()), info.standbyTasks().keySet()).encode(),
+                        getInfo(uuidForInt(client), new HashSet<>(info.activeTasks()), info.standbyTasks().keySet()).encode(),
                         assignment.partitions())
                 );
             }

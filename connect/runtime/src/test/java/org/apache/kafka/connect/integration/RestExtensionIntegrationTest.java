@@ -26,9 +26,10 @@ import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.apache.kafka.test.IntegrationTest;
+import org.junit.After;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -45,12 +46,12 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.rest.RestServerConfig.REST_EXTENSION_CLASSES_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.Assert.assertEquals;
 
 /**
  * A simple integration test to ensure that REST extensions are registered correctly.
  */
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class RestExtensionIntegrationTest {
 
     private static final long REST_EXTENSION_REGISTRATION_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
@@ -75,6 +76,9 @@ public class RestExtensionIntegrationTest {
 
         // start the clusters
         connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
 
         WorkerHandle worker = connect.workers().stream()
             .findFirst()
@@ -131,7 +135,7 @@ public class RestExtensionIntegrationTest {
         }
     }
 
-    @AfterEach
+    @After
     public void close() {
         // stop all Connect, Kafka and Zk threads.
         connect.stop();

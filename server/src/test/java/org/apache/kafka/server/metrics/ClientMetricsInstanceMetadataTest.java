@@ -17,7 +17,6 @@
 package org.apache.kafka.server.metrics;
 
 import org.apache.kafka.common.Uuid;
-
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
