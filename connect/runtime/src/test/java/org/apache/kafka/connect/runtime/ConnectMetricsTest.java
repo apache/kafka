@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
@@ -27,9 +24,14 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroupId;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;

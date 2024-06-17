@@ -16,16 +16,18 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Collections;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.MockTime;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * A specialization of {@link ConnectMetrics} that uses a custom {@link MetricsReporter} to capture the metrics

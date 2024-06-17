@@ -16,6 +16,12 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.runtime.distributed.ExtendedAssignment;
+import org.apache.kafka.connect.runtime.distributed.ExtendedWorkerState;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
+import org.apache.kafka.connect.storage.ClusterConfigState;
+import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Collections;
 import java.util.HashMap;
@@ -23,11 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.kafka.connect.runtime.distributed.ExtendedAssignment;
-import org.apache.kafka.connect.runtime.distributed.ExtendedWorkerState;
-import org.apache.kafka.connect.storage.AppliedConnectorConfig;
-import org.apache.kafka.connect.storage.ClusterConfigState;
-import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
 import static org.hamcrest.CoreMatchers.is;

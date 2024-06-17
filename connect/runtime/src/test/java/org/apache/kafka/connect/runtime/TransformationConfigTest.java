@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.HashMap;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.tools.MockConnector;
 import org.apache.kafka.connect.transforms.Cast;
@@ -31,7 +30,10 @@ import org.apache.kafka.connect.transforms.SetSchemaMetadata;
 import org.apache.kafka.connect.transforms.TimestampConverter;
 import org.apache.kafka.connect.transforms.TimestampRouter;
 import org.apache.kafka.connect.transforms.ValueToKey;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.HashMap;
 
 /**
  * Tests that transformations' configs can be composed with ConnectorConfig during its construction, ensuring no

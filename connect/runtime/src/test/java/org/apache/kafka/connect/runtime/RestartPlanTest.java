@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo.TaskState;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
