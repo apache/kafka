@@ -305,7 +305,6 @@ class ZkMigrationFailoverTest extends Logging {
         new ZKClientConfig)
     } catch {
       case t: Throwable =>
-        Utils.closeQuietly(zookeeper, "EmbeddedZookeeper")
         zookeeper.shutdown()
         if (zkClient != null) Utils.closeQuietly(zkClient, "KafkaZkClient")
         throw t
