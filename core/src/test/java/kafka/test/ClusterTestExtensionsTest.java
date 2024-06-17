@@ -17,7 +17,6 @@
 
 package kafka.test;
 
-import kafka.server.KafkaBroker;
 import kafka.test.annotation.AutoStart;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTemplate;
