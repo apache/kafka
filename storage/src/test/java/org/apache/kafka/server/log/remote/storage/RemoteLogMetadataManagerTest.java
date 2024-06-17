@@ -20,6 +20,7 @@ import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.junit.ClusterTestExtensions;
+
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataManagerTestUtils;
 import org.apache.kafka.server.log.remote.metadata.storage.RemotePartitionMetadataStore;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -35,15 +37,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.COPY_SEGMENT_FINISHED;
 import static org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteState.DELETE_PARTITION_FINISHED;
 import static org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteState.DELETE_PARTITION_MARKED;
 import static org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteState.DELETE_PARTITION_STARTED;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Tag("integration")
 @ExtendWith(ClusterTestExtensions.class)

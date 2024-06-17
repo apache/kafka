@@ -24,6 +24,7 @@ import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

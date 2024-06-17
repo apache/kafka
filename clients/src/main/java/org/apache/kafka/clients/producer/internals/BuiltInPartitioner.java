@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 
 /**
  * Built-in default partitioner.  Note, that this is just a utility class that is used directly from
@@ -44,8 +43,6 @@ public class BuiltInPartitioner {
     private volatile PartitionLoadStats partitionLoadStats = null;
     private final AtomicReference<StickyPartitionInfo> stickyPartitionInfo = new AtomicReference<>();
 
-    // Visible and used for testing only.
-    public static volatile Supplier<Integer> mockRandom = null;
 
     /**
      * BuiltInPartitioner constructor.
@@ -66,7 +63,7 @@ public class BuiltInPartitioner {
      * Calculate the next partition for the topic based on the partition load stats.
      */
     private int nextPartition(Cluster cluster) {
-        int random = mockRandom != null ? mockRandom.get() : Utils.toPositive(ThreadLocalRandom.current().nextInt());
+        int random = randomPartition();
 
         // Cache volatile variable in local variable.
         PartitionLoadStats partitionLoadStats = this.partitionLoadStats;
@@ -111,6 +108,10 @@ public class BuiltInPartitioner {
 
         log.trace("Switching to partition {} in topic {}", partition, topic);
         return partition;
+    }
+
+    int randomPartition() {
+        return Utils.toPositive(ThreadLocalRandom.current().nextInt());
     }
 
     /**
@@ -335,6 +336,7 @@ public class BuiltInPartitioner {
         public final int[] cumulativeFrequencyTable;
         public final int[] partitionIds;
         public final int length;
+
         public PartitionLoadStats(int[] cumulativeFrequencyTable, int[] partitionIds, int length) {
             assert cumulativeFrequencyTable.length == partitionIds.length;
             assert length <= cumulativeFrequencyTable.length;
