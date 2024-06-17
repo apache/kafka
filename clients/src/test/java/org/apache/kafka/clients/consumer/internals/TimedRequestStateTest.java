@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TimedRequestStateTest {
 
-    private final static long DEFAULT_TIMEOUT_MS = 30000;
+    private static final long DEFAULT_TIMEOUT_MS = 30000;
     private final Time time = new MockTime();
 
     @Test

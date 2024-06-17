@@ -119,18 +119,18 @@ public class WindowKeySchemaTest {
         mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::fromNonPrefixWindowKey)
     );
 
-    final private String key = "key";
-    final private String topic = "topic";
-    final private long startTime = 50L;
-    final private long endTime = 100L;
-    final private Serde<String> serde = Serdes.String();
+    private final String key = "key";
+    private final String topic = "topic";
+    private final long startTime = 50L;
+    private final long endTime = 100L;
+    private final Serde<String> serde = Serdes.String();
 
-    final private Window window = new TimeWindow(startTime, endTime);
-    final private Windowed<String> windowedKey = new Windowed<>(key, window);
-    final private KeySchema keySchema;
-    final private Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde, Long.MAX_VALUE);
-    final private StateSerdes<String, byte[]> stateSerdes = new StateSerdes<>("dummy", serde, Serdes.ByteArray());
-    final public SchemaType schemaType;
+    private final Window window = new TimeWindow(startTime, endTime);
+    private final Windowed<String> windowedKey = new Windowed<>(key, window);
+    private final KeySchema keySchema;
+    private final Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde, Long.MAX_VALUE);
+    private final StateSerdes<String, byte[]> stateSerdes = new StateSerdes<>("dummy", serde, Serdes.ByteArray());
+    public final SchemaType schemaType;
 
     private enum SchemaType {
         WindowKeySchema,

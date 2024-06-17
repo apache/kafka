@@ -34,9 +34,9 @@ import java.util.Arrays;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RuntimeLoggerManagerTest {
-    private final static Logger LOG = LoggerFactory.getLogger(RuntimeLoggerManagerTest.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RuntimeLoggerManagerTest.class);
 
-    private final static RuntimeLoggerManager MANAGER = new RuntimeLoggerManager(5, LOG);
+    private static final RuntimeLoggerManager MANAGER = new RuntimeLoggerManager(5, LOG);
 
     @Test
     public void testValidateSetLogLevelConfig() {

@@ -65,7 +65,7 @@ public enum ClientTelemetryState {
      */
     TERMINATED;
 
-    private final static Map<ClientTelemetryState, List<ClientTelemetryState>> VALID_NEXT_STATES = new EnumMap<>(ClientTelemetryState.class);
+    private static final Map<ClientTelemetryState, List<ClientTelemetryState>> VALID_NEXT_STATES = new EnumMap<>(ClientTelemetryState.class);
 
     static {
         /*

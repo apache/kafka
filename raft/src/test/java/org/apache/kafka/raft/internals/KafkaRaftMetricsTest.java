@@ -26,6 +26,7 @@ import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.MockQuorumStateStore;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -147,8 +148,8 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 1, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(5L), voters.voterIds());
-        state.leaderStateOrThrow().updateReplicaState(1, 0, new LogOffsetMetadata(5L));
+        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(5L), voters.voters());
+        state.leaderStateOrThrow().updateReplicaState(1, Uuid.randomUuid(), 0, new LogOffsetMetadata(5L));
         assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 
         state.transitionToFollower(2, voters.voterNode(1, VoterSetTest.DEFAULT_LISTENER_NAME).get());

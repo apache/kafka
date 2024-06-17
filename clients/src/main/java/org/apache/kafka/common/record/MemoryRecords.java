@@ -354,7 +354,7 @@ public class MemoryRecords extends AbstractRecords {
         return buffer.hashCode();
     }
 
-    public static abstract class RecordFilter {
+    public abstract static class RecordFilter {
         public final long currentTime;
         public final long deleteRetentionMs;
 

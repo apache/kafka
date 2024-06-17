@@ -22,7 +22,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectMetrics;
@@ -97,14 +97,14 @@ public class RetryWithToleranceOperatorTest {
         return genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, new ErrorHandlingMetrics(
                 new ConnectorTaskId("noop-connector", -1),
                 new ConnectMetrics("noop-worker", new TestableWorkerConfig(PROPERTIES),
-                        new SystemTime(), "test-cluster")));
+                        Time.SYSTEM, "test-cluster")));
     }
 
     public static <T> RetryWithToleranceOperator<T> allOperator() {
         return genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ALL, new ErrorHandlingMetrics(
                 new ConnectorTaskId("errors-all-tolerate-connector", -1),
                 new ConnectMetrics("errors-all-tolerate-worker", new TestableWorkerConfig(PROPERTIES),
-                        new SystemTime(), "test-cluster")));
+                        Time.SYSTEM, "test-cluster")));
     }
 
     private static <T> RetryWithToleranceOperator<T> genericOperator(int retryTimeout, ToleranceType toleranceType, ErrorHandlingMetrics metrics) {

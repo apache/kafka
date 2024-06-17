@@ -22,7 +22,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import java.util.Arrays;
 
 public class SubscriptionResponseWrapper<FV> {
-    final static byte CURRENT_VERSION = 0;
+    static final byte CURRENT_VERSION = 0;
     // v0 fields:
     private final long[] originalValueHash;
     private final FV foreignValue;

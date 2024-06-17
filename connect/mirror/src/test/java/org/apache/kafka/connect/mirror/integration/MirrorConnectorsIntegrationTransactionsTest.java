@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+
 import org.junit.jupiter.api.BeforeEach;
 
 import java.util.HashMap;

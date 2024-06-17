@@ -26,6 +26,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.slf4j.Logger;
 
 import java.util.Arrays;
@@ -41,7 +42,7 @@ public class PartitionRegistration {
     /**
      * A builder class which creates a PartitionRegistration.
      */
-    static public class Builder {
+    public static class Builder {
         private int[] replicas;
         private Uuid[] directories;
         private int[] isr;

@@ -21,6 +21,7 @@ import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
