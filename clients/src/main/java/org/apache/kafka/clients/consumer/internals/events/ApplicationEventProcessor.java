@@ -32,7 +32,6 @@ import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
@@ -117,10 +116,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
             case COMMIT_ON_CLOSE:
                 process((CommitOnCloseEvent) event);
-                return;
-
-            case LEAVE_ON_CLOSE:
-                process((LeaveOnCloseEvent) event);
                 return;
 
             default:
@@ -266,20 +261,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         log.debug("Signal CommitRequestManager closing");
         requestManagers.commitRequestManager.get().signalClose();
-    }
-
-    private void process(final LeaveOnCloseEvent event) {
-        if (!requestManagers.heartbeatRequestManager.isPresent()) {
-            event.future().complete(null);
-            return;
-        }
-        MembershipManager membershipManager =
-            Objects.requireNonNull(requestManagers.heartbeatRequestManager.get().membershipManager(), "Expecting " +
-                "membership manager to be non-null");
-        log.debug("Leaving group before closing");
-        CompletableFuture<Void> future = membershipManager.leaveGroup();
-        // The future will be completed on heartbeat sent
-        future.whenComplete(complete(event.future()));
     }
 
     private <T> BiConsumer<? super T, ? super Throwable> complete(final CompletableFuture<T> b) {
