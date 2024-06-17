@@ -231,7 +231,7 @@ public class ConfigCommandIntegrationTest {
             alterAndVerifyConfig(client, Optional.empty(), singletonMap("message.max.bytes", "140000"));
 
             // Delete config
-            deleteAndVerifyConfig(client, Optional.of(defaultBrokerId), singleton("message.max.bytes"));
+            deleteAndVerifyDefaultConfigValue(client, Optional.of(defaultBrokerId), singleton("message.max.bytes"));
 
             // Listener configs: should work only with listener name
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
@@ -240,7 +240,7 @@ public class ConfigCommandIntegrationTest {
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithKraft(client, Optional.empty(), 
                             singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks")));
-            deleteAndVerifyConfig(client, Optional.of(defaultBrokerId),
+            deleteAndVerifyDefaultConfigValue(client, Optional.of(defaultBrokerId),
                     singleton("listener.name.internal.ssl.keystore.location"));
             alterConfigWithKraft(client, Optional.of(defaultBrokerId),
                     singletonMap("listener.name.external.ssl.keystore.password", "secret"));
@@ -517,15 +517,15 @@ public class ConfigCommandIntegrationTest {
                 .flatMap(e -> e.entries().stream());
     }
 
-    private void deleteAndVerifyConfig(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
+    private void deleteAndVerifyDefaultConfigValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
         ConfigCommand.ConfigCommandOptions deleteOpts =
                 new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
                         asList("--delete-config", String.join(",", config))));
         ConfigCommand.alterConfig(client, deleteOpts);
-        verifyPerBrokerConfigValue(client, brokerId, config);
+        verifyPerBrokerDefaultConfigValue(client, brokerId, config);
     }
 
-    private void verifyPerBrokerConfigValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
+    private void verifyPerBrokerDefaultConfigValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
         TestUtils.waitForCondition(() -> {
             Map<String, String> current = getConfigEntryStream(client, configResource)
