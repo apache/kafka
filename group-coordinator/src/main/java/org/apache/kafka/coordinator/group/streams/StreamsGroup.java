@@ -139,22 +139,6 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, Integer> assignors;
 
     /**
-     * The number of subscribers per topic.
-     */
-    private final TimelineHashMap<String, Integer> subscribedTopicNames;
-
-    /**
-     * The metadata associated with each subscribed topic name.
-     */
-    private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
-
-    /**
-     * The streams group's subscription type.
-     * This value is set to Homogeneous by default.
-     */
-    private final TimelineObject<SubscriptionType> subscriptionType;
-
-    /**
      * The target assignment epoch. An assignment epoch smaller than the group epoch
      * means that a new assignment is required. The assignment epoch is updated when
      * a new assignment is installed.
@@ -211,9 +195,6 @@ public class StreamsGroup implements Group {
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.assignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -449,33 +430,6 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return An immutable map containing all the subscribed topic names
-     *         with the subscribers counts per topic.
-     */
-    public Map<String, Integer> subscribedTopicNames() {
-        return Collections.unmodifiableMap(subscribedTopicNames);
-    }
-
-    /**
-     * Returns true if the consumer group is actively subscribed to the topic.
-     *
-     * @param topic  The topic name.
-     *
-     * @return Whether the group is subscribed to the topic.
-     */
-    @Override
-    public boolean isSubscribedToTopic(String topic) {
-        return subscribedTopicNames.containsKey(topic);
-    }
-
-    /**
-     * @return The group's subscription type.
-     */
-    public SubscriptionType subscriptionType() {
-        return subscriptionType.get();
-    }
-
-    /**
      * Returns the target assignment of the member.
      *
      * @return The StreamsGroupMemberAssignment or an EMPTY one if it does not
@@ -699,72 +653,6 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return An immutable Map of subscription metadata for
-     *         each topic that the consumer group is subscribed to.
-     */
-    public Map<String, TopicMetadata> subscriptionMetadata() {
-        return Collections.unmodifiableMap(subscribedTopicMetadata);
-    }
-
-    /**
-     * Updates the subscription metadata. This replaces the previous one.
-     *
-     * @param subscriptionMetadata The new subscription metadata.
-     */
-    public void setSubscriptionMetadata(
-        Map<String, TopicMetadata> subscriptionMetadata
-    ) {
-        this.subscribedTopicMetadata.clear();
-        this.subscribedTopicMetadata.putAll(subscriptionMetadata);
-    }
-
-    /**
-     * Computes the subscription metadata based on the current subscription info.
-     *
-     * @param subscribedTopicNames      Map of topic names to the number of subscribers.
-     * @param topicsImage               The current metadata for all available topics.
-     * @param clusterImage              The current metadata for the Kafka cluster.
-     *
-     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
-     */
-    public Map<String, TopicMetadata> computeSubscriptionMetadata(
-        Map<String, Integer> subscribedTopicNames,
-        TopicsImage topicsImage,
-        ClusterImage clusterImage
-    ) {
-        // Create the topic metadata for each subscribed topic.
-        Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
-
-        subscribedTopicNames.forEach((topicName, count) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicName);
-            if (topicImage != null) {
-                Map<Integer, Set<String>> partitionRacks = new HashMap<>();
-                topicImage.partitions().forEach((partition, partitionRegistration) -> {
-                    Set<String> racks = new HashSet<>();
-                    for (int replica : partitionRegistration.replicas) {
-                        Optional<String> rackOptional = clusterImage.broker(replica).rack();
-                        // Only add the rack if it is available for the broker/replica.
-                        rackOptional.ifPresent(racks::add);
-                    }
-                    // If rack information is unavailable for all replicas of this partition,
-                    // no corresponding entry will be stored for it in the map.
-                    if (!racks.isEmpty())
-                        partitionRacks.put(partition, racks);
-                });
-
-                newSubscriptionMetadata.put(topicName, new TopicMetadata(
-                    topicImage.id(),
-                    topicImage.name(),
-                    topicImage.partitions().size(),
-                    partitionRacks)
-                );
-            }
-        });
-
-        return Collections.unmodifiableMap(newSubscriptionMetadata);
-    }
-
-    /**
      * Updates the metadata refresh deadline.
      *
      * @param deadlineMs The deadline in milliseconds.
@@ -870,6 +758,11 @@ public class StreamsGroup implements Group {
         if (state() != StreamsGroupState.EMPTY) {
             throw Errors.NON_EMPTY_GROUP.exception();
         }
+    }
+
+    @Override
+    public boolean isSubscribedToTopic(String topic) {
+        return false;
     }
 
     /**
