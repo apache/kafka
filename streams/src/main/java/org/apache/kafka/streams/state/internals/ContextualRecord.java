@@ -67,7 +67,6 @@ public class ContextualRecord {
     /**
      * See {@link ProcessorRecordContext#hashCode()}
      */
-    @Deprecated
     @Override
     public int hashCode() {
         throw new UnsupportedOperationException("ContextualRecord.ProcessorRecordContext is unsafe for use in Hash collections "
