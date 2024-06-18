@@ -60,6 +60,7 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Random;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -762,14 +763,14 @@ public class RaftEventSimulationTest {
                 .stream()
                 .collect(Collectors.toMap(Node::id, Cluster::nodeAddress));
 
-            QuorumConfig quorumConfig = new QuorumConfig(
-                REQUEST_TIMEOUT_MS,
-                RETRY_BACKOFF_MS,
-                ELECTION_TIMEOUT_MS,
-                ELECTION_JITTER_MS,
-                FETCH_TIMEOUT_MS,
-                LINGER_MS
-            );
+            Properties props = new Properties();
+            props.put(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
+            props.put(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
+            props.put(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, ELECTION_TIMEOUT_MS);
+            props.put(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, ELECTION_JITTER_MS);
+            props.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, FETCH_TIMEOUT_MS);
+            props.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, LINGER_MS);
+            QuorumConfig quorumConfig = new QuorumConfig(props);
             Metrics metrics = new Metrics(time);
 
             persistentState.log.reopen();
