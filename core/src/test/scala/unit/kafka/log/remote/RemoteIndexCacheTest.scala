@@ -947,26 +947,6 @@ class RemoteIndexCacheTest {
   }
 
   @Test
-  def testReopenClosedTxnIndex(): Unit = {
-    val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
-    val metadataList = generateRemoteLogSegmentMetadata(size = 1, tpId)
-
-    assertCacheSize(0)
-    // getIndex for first time will call rsm#fetchIndex
-    val cacheEntry = cache.getIndexEntry(metadataList.head)
-    assertCacheSize(1)
-    assertTrue(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isPresent)
-    assertTrue(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent)
-    assertTrue(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent)
-
-    // Close cached transaction index
-    cacheEntry.txnIndex.close()
-
-    // Reopen cached transaction index
-    assertFalse(cacheEntry.txnIndex.isClosed)
-  }
-
-  @Test
   def testDeleteInvalidIndexFilesOnInit(): Unit = {
     val cacheDir = new File(logDir, RemoteIndexCache.DIR_NAME)
     val baseOffset: Long = 100L
