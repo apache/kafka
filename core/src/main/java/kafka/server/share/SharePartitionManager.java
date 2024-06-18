@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.group.share.Persister;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.ShareSession;
 import org.apache.kafka.server.share.ShareSessionCache;
@@ -102,15 +103,21 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final int maxDeliveryCount;
 
+    /**
+     * The persister is used to persist the share partition state.
+     */
+    private final Persister persister;
+
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
         ShareSessionCache cache,
         int recordLockDurationMs,
         int maxDeliveryCount,
-        int maxInFlightMessages
+        int maxInFlightMessages,
+        Persister persister
     ) {
-        this(replicaManager, time, cache, new ConcurrentHashMap<>(), recordLockDurationMs, maxDeliveryCount, maxInFlightMessages);
+        this(replicaManager, time, cache, new ConcurrentHashMap<>(), recordLockDurationMs, maxDeliveryCount, maxInFlightMessages, persister);
     }
 
     SharePartitionManager(
@@ -120,7 +127,8 @@ public class SharePartitionManager implements AutoCloseable {
         Map<SharePartitionKey, SharePartition> partitionCacheMap,
         int recordLockDurationMs,
         int maxDeliveryCount,
-        int maxInFlightMessages
+        int maxInFlightMessages,
+        Persister persister
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -131,6 +139,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.recordLockDurationMs = recordLockDurationMs;
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
+        this.persister = persister;
     }
 
     /**
