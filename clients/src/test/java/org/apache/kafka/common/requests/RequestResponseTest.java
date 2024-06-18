@@ -481,11 +481,8 @@ public class RequestResponseTest {
         ProduceRequest request = ProduceRequest.forMagic(RecordBatch.MAGIC_VALUE_V2,
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(asList(
-                                new ProduceRequestData.TopicProduceData().setName(tp0.topic()).setTopicId(topicId).setPartitionData(
-                                        singletonList(new ProduceRequestData.PartitionProduceData().setIndex(tp0.partition()).setRecords(records0))),
-                                new ProduceRequestData.TopicProduceData().setName(tp1.topic()).setTopicId(topicId).setPartitionData(
-                                        singletonList(new ProduceRequestData.PartitionProduceData().setIndex(tp1.partition()).setRecords(records1))))
-                                .iterator()))
+                                createTopicProduceData(PRODUCE.latestVersion(), records0, tp0),
+                                createTopicProduceData(PRODUCE.latestVersion(), records1, tp1)).iterator()))
                         .setAcks((short) 1)
                         .setTimeoutMs(5000)
                         .setTransactionalId("transactionalId"))
@@ -2556,27 +2553,36 @@ public class RequestResponseTest {
                     .setAcks((short) -1)
                     .setTimeoutMs(123)
                     .setTopicData(new ProduceRequestData.TopicProduceDataCollection(singletonList(
-                            new ProduceRequestData.TopicProduceData()
-                                    .setName("topic1")
-                                    .setPartitionData(singletonList(new ProduceRequestData.PartitionProduceData()
-                                            .setIndex(1)
-                                            .setRecords(records)))).iterator()));
+                            createTopicProduceData(version, records, new TopicIdPartition(Uuid.ZERO_UUID, 1, "topic1"))
+                    ).iterator()));
             return new ProduceRequest.Builder(version, version, data).build(version);
         }
+
         byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
         MemoryRecords records = MemoryRecords.withRecords(magic, Compression.NONE, new SimpleRecord("woot".getBytes()));
+        TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "test");
         return ProduceRequest.forMagic(magic,
                 new ProduceRequestData()
-                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(singletonList(
-                                new ProduceRequestData.TopicProduceData()
-                                        .setName("test")
-                                        .setPartitionData(singletonList(new ProduceRequestData.PartitionProduceData()
-                                                .setIndex(0)
-                                                .setRecords(records)))).iterator()))
+                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+                                singletonList(createTopicProduceData(version, records, topicIdPartition)).iterator()
+                        ))
                         .setAcks((short) 1)
                         .setTimeoutMs(5000)
                         .setTransactionalId(version >= 3 ? "transactionalId" : null))
                 .build(version);
+    }
+
+    private static ProduceRequestData.TopicProduceData createTopicProduceData(short version, MemoryRecords records, TopicIdPartition tp) {
+        ProduceRequestData.TopicProduceData topicProduceData = new ProduceRequestData.TopicProduceData()
+                .setPartitionData(singletonList(new ProduceRequestData.PartitionProduceData()
+                        .setIndex(tp.partition())
+                        .setRecords(records)));
+        if (version >= 12) {
+            topicProduceData.setTopicId(tp.topicId());
+        } else {
+            topicProduceData.setName(tp.topic());
+        }
+        return topicProduceData;
     }
 
     @SuppressWarnings("deprecation")

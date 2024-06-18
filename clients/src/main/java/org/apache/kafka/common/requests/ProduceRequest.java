@@ -63,7 +63,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     private static boolean canNotSupportTopicId(ProduceRequestData data) {
-        return data.topicData().stream().anyMatch(d -> d.topicId() == null || d.topicId() == Uuid.ZERO_UUID);
+        return data.topicData().stream().anyMatch(d -> d.topicId() == Uuid.ZERO_UUID);
     }
 
     public static Builder forCurrentMagic(ProduceRequestData data) {

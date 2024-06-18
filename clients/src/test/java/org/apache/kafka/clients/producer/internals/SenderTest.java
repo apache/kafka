@@ -3658,7 +3658,11 @@ public class SenderTest {
             TopicPartition topicPartition = entry.getKey();
             ProduceResponseData.TopicProduceResponse topicData = data.responses().find(topicPartition.topic(), TOPIC_ID);
             if (topicData == null) {
-                topicData = new ProduceResponseData.TopicProduceResponse().setName(topicPartition.topic()).setTopicId(TOPIC_ID);
+                if (apiVersions.maxSupportedProduceVersion() >= 12) {
+                    topicData = new ProduceResponseData.TopicProduceResponse().setTopicId(TOPIC_ID);
+                } else {
+                    topicData = new ProduceResponseData.TopicProduceResponse().setName(topicPartition.topic());
+                }
                 data.responses().add(topicData);
             }
 

@@ -613,7 +613,7 @@ public class Sender implements Runnable {
                 produceResponse.data().responses().forEach(r -> r.partitionResponses().forEach(p -> {
 
                     // Version 12 drop topic name and add support to topic id. However, metadata can be used to map topic id to topic name.
-                    String topicName = (r.name() == null || r.name().isEmpty()) ? metadata.topicNames().get(r.topicId()) : r.name();
+                    String topicName = metadata.topicNames().getOrDefault(r.topicId(), r.name());
                     TopicPartition tp = new TopicPartition(topicName, p.index());
                     ProduceResponse.PartitionResponse partResp = new ProduceResponse.PartitionResponse(
                             Errors.forCode(p.errorCode()),
@@ -906,12 +906,14 @@ public class Sender implements Runnable {
 
             if (tpData == null) {
                 tpData = new ProduceRequestData.TopicProduceData();
+
+                if (canUseTopicId) {
+                    tpData.setTopicId(topicIds.get(tp.topic()));
+                } else {
+                    tpData.setName(tp.topic());
+                }
+
                 tpd.add(tpData);
-            }
-            if (canUseTopicId) {
-                tpData.setTopicId(topicIds.get(tp.topic()));
-            } else {
-                tpData.setName(tp.topic());
             }
 
             tpData.partitionData().add(new ProduceRequestData.PartitionProduceData()

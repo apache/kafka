@@ -121,11 +121,10 @@ public class ProduceRequestTest {
         ProduceRequest.Builder requestBuilder = ProduceRequest.forMagic(RecordBatch.CURRENT_MAGIC_VALUE,
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
-                                        new ProduceRequestData.TopicProduceData()
-                                                .setName("test")
-                                                .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
-                                                .setPartitionData(Collections.singletonList(
-                                                        new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
+                                new ProduceRequestData.TopicProduceData()
+                                        .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                                        .setPartitionData(Collections.singletonList(
+                                                new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
                                 .iterator()))
                         .setAcks((short) 1)
                         .setTimeoutMs(5000));
