@@ -27,6 +27,7 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.junit.jupiter.api.Test;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.mock;
@@ -85,6 +86,7 @@ public class MetadataVersionConfigValidatorTest {
         KafkaConfig config = mock(KafkaConfig.class);
         FaultHandler faultHandler = mock(FaultHandler.class);
 
+        when(faultHandler.handleFault(any(), any())).thenReturn(new RuntimeException("returned exception"));
         when(config.brokerId()).thenReturn(8);
         willAnswer(invocation -> {
             throw exception;
