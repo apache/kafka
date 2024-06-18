@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
+import java.nio.ByteBuffer
 import java.util.Collections
 import scala.jdk.CollectionConverters._
 
@@ -418,22 +419,11 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     // Classic member 1 joins the classic group.
     val groupId = "grp"
-    val metadataWithEmptyPartitions = ConsumerProtocol.serializeSubscription(
-      new ConsumerPartitionAssignor.Subscription(
-        Collections.singletonList("foo"),
-        null,
-        Collections.emptyList
-      )
-    ).array
 
     val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol(
       groupId = groupId,
-      metadata = metadataWithEmptyPartitions,
-      assignment = ConsumerProtocol.serializeAssignment(
-        new ConsumerPartitionAssignor.Assignment(
-          List(new TopicPartition("foo", 0), new TopicPartition("foo", 1), new TopicPartition("foo", 2)).asJava
-        )
-      ).array
+      metadata = metadata(List()),
+      assignment = assignment(List(0, 1, 2))
     )
 
     // The joining request with a consumer group member 2 is accepted.
@@ -530,7 +520,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       sendJoinRequest(
         groupId = groupId,
         memberId = memberId1,
-        metadata = metadataWithEmptyPartitions
+        metadata = metadata(List())
       )
     )
 
@@ -561,15 +551,11 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     // Member 1 syncs.
-    syncGroupWithOldProtocol(
+    verifySyncGroupWithOldProtocol(
       groupId = "grp",
       memberId = memberId1,
       generationId = 2,
-      expectedAssignment = ConsumerProtocol.serializeAssignment(
-        new ConsumerPartitionAssignor.Assignment(
-          List(0, 1, 2).filter(!partitionsOfMember2.contains(_)).map(new TopicPartition("foo", _)).asJava
-        )
-      ).array
+      expectedAssignment = assignment(List(0, 1, 2).filter(!partitionsOfMember2.contains(_)))
     )
 
     // Downgrade the group by leaving member 2.
@@ -592,5 +578,239 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         typesFilter = List(Group.GroupType.CLASSIC.toString)
       )
     )
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "bidirectional")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testOnlineUpgradeWithCooperativeAssignmentStrategy(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Classic member 1 joins the classic group.
+    val groupId = "grp"
+
+    val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol(
+      groupId = groupId,
+      metadata = metadata(List()),
+      assignment = assignment(List(0, 1, 2))
+    )
+
+    // The joining request with a consumer group member 2 is accepted.
+    val memberId2 = consumerGroupHeartbeat(
+      groupId = groupId,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    ).memberId
+
+    // The group has become a consumer group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.RECONCILING.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+
+    // Member 1 heartbeats and gets REBALANCE_IN_PROGRESS.
+    heartbeat(
+      groupId = groupId,
+      generationId = 1,
+      memberId = memberId1,
+      expectedError = Errors.REBALANCE_IN_PROGRESS
+    )
+
+    // Member 1 commits offset. Start from version 1 because version 0 goes to ZK.
+    for (version <- 1 to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
+      for (partitionId <- 0 to 2) {
+        commitOffset(
+          groupId = "grp",
+          memberId = memberId1,
+          memberEpoch = 1,
+          topic = "foo",
+          partition = partitionId,
+          offset = 100L + 10 * version + partitionId,
+          expectedError = Errors.NONE,
+          version = version.toShort
+        )
+      }
+    }
+    val committedOffset = 100L + 10 * ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+
+    // Member 1 fetches offsets. Start from version 1 because version 0 goes to ZK.
+    for (version <- 1 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
+      assertEquals(
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("grp")
+          .setTopics(List(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setName("foo")
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setCommittedOffset(committedOffset),
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(1)
+                  .setCommittedOffset(committedOffset + 1),
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(2)
+                  .setCommittedOffset(committedOffset + 2)
+              ).asJava)
+          ).asJava),
+        fetchOffsets(
+          groupId = "grp",
+          memberId = memberId1,
+          memberEpoch = 1,
+          partitions = List(
+            new TopicPartition("foo", 0),
+            new TopicPartition("foo", 1),
+            new TopicPartition("foo", 2)
+          ),
+          requireStable = false,
+          version = version.toShort
+        )
+      )
+    }
+
+    // Member 1 rejoins with current owned partitions.
+    assertEquals(
+      new JoinGroupResponseData()
+        .setGenerationId(1)
+        .setProtocolType("consumer")
+        .setProtocolName("consumer-range")
+        .setMemberId(memberId1),
+      sendJoinRequest(
+        groupId = groupId,
+        memberId = memberId1,
+        metadata = metadata(List(0, 1, 2))
+      )
+    )
+
+    // Member 1 syncs.
+    val partitionsOfMember1 = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(
+      syncGroupWithOldProtocol(
+        groupId = "grp",
+        memberId = memberId1,
+        generationId = 1
+      ).assignment()
+    )).partitions()
+
+    // Member 1 heartbeats and gets REBALANCE_IN_PROGRESS.
+    heartbeat(
+      groupId = groupId,
+      generationId = 1,
+      memberId = memberId1,
+      expectedError = Errors.REBALANCE_IN_PROGRESS
+    )
+
+    // Member 1 rejoins with assigned partitions.
+    assertEquals(
+      new JoinGroupResponseData()
+        .setGenerationId(2)
+        .setProtocolType("consumer")
+        .setProtocolName("consumer-range")
+        .setMemberId(memberId1),
+      sendJoinRequest(
+        groupId = groupId,
+        memberId = memberId1,
+        metadata = metadata(partitionsOfMember1.asScala.toList.map(_.partition))
+      )
+    )
+
+    // Member 1 syncs.
+    verifySyncGroupWithOldProtocol(
+      groupId = "grp",
+      memberId = memberId1,
+      generationId = 2,
+      expectedAssignment = assignment(partitionsOfMember1.asScala.toList.map(_.partition))
+    )
+
+    // Member 2 rejoins to retrieve partitions pending assignment.
+    consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberId2,
+      memberEpoch = 2,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    )
+
+    // The group has been stabilized.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.STABLE.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+
+    // Downgrade the group by leaving member 2.
+    leaveGroupWithNewProtocol(
+      groupId = groupId,
+      memberId = memberId2
+    )
+
+    // The group has become a classic group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ClassicGroupState.PREPARING_REBALANCE.toString)
+          .setGroupType(Group.GroupType.CLASSIC.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CLASSIC.toString)
+      )
+    )
+  }
+
+  private def metadata(ownedPartitions: List[Int]): Array[Byte] = {
+    ConsumerProtocol.serializeSubscription(
+      new ConsumerPartitionAssignor.Subscription(
+        Collections.singletonList("foo"),
+        null,
+        ownedPartitions.map(new TopicPartition("foo", _)).asJava
+      )
+    ).array
+  }
+
+  private def assignment(assignedPartitions: List[Int]): Array[Byte] = {
+    ConsumerProtocol.serializeAssignment(
+      new ConsumerPartitionAssignor.Assignment(
+        assignedPartitions.map(new TopicPartition("foo", _)).asJava
+      )
+    ).array
   }
 }

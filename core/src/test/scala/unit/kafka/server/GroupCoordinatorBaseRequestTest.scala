@@ -236,7 +236,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     }
   }
 
-  protected def syncGroupWithOldProtocol(
+  protected def verifySyncGroupWithOldProtocol(
     groupId: String,
     memberId: String,
     generationId: Int,
@@ -249,6 +249,37 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     expectedError: Errors = Errors.NONE,
     version: Short = ApiKeys.SYNC_GROUP.latestVersion(isUnstableApiEnabled)
   ): SyncGroupResponseData = {
+    val syncGroupResponseData = syncGroupWithOldProtocol(
+      groupId = groupId,
+      memberId = memberId,
+      generationId = generationId,
+      protocolType = protocolType,
+      protocolName = protocolName,
+      assignments = assignments,
+      version = version
+    )
+
+    assertEquals(
+      new SyncGroupResponseData()
+        .setErrorCode(expectedError.code)
+        .setProtocolType(if (version >= 5) expectedProtocolType else null)
+        .setProtocolName(if (version >= 5) expectedProtocolName else null)
+        .setAssignment(expectedAssignment),
+      syncGroupResponseData
+    )
+
+    syncGroupResponseData
+  }
+
+  protected def syncGroupWithOldProtocol(
+    groupId: String,
+    memberId: String,
+    generationId: Int,
+    protocolType: String = "consumer",
+    protocolName: String = "consumer-range",
+    assignments: List[SyncGroupRequestData.SyncGroupRequestAssignment] = List.empty,
+    version: Short = ApiKeys.SYNC_GROUP.latestVersion(isUnstableApiEnabled)
+  ): SyncGroupResponseData = {
     val syncGroupRequestData = new SyncGroupRequestData()
       .setGroupId(groupId)
       .setMemberId(memberId)
@@ -259,16 +290,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
     val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build(version)
     val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
-    
-    assertEquals(
-      new SyncGroupResponseData()
-        .setErrorCode(expectedError.code)
-        .setProtocolType(if (version >= 5) expectedProtocolType else null)
-        .setProtocolName(if (version >= 5) expectedProtocolName else null)
-        .setAssignment(expectedAssignment),
-      syncGroupResponse.data
-    )
-
     syncGroupResponse.data
   }
 
@@ -330,7 +351,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
     if (completeRebalance) {
       // Send the sync group request to complete the rebalance.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = groupId,
         memberId = rejoinGroupResponseData.memberId,
         generationId = rejoinGroupResponseData.generationId,
@@ -358,7 +379,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
     if (completeRebalance) {
       // Send the sync group request to complete the rebalance.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = groupId,
         memberId = joinGroupResponseData.memberId,
         generationId = joinGroupResponseData.generationId
