@@ -508,6 +508,7 @@ public class RemoteIndexCache implements Closeable {
         public Entry(OffsetIndex offsetIndex, TimeIndex timeIndex, TransactionIndex txnIndex) {
             this.offsetIndex = offsetIndex;
             this.timeIndex = timeIndex;
+            // If txn index does not exist on the source, it's an empty file on the index entry
             this.txnIndex = txnIndex;
             this.entrySizeBytes = estimatedEntrySize();
         }
