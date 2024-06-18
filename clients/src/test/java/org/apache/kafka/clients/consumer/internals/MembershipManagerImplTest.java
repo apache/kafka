@@ -1049,9 +1049,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testLeaveGroupWhenMemberFenced() {
-        
-        backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
         ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = mockFencedMemberStuckOnUserCallback(membershipManager, invoker);
@@ -1626,9 +1623,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testListenerCallbacksBasic() {
-        
-        backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         MembershipManagerImpl membershipManager = createMemberInStableState();
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
@@ -1717,9 +1711,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testListenerCallbacksThrowsErrorOnPartitionsRevoked() {
-        
-        backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         // Step 1: set up mocks
         String topicName = "topic1";
         Uuid topicId = Uuid.randomUuid();
@@ -1774,9 +1765,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testListenerCallbacksThrowsErrorOnPartitionsAssigned() {
-        
-        backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         // Step 1: set up mocks
         MembershipManagerImpl membershipManager = createMemberInStableState();
         String topicName = "topic1";
@@ -1841,8 +1829,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testAddedPartitionsTemporarilyDisabledAwaitingOnPartitionsAssignedCallback() {
-        backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         String topicName = "topic1";
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
@@ -1871,9 +1857,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testAddedPartitionsNotEnabledAfterFailedOnPartitionsAssignedCallback() {
-        backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
-        
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         String topicName = "topic1";
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
@@ -2004,9 +1987,6 @@ public class MembershipManagerImplTest {
         assertEquals(backgroundEventQueue.peek().getClass().getCanonicalName(), ConsumerRebalanceListenerCallbackNeededEvent.class.getCanonicalName());
 
         // Stale member triggers onPartitionLost callback that will not complete just yet
-        ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
-                ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST,
-                topicPartitions(topicName, ownedPartition));
         ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = performCallback(
             membershipManager,
             invoker,
@@ -2054,8 +2034,6 @@ public class MembershipManagerImplTest {
     }
 
     private void testOnPartitionsLost(Optional<RuntimeException> lostError) {
-        backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         // Step 1: set up mocks
         MembershipManagerImpl membershipManager = createMemberInStableState();
         String topicName = "topic1";
@@ -2218,9 +2196,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testMemberJoiningCallsRebalanceListenerWhenReceivingEmptyAssignment() {
-        backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
-        
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
@@ -2290,9 +2265,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testRebalanceMetricsForMultipleReconciliations() {
-        
-        backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
@@ -2461,10 +2433,6 @@ public class MembershipManagerImplTest {
         clearInvocations(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
-        ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
-                ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
-                topicPartitions(ownedPartition.topic(), ownedPartition.partition()));
-
         return performCallback(
             membershipManager,
             invoker,
@@ -2489,10 +2457,6 @@ public class MembershipManagerImplTest {
         verifyReconciliationTriggered(membershipManager);
         clearInvocations(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-
-        ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
-                ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
-                topicPartitions(topicName, newPartition));
 
         return performCallback(
             membershipManager,
@@ -2792,9 +2756,6 @@ public class MembershipManagerImplTest {
 
         // Start leaving group, blocked waiting for callback to complete.
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
-        ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
-            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
-            topicPartitions(ownedPartition.topic(), ownedPartition.partition()));
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
