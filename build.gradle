@@ -204,9 +204,7 @@ def determineCommitId() {
 def excludedSpotlessModules = [':clients',
                                ':connect:runtime',
                                ':core',
-                               ':streams',
-                               ':streams:examples',
-                               ':streams:streams-scala']
+                               ':streams']
 
 
 apply from: file('wrapper.gradle')
