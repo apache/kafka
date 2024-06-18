@@ -91,8 +91,8 @@ because it cannot know when it has processed "all" the input data.
 <a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/{{fullDotVersion}}/kafka_{{scalaVersion}}-{{fullDotVersion}}.tgz" title="Kafka downloads">Download</a> the {{fullDotVersion}} release and un-tar it.
 Note that there are multiple downloadable Scala versions and we choose to use the recommended version ({{scalaVersion}}) here:
 
-<pre class="line-numbers"><code class="language-bash">&gt; tar -xzf kafka_{{scalaVersion}}-{{fullDotVersion}}.tgz
-&gt; cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
+<pre><code class="language-bash">$ tar -xzf kafka_{{scalaVersion}}-{{fullDotVersion}}.tgz
+$ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
 
 <h4><a id="quickstart_streams_startserver" href="#quickstart_streams_startserver">Step 2: Start the Kafka server</a></h4>
 
@@ -108,13 +108,13 @@ Note that there are multiple downloadable Scala versions and we choose to use th
   Run the following commands in order to start all services in the correct order:
 </p>
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/zookeeper-server-start.sh config/zookeeper.properties</code></pre>
+<pre><code class="language-bash">$ bin/zookeeper-server-start.sh config/zookeeper.properties</code></pre>
 
 <p>
   Open another terminal session and run:
 </p>
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-server-start.sh config/server.properties</code></pre>
+<pre><code class="language-bash">$ bin/kafka-server-start.sh config/server.properties</code></pre>
 
 <h5>
   Kafka with KRaft
@@ -124,19 +124,19 @@ Note that there are multiple downloadable Scala versions and we choose to use th
   Generate a Cluster UUID
 </p>
 
-<pre class="line-numbers"><code class="language-bash">&gt; KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"</code></pre>
+<pre><code class="language-bash">$ KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"</code></pre>
 
 <p>
   Format Log Directories
 </p>
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties</code></pre>
+<pre><code class="language-bash">$ bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties</code></pre>
 
 <p>
   Start the Kafka Server
 </p>
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-server-start.sh config/kraft/server.properties</code></pre>
+<pre><code class="language-bash">$ bin/kafka-server-start.sh config/kraft/server.properties</code></pre>
 
 <h4><a id="quickstart_streams_prepare" href="#quickstart_streams_prepare">Step 3: Prepare input topic and start Kafka producer</a></h4>
 
@@ -152,7 +152,7 @@ Or on Windows:
 
 Next, we create the input topic named <b>streams-plaintext-input</b> and the output topic named <b>streams-wordcount-output</b>:
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-topics.sh --create \
+<pre><code class="language-bash">$ bin/kafka-topics.sh --create \
     --bootstrap-server localhost:9092 \
     --replication-factor 1 \
     --partitions 1 \
@@ -162,7 +162,7 @@ Created topic "streams-plaintext-input".</code></pre>
 Note: we create the output topic with compaction enabled because the output stream is a changelog stream
 (cf. <a href="#anchor-changelog-output">explanation of application output</a> below).
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-topics.sh --create \
+<pre><code class="language-bash">$ bin/kafka-topics.sh --create \
     --bootstrap-server localhost:9092 \
     --replication-factor 1 \
     --partitions 1 \
@@ -172,8 +172,7 @@ Created topic "streams-wordcount-output".</code></pre>
 
 The created topic can be described with the same <b>kafka-topics</b> tool:
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe
-
+<pre><code class="language-bash">$ bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe
 Topic:streams-wordcount-output	PartitionCount:1	ReplicationFactor:1	Configs:cleanup.policy=compact,segment.bytes=1073741824
 	Topic: streams-wordcount-output	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
 Topic:streams-plaintext-input	PartitionCount:1	ReplicationFactor:1	Configs:segment.bytes=1073741824
@@ -183,7 +182,7 @@ Topic:streams-plaintext-input	PartitionCount:1	ReplicationFactor:1	Configs:segme
 
 The following command starts the WordCount demo application:
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-run-class.sh org.apache.kafka.streams.examples.wordcount.WordCountDemo</code></pre>
+<pre><code class="language-bash">$ bin/kafka-run-class.sh org.apache.kafka.streams.examples.wordcount.WordCountDemo</code></pre>
 
 <p>
 The demo application will read from the input topic <b>streams-plaintext-input</b>, perform the computations of the WordCount algorithm on each of the read messages,
@@ -193,11 +192,11 @@ Hence there won't be any STDOUT output except log entries as the results are wri
 
 Now we can start the console producer in a separate terminal to write some input data to this topic:
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input</code></pre>
+<pre><code class="language-bash">$ bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input</code></pre>
 
 and inspect the output of the WordCount demo application by reading from its output topic with the console consumer in a separate terminal:
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+<pre><code class="language-bash">$ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
     --property print.key=true \
@@ -212,14 +211,14 @@ Now let's write some message with the console producer into the input topic <b>s
 This will send a new message to the input topic, where the message key is null and the message value is the string encoded text line that you just entered
 (in practice, input data for applications will typically be streaming continuously into Kafka, rather than being manually entered as we do in this quickstart):
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
-all streams lead to kafka</code></pre>
+<pre><code class="language-bash">$ bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
+>all streams lead to kafka</code></pre>
 
 <p>
 This message will be processed by the Wordcount application and the following output data will be written to the <b>streams-wordcount-output</b> topic and printed by the console consumer:
 </p>
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+<pre><code class="language-bash">$ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
     --property print.key=true \
@@ -241,13 +240,13 @@ Now let's continue writing one more message with the console producer into the i
 Enter the text line "hello kafka streams" and hit &lt;RETURN&gt;.
 Your terminal should look as follows:
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
-all streams lead to kafka
-hello kafka streams</code></pre>
+<pre><code class="language-bash">$ bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
+>all streams lead to kafka
+>hello kafka streams</code></pre>
 
 In your other terminal in which the console consumer is running, you will observe that the WordCount application wrote new output data:
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+<pre><code class="language-bash">$ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
     --property print.key=true \
@@ -269,15 +268,15 @@ Whenever you write further input messages to the input topic, you will observe n
 representing the most recent word counts as computed by the WordCount application.
 Let's enter one final input text line "join kafka summit" and hit &lt;RETURN&gt; in the console producer to the input topic <b>streams-plaintext-input</b> before we wrap up this quickstart:
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
-all streams lead to kafka
-hello kafka streams
-join kafka summit</code></pre>
+<pre><code class="language-bash">$ bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
+>all streams lead to kafka
+>hello kafka streams
+>join kafka summit</code></pre>
 
 <a name="anchor-changelog-output"></a>
 The <b>streams-wordcount-output</b> topic will subsequently show the corresponding updated word counts (see last three lines):
 
-<pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+<pre><code class="language-bash">$ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
     --property print.key=true \
