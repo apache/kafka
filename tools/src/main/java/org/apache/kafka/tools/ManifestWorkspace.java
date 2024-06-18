@@ -123,7 +123,7 @@ public class ManifestWorkspace {
      * <p>Buffers simulated reads and writes to the plugin path before they can be written to disk.
      * @param <T> The data structure used by the workspace to store in-memory manifests internally.
      */
-    public static abstract class SourceWorkspace<T> {
+    public abstract static class SourceWorkspace<T> {
         private final Path location;
         private final PluginSource.Type type;
         protected final T initial;

@@ -150,6 +150,9 @@
 
     <!-- Allows the use of the @SuppressWarnings annotation in the code -->
     <module name="SuppressWarningsHolder"/>
+
+    <module name="ModifierOrder"/>
+    
   </module>
 
   <module name="SuppressionFilter">

@@ -144,9 +144,9 @@ public class KafkaStreamsTest {
     public Timeout globalTimeout = Timeout.seconds(600);
 
     private static final int NUM_THREADS = 2;
-    private final static String APPLICATION_ID = "appId";
-    private final static String CLIENT_ID = "test-client";
-    private final static Duration DEFAULT_DURATION = Duration.ofSeconds(30);
+    private static final String APPLICATION_ID = "appId";
+    private static final String CLIENT_ID = "test-client";
+    private static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
     @Rule
     public TestName testName = new TestName();

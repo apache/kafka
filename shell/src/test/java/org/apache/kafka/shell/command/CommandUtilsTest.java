@@ -17,13 +17,13 @@
 
 package org.apache.kafka.shell.command;
 
-import static java.util.concurrent.TimeUnit.MINUTES;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
+
+import static java.util.concurrent.TimeUnit.MINUTES;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 5, unit = MINUTES)
 public class CommandUtilsTest {

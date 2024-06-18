@@ -260,6 +260,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.REMOVE_RAFT_VOTER => forwardToControllerOrFail(request)
         case ApiKeys.SHARE_FETCH => handleShareFetchRequest(request)
         case ApiKeys.SHARE_ACKNOWLEDGE => handleShareAcknowledgeRequest(request)
+        case ApiKeys.INITIALIZE_SHARE_GROUP_STATE => handleInitializeShareGroupStateRequest(request)
+        case ApiKeys.READ_SHARE_GROUP_STATE => handleReadShareGroupStateRequest(request)
+        case ApiKeys.WRITE_SHARE_GROUP_STATE => handleWriteShareGroupStateRequest(request)
+        case ApiKeys.DELETE_SHARE_GROUP_STATE => handleDeleteShareGroupStateRequest(request)
+        case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY => handleReadShareGroupStateSummaryRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3971,6 +3976,41 @@ class KafkaApis(val requestChannel: RequestChannel,
     val shareAcknowledgeRequest = request.body[ShareAcknowledgeRequest]
     // TODO: Implement the ShareAcknowledgeRequest handling
     requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleInitializeShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+    val initializeShareGroupStateRequest = request.body[InitializeShareGroupStateRequest]
+    // TODO: Implement the InitializeShareGroupStateRequest handling
+    requestHelper.sendMaybeThrottle(request, initializeShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleReadShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+    val readShareGroupStateRequest = request.body[ReadShareGroupStateRequest]
+    // TODO: Implement the ReadShareGroupStateRequest handling
+    requestHelper.sendMaybeThrottle(request, readShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleWriteShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+    val writeShareGroupStateRequest = request.body[WriteShareGroupStateRequest]
+    // TODO: Implement the WriteShareGroupStateRequest handling
+    requestHelper.sendMaybeThrottle(request, writeShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleDeleteShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+    val deleteShareGroupStateRequest = request.body[DeleteShareGroupStateRequest]
+    // TODO: Implement the DeleteShareGroupStateRequest handling
+    requestHelper.sendMaybeThrottle(request, deleteShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleReadShareGroupStateSummaryRequest(request: RequestChannel.Request): Unit = {
+    val readShareGroupStateSummaryRequest = request.body[ReadShareGroupStateSummaryRequest]
+    // TODO: Implement the ReadShareGroupStateSummaryRequest handling
+    requestHelper.sendMaybeThrottle(request, readShareGroupStateSummaryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     CompletableFuture.completedFuture[Unit](())
   }
 

@@ -82,7 +82,7 @@ public enum BrokerState {
      */
     UNKNOWN((byte) 127);
 
-    private final static Map<Byte, BrokerState> VALUES_TO_ENUMS = new HashMap<>();
+    private static final Map<Byte, BrokerState> VALUES_TO_ENUMS = new HashMap<>();
 
     static {
         for (BrokerState state : BrokerState.values()) {
