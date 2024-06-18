@@ -1126,7 +1126,7 @@ public class ProcessorStateManagerTest {
     }
 
     public static class StateStorePositionCommit implements CommitCallback {
-        private File file;
+        private final File file;
         private final OffsetCheckpoint checkpointFile;
         private final Position position;
 

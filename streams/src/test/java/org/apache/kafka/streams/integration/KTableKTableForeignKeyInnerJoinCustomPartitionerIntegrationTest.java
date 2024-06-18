@@ -126,8 +126,8 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
             new KeyValue<>("ID123-4", "ID123-A4")
         );
 
-        final List<KeyValue<String, String>> table2 = asList(
-            new KeyValue<>("ID123", "BBB")
+        final List<KeyValue<String, String>> table2 = Collections.singletonList(
+                new KeyValue<>("ID123", "BBB")
         );
 
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);

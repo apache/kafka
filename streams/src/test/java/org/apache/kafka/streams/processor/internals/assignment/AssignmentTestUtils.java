@@ -375,16 +375,15 @@ public final class AssignmentTestUtils {
 
         if (!misassigned.isEmpty()) {
             assertThat(
-                new StringBuilder().append("Found some over- or under-assigned tasks in the final assignment with ")
-                                   .append(numStandbyReplicas)
-                                   .append(" and max warmups ")
-                                   .append(maxWarmupReplicas)
-                                   .append(" standby replicas, stateful tasks:")
-                                   .append(statefulTasks)
-                                   .append(", and stateless tasks:")
-                                   .append(statelessTasks)
-                                   .append(failureContext)
-                                   .toString(),
+                    "Found some over- or under-assigned tasks in the final assignment with " +
+                            numStandbyReplicas +
+                            " and max warmups " +
+                            maxWarmupReplicas +
+                            " standby replicas, stateful tasks:" +
+                            statefulTasks +
+                            ", and stateless tasks:" +
+                            statelessTasks +
+                            failureContext,
                 misassigned,
                 is(emptyMap()));
         }
@@ -398,27 +397,25 @@ public final class AssignmentTestUtils {
         for (final TaskId standbyTask : entry.getValue().standbyTasks()) {
             if (statelessTasks.contains(standbyTask)) {
                 throw new AssertionError(
-                    new StringBuilder().append("Found a standby task for stateless task ")
-                                       .append(standbyTask)
-                                       .append(" on client ")
-                                       .append(entry)
-                                       .append(" stateless tasks:")
-                                       .append(statelessTasks)
-                                       .append(failureContext)
-                                       .toString()
+                        "Found a standby task for stateless task " +
+                                standbyTask +
+                                " on client " +
+                                entry +
+                                " stateless tasks:" +
+                                statelessTasks +
+                                failureContext
                 );
             } else if (assignments.containsKey(standbyTask)) {
                 assignments.get(standbyTask).add(entry.getKey());
             } else {
                 throw new AssertionError(
-                    new StringBuilder().append("Found an extra standby task ")
-                                       .append(standbyTask)
-                                       .append(" on client ")
-                                       .append(entry)
-                                       .append(" but expected stateful tasks:")
-                                       .append(statefulTasks)
-                                       .append(failureContext)
-                                       .toString()
+                        "Found an extra standby task " +
+                                standbyTask +
+                                " on client " +
+                                entry +
+                                " but expected stateful tasks:" +
+                                statefulTasks +
+                                failureContext
                 );
             }
         }
@@ -434,16 +431,15 @@ public final class AssignmentTestUtils {
                 assignments.get(activeTask).add(entry.getKey());
             } else {
                 throw new AssertionError(
-                    new StringBuilder().append("Found an extra active task ")
-                                       .append(activeTask)
-                                       .append(" on client ")
-                                       .append(entry)
-                                       .append(" but expected stateful tasks:")
-                                       .append(statefulTasks)
-                                       .append(" and stateless tasks:")
-                                       .append(statelessTasks)
-                                       .append(failureContext)
-                                       .toString()
+                        "Found an extra active task " +
+                                activeTask +
+                                " on client " +
+                                entry +
+                                " but expected stateful tasks:" +
+                                statefulTasks +
+                                " and stateless tasks:" +
+                                statelessTasks +
+                                failureContext
                 );
             }
         }

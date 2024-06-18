@@ -110,7 +110,7 @@ class DefaultStateUpdaterTest {
     private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
     private final TopologyMetadata topologyMetadata = unnamedTopology().build();
-    private DefaultStateUpdater stateUpdater =
+    private final DefaultStateUpdater stateUpdater =
         new DefaultStateUpdater("test-state-updater", metrics, config, null, changelogReader, topologyMetadata, time);
 
     @AfterEach

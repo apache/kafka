@@ -51,10 +51,10 @@ public class TimestampedTupleForwarderTest {
         when(store.setFlushListener(flushListener, sendOldValues)).thenReturn(false);
 
         new TimestampedTupleForwarder<>(
-            store,
-            (org.apache.kafka.streams.processor.api.ProcessorContext<Object, Change<Object>>) null,
-            flushListener,
-            sendOldValues
+                store,
+                null,
+                flushListener,
+                sendOldValues
         );
     }
 
@@ -81,10 +81,10 @@ public class TimestampedTupleForwarderTest {
 
         final TimestampedTupleForwarder<String, String> forwarder =
             new TimestampedTupleForwarder<>(
-                store,
-                (org.apache.kafka.streams.processor.api.ProcessorContext<String, Change<String>>) context,
-                null,
-                sendOldValues
+                    store,
+                    context,
+                    null,
+                    sendOldValues
             );
         forwarder.maybeForward(new Record<>("key1", new Change<>("newValue1", "oldValue1", true), 0L));
         forwarder.maybeForward(new Record<>("key2", new Change<>("newValue2", "oldValue2", false), 42L));
@@ -101,10 +101,10 @@ public class TimestampedTupleForwarderTest {
 
         final TimestampedTupleForwarder<String, String> forwarder =
             new TimestampedTupleForwarder<>(
-                store,
-                (org.apache.kafka.streams.processor.api.ProcessorContext<String, Change<String>>) context,
-                null,
-                false
+                    store,
+                    context,
+                    null,
+                    false
             );
         forwarder.maybeForward(new Record<>("key", new Change<>("newValue", "oldValue", true), 0L));
         forwarder.maybeForward(new Record<>("key", new Change<>("newValue", "oldValue", true), 42L));
