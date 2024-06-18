@@ -90,6 +90,12 @@
             If READ is not authorized, checkpointing is limited to offsets mirrorred after the start of the task.
             See <a href="https://issues.apache.org/jira/browse/KAFKA-15905">KAFKA-15905</a> for more details.
         </li>
+        <li>
+            JBOD support in KRaft was introduced from Metadata Version (MV) 3.7-IV2.
+            Configuring Brokers with multiple log directories can lead to indefinite unavailability.
+            Brokers will now detect this situation and log an error.
+            See <a href="https://issues.apache.org/jira/browse/KAFKA-16606">KAFKA-16606</a> for more details.
+        </li>
     </ul>
 
     <h5><a id="upgrade_370_notable" href="#upgrade_370_notable">Notable changes in 3.7.0</a></h5>
