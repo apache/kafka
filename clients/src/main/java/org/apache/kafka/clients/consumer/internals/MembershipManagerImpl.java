@@ -142,7 +142,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * when a new assignment is received, that is retried until it succeeds, fails with a
      * non-retriable error, it the time limit expires.
      */
-    private final int rebalanceTimeoutMs;
+    private final int commitTimeoutDuringReconciliation;
 
     /**
      * Member ID assigned by the server to the member, received in a heartbeat response when
@@ -286,7 +286,7 @@ public class MembershipManagerImpl implements MembershipManager {
 
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
-                                 int rebalanceTimeoutMs,
+                                 int commitTimeoutDuringReconciliation,
                                  Optional<String> serverAssignor,
                                  SubscriptionState subscriptions,
                                  CommitRequestManager commitRequestManager,
@@ -298,7 +298,7 @@ public class MembershipManagerImpl implements MembershipManager {
                                  Metrics metrics) {
         this(groupId,
             groupInstanceId,
-            rebalanceTimeoutMs,
+            commitTimeoutDuringReconciliation,
             serverAssignor,
             subscriptions,
             commitRequestManager,
@@ -313,7 +313,7 @@ public class MembershipManagerImpl implements MembershipManager {
     // Visible for testing
     MembershipManagerImpl(String groupId,
                           Optional<String> groupInstanceId,
-                          int rebalanceTimeoutMs,
+                          int commitTimeoutDuringReconciliation,
                           Optional<String> serverAssignor,
                           SubscriptionState subscriptions,
                           CommitRequestManager commitRequestManager,
@@ -336,7 +336,7 @@ public class MembershipManagerImpl implements MembershipManager {
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.stateUpdatesListeners = new ArrayList<>();
         this.clientTelemetryReporter = clientTelemetryReporter;
-        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
+        this.commitTimeoutDuringReconciliation = commitTimeoutDuringReconciliation;
         this.backgroundEventHandler = backgroundEventHandler;
         this.time = time;
         this.metricsManager = metricsManager;
@@ -960,7 +960,7 @@ public class MembershipManagerImpl implements MembershipManager {
         // best effort to commit the offsets in the case where the epoch might have changed while
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
-        commitResult = commitRequestManager.maybeAutoCommitSyncBeforeRevocation(getDeadlineMsForTimeout(rebalanceTimeoutMs));
+        commitResult = commitRequestManager.maybeAutoCommitSyncBeforeRevocation(getDeadlineMsForTimeout(commitTimeoutDuringReconciliation));
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((__, commitReqError) -> {
