@@ -1468,13 +1468,11 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition(membershipManager, Uuid.randomUuid(), "topic1");
 
-        mockRevocationNoCallbacks(true);
+        CompletableFuture<Void> commitResult = mockRevocationNoCallbacks(true);
+
         receiveEmptyAssignment(membershipManager);
 
-        CompletableFuture<Void> commitResult = new CompletableFuture<>();
-        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
-        mockEmptyAssignmentAndRevocationStuckOnCommit(membershipManager);
-
+        verifyReconciliationNotTriggered(membershipManager);
         membershipManager.poll(time.milliseconds());
 
         // Member stays in RECONCILING while the commit request hasn't completed.
@@ -1627,8 +1625,6 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         membershipManager.onSubscriptionUpdated();
         verify(membershipManager, never()).transitionToJoining();
-        assertNotEquals(membershipManager.state(), MemberState.FATAL);
-        assertNotEquals(membershipManager.state(), MemberState.JOINING);
     }
 
     @Test
@@ -2033,8 +2029,6 @@ public class MembershipManagerImplTest {
         verify(subscriptionState, never()).assignFromSubscribed(any());
 
         completeCallback(callbackEvent, membershipManager);
-        membershipManager.transitionToJoining();
-        subscriptionState.assignFromSubscribed(Collections.emptySet());
         assertEquals(MemberState.JOINING, membershipManager.state());
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
     }
@@ -2446,7 +2440,6 @@ public class MembershipManagerImplTest {
         receiveAssignment(topicId, partitions, membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        receiveAssignment(topicId, partitions, membershipManager);
         membershipManager.poll(time.milliseconds());
 
         verifyReconciliationTriggered(membershipManager);
