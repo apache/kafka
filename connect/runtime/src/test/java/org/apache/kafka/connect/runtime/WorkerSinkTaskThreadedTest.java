@@ -25,33 +25,36 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.errors.ProcessingContext;
-import org.apache.kafka.connect.storage.ClusterConfigState;
-import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.common.utils.MockTime;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.AdditionalAnswers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
@@ -68,10 +71,10 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static java.util.Collections.singletonList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -84,7 +87,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class WorkerSinkTaskThreadedTest {
 
     // These are fixed to keep this code simpler. In this example we assume byte[] raw values
@@ -161,7 +165,7 @@ public class WorkerSinkTaskThreadedTest {
         return offsetsToCommit;
     };
 
-    @Before
+    @BeforeEach
     public void setup() {
         time = new MockTime();
         metrics = new MockConnectMetrics();
@@ -178,7 +182,7 @@ public class WorkerSinkTaskThreadedTest {
         recordsReturned = 0;
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         if (metrics != null) metrics.stop();
     }
@@ -241,8 +245,10 @@ public class WorkerSinkTaskThreadedTest {
         expectTaskGetTopic();
         expectInitialAssignment();
         expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
-        expectOffsetCommit(new ExpectOffsetCommitCommand(
-                expectedMessages, null, null, 0, true));
+        ExpectOffsetCommitCommand command = new ExpectOffsetCommitCommand(
+                expectedMessages, null, null, 0, true);
+        expectPreCommit(command);
+        expectOffsetCommit(command);
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -276,7 +282,7 @@ public class WorkerSinkTaskThreadedTest {
         expectTaskGetTopic();
         expectInitialAssignment();
         expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
-        expectOffsetCommit(new ExpectOffsetCommitCommand(
+        expectPreCommit(new ExpectOffsetCommitCommand(
                 1L, new RuntimeException(), null, 0, true));
 
         workerTask.initialize(TASK_CONFIG);
@@ -313,10 +319,12 @@ public class WorkerSinkTaskThreadedTest {
         expectTaskGetTopic();
         expectInitialAssignment();
         expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
-        expectOffsetCommit(
-                new ExpectOffsetCommitCommand(1L, null, null, 0, true),
-                new ExpectOffsetCommitCommand(2L, new RuntimeException(), null, 0, true)
-        );
+        ExpectOffsetCommitCommand[] commands = new ExpectOffsetCommitCommand[]{
+            new ExpectOffsetCommitCommand(1L, null, null, 0, true),
+            new ExpectOffsetCommitCommand(2L, new RuntimeException(), null, 0, true)
+        };
+        expectPreCommit(commands);
+        expectOffsetCommit(commands);
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -351,8 +359,10 @@ public class WorkerSinkTaskThreadedTest {
         expectTaskGetTopic();
         expectInitialAssignment();
         expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
-        expectOffsetCommit(new ExpectOffsetCommitCommand(
-                1L, null, new Exception(), 0, true));
+        ExpectOffsetCommitCommand command = new ExpectOffsetCommitCommand(
+                1L, null, new Exception(), 0, true);
+        expectPreCommit(command);
+        expectOffsetCommit(command);
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -383,8 +393,10 @@ public class WorkerSinkTaskThreadedTest {
         expectInitialAssignment();
         // Cut down amount of time to pass in each poll so we trigger exactly 1 offset commit
         expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT / 2);
-        expectOffsetCommit(new ExpectOffsetCommitCommand(
-                2L, null, null, WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, false));
+        ExpectOffsetCommitCommand command = new ExpectOffsetCommitCommand(
+                2L, null, null, WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, false);
+        expectPreCommit(command);
+        expectOffsetCommit(command);
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -626,15 +638,17 @@ public class WorkerSinkTaskThreadedTest {
         when(valueConverter.toConnectData(TOPIC, emptyHeaders(), RAW_VALUE)).thenReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
     }
 
-    private void expectOffsetCommit(ExpectOffsetCommitCommand... commands) {
+    private void expectPreCommit(ExpectOffsetCommitCommand... commands) {
         doAnswer(new Answer<Object>() {
             int index = 0;
 
             @Override
             public Object answer(InvocationOnMock invocation) {
                 ExpectOffsetCommitCommand commitCommand = commands[index++];
-                // All assigned partitions will have offsets committed, but we've only processed messages/updated offsets for one
-                final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = offsetsToCommitFn.apply(commitCommand.expectedMessages);
+                // All assigned partitions will have offsets committed, but we've only processed messages/updated 
+                // offsets for one
+                final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit =
+                        offsetsToCommitFn.apply(commitCommand.expectedMessages);
 
                 if (commitCommand.error != null) {
                     throw commitCommand.error;
@@ -643,7 +657,9 @@ public class WorkerSinkTaskThreadedTest {
                 }
             }
         }).when(sinkTask).preCommit(anyMap());
-
+    }
+    
+    private void expectOffsetCommit(ExpectOffsetCommitCommand... commands) {
         doAnswer(new Answer<Object>() {
             int index = 0;
 
