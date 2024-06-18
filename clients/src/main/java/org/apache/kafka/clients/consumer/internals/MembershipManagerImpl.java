@@ -834,8 +834,8 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     private void transitionToUnsubscribed() {
-        transitionTo(MemberState.UNSUBSCRIBED);
         leaveGroupInProgress.get().complete(null);
+        transitionTo(MemberState.UNSUBSCRIBED);
         leaveGroupInProgress = Optional.empty();
     }
 
