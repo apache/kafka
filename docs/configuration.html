@@ -294,9 +294,9 @@
       <h4><a id="org.apache.kafka.disallowed.login.modules"></a><a id="systemproperties_org.apache.kafka.disallowed.login.modules" href="#systemproperties_org.apache.kafka.disallowed.login.modules">org.apache.kafka.disallowed.login.modules</a></h4>
       <p>This system property is used to disable the problematic login modules usage in SASL JAAS configuration. This property accepts comma-separated list of loginModule names. By default <b>com.sun.security.auth.module.JndiLoginModule</b> loginModule is disabled.
       <p>If users want to enable JndiLoginModule, users need to explicitly reset the system property like below. We advise the users to validate configurations and only allow trusted JNDI configurations. For more details <a href="https://nvd.nist.gov/vuln/detail/CVE-2023-25194">CVE-2023-25194</a>.
-      <p><pre class="brush: bash;"> -Dorg.apache.kafka.disallowed.login.modules=</pre>
+      <p><pre><code class="language-bash">-Dorg.apache.kafka.disallowed.login.modules=</code></pre>
       <p>To disable more loginModules, update the system property with comma-separated loginModule names. Make sure to explicitly add <b>JndiLoginModule</b> module name to the comma-separated list like below.
-      <p><pre class="brush: bash;"> -Dorg.apache.kafka.disallowed.login.modules=com.sun.security.auth.module.JndiLoginModule,com.ibm.security.auth.module.LdapLoginModule,com.ibm.security.auth.module.Krb5LoginModule</pre>
+      <p><pre><code class="language-bash">-Dorg.apache.kafka.disallowed.login.modules=com.sun.security.auth.module.JndiLoginModule,com.ibm.security.auth.module.LdapLoginModule,com.ibm.security.auth.module.Krb5LoginModule</code></pre>
       <table><tbody>
       <tr><th>Since:</th><td>3.4.0</td></tr>
       <tr><th>Default Value:</th><td>com.sun.security.auth.module.JndiLoginModule</td></tr>

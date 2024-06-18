@@ -206,7 +206,7 @@ This is my second event</code></pre>
             Edit the <code class="language-bash">config/connect-standalone.properties</code> file, add or change the <code>plugin.path</code> configuration property match the following, and save the file:
         </p>
 
-        <pre><code class="language-bash">$ echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar &gt;&gt; config/connect-standalone.properties"</code></pre>
+        <pre><code class="language-bash">$ echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar" &gt;&gt; config/connect-standalone.properties</code></pre>
 
         <p>
             Then, start by creating some seed data to test with:
@@ -259,7 +259,7 @@ bar</code></pre>
 
         <p>The connectors continue to process data, so we can add data to the file and see it move through the pipeline:</p>
 
-        <pre><code class="language-bash">$ echo Another line &gt;&gt; test.txt</code></pre>
+        <pre><code class="language-bash">$ echo "Another line" &gt;&gt; test.txt</code></pre>
 
         <p>You should see the line appear in the console consumer output and in the sink file.</p>
 
