@@ -1190,7 +1190,7 @@ public class SharePartition {
     boolean isWriteShareGroupStateSuccessful(List<PersisterStateBatch> stateBatches) {
         WriteShareGroupStateResult response;
         try {
-             response = persister.writeState(new WriteShareGroupStateParameters.Builder()
+            response = persister.writeState(new WriteShareGroupStateParameters.Builder()
                 .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
                     .setGroupId(this.groupId)
                     .setTopicsData(Collections.singletonList(new TopicData<>(topicIdPartition.topicId(),
