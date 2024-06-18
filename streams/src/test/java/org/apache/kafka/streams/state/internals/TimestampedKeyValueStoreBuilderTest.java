@@ -53,10 +53,10 @@ public class TimestampedKeyValueStoreBuilderTest {
         when(supplier.metricsScope()).thenReturn("metricScope");
 
         builder = new TimestampedKeyValueStoreBuilder<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
     }
 

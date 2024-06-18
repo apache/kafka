@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 public class RocksDBSessionStoreTest extends AbstractRocksDBSessionStoreTest {
 
     @Override
-    public StoreType storeType() {
+    StoreType storeType() {
         return StoreType.RocksDBSessionStore;
     }
 }

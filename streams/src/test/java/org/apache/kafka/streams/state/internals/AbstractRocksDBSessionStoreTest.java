@@ -26,7 +26,7 @@ public abstract class AbstractRocksDBSessionStoreTest extends AbstractSessionByt
 
     private static final String STORE_NAME = "rocksDB session store";
 
-    public abstract StoreType storeType();
+    abstract StoreType storeType();
 
     @Override
     StoreType getStoreType() {

@@ -19,12 +19,12 @@ package org.apache.kafka.streams.state.internals;
 public class RocksDBTimeOrderedSessionSchemaWithIndexSegmentedBytesStoreTest extends AbstractRocksDBTimeOrderedWindowSegmentedBytesStoreTest {
 
     @Override
-    protected boolean hasIndex() {
+    boolean hasIndex() {
         return true;
     }
 
     @Override
-    protected SchemaType schemaType() {
+    SchemaType schemaType() {
         return SchemaType.SessionSchemaWithIndex;
     }
 }

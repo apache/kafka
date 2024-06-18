@@ -27,15 +27,15 @@ public abstract class AbstractRocksDBTimeOrderedWindowSegmentedBytesStoreTest
 
     private static final String METRICS_SCOPE = "metrics-scope";
 
-    protected enum SchemaType {
+    enum SchemaType {
         WindowSchemaWithIndex,
         WindowSchemaWithoutIndex,
         SessionSchemaWithIndex,
         SessionSchemaWithoutIndex
     }
 
-    protected abstract boolean hasIndex();
-    protected abstract SchemaType schemaType();
+    abstract boolean hasIndex();
+    abstract SchemaType schemaType();
 
     AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> getBytesStore() {
         switch (schemaType()) {
