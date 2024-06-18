@@ -83,7 +83,7 @@ object ApiVersionsRequestTest {
 class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
 
   @ClusterTemplate("testApiVersionsRequestTemplate")
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_3_9_IV0, serverProperties = Array(
+  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_4_0_IV0, serverProperties = Array(
     new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "true")
   ))
