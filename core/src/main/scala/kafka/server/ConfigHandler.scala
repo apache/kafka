@@ -236,22 +236,25 @@ class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends Co
   */
 class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
                           private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
-
   def processConfigChanges(brokerId: String, properties: Properties): Unit = {
-    def getOrDefault(prop: String): Long = {
-      if (properties.containsKey(prop))
-        properties.getProperty(prop).toLong
-      else
-        QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT
-    }
     if (brokerId == ZooKeeperInternals.DEFAULT_STRING)
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
       brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
-      quotaManagers.leader.updateQuota(upperBound(getOrDefault(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
-      quotaManagers.follower.updateQuota(upperBound(getOrDefault(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
-      quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG).toDouble))
     }
+    val updatedDynamicBrokerConfigs = brokerConfig.dynamicConfig.currentDynamicBrokerConfigs
+    val updatedDynamicDefaultConfigs = brokerConfig.dynamicConfig.currentDynamicDefaultConfigs
+
+    def getOrDefault(prop: String): Long = updatedDynamicBrokerConfigs get prop match {
+      case Some(value) => value.toLong
+      case None => updatedDynamicDefaultConfigs get prop match {
+        case Some(defaultValue) => defaultValue.toLong
+        case None => QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT
+      }
+    }
+    quotaManagers.leader.updateQuota(upperBound(getOrDefault(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
+    quotaManagers.follower.updateQuota(upperBound(getOrDefault(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
+    quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG).toDouble))
   }
 }
 
