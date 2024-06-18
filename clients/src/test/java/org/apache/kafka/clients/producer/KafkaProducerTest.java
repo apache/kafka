@@ -49,8 +49,10 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Metrics;
@@ -62,6 +64,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
+import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -94,6 +97,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -119,10 +124,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
 
 import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -1764,6 +1768,39 @@ public class KafkaProducerTest {
                                                .setErrorCode(error.code())
                                                .setThrottleTimeMs(10));
     }
+    private ProduceResponse produceResponse(String topicName, int partition, Errors error) {
+        return new ProduceResponse(new ProduceResponseData()
+                .setResponses(new ProduceResponseData.TopicProduceResponseCollection(singletonList(
+                        new ProduceResponseData.TopicProduceResponse()
+                                .setName(topicName)
+                                .setPartitionResponses(singletonList(
+                                        new ProduceResponseData.PartitionProduceResponse()
+                                                .setIndex(partition)
+                                                .setErrorCode(error.code())
+                                                .setBaseOffset(0)))).iterator())));
+    }
+
+    private AddPartitionsToTxnResponse addPartitionsToTxnResponseWithNoError(String topicName) {
+
+        AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResultCollection topicCollection = new AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResultCollection();
+
+        AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResult topicResult = new AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResult();
+        topicResult.setName(topicName);
+
+        topicResult.resultsByPartition().add(new AddPartitionsToTxnResponseData.AddPartitionsToTxnPartitionResult()
+                .setPartitionErrorCode(Errors.NONE.code())
+                .setPartitionIndex(0));
+
+        topicCollection.add(topicResult);
+
+        AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection results = new AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection();
+        results.add(new AddPartitionsToTxnResponseData.AddPartitionsToTxnResult().setTopicResults(topicCollection));
+
+        AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
+                .setResultsByTransaction(results)
+                .setThrottleTimeMs(10);
+        return new AddPartitionsToTxnResponse(data);
+    }
 
     private TxnOffsetCommitResponse txnOffsetsCommitResponse(Map<TopicPartition, Errors> errorMap) {
         return new TxnOffsetCommitResponse(10, errorMap);
@@ -2493,4 +2530,41 @@ public class KafkaProducerTest {
         assertDoesNotThrow(() -> new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer()).close());
     }
 
+    @Test
+    public void testKafka16217Bug() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 100);
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+
+        Node node = metadata.fetch().nodes().get(0);
+        client.throttle(node, 5000);
+
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+        client.prepareResponse(addPartitionsToTxnResponseWithNoError("topic"));
+        client.prepareResponse(produceResponse("topic", 0, Errors.NOT_LEADER_OR_FOLLOWER));
+        client.prepareResponse(endTxnResponse(Errors.NONE));
+
+        Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time);
+        try {
+            producer.initTransactions();
+            producer.beginTransaction();
+            ProducerRecord<String, String> record = new ProducerRecord<>(
+                "topic", 0, "bla", "blabla");
+            producer.send(record);
+            producer.commitTransaction();
+        } catch (Exception e) {
+            producer.close();
+        }
+    }
 }

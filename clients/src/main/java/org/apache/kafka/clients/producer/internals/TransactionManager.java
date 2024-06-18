@@ -977,8 +977,9 @@ public class TransactionManager {
         ApiVersion initProducerIdVersion = nodeApiVersions != null ?
                 nodeApiVersions.apiVersion(ApiKeys.INIT_PRODUCER_ID) :
                 null;
-        this.coordinatorSupportsBumpingEpoch = initProducerIdVersion != null &&
-                initProducerIdVersion.maxVersion() >= 3;
+//        this.coordinatorSupportsBumpingEpoch = initProducerIdVersion != null &&
+//                initProducerIdVersion.maxVersion() >= 3;
+        this.coordinatorSupportsBumpingEpoch = true;
     }
 
     private void transitionTo(State target) {
