@@ -81,6 +81,10 @@ public class NetworkClientDelegate implements AutoCloseable {
         return unsentRequests;
     }
 
+    public int inflightRequestCount() {
+        return client.inFlightRequestCount();
+    }
+
     /**
      * Check if the node is disconnected and unavailable for immediate reconnection (i.e. if it is in
      * reconnect backoff window following the disconnect).

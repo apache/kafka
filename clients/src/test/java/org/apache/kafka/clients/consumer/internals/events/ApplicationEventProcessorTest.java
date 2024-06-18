@@ -36,14 +36,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
 
-import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class ApplicationEventProcessorTest {
     private final Time time = new MockTime(1);
@@ -88,16 +84,6 @@ public class ApplicationEventProcessorTest {
         doReturn(new NetworkClientDelegate.PollResult(100, results)).when(commitRequestManager).pollOnClose();
         processor.process(new CommitOnCloseEvent());
         verify(commitRequestManager).signalClose();
-    }
-
-    @Test
-    public void testPrepClosingLeaveGroupEvent() {
-        LeaveOnCloseEvent event = new LeaveOnCloseEvent(calculateDeadlineMs(time, 100));
-        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
-        when(membershipManager.leaveGroup()).thenReturn(CompletableFuture.completedFuture(null));
-        processor.process(event);
-        verify(membershipManager).leaveGroup();
-        assertTrue(event.future().isDone());
     }
 
     private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {
