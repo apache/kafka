@@ -202,4 +202,48 @@ public class TransactionIndexTest {
         index.deleteIfExists();
         assertFalse(file.exists());
     }
+
+    @Test
+    public void testDoNotCreateFileUntilNeeded() throws IOException {
+        // Given that index file does not exist yet
+        file.delete();
+        // When index is created, reset, or flushed
+        // Then it is not created
+        final TransactionIndex index = assertDoesNotThrow(() -> new TransactionIndex(0, file));
+        assertFalse(file.exists());
+        index.reset();
+        assertFalse(file.exists());
+        index.flush();
+        assertFalse(file.exists());
+        // only when modifying it, it gets created
+        index.append(new AbortedTxn(0L, 0, 10, 2));
+        assertTrue(file.exists());
+    }
+
+    @Test
+    void testAppendAndCollectAfterClose() throws IOException {
+        // Given the index
+        // When closed
+        index.close();
+        // Then it should still append data
+        index.append(new AbortedTxn(0L, 0, 10, 2));
+        // When channel is closed
+        index.txnFile.channel().close();
+        // Then it should still append data
+        assertDoesNotThrow(() -> index.append(new AbortedTxn(1L, 5, 15, 16)));
+        // When closed
+        index.close();
+        // Then it should still read data
+        List<AbortedTxn> abortedTxns = assertDoesNotThrow(() ->
+            index.collectAbortedTxns(0L, 100L).abortedTransactions);
+        assertEquals(2, abortedTxns.size());
+        assertEquals(0, abortedTxns.get(0).firstOffset());
+        assertEquals(5, abortedTxns.get(1).firstOffset());
+        // When channel is closed
+        index.txnFile.channel().close();
+        // Then it should still read data
+        abortedTxns = assertDoesNotThrow(() ->
+            index.collectAbortedTxns(0L, 100L).abortedTransactions);
+        assertEquals(2, abortedTxns.size());
+    }
 }
