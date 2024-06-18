@@ -2415,10 +2415,13 @@ public class MembershipManagerImplTest {
         if (mockMetadata) {
             when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         }
+
+        verifyReconciliationNotTriggered(membershipManager);
         receiveAssignment(topicId, partitions, membershipManager);
         membershipManager.poll(time.milliseconds());
 
         verifyReconciliationTriggered(membershipManager);
+        clearInvocations(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         return commitResult;
@@ -2432,11 +2435,13 @@ public class MembershipManagerImplTest {
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
 
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         receiveAssignment(topicId, partitions, membershipManager);
         membershipManager.poll(time.milliseconds());
         verifyReconciliationTriggered(membershipManager);
+        clearInvocations(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
@@ -2462,11 +2467,13 @@ public class MembershipManagerImplTest {
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
 
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         receiveAssignment(topicId, Collections.singletonList(newPartition), membershipManager);
         membershipManager.poll(time.milliseconds());
         verifyReconciliationTriggered(membershipManager);
+        clearInvocations(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
@@ -2647,6 +2654,7 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
 
+        clearInvocations(subscriptionState, membershipManager, commitRequestManager);
         return membershipManager;
     }
 
@@ -2687,6 +2695,7 @@ public class MembershipManagerImplTest {
         ConsumerGroupHeartbeatResponse heartbeatResponse =
                 createConsumerGroupHeartbeatResponseWithBumpedEpoch(targetAssignment);
         membershipManager.onHeartbeatSuccess(heartbeatResponse.data());
+        verifyReconciliationNotTriggered(membershipManager);
         Map<Uuid, SortedSet<Integer>> assignmentAfterRejoin = topicIdPartitionsMap(topicId, 5);
         assertEquals(assignmentAfterRejoin, membershipManager.topicPartitionsAwaitingReconciliation());
         return assignmentAfterRejoin;
@@ -2704,9 +2713,10 @@ public class MembershipManagerImplTest {
         assertEquals(assignmentAfterRejoin, membershipManager.topicPartitionsAwaitingReconciliation());
 
         // Stale reconciliation should have been aborted and a new one should be triggered on the next poll.
-        membershipManager.markReconciliationCompleted();
         assertFalse(membershipManager.reconciliationInProgress());
+        clearInvocations(membershipManager);
         membershipManager.poll(time.milliseconds());
+        verify(membershipManager).markReconciliationInProgress();
     }
 
     private void receiveEmptyAssignment(MembershipManager membershipManager) {
@@ -2780,6 +2790,7 @@ public class MembershipManagerImplTest {
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
+        when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
         membershipManager.leaveGroup();
         return performCallback(
             membershipManager,
@@ -2801,6 +2812,7 @@ public class MembershipManagerImplTest {
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
         membershipManager.transitionToFenced();
         return performCallback(
             membershipManager,
