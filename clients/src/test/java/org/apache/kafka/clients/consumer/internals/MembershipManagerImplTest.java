@@ -392,7 +392,6 @@ public class MembershipManagerImplTest {
 
         // When callback completes member should transition to LEAVING.
         completeCallback(callbackEvent, membershipManager);
-        membershipManager.transitionToSendingLeaveGroup(false);
         assertEquals(MemberState.LEAVING, membershipManager.state());
     }
 
