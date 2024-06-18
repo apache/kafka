@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -110,14 +109,13 @@ public class MembershipManagerImplTest {
     private Metrics metrics;
     private RebalanceMetricsManager rebalanceMetricsManager;
 
-    @SuppressWarnings("unchecked")
     @BeforeEach
     public void setup() {
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
         commitRequestManager = mock(CommitRequestManager.class);
-        backgroundEventHandler = mock(BackgroundEventHandler.class);
-        backgroundEventQueue = mock(BlockingQueue.class);
+        backgroundEventQueue = new LinkedBlockingQueue<>();
+        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         logContext = new LogContext();
         time = new MockTime(0);
         metrics = new Metrics(time);
@@ -2002,15 +2000,13 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
 
         assertEquals(MemberState.STALE, membershipManager.state());
-        verify(backgroundEventHandler).add(any(ConsumerRebalanceListenerCallbackNeededEvent.class));
+        assertFalse(backgroundEventQueue.isEmpty());
+        assertEquals(backgroundEventQueue.peek().getClass().getCanonicalName(), ConsumerRebalanceListenerCallbackNeededEvent.class.getCanonicalName());
 
         // Stale member triggers onPartitionLost callback that will not complete just yet
         ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST,
                 topicPartitions(topicName, ownedPartition));
-        when(backgroundEventQueue.size()).thenReturn(1);
-        when(backgroundEventQueue.peek()).thenReturn(mock(ConsumerRebalanceListenerCallbackNeededEvent.class));
-        when(backgroundEventQueue.poll()).thenReturn(neededEvent);
         ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = performCallback(
             membershipManager,
             invoker,
@@ -2468,9 +2464,6 @@ public class MembershipManagerImplTest {
         ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
                 topicPartitions(ownedPartition.topic(), ownedPartition.partition()));
-        when(backgroundEventQueue.size()).thenReturn(1);
-        when(backgroundEventQueue.peek()).thenReturn(mock(ConsumerRebalanceListenerCallbackNeededEvent.class));
-        when(backgroundEventQueue.poll()).thenReturn(neededEvent);
 
         return performCallback(
             membershipManager,
@@ -2500,9 +2493,6 @@ public class MembershipManagerImplTest {
         ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
                 topicPartitions(topicName, newPartition));
-        when(backgroundEventQueue.size()).thenReturn(1);
-        when(backgroundEventQueue.peek()).thenReturn(mock(ConsumerRebalanceListenerCallbackNeededEvent.class));
-        when(backgroundEventQueue.poll()).thenReturn(neededEvent);
 
         return performCallback(
             membershipManager,
@@ -2805,9 +2795,6 @@ public class MembershipManagerImplTest {
         ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
             ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
             topicPartitions(ownedPartition.topic(), ownedPartition.partition()));
-        when(backgroundEventQueue.size()).thenReturn(1);
-        when(backgroundEventQueue.peek()).thenReturn(mock(ConsumerRebalanceListenerCallbackNeededEvent.class));
-        when(backgroundEventQueue.poll()).thenReturn(neededEvent);
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
