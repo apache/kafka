@@ -173,7 +173,6 @@ Created topic "streams-wordcount-output".</code></pre>
 The created topic can be described with the same <b>kafka-topics</b> tool:
 
 <pre><code class="language-bash">$ bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe
-
 Topic:streams-wordcount-output	PartitionCount:1	ReplicationFactor:1	Configs:cleanup.policy=compact,segment.bytes=1073741824
 	Topic: streams-wordcount-output	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
 Topic:streams-plaintext-input	PartitionCount:1	ReplicationFactor:1	Configs:segment.bytes=1073741824
@@ -213,7 +212,7 @@ This will send a new message to the input topic, where the message key is null a
 (in practice, input data for applications will typically be streaming continuously into Kafka, rather than being manually entered as we do in this quickstart):
 
 <pre><code class="language-bash">$ bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
-all streams lead to kafka</code></pre>
+>all streams lead to kafka</code></pre>
 
 <p>
 This message will be processed by the Wordcount application and the following output data will be written to the <b>streams-wordcount-output</b> topic and printed by the console consumer:
@@ -242,8 +241,8 @@ Enter the text line "hello kafka streams" and hit &lt;RETURN&gt;.
 Your terminal should look as follows:
 
 <pre><code class="language-bash">$ bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
-all streams lead to kafka
-hello kafka streams</code></pre>
+>all streams lead to kafka
+>hello kafka streams</code></pre>
 
 In your other terminal in which the console consumer is running, you will observe that the WordCount application wrote new output data:
 
@@ -270,9 +269,9 @@ representing the most recent word counts as computed by the WordCount applicatio
 Let's enter one final input text line "join kafka summit" and hit &lt;RETURN&gt; in the console producer to the input topic <b>streams-plaintext-input</b> before we wrap up this quickstart:
 
 <pre><code class="language-bash">$ bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
-all streams lead to kafka
-hello kafka streams
-join kafka summit</code></pre>
+>all streams lead to kafka
+>hello kafka streams
+>join kafka summit</code></pre>
 
 <a name="anchor-changelog-output"></a>
 The <b>streams-wordcount-output</b> topic will subsequently show the corresponding updated word counts (see last three lines):

@@ -28,7 +28,7 @@
   You have the option of either adding topics manually or having them be created automatically when data is first published to a non-existent topic. If topics are auto-created then you may want to tune the default <a href="#topicconfigs">topic configurations</a> used for auto-created topics.
   <p>
   Topics are added and modified using the topic tool:
-  <pre><code class="language-bash">$ bin/kafka-topics.sh --bootstrap-server broker_host:port --create --topic my_topic_name \
+  <pre><code class="language-bash">$ bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic my_topic_name \
     --partitions 20 --replication-factor 3 --config x=y</code></pre>
   The replication factor controls how many servers will replicate each message that is written. If you have a replication factor of 3 then up to 2 servers can fail before you will lose access to your data. We recommend you use a replication factor of 2 or 3 so that you can transparently bounce machines without interrupting data consumption.
   <p>
@@ -43,16 +43,16 @@
   You can change the configuration or partitioning of a topic using the same topic tool.
   <p>
   To add partitions you can do
-  <pre><code class="language-bash">$ bin/kafka-topics.sh --bootstrap-server broker_host:port --alter --topic my_topic_name \
+  <pre><code class="language-bash">$ bin/kafka-topics.sh --bootstrap-server localhost:9092 --alter --topic my_topic_name \
     --partitions 40</code></pre>
   Be aware that one use case for partitions is to semantically partition data, and adding partitions doesn't change the partitioning of existing data so this may disturb consumers if they rely on that partition. That is if data is partitioned by <code>hash(key) % number_of_partitions</code> then this partitioning will potentially be shuffled by adding partitions but Kafka will not attempt to automatically redistribute data in any way.
   <p>
   To add configs:
-  <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server broker_host:port --entity-type topics --entity-name my_topic_name --alter --add-config x=y</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics --entity-name my_topic_name --alter --add-config x=y</code></pre>
   To remove a config:
-  <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server broker_host:port --entity-type topics --entity-name my_topic_name --alter --delete-config x</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics --entity-name my_topic_name --alter --delete-config x</code></pre>
   And finally deleting a topic:
-  <pre><code class="language-bash">$ bin/kafka-topics.sh --bootstrap-server broker_host:port --delete --topic my_topic_name</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic my_topic_name</code></pre>
   <p>
   Kafka does not currently support reducing the number of partitions for a topic.
   <p>
@@ -80,7 +80,7 @@
 
   <pre><code class="language-text">auto.leader.rebalance.enable=true</code></pre>
     You can also set this to false, but you will then need to manually restore leadership to the restored replicas by running the command:
-  <pre><code class="language-bash">$ bin/kafka-leader-election.sh --bootstrap-server broker_host:port --election-type preferred --all-topic-partitions</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-leader-election.sh --bootstrap-server localhost:9092 --election-type preferred --all-topic-partitions</code></pre>
 
   <h4 class="anchor-heading"><a id="basic_ops_racks" class="anchor-link"></a><a href="#basic_ops_racks">Balancing Replicas Across Racks</a></h4>
   The rack awareness feature spreads replicas of the same partition across different racks. This extends the guarantees Kafka provides for broker-failure to cover rack-failure, limiting the risk of data loss should all the brokers on a rack fail at once. The feature can also be applied to other broker groupings such as availability zones in EC2.
@@ -1163,7 +1163,7 @@ Security settings for Kafka fall into three main categories, which are similar t
 
 <pre><code class="language-bash"># Grant permissions to user Alice
 $ bin/kafka-acls.sh \
-    --bootstrap-server broker1:9092 \
+    --bootstrap-server localhost:9092 \
     --add --allow-principal User:Alice \
     --producer \
     --resource-pattern-type prefixed --topic acme.infosec.</code></pre>
@@ -1365,7 +1365,7 @@ queued.max.requests=[number of concurrent requests]</code></pre>
 
   <p>If the data in the cluster metadata directory is lost either because of hardware failure or the hardware needs to be replaced, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the <code>kafka-metadata-quorum.sh</code> tool to describe the replication status:</p>
 
-  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --bootstrap-server broker_host:port describe --replication
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --replication
 NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   Status
 1       25806           0       1662500992757           1662500992757           Leader
 ...     ...             ...     ...                     ...                     ...</code></pre>
