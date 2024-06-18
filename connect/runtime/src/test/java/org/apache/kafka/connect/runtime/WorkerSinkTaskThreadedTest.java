@@ -245,8 +245,10 @@ public class WorkerSinkTaskThreadedTest {
         expectTaskGetTopic();
         expectInitialAssignment();
         expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
-        expectOffsetCommit(new ExpectOffsetCommitCommand(
-                expectedMessages, null, null, 0, true));
+        ExpectOffsetCommitCommand command = new ExpectOffsetCommitCommand(
+                expectedMessages, null, null, 0, true);
+        expectPreCommit(command);
+        expectOffsetCommit(command);
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -280,7 +282,7 @@ public class WorkerSinkTaskThreadedTest {
         expectTaskGetTopic();
         expectInitialAssignment();
         expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
-        expectOffsetCommit(new ExpectOffsetCommitCommand(
+        expectPreCommit(new ExpectOffsetCommitCommand(
                 1L, new RuntimeException(), null, 0, true));
 
         workerTask.initialize(TASK_CONFIG);
@@ -317,10 +319,12 @@ public class WorkerSinkTaskThreadedTest {
         expectTaskGetTopic();
         expectInitialAssignment();
         expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
-        expectOffsetCommit(
-                new ExpectOffsetCommitCommand(1L, null, null, 0, true),
-                new ExpectOffsetCommitCommand(2L, new RuntimeException(), null, 0, true)
-        );
+        ExpectOffsetCommitCommand[] commands = new ExpectOffsetCommitCommand[]{
+            new ExpectOffsetCommitCommand(1L, null, null, 0, true),
+            new ExpectOffsetCommitCommand(2L, new RuntimeException(), null, 0, true)
+        };
+        expectPreCommit(commands);
+        expectOffsetCommit(commands);
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -355,8 +359,10 @@ public class WorkerSinkTaskThreadedTest {
         expectTaskGetTopic();
         expectInitialAssignment();
         expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
-        expectOffsetCommit(new ExpectOffsetCommitCommand(
-                1L, null, new Exception(), 0, true));
+        ExpectOffsetCommitCommand command = new ExpectOffsetCommitCommand(
+                1L, null, new Exception(), 0, true);
+        expectPreCommit(command);
+        expectOffsetCommit(command);
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -387,8 +393,10 @@ public class WorkerSinkTaskThreadedTest {
         expectInitialAssignment();
         // Cut down amount of time to pass in each poll so we trigger exactly 1 offset commit
         expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT / 2);
-        expectOffsetCommit(new ExpectOffsetCommitCommand(
-                2L, null, null, WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, false));
+        ExpectOffsetCommitCommand command = new ExpectOffsetCommitCommand(
+                2L, null, null, WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, false);
+        expectPreCommit(command);
+        expectOffsetCommit(command);
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -630,15 +638,17 @@ public class WorkerSinkTaskThreadedTest {
         when(valueConverter.toConnectData(TOPIC, emptyHeaders(), RAW_VALUE)).thenReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
     }
 
-    private void expectOffsetCommit(ExpectOffsetCommitCommand... commands) {
+    private void expectPreCommit(ExpectOffsetCommitCommand... commands) {
         doAnswer(new Answer<Object>() {
             int index = 0;
 
             @Override
             public Object answer(InvocationOnMock invocation) {
                 ExpectOffsetCommitCommand commitCommand = commands[index++];
-                // All assigned partitions will have offsets committed, but we've only processed messages/updated offsets for one
-                final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = offsetsToCommitFn.apply(commitCommand.expectedMessages);
+                // All assigned partitions will have offsets committed, but we've only processed messages/updated 
+                // offsets for one
+                final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit =
+                        offsetsToCommitFn.apply(commitCommand.expectedMessages);
 
                 if (commitCommand.error != null) {
                     throw commitCommand.error;
@@ -647,11 +657,9 @@ public class WorkerSinkTaskThreadedTest {
                 }
             }
         }).when(sinkTask).preCommit(anyMap());
-        //  if the only command has error, consumer don't commit, so we don't need to mock commitAsync.
-        //  or else strictness will throw exception
-        if (commands.length == 1 && commands[0].error != null) {
-            return;
-        }
+    }
+    
+    private void expectOffsetCommit(ExpectOffsetCommitCommand... commands) {
         doAnswer(new Answer<Object>() {
             int index = 0;
 

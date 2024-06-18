@@ -187,18 +187,16 @@ public class WorkerSourceTaskTest {
             new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
     );
 
-    private boolean enableTopicCreation;
 
     public void setup(boolean enableTopicCreation) {
-        this.enableTopicCreation = enableTopicCreation;
-        Map<String, String> workerProps = workerProps();
+        Map<String, String> workerProps = workerProps(enableTopicCreation);
         plugins = new Plugins(workerProps);
         config = new StandaloneConfig(workerProps);
         sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorPropsWithGroups(TOPIC), true);
         metrics = new MockConnectMetrics();
     }
 
-    private Map<String, String> workerProps() {
+    private Map<String, String> workerProps(boolean enableTopicCreation) {
         Map<String, String> props = new HashMap<>();
         props.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         props.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
