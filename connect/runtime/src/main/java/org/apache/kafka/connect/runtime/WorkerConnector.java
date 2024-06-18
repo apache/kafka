@@ -314,8 +314,7 @@ public class WorkerConnector implements Runnable {
             log.info("Completed shutdown for {}", this);
         } catch (Throwable t) {
             log.error("{} Error while shutting down connector", this, t);
-            state = State.FAILED;
-            statusListener.onFailure(connName, t);
+            onFailure(t);
         } finally {
             Utils.closeQuietly(ctx, "connector context for " + connName);
             Utils.closeQuietly(metrics, "connector metrics for " + connName);
