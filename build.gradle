@@ -3194,7 +3194,6 @@ project(':connect:runtime') {
     testImplementation project(':group-coordinator')
 
     testImplementation libs.junitJupiter
-    testImplementation libs.junitVintageEngine
     testImplementation libs.mockitoJunitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
