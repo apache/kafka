@@ -53,7 +53,6 @@ import java.util.NoSuchElementException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -523,7 +522,7 @@ public class RemoteIndexCache implements Closeable {
             return timeIndex;
         }
 
-        // Use to reopen txn index if channel is closed.
+        // Visible for testing
         public TransactionIndex txnIndex() {
             if (txnIndex.isClosed()) {
                 // Reopen txn index if closed
@@ -628,17 +627,6 @@ public class RemoteIndexCache implements Closeable {
             }
         }
 
-        public boolean completeAbortedTxnsSearch(
-            long startOffset,
-            long upperBoundOffset,
-            Consumer<List<AbortedTxn>> accumulator
-        ) {
-            TransactionIndex transactionIndex = txnIndex();
-            TxnIndexSearchResult searchResult = transactionIndex.collectAbortedTxns(startOffset, upperBoundOffset);
-            accumulator.accept(searchResult.abortedTransactions);
-            return searchResult.isComplete;
-        }
-
         @Override
         public void close() {
             entryLock.writeLock().lock();
@@ -658,10 +646,6 @@ public class RemoteIndexCache implements Closeable {
                     ", timeIndex=" + timeIndex.file().getName() +
                     ", txnIndex=" + txnIndex.file().getName() +
                     '}';
-        }
-
-        public boolean hasTxnIndex() {
-            return txnIndex.file().length() == 0;
         }
     }
 
