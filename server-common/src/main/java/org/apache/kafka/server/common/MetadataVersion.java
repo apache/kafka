@@ -465,7 +465,9 @@ public enum MetadataVersion {
     }
 
     public short listOffsetRequestVersion() {
-        if (this.isAtLeast(IBP_3_5_IV0)) {
+        if (this.isAtLeast(IBP_3_9_IV0)) {
+            return 9;
+        } else if (this.isAtLeast(IBP_3_5_IV0)) {
             return 8;
         } else if (this.isAtLeast(IBP_3_0_IV1)) {
             return 7;

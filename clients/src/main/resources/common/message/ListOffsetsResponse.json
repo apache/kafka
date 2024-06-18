@@ -34,6 +34,8 @@
   //
   // Version 8 enables listing offsets by local log start offset.
   // This is the earliest log start offset in the local log. (KIP-405).
+  //
+  // Version 9 enables listing offsets by last tiered offset (KIP-1005).
   "validVersions": "0-8",
   "flexibleVersions": "6+",
   "fields": [
