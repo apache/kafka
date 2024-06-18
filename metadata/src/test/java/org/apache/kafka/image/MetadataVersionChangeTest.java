@@ -30,10 +30,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(value = 40)
 public class MetadataVersionChangeTest {
 
-    private final static MetadataVersionChange CHANGE_3_0_IV1_TO_3_3_IV0 =
+    private static final MetadataVersionChange CHANGE_3_0_IV1_TO_3_3_IV0 =
         new MetadataVersionChange(IBP_3_0_IV1, IBP_3_3_IV0);
 
-    private final static MetadataVersionChange CHANGE_3_3_IV0_TO_3_0_IV1 =
+    private static final MetadataVersionChange CHANGE_3_3_IV0_TO_3_0_IV1 =
         new MetadataVersionChange(IBP_3_3_IV0, IBP_3_0_IV1);
 
     @Test

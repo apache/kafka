@@ -36,7 +36,7 @@ public enum ConsumerGroupState {
     ASSIGNING("Assigning"),
     RECONCILING("Reconciling");
 
-    private final static Map<String, ConsumerGroupState> NAME_TO_ENUM = Arrays.stream(values())
+    private static final Map<String, ConsumerGroupState> NAME_TO_ENUM = Arrays.stream(values())
         .collect(Collectors.toMap(state -> state.name.toUpperCase(Locale.ROOT), Function.identity()));
 
     private final String name;

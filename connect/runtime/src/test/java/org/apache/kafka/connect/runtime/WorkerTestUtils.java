@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.connect.storage.AppliedConnectorConfig;
-import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.ExtendedAssignment;
 import org.apache.kafka.connect.runtime.distributed.ExtendedWorkerState;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.AbstractMap.SimpleEntry;
@@ -33,8 +33,8 @@ import java.util.stream.IntStream;
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class WorkerTestUtils {
 
@@ -176,29 +176,30 @@ public class WorkerTestUtils {
                                         int expectedRevokedTaskNum,
                                         int expectedDelay,
                                         ExtendedAssignment assignment) {
-        assertNotNull("Assignment can't be null", assignment);
+        assertNotNull(assignment, "Assignment can't be null");
 
-        assertEquals("Wrong status in " + assignment, expectFailed, assignment.failed());
+        assertEquals(expectFailed, assignment.failed(), "Wrong status in " + assignment);
 
-        assertEquals("Wrong leader in " + assignment, expectedLeader, assignment.leader());
+        assertEquals(expectedLeader, assignment.leader(), "Wrong leader in " + assignment);
 
-        assertEquals("Wrong leaderUrl in " + assignment, expectedLeaderUrl(expectedLeader),
-                assignment.leaderUrl());
+        assertEquals(expectedLeaderUrl(expectedLeader),
+                assignment.leaderUrl(), "Wrong leaderUrl in " + assignment);
 
-        assertEquals("Wrong offset in " + assignment, expectedOffset, assignment.offset());
+        assertEquals(expectedOffset, assignment.offset(), "Wrong offset in " + assignment);
 
         assertThat("Wrong set of assigned connectors in " + assignment,
                 assignment.connectors(), is(expectedAssignedConnectors));
 
-        assertEquals("Wrong number of assigned tasks in " + assignment,
-                expectedAssignedTaskNum, assignment.tasks().size());
+        assertEquals(expectedAssignedTaskNum, assignment.tasks().size(),
+                "Wrong number of assigned tasks in " + assignment);
 
         assertThat("Wrong set of revoked connectors in " + assignment,
                 assignment.revokedConnectors(), is(expectedRevokedConnectors));
 
-        assertEquals("Wrong number of revoked tasks in " + assignment,
-                expectedRevokedTaskNum, assignment.revokedTasks().size());
+        assertEquals(expectedRevokedTaskNum, assignment.revokedTasks().size(),
+                "Wrong number of revoked tasks in " + assignment);
 
-        assertEquals("Wrong rebalance delay in " + assignment, expectedDelay, assignment.delay());
+        assertEquals(expectedDelay, assignment.delay(),
+                "Wrong rebalance delay in " + assignment);
     }
 }

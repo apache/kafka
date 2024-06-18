@@ -26,7 +26,7 @@ import joptsimple.OptionSpec
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ClientResponse, ClientUtils, CommonClientConfigs, Metadata, NetworkClient, NodeApiVersions}
+import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ClientResponse, ClientUtils, CommonClientConfigs, Metadata, MetadataRecoveryStrategy, NetworkClient, NodeApiVersions}
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.ValidString._
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
@@ -310,7 +310,8 @@ object BrokerApiVersionsCommand {
         time,
         true,
         new ApiVersions,
-        logContext)
+        logContext,
+        MetadataRecoveryStrategy.NONE)
 
       val highLevelClient = new ConsumerNetworkClient(
         logContext,

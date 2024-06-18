@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import static java.util.Arrays.asList;
+import org.apache.kafka.common.config.ConfigDef.Validator;
+import org.apache.kafka.common.config.ConfigException;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.config.ConfigDef.Validator;
-import org.apache.kafka.common.config.ConfigException;
+
+import static java.util.Arrays.asList;
 
 public class ThrottledReplicaListValidator implements Validator {
     public static final Validator INSTANCE = new ThrottledReplicaListValidator();

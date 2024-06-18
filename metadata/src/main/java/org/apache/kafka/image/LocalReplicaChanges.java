@@ -22,8 +22,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
 
-import java.util.Set;
 import java.util.Map;
+import java.util.Set;
 
 public final class LocalReplicaChanges {
     // partitions for which the broker is not a replica anymore
@@ -36,6 +36,7 @@ public final class LocalReplicaChanges {
     private final Map<TopicPartition, PartitionInfo> followers;
     // The topic name -> topic id map in leaders and followers changes
     private final Map<String, Uuid> topicIds;
+    // partitions for which directory id changes or newly added to the broker
     private final Map<TopicIdPartition, Uuid> directoryIds;
 
     LocalReplicaChanges(

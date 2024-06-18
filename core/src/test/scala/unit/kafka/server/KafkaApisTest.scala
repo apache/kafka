@@ -81,7 +81,7 @@ import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.common.{FinalizedFeatures, GroupVersion, MetadataVersion}
-import org.apache.kafka.server.config._
+import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
@@ -615,7 +615,7 @@ class KafkaApisTest extends Logging {
   def testDescribeQuorumNotAllowedForZkClusters(): Unit = {
     val requestData = DescribeQuorumRequest.singletonRequest(KafkaRaftServer.MetadataPartition)
     val requestBuilder = new DescribeQuorumRequest.Builder(requestData)
-    val request = buildRequest(requestBuilder.build())
+    val request = buildRequest(requestBuilder.build(DescribeQuorumRequestData.HIGHEST_SUPPORTED_VERSION))
 
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
@@ -624,6 +624,7 @@ class KafkaApisTest extends Logging {
 
     val response = verifyNoThrottling[DescribeQuorumResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR.message(), response.data.errorMessage)
   }
 
   @Test

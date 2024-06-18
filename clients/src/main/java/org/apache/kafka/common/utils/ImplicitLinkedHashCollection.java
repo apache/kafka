@@ -297,7 +297,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * remove on the iterator itself, of course.)
      */
     @Override
-    final public Iterator<E> iterator() {
+    public final Iterator<E> iterator() {
         return listIterator(0);
     }
 
@@ -345,7 +345,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * @param key   The element to match.
      * @return      The matching element, or null if there were none.
      */
-    final public E find(E key) {
+    public final E find(E key) {
         int index = findIndexOfEqualElement(key);
         if (index == INVALID_INDEX) {
             return null;
@@ -359,7 +359,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * Returns the number of elements in the set.
      */
     @Override
-    final public int size() {
+    public final int size() {
         return size;
     }
 
@@ -370,7 +370,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * @param key       The object to try to match.
      */
     @Override
-    final public boolean contains(Object key) {
+    public final boolean contains(Object key) {
         return findIndexOfEqualElement(key) != INVALID_INDEX;
     }
 
@@ -390,7 +390,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      *                      false if it was not, because there was an existing equal element.
      */
     @Override
-    final public boolean add(E newElement) {
+    public final boolean add(E newElement) {
         if (newElement == null) {
             return false;
         }
@@ -409,7 +409,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         return false;
     }
 
-    final public void mustAdd(E newElement) {
+    public final void mustAdd(E newElement) {
         if (!add(newElement)) {
             throw new RuntimeException("Unable to add " + newElement);
         }
@@ -462,7 +462,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * @return          True if an element was removed; false otherwise.
      */
     @Override
-    final public boolean remove(Object key) {
+    public final boolean remove(Object key) {
         int slot = findElementToRemove(key);
         if (slot == INVALID_INDEX) {
             return false;
@@ -565,7 +565,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * Removes all of the elements from this set.
      */
     @Override
-    final public void clear() {
+    public final void clear() {
         clear(elements.length);
     }
 
@@ -573,7 +573,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * Moves an element which is already in the collection so that it comes last
      * in iteration order.
      */
-    final public void moveToEnd(E element) {
+    public final void moveToEnd(E element) {
         if (element.prev() == INVALID_INDEX || element.next() == INVALID_INDEX) {
             throw new RuntimeException("Element " + element + " is not in the collection.");
         }
@@ -589,7 +589,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * Removes all of the elements from this set, and resets the set capacity
      * based on the provided expected number of elements.
      */
-    final public void clear(int expectedNumElements) {
+    public final void clear(int expectedNumElements) {
         if (expectedNumElements == 0) {
             // Optimize away object allocations for empty sets.
             this.head = HeadElement.EMPTY;
