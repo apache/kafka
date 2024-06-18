@@ -1001,6 +1001,25 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertTrue(assertThrows(classOf[ExecutionException], () => describeResult2.values.get(invalidTopic).get).getCause.isInstanceOf[InvalidTopicException])
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testIncludeDocumentation(quorum: String): Unit = {
+    createTopic(topic)
+    client = createAdminClient
+
+    val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    val resources = Collections.singletonList(resource)
+    val includeDocumentation = new DescribeConfigsOptions().includeDocumentation(true)
+    var describeConfigs = client.describeConfigs(resources, includeDocumentation)
+    var configEntries = describeConfigs.values().get(resource).get().entries()
+    configEntries.forEach(e => assertNotNull(e.documentation()))
+
+    val excludeDocumentation = new DescribeConfigsOptions().includeDocumentation(false)
+    describeConfigs = client.describeConfigs(resources, excludeDocumentation)
+    configEntries = describeConfigs.values().get(resource).get().entries()
+    configEntries.forEach(e => assertNull(e.documentation()))
+  }
+
   private def subscribeAndWaitForAssignment(topic: String, consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
     consumer.subscribe(Collections.singletonList(topic))
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
