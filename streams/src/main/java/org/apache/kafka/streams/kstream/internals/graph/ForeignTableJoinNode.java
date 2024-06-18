@@ -25,9 +25,8 @@ import org.apache.kafka.streams.state.StoreBuilder;
 public class ForeignTableJoinNode<K, V> extends StatefulProcessorNode<K, V> implements VersionedSemanticsGraphNode {
 
     public ForeignTableJoinNode(final ProcessorParameters<K, V, ?, ?> processorParameters,
-                                final Set<StoreBuilder<?>> preRegisteredStores,
-                                final Set<KTableValueGetterSupplier<?, ?>> valueGetterSuppliers) {
-        super(processorParameters, preRegisteredStores, valueGetterSuppliers);
+                                final String[] storeNames) {
+        super(processorParameters.processorName(), processorParameters, storeNames);
     }
 
     @SuppressWarnings("unchecked")
