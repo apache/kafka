@@ -227,8 +227,13 @@ public class NioEchoServer extends Thread {
                 synchronized (newChannels) {
                     for (SocketChannel socketChannel : newChannels) {
                         String id = id(socketChannel);
-                        selector.register(id, socketChannel);
-                        socketChannels.add(socketChannel);
+                        try {
+                            selector.register(id, socketChannel);
+                            socketChannels.add(socketChannel);
+                        } catch (IllegalStateException e) {
+                            LOG.warn("Failed to register new channel: {}", id, e);
+                            socketChannel.close();
+                        }
                     }
                     newChannels.clear();
                 }
