@@ -49,7 +49,6 @@ public class MonitorableSinkConnector extends SampleSinkConnector {
     private String connectorName;
     private Map<String, String> commonConfigs;
     private ConnectorHandle connectorHandle;
-    private ResourceHandler resourceHandler;
 
     @Override
     public void start(Map<String, String> props) {
@@ -57,15 +56,7 @@ public class MonitorableSinkConnector extends SampleSinkConnector {
         connectorName = props.get("name");
         commonConfigs = props;
         log.info("Starting connector {}", props.get("name"));
-        if (Boolean.parseBoolean(props.getOrDefault("connector.create.resource", "false"))) {
-            resourceHandler = new ResourceHandler();
-            resourceHandler.createResource();
-            connectorHandle.setResourceStatus(resourceHandler.isResourceAlive());
-        }
         connectorHandle.recordConnectorStart();
-        if (Boolean.parseBoolean(props.getOrDefault("connector.start.inject.error", "false"))) {
-            throw new RuntimeException("Injecting errors during connector start");
-        }
     }
 
     @Override
@@ -88,10 +79,6 @@ public class MonitorableSinkConnector extends SampleSinkConnector {
     @Override
     public void stop() {
         log.info("Stopped {} connector {}", this.getClass().getSimpleName(), connectorName);
-        if (resourceHandler != null) {
-            resourceHandler.closeResource();
-            connectorHandle.setResourceStatus(resourceHandler.isResourceAlive());
-        }
         connectorHandle.recordConnectorStop();
     }
 

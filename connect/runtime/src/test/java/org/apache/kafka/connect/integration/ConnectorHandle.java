@@ -47,7 +47,6 @@ public class ConnectorHandle {
     private CountDownLatch recordsToCommitLatch;
     private int expectedRecords = -1;
     private int expectedCommits = -1;
-    private boolean resourceStatus = false;
 
     public ConnectorHandle(String connectorName) {
         this.connectorName = connectorName;
@@ -233,22 +232,6 @@ public class ConnectorHandle {
      */
     public void recordConnectorStop() {
         startAndStopCounter.recordStop();
-    }
-
-    /**
-     * Check the status of the resource associated with this connector.
-     * @return true if the resource is running, false otherwise.
-     */
-    public boolean getResourceStatus() {
-        return resourceStatus;
-    }
-
-    /**
-     * Update the status of the resource associated with this connector.
-     * @param status true if the resource is running, false otherwise.
-     */
-    public void setResourceStatus(boolean status) {
-        resourceStatus = status;
     }
 
     /**
