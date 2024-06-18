@@ -50,7 +50,7 @@ public final class Heartbeat {
         this.time = time;
         this.heartbeatTimer = time.timer(config.heartbeatIntervalMs);
         this.sessionTimer = time.timer(config.sessionTimeoutMs);
-        this.maxPollIntervalMs = config.commitTimeoutDuringReconciliation;
+        this.maxPollIntervalMs = config.rebalanceTimeoutMs;
         this.pollTimer = time.timer(maxPollIntervalMs);
         this.retryBackoff = new ExponentialBackoff(rebalanceConfig.retryBackoffMs,
                 CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,

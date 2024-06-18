@@ -610,7 +610,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                         .setProtocolType(protocolType())
                         .setProtocols(metadata())
-                        .setRebalanceTimeoutMs(this.rebalanceConfig.commitTimeoutDuringReconciliation)
+                        .setRebalanceTimeoutMs(this.rebalanceConfig.rebalanceTimeoutMs)
                         .setReason(JoinGroupRequest.maybeTruncateReason(this.rejoinReason))
         );
 
@@ -621,8 +621,8 @@ public abstract class AbstractCoordinator implements Closeable {
         int joinGroupTimeoutMs = Math.max(
             client.defaultRequestTimeoutMs(),
             Math.max(
-                rebalanceConfig.commitTimeoutDuringReconciliation + JOIN_GROUP_TIMEOUT_LAPSE,
-                rebalanceConfig.commitTimeoutDuringReconciliation) // guard against overflow since rebalance timeout can be MAX_VALUE
+                rebalanceConfig.rebalanceTimeoutMs + JOIN_GROUP_TIMEOUT_LAPSE,
+                rebalanceConfig.rebalanceTimeoutMs) // guard against overflow since rebalance timeout can be MAX_VALUE
             );
         return client.send(coordinator, requestBuilder, joinGroupTimeoutMs)
                 .compose(new JoinGroupResponseHandler(generation));
@@ -1016,7 +1016,7 @@ public abstract class AbstractCoordinator implements Closeable {
             lastTimeOfConnectionMs = time.milliseconds();
         } else {
             long durationOfOngoingDisconnect = time.milliseconds() - lastTimeOfConnectionMs;
-            if (durationOfOngoingDisconnect > rebalanceConfig.commitTimeoutDuringReconciliation)
+            if (durationOfOngoingDisconnect > rebalanceConfig.rebalanceTimeoutMs)
                 log.warn("Consumer has been disconnected from the group coordinator for {}ms", durationOfOngoingDisconnect);
         }
     }

@@ -146,7 +146,7 @@ public class ConsumerTestBuilder implements Closeable {
         this.subscriptions = spy(createSubscriptionState(config, logContext));
         this.metadata = spy(new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners()));
         this.metricsManager = createFetchMetricsManager(metrics);
-        this.pollTimer = time.timer(groupRebalanceConfig.commitTimeoutDuringReconciliation);
+        this.pollTimer = time.timer(groupRebalanceConfig.rebalanceTimeoutMs);
 
         this.client = new MockClient(time, metadata);
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
@@ -200,7 +200,7 @@ public class ConsumerTestBuilder implements Closeable {
                 new MembershipManagerImpl(
                     gi.groupId,
                     gi.groupInstanceId,
-                    groupRebalanceConfig.commitTimeoutDuringReconciliation,
+                    groupRebalanceConfig.rebalanceTimeoutMs,
                     gi.serverAssignor,
                     subscriptions,
                     commit,
