@@ -22,7 +22,7 @@ import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.{JoinGroupResponseData, ListGroupsResponseData, OffsetFetchResponseData}
+import org.apache.kafka.common.message.{JoinGroupResponseData, ListGroupsResponseData, OffsetFetchResponseData, SyncGroupResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.coordinator.group.Group
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
@@ -422,7 +422,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol(
       groupId = groupId,
-      metadata = metadata(List()),
+      metadata = metadata(List.empty),
       assignment = assignment(List(0, 1, 2))
     )
 
@@ -462,7 +462,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     for (version <- 1 to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
       for (partitionId <- 0 to 2) {
         commitOffset(
-          groupId = "grp",
+          groupId = groupId,
           memberId = memberId1,
           memberEpoch = 1,
           topic = "foo",
@@ -479,7 +479,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     for (version <- 1 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
       assertEquals(
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
-          .setGroupId("grp")
+          .setGroupId(groupId)
           .setTopics(List(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
               .setName("foo")
@@ -496,7 +496,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
               ).asJava)
           ).asJava),
         fetchOffsets(
-          groupId = "grp",
+          groupId = groupId,
           memberId = memberId1,
           memberEpoch = 1,
           partitions = List(
@@ -520,7 +520,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       sendJoinRequest(
         groupId = groupId,
         memberId = memberId1,
-        metadata = metadata(List())
+        metadata = metadata(List.empty)
       )
     )
 
@@ -552,7 +552,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     // Member 1 syncs.
     verifySyncGroupWithOldProtocol(
-      groupId = "grp",
+      groupId = groupId,
       memberId = memberId1,
       generationId = 2,
       expectedAssignment = assignment(List(0, 1, 2).filter(!partitionsOfMember2.contains(_)))
@@ -607,7 +607,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol(
       groupId = groupId,
-      metadata = metadata(List()),
+      metadata = metadata(List.empty),
       assignment = assignment(List(0, 1, 2))
     )
 
@@ -647,7 +647,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     for (version <- 1 to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
       for (partitionId <- 0 to 2) {
         commitOffset(
-          groupId = "grp",
+          groupId = groupId,
           memberId = memberId1,
           memberEpoch = 1,
           topic = "foo",
@@ -664,7 +664,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     for (version <- 1 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
       assertEquals(
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
-          .setGroupId("grp")
+          .setGroupId(groupId)
           .setTopics(List(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
               .setName("foo")
@@ -681,7 +681,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
               ).asJava)
           ).asJava),
         fetchOffsets(
-          groupId = "grp",
+          groupId = groupId,
           memberId = memberId1,
           memberEpoch = 1,
           partitions = List(
@@ -712,7 +712,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // Member 1 syncs.
     val partitionsOfMember1 = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(
       syncGroupWithOldProtocol(
-        groupId = "grp",
+        groupId = groupId,
         memberId = memberId1,
         generationId = 1
       ).assignment()
@@ -742,7 +742,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     // Member 1 syncs.
     verifySyncGroupWithOldProtocol(
-      groupId = "grp",
+      groupId = groupId,
       memberId = memberId1,
       generationId = 2,
       expectedAssignment = assignment(partitionsOfMember1.asScala.toList.map(_.partition))
@@ -793,6 +793,190 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         statesFilter = List.empty,
         typesFilter = List(Group.GroupType.CLASSIC.toString)
       )
+    )
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "upgrade")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testUpgradeMigrationPolicy(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Classic member 1 joins the classic group.
+    val groupId = "grp"
+
+    joinDynamicConsumerGroupWithOldProtocol(
+      groupId = groupId,
+      metadata = metadata(List.empty),
+      assignment = assignment(List(0, 1, 2))
+    )
+
+    // The joining request with a consumer group member 2 is accepted.
+    val memberId2 = consumerGroupHeartbeat(
+      groupId = groupId,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    ).memberId
+
+    // The group has become a consumer group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.RECONCILING.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+
+    // Downgrade the group by leaving member 2.
+    leaveGroupWithNewProtocol(
+      groupId = groupId,
+      memberId = memberId2
+    )
+
+    // The group is still a consumer group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.ASSIGNING.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "downgrade")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testDowngradeMigrationPolicy(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    val groupId = "grp"
+
+    // Consumer member 1 joins the group.
+    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId)
+
+    // Classic member 2 joins the group.
+    val joinGroupResponseData = sendJoinRequest(
+      groupId = groupId
+    )
+    val memberId2 = sendJoinRequest(
+      groupId = groupId,
+      memberId = joinGroupResponseData.memberId,
+      metadata = metadata(List.empty)
+    ).memberId
+
+    // Member 2 syncs. The assigned partition is empty.
+    assertEquals(
+      new SyncGroupResponseData()
+        .setErrorCode(Errors.NONE.code)
+        .setProtocolType("consumer")
+        .setProtocolName("consumer-range")
+        .setAssignment(assignment(List.empty)),
+      syncGroupWithOldProtocol(
+        groupId = groupId,
+        memberId = memberId2,
+        generationId = 2
+      )
+    )
+
+    // Member 2 heartbeats.
+    heartbeat(
+      groupId = groupId,
+      generationId = 2,
+      memberId = memberId2
+    )
+
+    // Member 1 heartbeats to revoke partitions.
+    consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberId1,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    )
+
+    // Member 2 heartbeats and gets REBALANCE_IN_PROGRESS.
+    heartbeat(
+      groupId = groupId,
+      generationId = 2,
+      memberId = memberId2,
+      expectedError = Errors.REBALANCE_IN_PROGRESS
+    )
+
+    // Downgrade the group by leaving member 1.
+    leaveGroupWithNewProtocol(
+      groupId = groupId,
+      memberId = memberId1
+    )
+
+    // The group has become a classic group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ClassicGroupState.PREPARING_REBALANCE.toString)
+          .setGroupType(Group.GroupType.CLASSIC.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CLASSIC.toString)
+      )
+    )
+
+    // The consumerGroupHeartbeat request is rejected.
+    consumerGroupHeartbeat(
+      groupId = groupId,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.GROUP_ID_NOT_FOUND
     )
   }
 
