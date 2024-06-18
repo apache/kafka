@@ -489,10 +489,9 @@ public class MembershipManagerImplTest {
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId1, topic1, owned);
 
         // Reconciliation that does not complete stuck on revocation commit.
-        CompletableFuture<Void> commitResult = new CompletableFuture<>();
-        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
-        mockEmptyAssignmentAndRevocationStuckOnCommit(membershipManager);
-        mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId1, topic1, Arrays.asList(1, 2), true);
+        CompletableFuture<Void> commitResult =
+                mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId1, topic1,
+                        Arrays.asList(1, 2), true);
         Map<Uuid, SortedSet<Integer>> assignment1 = topicIdPartitionsMap(topicId1,  1, 2);
         assertEquals(assignment1, membershipManager.topicPartitionsAwaitingReconciliation());
 
@@ -715,9 +714,9 @@ public class MembershipManagerImplTest {
         // for metadata.
         Uuid topicId2 = Uuid.randomUuid();
         String topic2 = "topic2";
-        CompletableFuture<Void> commitResult = new CompletableFuture<>();
-        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
-        mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId2, topic2, Arrays.asList(1, 2), false);
+        CompletableFuture<Void> commitResult =
+                mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId2, topic2,
+                        Arrays.asList(1, 2), false);
         verify(metadata).requestUpdate(anyBoolean());
         assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
 
@@ -783,7 +782,6 @@ public class MembershipManagerImplTest {
         );
 
         // Receive assignment with only topic1-0, getting stuck during commit.
-        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(new CompletableFuture<>());
         final CompletableFuture<Void> commitFuture = mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId1,
             topic1, Collections.singletonList(0), false);
 
@@ -796,8 +794,6 @@ public class MembershipManagerImplTest {
             );
 
         receiveAssignment(newAssignment, membershipManager);
-        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitFuture);
-        membershipManager.markReconciliationCompleted();
         membershipManager.poll(time.milliseconds());
 
         verifyReconciliationNotTriggered(membershipManager);
@@ -811,11 +807,6 @@ public class MembershipManagerImplTest {
         commitFuture.complete(null);
 
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        TreeSet<Integer> treeSet = new TreeSet<>();
-        treeSet.add(0);
-        HashMap<Uuid, SortedSet<Integer>> partitions = new HashMap<>();
-        partitions.put(topicId1, treeSet);
-        membershipManager.updateAssignment(partitions);
         assertEquals(mkSet(topicId2), membershipManager.topicsAwaitingReconciliation());
 
         // After acknowledging the assignment, we should be back to RECONCILING, because we have not
@@ -826,14 +817,6 @@ public class MembershipManagerImplTest {
         clearInvocations(membershipManager, commitRequestManager);
 
         // Next poll should trigger final reconciliation
-        //when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(new CompletableFuture<>());
-        Map<Uuid, SortedSet<Integer>> map = new HashMap<>();
-        TreeSet<Integer> set1 = new TreeSet<>();
-        set1.add(0);
-        map.put(topicId1, set1);
-        map.put(topicId2, set1);
-
-        membershipManager.updateAssignment(map);
         membershipManager.poll(time.milliseconds());
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
