@@ -134,7 +134,7 @@ public class ClientQuotasImageNode implements MetadataNode {
                         case ')':
                             entries.put(type, value.toString());
                             type = null;
-                            value.delete(0, value.length());
+                            value = new StringBuilder();
                             break;
                         case '\\':
                             escaping = true;
