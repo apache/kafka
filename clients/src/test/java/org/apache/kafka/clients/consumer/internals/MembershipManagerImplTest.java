@@ -2528,9 +2528,9 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).markPendingRevocation(anySet());
         List<TopicPartition> expectedTopicPartitionAssignment =
                 buildTopicPartitions(expectedCurrentAssignment);
-        verify(subscriptionState).assignFromSubscribed(new HashSet<>(expectedTopicPartitionAssignment));
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(any(), any());
         if (expectedTopicPartitionAssignment.equals(Collections.emptyList()))
-            verify(subscriptionState, times(2)).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitionAssignment)), eq(new HashSet<>()));
+            verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitionAssignment)), eq(new HashSet<>()));
         else
             verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitionAssignment)), eq(new HashSet<>()));
     }
@@ -2587,7 +2587,7 @@ public class MembershipManagerImplTest {
 
         if (triggerReconciliation) {
             membershipManager.poll(time.milliseconds());
-            verify(subscriptionState).assignFromSubscribed(anyCollection());
+            verify(subscriptionState).assignFromSubscribedAwaitingCallback(any(), any());
         } else {
             verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
         }
