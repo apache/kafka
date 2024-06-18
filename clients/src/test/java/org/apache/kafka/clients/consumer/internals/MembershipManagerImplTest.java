@@ -2498,7 +2498,7 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).markPendingRevocation(anySet());
         List<TopicPartition> expectedTopicPartitionAssignment =
                 buildTopicPartitions(expectedCurrentAssignment);
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(any(), any());
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(any(), eq(new HashSet<>()));
         if (expectedTopicPartitionAssignment.equals(Collections.emptyList()))
             verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitionAssignment)), eq(new HashSet<>()));
         else
