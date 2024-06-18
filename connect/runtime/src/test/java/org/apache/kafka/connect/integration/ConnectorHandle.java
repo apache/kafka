@@ -244,8 +244,7 @@ public class ConnectorHandle {
     }
 
     /**
-     * Set the status of the resource associated with this connector. This should be called by the
-     * connector under test.
+     * Update the status of the resource associated with this connector.
      * @param status true if the resource is running, false otherwise.
      */
     public void setResourceStatus(boolean status) {
