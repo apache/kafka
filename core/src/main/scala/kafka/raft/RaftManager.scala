@@ -20,10 +20,8 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.util.OptionalInt
+import java.util.{OptionalInt, Properties, Collection => JCollection, Map => JMap}
 import java.util.concurrent.CompletableFuture
-import java.util.{Map => JMap}
-import java.util.{Collection => JCollection}
 import kafka.log.LogManager
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
@@ -157,9 +155,16 @@ class KafkaRaftManager[T](
   controllerListeners: Endpoints,
   fatalFaultHandler: FaultHandler
 ) extends RaftManager[T] with Logging {
+  val props = new Properties()
+  props.put(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, config.getInt(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG))
+  props.put(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, config.getInt(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG))
+  props.put(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, config.getInt(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG))
+  props.put(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, config.getInt(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG))
+  props.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, config.getInt(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG))
+  props.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, config.getInt(QuorumConfig.QUORUM_LINGER_MS_CONFIG))
 
   val apiVersions = new ApiVersions()
-  private val raftConfig = new QuorumConfig(config)
+  private val raftConfig = new QuorumConfig(props)
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
   private val logContext = new LogContext(s"[RaftManager id=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix()
