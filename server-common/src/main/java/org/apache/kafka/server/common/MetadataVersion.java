@@ -211,11 +211,14 @@ public enum MetadataVersion {
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // Add ELR related supports (KIP-966).
+    // Support ListOffsetRequest v9 for KIP-1005.
     IBP_3_9_IV0(21, "3.9", "IV0", true),
 
+    // Add ELR related supports (KIP-966).
+    IBP_3_9_IV1(22, "3.9", "IV1", true),
+
     // Introduce version 1 of the GroupVersion feature (KIP-848).
-    IBP_4_0_IV0(22, "4.0", "IV0", false);
+    IBP_4_0_IV0(23, "4.0", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version

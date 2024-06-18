@@ -47,7 +47,7 @@ object ApiVersionsRequestTest {
     List(ClusterConfig.defaultBuilder()
       .setTypes(java.util.Collections.singleton(Type.ZK))
       .setServerProperties(serverProperties)
-      .setMetadataVersion(MetadataVersion.IBP_3_9_IV0)
+      .setMetadataVersion(MetadataVersion.latestTesting())
       .build()).asJava
   }
 
