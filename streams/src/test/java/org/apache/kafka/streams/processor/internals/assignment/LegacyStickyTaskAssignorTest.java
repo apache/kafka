@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Collection;
 import java.util.Optional;
 import java.util.SortedMap;
 import java.util.SortedSet;
@@ -30,8 +29,6 @@ import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.junit.Before;
-import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -42,9 +39,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
+import java.util.stream.Stream;
+
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
@@ -100,42 +99,31 @@ import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.spy;
 
-@RunWith(Parameterized.class)
 public class LegacyStickyTaskAssignorTest {
 
     private final List<Integer> expectedTopicGroupIds = asList(1, 2);
     private final Time time = new MockTime();
     private final Map<ProcessId, ClientState> clients = new TreeMap<>();
 
-    private boolean enableRackAwareTaskAssignor;
-
-    @Parameter
-    public String rackAwareStrategy;
-
-    @Before
-    public void setUp() {
-        enableRackAwareTaskAssignor = !rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
+    static Stream<Arguments> paramStoreType() {
+        return Stream.of(
+            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, false),
+            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, true),
+            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY, true)
+        );
     }
 
-    @Parameterized.Parameters(name = "rackAwareStrategy={0}")
-    public static Collection<Object[]> getParamStoreType() {
-        return asList(new Object[][] {
-            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE},
-            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC},
-            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY},
-        });
-    }
-
-    @Test
-    public void shouldAssignOneActiveTaskToEachProcessWhenTaskCountSameAsProcessCount() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignOneActiveTaskToEachProcessWhenTaskCountSameAsProcessCount(final String rackAwareStrategy) {
         createClient(PID_1, 1);
         createClient(PID_2, 1);
         createClient(PID_3, 1);
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
 
         for (final ClientState clientState : clients.values()) {
@@ -143,36 +131,39 @@ public class LegacyStickyTaskAssignorTest {
         }
     }
 
-    @Test
-    public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithNoStandByTasks() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithNoStandByTasks(final String rackAwareStrategy) {
         createClient(PID_1, 2);
         createClient(PID_2, 2);
         createClient(PID_3, 2);
 
-        final boolean probingRebalanceNeeded = assign(TASK_1_0, TASK_1_1, TASK_2_2, TASK_2_0, TASK_2_1, TASK_1_2);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_1_0, TASK_1_1, TASK_2_2, TASK_2_0, TASK_2_1, TASK_1_2);
         assertThat(probingRebalanceNeeded, is(false));
 
         assertActiveTaskTopicGroupIdsEvenlyDistributed();
     }
 
-    @Test
-    public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithStandByTasks() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithStandByTasks(final String rackAwareStrategy) {
         createClient(PID_1, 2);
         createClient(PID_2, 2);
         createClient(PID_3, 2);
 
-        final boolean probingRebalanceNeeded = assign(1, TASK_2_0, TASK_1_1, TASK_1_2, TASK_1_0, TASK_2_1, TASK_2_2);
+        final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_2_0, TASK_1_1, TASK_1_2, TASK_1_0, TASK_2_1, TASK_2_2);
         assertThat(probingRebalanceNeeded, is(false));
 
         assertActiveTaskTopicGroupIdsEvenlyDistributed();
     }
 
-    @Test
-    public void shouldNotMigrateActiveTaskToOtherProcess() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldNotMigrateActiveTaskToOtherProcess(final String rackAwareStrategy) {
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
 
-        assertThat(assign(TASK_0_0, TASK_0_1, TASK_0_2), is(false));
+        assertThat(assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2), is(false));
 
         assertThat(clients.get(PID_1).activeTasks(), hasItems(TASK_0_0));
         assertThat(clients.get(PID_2).activeTasks(), hasItems(TASK_0_1));
@@ -184,20 +175,21 @@ public class LegacyStickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_2);
 
-        assertThat(assign(TASK_0_0, TASK_0_1, TASK_0_2), is(false));
+        assertThat(assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2), is(false));
 
         assertThat(clients.get(PID_1).activeTasks(), hasItems(TASK_0_1));
         assertThat(clients.get(PID_2).activeTasks(), hasItems(TASK_0_2));
         assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
     }
 
-    @Test
-    public void shouldMigrateActiveTasksToNewProcessWithoutChangingAllAssignments() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldMigrateActiveTasksToNewProcessWithoutChangingAllAssignments(final String rackAwareStrategy) {
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
         createClient(PID_3, 1);
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
 
         assertThat(probingRebalanceNeeded, is(false));
         assertThat(clients.get(PID_2).activeTasks(), equalTo(singleton(TASK_0_1)));
@@ -206,24 +198,26 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
     }
 
-    @Test
-    public void shouldAssignBasedOnCapacity() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignBasedOnCapacity(final String rackAwareStrategy) {
         createClient(PID_1, 1);
         createClient(PID_2, 2);
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
 
         assertThat(probingRebalanceNeeded, is(false));
         assertThat(clients.get(PID_1).activeTasks().size(), equalTo(1));
         assertThat(clients.get(PID_2).activeTasks().size(), equalTo(2));
     }
 
-    @Test
-    public void shouldAssignTasksEvenlyWithUnequalTopicGroupSizes() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignTasksEvenlyWithUnequalTopicGroupSizes(final String rackAwareStrategy) {
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_1_0);
 
         createClient(PID_2, 1);
 
-        assertThat(assign(TASK_1_0, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5), is(false));
+        assertThat(assign(rackAwareStrategy, TASK_1_0, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5), is(false));
 
         final Set<TaskId> allTasks = new HashSet<>(asList(TASK_0_0, TASK_0_1, TASK_1_0, TASK_0_5, TASK_0_2, TASK_0_3, TASK_0_4));
         final Set<TaskId> client1Tasks = clients.get(PID_1).activeTasks();
@@ -239,15 +233,16 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(client2Tasks, equalTo(allTasks));
     }
 
-    @Test
-    public void shouldKeepActiveTaskStickinessWhenMoreClientThanActiveTasks() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldKeepActiveTaskStickinessWhenMoreClientThanActiveTasks(final String rackAwareStrategy) {
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_1);
         createClient(PID_4, 1);
         createClient(PID_5, 1);
 
-        assertThat(assign(TASK_0_0, TASK_0_1, TASK_0_2), is(false));
+        assertThat(assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2), is(false));
 
         assertThat(clients.get(PID_1).activeTasks(), equalTo(singleton(TASK_0_0)));
         assertThat(clients.get(PID_2).activeTasks(), equalTo(singleton(TASK_0_2)));
@@ -261,15 +256,16 @@ public class LegacyStickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(PID_4, 1, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_5, 1, TASK_0_1);
 
-        assertThat(assign(TASK_0_0, TASK_0_1, TASK_0_2), is(false));
+        assertThat(assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2), is(false));
 
         assertThat(clients.get(PID_2).activeTasks(), equalTo(singleton(TASK_0_0)));
         assertThat(clients.get(PID_4).activeTasks(), equalTo(singleton(TASK_0_2)));
         assertThat(clients.get(PID_5).activeTasks(), equalTo(singleton(TASK_0_1)));
     }
 
-    @Test
-    public void shouldAssignTasksToClientWithPreviousStandbyTasks() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignTasksToClientWithPreviousStandbyTasks(final String rackAwareStrategy) {
         final ClientState client1 = createClient(PID_1, 1);
         client1.addPreviousStandbyTasks(mkSet(TASK_0_2));
         final ClientState client2 = createClient(PID_2, 1);
@@ -277,7 +273,7 @@ public class LegacyStickyTaskAssignorTest {
         final ClientState client3 = createClient(PID_3, 1);
         client3.addPreviousStandbyTasks(mkSet(TASK_0_0));
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
 
         assertThat(probingRebalanceNeeded, is(false));
 
@@ -286,14 +282,15 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(clients.get(PID_3).activeTasks(), equalTo(singleton(TASK_0_0)));
     }
 
-    @Test
-    public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks(final String rackAwareStrategy) {
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
         c1.addPreviousStandbyTasks(mkSet(TASK_0_1));
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 2, TASK_0_2);
         c2.addPreviousStandbyTasks(mkSet(TASK_0_1));
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
 
         assertThat(probingRebalanceNeeded, is(false));
 
@@ -301,14 +298,15 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(clients.get(PID_2).activeTasks(), equalTo(mkSet(TASK_0_2, TASK_0_1)));
     }
 
-    @Test
-    public void shouldAssignStandbyTasksToDifferentClientThanCorrespondingActiveTaskIsAssignedTo() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignStandbyTasksToDifferentClientThanCorrespondingActiveTaskIsAssignedTo(final String rackAwareStrategy) {
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_4, 1, TASK_0_3);
 
-        final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
 
@@ -330,13 +328,14 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(allStandbyTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
     }
 
-    @Test
-    public void shouldAssignMultipleReplicasOfStandbyTask() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignMultipleReplicasOfStandbyTask(final String rackAwareStrategy) {
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_2);
 
-        final boolean probingRebalanceNeeded = assign(2, TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(2, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(PID_1).standbyTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
@@ -344,42 +343,46 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(clients.get(PID_3).standbyTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
     }
 
-    @Test
-    public void shouldNotAssignStandbyTaskReplicasWhenNoClientAvailableWithoutHavingTheTaskAssigned() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldNotAssignStandbyTaskReplicasWhenNoClientAvailableWithoutHavingTheTaskAssigned(final String rackAwareStrategy) {
         createClient(PID_1, 1);
-        final boolean probingRebalanceNeeded = assign(1, TASK_0_0);
+        final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0);
         assertThat(probingRebalanceNeeded, is(false));
         assertThat(clients.get(PID_1).standbyTasks().size(), equalTo(0));
     }
 
-    @Test
-    public void shouldAssignActiveAndStandbyTasks() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignActiveAndStandbyTasks(final String rackAwareStrategy) {
         createClient(PID_1, 1);
         createClient(PID_2, 1);
         createClient(PID_3, 1);
 
-        final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
         assertThat(allStandbyTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
     }
 
-    @Test
-    public void shouldAssignAtLeastOneTaskToEachClientIfPossible() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignAtLeastOneTaskToEachClientIfPossible(final String rackAwareStrategy) {
         createClient(PID_1, 3);
         createClient(PID_2, 1);
         createClient(PID_3, 1);
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
         assertThat(clients.get(PID_1).assignedTaskCount(), equalTo(1));
         assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(1));
         assertThat(clients.get(PID_3).assignedTaskCount(), equalTo(1));
     }
 
-    @Test
-    public void shouldAssignEachActiveTaskToOneClientWhenMoreClientsThanTasks() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignEachActiveTaskToOneClientWhenMoreClientsThanTasks(final String rackAwareStrategy) {
         createClient(PID_1, 1);
         createClient(PID_2, 1);
         createClient(PID_3, 1);
@@ -387,14 +390,15 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_5, 1);
         createClient(PID_6, 1);
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
     }
 
-    @Test
-    public void shouldBalanceActiveAndStandbyTasksAcrossAvailableClients() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldBalanceActiveAndStandbyTasksAcrossAvailableClients(final String rackAwareStrategy) {
         createClient(PID_1, 1);
         createClient(PID_2, 1);
         createClient(PID_3, 1);
@@ -402,7 +406,7 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_5, 1);
         createClient(PID_6, 1);
 
-        final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_1, TASK_0_2);
+        final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
 
         for (final ClientState clientState : clients.values()) {
@@ -410,12 +414,14 @@ public class LegacyStickyTaskAssignorTest {
         }
     }
 
-    @Test
-    public void shouldAssignMoreTasksToClientWithMoreCapacity() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignMoreTasksToClientWithMoreCapacity(final String rackAwareStrategy) {
         createClient(PID_2, 2);
         createClient(PID_1, 1);
 
         final boolean probingRebalanceNeeded = assign(
+            rackAwareStrategy,
             TASK_0_0,
             TASK_0_1,
             TASK_0_2,
@@ -435,8 +441,9 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(clients.get(PID_1).assignedTaskCount(), equalTo(4));
     }
 
-    @Test
-    public void shouldEvenlyDistributeByTaskIdAndPartition() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldEvenlyDistributeByTaskIdAndPartition(final String rackAwareStrategy, final boolean enable) {
         createClient(PID_1, 4);
         createClient(PID_2, 4);
         createClient(PID_3, 4);
@@ -501,15 +508,16 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(sortedAssignments.get(PID_4), equalTo(expectedClientFourAssignment));
     }
 
-    @Test
-    public void shouldNotHaveSameAssignmentOnAnyTwoHosts() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldNotHaveSameAssignmentOnAnyTwoHosts(final String rackAwareStrategy) {
         final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3, PID_4);
         createClient(PID_1, 1);
         createClient(PID_2, 1);
         createClient(PID_3, 1);
         createClient(PID_4, 1);
 
-        final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
+        final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
         for (final ProcessId uuid : allProcessIds) {
@@ -524,15 +532,16 @@ public class LegacyStickyTaskAssignorTest {
         }
     }
 
-    @Test
-    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks(final String rackAwareStrategy) {
         final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3);
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_3);
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_0);
         createClient(PID_4, 1);
 
-        final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
+        final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
         for (final ProcessId uuid : allProcessIds) {
@@ -547,8 +556,9 @@ public class LegacyStickyTaskAssignorTest {
         }
     }
 
-    @Test
-    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousStandbyTasks() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousStandbyTasks(final String rackAwareStrategy) {
         final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3, PID_4);
 
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
@@ -559,7 +569,7 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_3, 1);
         createClient(PID_4, 1);
 
-        final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
+        final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
         for (final ProcessId uuid : allProcessIds) {
@@ -573,14 +583,15 @@ public class LegacyStickyTaskAssignorTest {
         }
     }
 
-    @Test
-    public void shouldReBalanceTasksAcrossAllClientsWhenCapacityAndTaskCountTheSame() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldReBalanceTasksAcrossAllClientsWhenCapacityAndTaskCountTheSame(final String rackAwareStrategy) {
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         createClient(PID_1, 1);
         createClient(PID_2, 1);
         createClient(PID_4, 1);
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(PID_1).assignedTaskCount(), equalTo(1));
@@ -589,13 +600,14 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(clients.get(PID_4).assignedTaskCount(), equalTo(1));
     }
 
-    @Test
-    public void shouldReBalanceTasksAcrossClientsWhenCapacityLessThanTaskCount() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldReBalanceTasksAcrossClientsWhenCapacityLessThanTaskCount(final String rackAwareStrategy) {
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         createClient(PID_1, 1);
         createClient(PID_2, 1);
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(PID_3).assignedTaskCount(), equalTo(2));
@@ -603,18 +615,20 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(1));
     }
 
-    @Test
-    public void shouldRebalanceTasksToClientsBasedOnCapacity() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldRebalanceTasksToClientsBasedOnCapacity(final String rackAwareStrategy) {
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_0_3, TASK_0_2);
         createClient(PID_3, 2);
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_3);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
         assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(1));
         assertThat(clients.get(PID_3).assignedTaskCount(), equalTo(2));
     }
 
-    @Test
-    public void shouldMoveMinimalNumberOfTasksWhenPreviouslyAboveCapacityAndNewClientAdded() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldMoveMinimalNumberOfTasksWhenPreviouslyAboveCapacityAndNewClientAdded(final String rackAwareStrategy) {
         final Set<TaskId> p1PrevTasks = mkSet(TASK_0_0, TASK_0_2);
         final Set<TaskId> p2PrevTasks = mkSet(TASK_0_1, TASK_0_3);
 
@@ -622,7 +636,7 @@ public class LegacyStickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1, TASK_0_3);
         createClientWithPreviousActiveTasks(PID_3, 1);
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
         final Set<TaskId> p3ActiveTasks = clients.get(PID_3).activeTasks();
@@ -634,26 +648,28 @@ public class LegacyStickyTaskAssignorTest {
         }
     }
 
-    @Test
-    public void shouldNotMoveAnyTasksWhenNewTasksAdded() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldNotMoveAnyTasksWhenNewTasksAdded(final String rackAwareStrategy) {
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_2, TASK_0_3);
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_3, TASK_0_1, TASK_0_4, TASK_0_2, TASK_0_0, TASK_0_5);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_3, TASK_0_1, TASK_0_4, TASK_0_2, TASK_0_0, TASK_0_5);
         assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(PID_1).activeTasks(), hasItems(TASK_0_0, TASK_0_1));
         assertThat(clients.get(PID_2).activeTasks(), hasItems(TASK_0_2, TASK_0_3));
     }
 
-    @Test
-    public void shouldAssignNewTasksToNewClientWhenPreviousTasksAssignedToOldClients() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignNewTasksToNewClientWhenPreviousTasksAssignedToOldClients(final String rackAwareStrategy) {
 
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_2, TASK_0_1);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_0_3);
         createClient(PID_3, 1);
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_3, TASK_0_1, TASK_0_4, TASK_0_2, TASK_0_0, TASK_0_5);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_3, TASK_0_1, TASK_0_4, TASK_0_2, TASK_0_0, TASK_0_5);
         assertThat(probingRebalanceNeeded, is(false));
 
         assertThat(clients.get(PID_1).activeTasks(), hasItems(TASK_0_2, TASK_0_1));
@@ -661,8 +677,9 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(clients.get(PID_3).activeTasks(), hasItems(TASK_0_4, TASK_0_5));
     }
 
-    @Test
-    public void shouldAssignTasksNotPreviouslyActiveToNewClient() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignTasksNotPreviouslyActiveToNewClient(final String rackAwareStrategy) {
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_1_2, TASK_1_3);
         c1.addPreviousStandbyTasks(mkSet(TASK_0_0, TASK_1_1, TASK_2_0, TASK_2_1, TASK_2_3));
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_1_1, TASK_2_2);
@@ -673,7 +690,7 @@ public class LegacyStickyTaskAssignorTest {
         final ClientState newClient = createClient(PID_4, 1);
         newClient.addPreviousStandbyTasks(mkSet(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3));
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
         assertThat(probingRebalanceNeeded, is(false));
 
         if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
@@ -689,8 +706,9 @@ public class LegacyStickyTaskAssignorTest {
         }
     }
 
-    @Test
-    public void shouldAssignTasksNotPreviouslyActiveToMultipleNewClients() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignTasksNotPreviouslyActiveToMultipleNewClients(final String rackAwareStrategy) {
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_1_2, TASK_1_3);
         c1.addPreviousStandbyTasks(mkSet(TASK_0_0, TASK_1_1, TASK_2_0, TASK_2_1, TASK_2_3));
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_1_1, TASK_2_2);
@@ -702,7 +720,7 @@ public class LegacyStickyTaskAssignorTest {
         final ClientState bounce2 = createClient(PID_4, 1);
         bounce2.addPreviousStandbyTasks(mkSet(TASK_0_2, TASK_0_3, TASK_1_0));
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
         assertThat(probingRebalanceNeeded, is(false));
 
         if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
@@ -718,21 +736,23 @@ public class LegacyStickyTaskAssignorTest {
         }
     }
 
-    @Test
-    public void shouldAssignTasksToNewClient() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignTasksToNewClient(final String rackAwareStrategy) {
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
         createClient(PID_2, 1);
-        assertThat(assign(TASK_0_1, TASK_0_2), is(false));
+        assertThat(assign(rackAwareStrategy, TASK_0_1, TASK_0_2), is(false));
         assertThat(clients.get(PID_1).activeTaskCount(), equalTo(1));
     }
 
-    @Test
-    public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingClients() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingClients(final String rackAwareStrategy) {
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_3, TASK_0_4, TASK_0_5);
         final ClientState newClient = createClient(PID_3, 1);
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5);
         assertThat(probingRebalanceNeeded, is(false));
         assertThat(c1.activeTasks(), not(hasItem(TASK_0_3)));
         assertThat(c1.activeTasks(), not(hasItem(TASK_0_4)));
@@ -745,14 +765,15 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(newClient.activeTaskCount(), equalTo(2));
     }
 
-    @Test
-    public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingAndBouncedClients() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingAndBouncedClients(final String rackAwareStrategy) {
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_6);
         final ClientState c2 = createClient(PID_2, 1);
         c2.addPreviousStandbyTasks(mkSet(TASK_0_3, TASK_0_4, TASK_0_5));
         final ClientState newClient = createClient(PID_3, 1);
 
-        final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6);
+        final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6);
         assertThat(probingRebalanceNeeded, is(false));
 
         // it's possible for either client 1 or 2 to get three tasks since they both had three previously assigned
@@ -767,8 +788,9 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(newClient.activeTaskCount(), equalTo(2));
     }
 
-    @Test
-    public void shouldViolateBalanceToPreserveActiveTaskStickiness() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldViolateBalanceToPreserveActiveTaskStickiness(final String rackAwareStrategy) {
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
         final ClientState c2 = createClient(PID_2, 1);
 
@@ -820,8 +842,9 @@ public class LegacyStickyTaskAssignorTest {
         assertThat(c2.activeTasks(), empty());
     }
 
-    @Test
-    public void shouldOptimizeStatefulAndStatelessTaskTraffic() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldOptimizeStatefulAndStatelessTaskTraffic(final String rackAwareStrategy) {
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_1_0, TASK_1_1, TASK_0_3, TASK_1_3);
         final ClientState c3 = createClientWithPreviousActiveTasks(PID_3, 1, TASK_1_2);
@@ -897,8 +920,9 @@ public class LegacyStickyTaskAssignorTest {
 
     }
 
-    @Test
-    public void shouldAssignRandomInput() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldAssignRandomInput(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor) {
         final int nodeSize = 50;
         final int tpSize = 60;
         final int partitionSize = 3;
@@ -959,8 +983,9 @@ public class LegacyStickyTaskAssignorTest {
         }
     }
 
-    @Test
-    public void shouldRemainOriginalAssignmentWithoutTrafficCostForMinCostStrategy() {
+    @ParameterizedTest
+    @MethodSource("paramStoreType")
+    public void shouldRemainOriginalAssignmentWithoutTrafficCostForMinCostStrategy(final String rackAwareStrategy) {
         // This test tests that if the traffic cost is 0, we should have same assignment with or without
         // rack aware assignor enabled
         final int nodeSize = 50;
@@ -1061,11 +1086,11 @@ public class LegacyStickyTaskAssignorTest {
         }
     }
 
-    private boolean assign(final TaskId... tasks) {
-        return assign(0, tasks);
+    private boolean assign(final String rackAwareStrategy, final TaskId... tasks) {
+        return assign(0, rackAwareStrategy, tasks);
     }
 
-    private boolean assign(final int numStandbys, final TaskId... tasks) {
+    private boolean assign(final int numStandbys, final String rackAwareStrategy, final TaskId... tasks) {
         final List<TaskId> taskIds = asList(tasks);
         Collections.shuffle(taskIds);
         final AssignmentConfigs configs = new AssignmentConfigs(
