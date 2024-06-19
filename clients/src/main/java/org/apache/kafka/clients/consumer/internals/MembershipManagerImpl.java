@@ -362,7 +362,7 @@ public class MembershipManagerImpl implements MembershipManager {
             metricsManager.recordRebalanceStarted(time.milliseconds());
         }
 
-        log.trace("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
+        log.info("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
         this.state = nextState;
     }
 
@@ -679,11 +679,11 @@ public class MembershipManagerImpl implements MembershipManager {
         CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
             if (error != null) {
-                log.error("Member {} callback to release assignment failed. Member will proceed " +
-                    "to send leave group heartbeat", memberId, error);
+                log.error("Member {} callback to release assignment failed. It will proceed " +
+                    "to clear its assignment and send a leave group heartbeat", memberId, error);
             } else {
-                log.debug("Member {} completed callback to release assignment and will send leave " +
-                    "group heartbeat", memberId);
+                log.info("Member {} completed callback to release assignment. It will proceed " +
+                    "to clear its assignment and send a leave group heartbeat", memberId);
             }
             // Clear the subscription, no matter if the callback execution failed or succeeded.
             subscriptions.unsubscribe();
@@ -718,7 +718,7 @@ public class MembershipManagerImpl implements MembershipManager {
         SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         droppedPartitions.addAll(subscriptions.assignedPartitions());
 
-        log.debug("Member {} is triggering callbacks to release assignment {} and leave group",
+        log.info("Member {} is triggering callbacks to release assignment {} and leave group",
             memberId, droppedPartitions);
 
         CompletableFuture<Void> callbackResult;
@@ -965,8 +965,8 @@ public class MembershipManagerImpl implements MembershipManager {
                         "\tCurrent owned partitions:                  {}\n" +
                         "\tAdded partitions (assigned - owned):       {}\n" +
                         "\tRevoked partitions (owned - assigned):     {}\n",
-                memberId,
                 resolvedAssignment.localEpoch,
+                memberId,
                 assignedTopicPartitions,
                 ownedPartitions,
                 addedPartitions,

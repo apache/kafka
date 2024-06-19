@@ -32,7 +32,7 @@
 
     <h4 class="anchor-heading"><a id="recordbatch" class="anchor-link"></a><a href="#recordbatch">5.3.1 Record Batch</a></h4>
 	<p> The following is the on-disk format of a RecordBatch. </p>
-	<pre class="line-numbers"><code class="language-text">baseOffset: int64
+	<pre><code class="language-text">baseOffset: int64
 batchLength: int32
 partitionLeaderEpoch: int32
 magic: int8 (current magic value is 2)
@@ -75,13 +75,13 @@ records: [Record]</code></pre>
     <h5 class="anchor-heading"><a id="controlbatch" class="anchor-link"></a><a href="#controlbatch">5.3.1.1 Control Batches</a></h5>
     <p>A control batch contains a single record called the control record. Control records should not be passed on to applications. Instead, they are used by consumers to filter out aborted transactional messages.</p>
     <p> The key of a control record conforms to the following schema: </p>
-    <pre class="line-numbers"><code class="language-text">version: int16 (current version is 0)
+    <pre><code class="language-text">version: int16 (current version is 0)
 type: int16 (0 indicates an abort marker, 1 indicates a commit)</code></pre>
     <p>The schema for the value of a control record is dependent on the type. The value is opaque to clients.</p>
 
     <h4 class="anchor-heading"><a id="record" class="anchor-link"></a><a href="#record">5.3.2 Record</a></h4>
 	<p>Record level headers were introduced in Kafka 0.11.0. The on-disk format of a record with Headers is delineated below. </p>
-	<pre class="line-numbers"><code class="language-text">length: varint
+	<pre><code class="language-text">length: varint
 attributes: int8
     bit 0~7: unused
 timestampDelta: varlong
@@ -92,7 +92,7 @@ valueLen: varint
 value: byte[]
 Headers => [Header]</code></pre>
 	<h5 class="anchor-heading"><a id="recordheader" class="anchor-link"></a><a href="#recordheader">5.3.2.1 Record Header</a></h5>
-	<pre class="line-numbers"><code class="language-text">headerKeyLength: varint
+	<pre><code class="language-text">headerKeyLength: varint
 headerKey: String
 headerValueLength: varint
 Value: byte[]</code></pre>
@@ -106,7 +106,7 @@ Value: byte[]</code></pre>
     </p>
 
     <b>Message Set:</b><br>
-    <pre class="line-numbers"><code class="language-text">MessageSet (Version: 0) => [offset message_size message]
+    <pre><code class="language-text">MessageSet (Version: 0) => [offset message_size message]
 offset => INT64
 message_size => INT32
 message => crc magic_byte attributes key value
@@ -120,7 +120,7 @@ message => crc magic_byte attributes key value
         bit 3~7: unused
     key => BYTES
     value => BYTES</code></pre>
-    <pre class="line-numbers"><code class="language-text">MessageSet (Version: 1) => [offset message_size message]
+    <pre><code class="language-text">MessageSet (Version: 1) => [offset message_size message]
 offset => INT64
 message_size => INT32
 message => crc magic_byte attributes timestamp key value
@@ -190,7 +190,7 @@ message => crc magic_byte attributes timestamp key value
 
     <p> The following is the format of the results sent to the consumer.
 
-    <pre class="line-numbers"><code class="language-text">MessageSetSend (fetch result)
+    <pre><code class="language-text">MessageSetSend (fetch result)
 
 total length     : 4 bytes
 error code       : 2 bytes
@@ -198,7 +198,7 @@ message 1        : x bytes
 ...
 message n        : x bytes</code></pre>
 
-    <pre class="line-numbers"><code class="language-text">MultiMessageSetSend (multiFetch result)
+    <pre><code class="language-text">MultiMessageSetSend (multiFetch result)
 
 total length       : 4 bytes
 error code         : 2 bytes
@@ -264,7 +264,7 @@ messageSetSend n</code></pre>
     </p>
 
     <h4 class="anchor-heading"><a id="impl_zkbroker" class="anchor-link"></a><a href="#impl_zkbroker">Broker Node Registry</a></h4>
-    <pre class="line-numbers"><code class="language-json">/brokers/ids/[0...N] --> {"jmx_port":...,"timestamp":...,"endpoints":[...],"host":...,"version":...,"port":...} (ephemeral node)</code></pre>
+    <pre><code class="language-json">/brokers/ids/[0...N] --> {"jmx_port":...,"timestamp":...,"endpoints":[...],"host":...,"version":...,"port":...} (ephemeral node)</code></pre>
     <p>
     This is a list of all present broker nodes, each of which provides a unique logical broker id which identifies it to consumers (which must be given as part of its configuration). On startup, a broker node registers itself by creating a znode with the logical broker id under /brokers/ids. The purpose of the logical broker id is to allow a broker to be moved to a different physical machine without affecting consumers. An attempt to register a broker id that is already in use (say because two servers are configured with the same broker id) results in an error.
     </p>
@@ -272,7 +272,7 @@ messageSetSend n</code></pre>
     Since the broker registers itself in ZooKeeper using ephemeral znodes, this registration is dynamic and will disappear if the broker is shutdown or dies (thus notifying consumers it is no longer available).
     </p>
     <h4 class="anchor-heading"><a id="impl_zktopic" class="anchor-link"></a><a href="#impl_zktopic">Broker Topic Registry</a></h4>
-    <pre class="line-numbers"><code class="language-json">/brokers/topics/[topic]/partitions/[0...N]/state --> {"controller_epoch":...,"leader":...,"version":...,"leader_epoch":...,"isr":[...]} (ephemeral node)</code></pre>
+    <pre><code class="language-json">/brokers/topics/[topic]/partitions/[0...N]/state --> {"controller_epoch":...,"leader":...,"version":...,"leader_epoch":...,"isr":[...]} (ephemeral node)</code></pre>
 
     <p>
     Each broker registers itself under the topics it maintains and stores the number of partitions for that topic.

@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.examples.pageview;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * A timestamp extractor implementation that tries to extract event time from

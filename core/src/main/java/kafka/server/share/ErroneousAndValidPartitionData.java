@@ -22,11 +22,12 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
-import scala.Tuple2;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+import scala.Tuple2;
 
 /**
  * Helper class to return the erroneous partitions and valid partition data
