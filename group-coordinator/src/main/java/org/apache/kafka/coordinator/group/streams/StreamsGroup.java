@@ -29,7 +29,6 @@ import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
@@ -50,16 +49,13 @@ import java.util.Optional;
 import java.util.Set;
 
 import static java.util.Collections.emptyMap;
-import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
-import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.RECONCILING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.STABLE;
 
 /**
- * A Streams Group. All the metadata in this class are backed by
- * records in the __consumer_offsets partitions.
+ * A Streams Group. All the metadata in this class are backed by records in the __consumer_offsets partitions.
  */
 public class StreamsGroup implements Group {
 
@@ -90,6 +86,7 @@ public class StreamsGroup implements Group {
     }
 
     public static class DeadlineAndEpoch {
+
         static final DeadlineAndEpoch EMPTY = new DeadlineAndEpoch(0L, 0);
 
         public final long deadlineMs;
@@ -117,9 +114,8 @@ public class StreamsGroup implements Group {
     private final TimelineObject<StreamsGroupState> state;
 
     /**
-     * The group epoch. The epoch is incremented whenever the subscriptions
-     * are updated and it will trigger the computation of a new assignment
-     * for the group.
+     * The group epoch. The epoch is incremented whenever the subscriptions are updated and it will trigger the computation of a new
+     * assignment for the group.
      */
     private final TimelineInteger groupEpoch;
 
@@ -139,9 +135,13 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, Integer> assignors;
 
     /**
-     * The target assignment epoch. An assignment epoch smaller than the group epoch
-     * means that a new assignment is required. The assignment epoch is updated when
-     * a new assignment is installed.
+     * The metadata associated with each subscribed topic name.
+     */
+    private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
+
+    /**
+     * The target assignment epoch. An assignment epoch smaller than the group epoch means that a new assignment is required. The assignment
+     * epoch is updated when a new assignment is installed.
      */
     private final TimelineInteger targetAssignmentEpoch;
 
@@ -151,17 +151,15 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, Assignment> targetAssignment;
 
     /**
-     * Reverse lookup map representing tasks with
-     * their current member assignments.
+     * Reverse lookup map representing tasks with their current member assignments.
      */
     private final TimelineHashMap<String, TimelineHashMap<Integer, String>> invertedTargetActiveTasksAssignment;
     private final TimelineHashMap<String, TimelineHashMap<Integer, String>> invertedTargetStandbyTasksAssignment;
     private final TimelineHashMap<String, TimelineHashMap<Integer, String>> invertedTargetWarmupTasksAssignment;
 
     /**
-     * The current partition epoch maps each topic-partitions to their current epoch where
-     * the epoch is the epoch of their owners. When a member revokes a partition, it removes
-     * its epochs from this map. When a member gets a partition, it adds its epochs to this map.
+     * The current partition epoch maps each topic-partitions to their current epoch where the epoch is the epoch of their owners. When a
+     * member revokes a partition, it removes its epochs from this map. When a member gets a partition, it adds its epochs to this map.
      */
     private final TimelineHashMap<String, TimelineHashMap<Integer, Integer>> currentActiveTasksEpoch;
     private final TimelineHashMap<String, TimelineHashMap<Integer, Integer>> currentStandbyTasksEpoch;
@@ -173,14 +171,16 @@ public class StreamsGroup implements Group {
     private final GroupCoordinatorMetricsShard metrics;
 
     /**
-     * The metadata refresh deadline. It consists of a timestamp in milliseconds together with
-     * the group epoch at the time of setting it. The metadata refresh time is considered as a
-     * soft state (read that it is not stored in a timeline data structure). It is like this
-     * because it is not persisted to the log. The group epoch is here to ensure that the
-     * metadata refresh deadline is invalidated if the group epoch does not correspond to
-     * the current group epoch. This can happen if the metadata refresh deadline is updated
-     * after having refreshed the metadata but the write operation failed. In this case, the
-     * time is not automatically rolled back.
+     * The Streams topology.
+     */
+    private final StreamsTopology topology;
+
+    /**
+     * The metadata refresh deadline. It consists of a timestamp in milliseconds together with the group epoch at the time of setting it.
+     * The metadata refresh time is considered as a soft state (read that it is not stored in a timeline data structure). It is like this
+     * because it is not persisted to the log. The group epoch is here to ensure that the metadata refresh deadline is invalidated if the
+     * group epoch does not correspond to the current group epoch. This can happen if the metadata refresh deadline is updated after having
+     * refreshed the metadata but the write operation failed. In this case, the time is not automatically rolled back.
      */
     private DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
 
@@ -196,6 +196,7 @@ public class StreamsGroup implements Group {
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.assignors = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.invertedTargetActiveTasksAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -205,6 +206,7 @@ public class StreamsGroup implements Group {
         this.currentStandbyTasksEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentWarmupTasksEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
+        this.topology = null; // TODO
     }
 
     /**
@@ -239,6 +241,10 @@ public class StreamsGroup implements Group {
             .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
             .setGroupState(state.get(committedOffset).toString())
             .setGroupType(type().toString());
+    }
+
+    public StreamsTopology topology() {
+        return topology;
     }
 
     /**
@@ -298,11 +304,9 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Get member id of a static member that matches the given group
-     * instance id.
+     * Get member id of a static member that matches the given group instance id.
      *
      * @param groupInstanceId The group instance id.
-     *
      * @return The member id corresponding to the given instance id or null if it does not exist
      */
     public String staticMemberId(String groupInstanceId) {
@@ -310,13 +314,11 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Gets or creates a new member but without adding it to the group. Adding a member
-     * is done via the {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
+     * Gets or creates a new member but without adding it to the group. Adding a member is done via the
+     * {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
      *
      * @param memberId          The member id.
-     * @param createIfNotExists Booleans indicating whether the member must be
-     *                          created if it does not exist.
-     *
+     * @param createIfNotExists Booleans indicating whether the member must be created if it does not exist.
      * @return A StreamsGroupMember.
      */
     public StreamsGroupMember getOrMaybeCreateMember(
@@ -324,7 +326,9 @@ public class StreamsGroup implements Group {
         boolean createIfNotExists
     ) {
         StreamsGroupMember member = members.get(memberId);
-        if (member != null) return member;
+        if (member != null) {
+            return member;
+        }
 
         if (!createIfNotExists) {
             throw new UnknownMemberIdException(
@@ -339,7 +343,6 @@ public class StreamsGroup implements Group {
      * Gets a static member.
      *
      * @param instanceId The group instance id.
-     *
      * @return The member corresponding to the given instance id or null if it does not exist
      */
     public StreamsGroupMember staticMember(String instanceId) {
@@ -401,7 +404,6 @@ public class StreamsGroup implements Group {
      * Returns true if the member exists.
      *
      * @param memberId The member id.
-     *
      * @return A boolean indicating whether the member exists or not.
      */
     public boolean hasMember(String memberId) {
@@ -432,16 +434,14 @@ public class StreamsGroup implements Group {
     /**
      * Returns the target assignment of the member.
      *
-     * @return The StreamsGroupMemberAssignment or an EMPTY one if it does not
-     *         exist.
+     * @return The StreamsGroupMemberAssignment or an EMPTY one if it does not exist.
      */
     public Assignment targetAssignment(String memberId) {
         return targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
     }
 
     /**
-     * @return An immutable map containing all the topic partitions
-     *         with their current member assignments.
+     * @return An immutable map containing all the topic partitions with their current member assignments.
      */
     public Map<String, Map<Integer, String>> invertedTargetActiveTasksAssignment() {
         return Collections.unmodifiableMap(invertedTargetActiveTasksAssignment);
@@ -488,8 +488,8 @@ public class StreamsGroup implements Group {
     /**
      * Updates the target assignment of a member.
      *
-     * @param memberId              The member id.
-     * @param newTargetAssignment   The new target assignment.
+     * @param memberId            The member id.
+     * @param newTargetAssignment The new target assignment.
      */
     public void updateTargetAssignment(String memberId, Assignment newTargetAssignment) {
         updateInvertedTargetActiveTasksAssignment(
@@ -553,9 +553,9 @@ public class StreamsGroup implements Group {
     /**
      * Updates the reverse lookup map of the target assignment.
      *
-     * @param memberId              The member Id.
-     * @param oldTargetAssignment   The old target assignment.
-     * @param newTargetAssignment   The new target assignment.
+     * @param memberId            The member Id.
+     * @param oldTargetAssignment The old target assignment.
+     * @param newTargetAssignment The new target assignment.
      */
     private void updateInvertedTargetAssignment(
         String memberId,
@@ -633,12 +633,10 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Returns the current epoch of a partition or -1 if the partition
-     * does not have one.
+     * Returns the current epoch of a partition or -1 if the partition does not have one.
      *
-     * @param topicId       The topic id.
-     * @param partitionId   The partition id.
-     *
+     * @param topicId     The topic id.
+     * @param partitionId The partition id.
      * @return The epoch or -1.
      */
     public int currentActiveTaskEpoch(
@@ -650,6 +648,108 @@ public class StreamsGroup implements Group {
         } else {
             return partitions.getOrDefault(partitionId, -1);
         }
+    }
+
+    /**
+     * Compute the preferred (server side) assignor for the group while taking into account the updated member. The computation relies on
+     * {{@link StreamsGroup#assignors}} persisted structure but it does not update it.
+     *
+     * @param oldMember The old member.
+     * @param newMember The new member.
+     * @return An Optional containing the preferred assignor.
+     */
+    public Optional<String> computePreferredServerAssignor(
+        StreamsGroupMember oldMember,
+        StreamsGroupMember newMember
+    ) {
+        // Copy the current count and update it.
+        Map<String, Integer> counts = new HashMap<>(this.assignors);
+        maybeUpdateAssignors(counts, oldMember, newMember);
+
+        return counts.entrySet().stream()
+            .max(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey);
+    }
+
+    /**
+     * @return The preferred assignor for the group.
+     */
+    public Optional<String> preferredServerAssignor() {
+        return preferredServerAssignor(Long.MAX_VALUE);
+    }
+
+    /**
+     * @return The preferred assignor for the group with given offset.
+     */
+    public Optional<String> preferredServerAssignor(long committedOffset) {
+        return assignors.entrySet(committedOffset).stream()
+            .max(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey);
+    }
+
+    /**
+     * @return An immutable Map of subscription metadata for each topic that the consumer group is subscribed to.
+     */
+    public Map<String, TopicMetadata> subscriptionMetadata() {
+        return Collections.unmodifiableMap(subscribedTopicMetadata);
+    }
+
+    /**
+     * Updates the subscription metadata. This replaces the previous one.
+     *
+     * @param subscriptionMetadata The new subscription metadata.
+     */
+    public void setSubscriptionMetadata(
+        Map<String, TopicMetadata> subscriptionMetadata
+    ) {
+        this.subscribedTopicMetadata.clear();
+        this.subscribedTopicMetadata.putAll(subscriptionMetadata);
+    }
+
+    /**
+     * Computes the subscription metadata based on the current subscription info.
+     *
+     * @param subscribedTopicNames Map of topic names to the number of subscribers.
+     * @param topicsImage          The current metadata for all available topics.
+     * @param clusterImage         The current metadata for the Kafka cluster.
+     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
+     */
+    public Map<String, TopicMetadata> computeSubscriptionMetadata(
+        Map<String, Integer> subscribedTopicNames,
+        TopicsImage topicsImage,
+        ClusterImage clusterImage
+    ) {
+        // Create the topic metadata for each subscribed topic.
+        Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
+
+        subscribedTopicNames.forEach((topicName, count) -> {
+            TopicImage topicImage = topicsImage.getTopic(topicName);
+            if (topicImage != null) {
+                Map<Integer, Set<String>> partitionRacks = new HashMap<>();
+                topicImage.partitions().forEach((partition, partitionRegistration) -> {
+                    Set<String> racks = new HashSet<>();
+                    for (int replica : partitionRegistration.replicas) {
+                        Optional<String> rackOptional = clusterImage.broker(replica).rack();
+                        // Only add the rack if it is available for the broker/replica.
+                        rackOptional.ifPresent(racks::add);
+                    }
+                    // If rack information is unavailable for all replicas of this partition,
+                    // no corresponding entry will be stored for it in the map.
+                    if (!racks.isEmpty()) {
+                        partitionRacks.put(partition, racks);
+                    }
+                });
+
+                newSubscriptionMetadata.put(topicName, new TopicMetadata(
+                    topicImage.id(),
+                    topicImage.name(),
+                    topicImage.partitions().size(),
+                    partitionRacks)
+                );
+            }
+        });
+
+        return Collections.unmodifiableMap(newSubscriptionMetadata);
     }
 
     /**
@@ -673,11 +773,9 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Checks if a metadata refresh is required. A refresh is required in two cases:
-     * 1) The deadline is smaller or equal to the current time;
-     * 2) The group epoch associated with the deadline is larger than
-     *    the current group epoch. This means that the operations which updated
-     *    the deadline failed.
+     * Checks if a metadata refresh is required. A refresh is required in two cases: 1) The deadline is smaller or equal to the current
+     * time; 2) The group epoch associated with the deadline is larger than the current group epoch. This means that the operations which
+     * updated the deadline failed.
      *
      * @param currentTimeMs The current time in milliseconds.
      * @return A boolean indicating whether a refresh is required or not.
@@ -696,11 +794,10 @@ public class StreamsGroup implements Group {
     /**
      * Validates the OffsetCommit request.
      *
-     * @param memberId          The member id.
-     * @param groupInstanceId   The group instance id.
-     * @param memberEpoch       The member epoch.
-     * @param isTransactional   Whether the offset commit is transactional or not. It has no
-     *                          impact when a consumer group is used.
+     * @param memberId        The member id.
+     * @param groupInstanceId The group instance id.
+     * @param memberEpoch     The member epoch.
+     * @param isTransactional Whether the offset commit is transactional or not. It has no impact when a consumer group is used.
      */
     @Override
     public void validateOffsetCommit(
@@ -712,7 +809,9 @@ public class StreamsGroup implements Group {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
         // the request can commit offsets if the group is empty.
-        if (memberEpoch < 0 && members().isEmpty()) return;
+        if (memberEpoch < 0 && members().isEmpty()) {
+            return;
+        }
 
         final StreamsGroupMember member = getOrMaybeCreateMember(memberId, false);
         validateMemberEpoch(memberEpoch, member.memberEpoch());
@@ -721,9 +820,9 @@ public class StreamsGroup implements Group {
     /**
      * Validates the OffsetFetch request.
      *
-     * @param memberId              The member id for consumer groups.
-     * @param memberEpoch           The member epoch for consumer groups.
-     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * @param memberId            The member id for consumer groups.
+     * @param memberEpoch         The member epoch for consumer groups.
+     * @param lastCommittedOffset The last committed offsets in the timeline.
      */
     @Override
     public void validateOffsetFetch(
@@ -734,7 +833,9 @@ public class StreamsGroup implements Group {
         // When the member id is null and the member epoch is -1, the request either comes
         // from the admin client or from a client which does not provide them. In this case,
         // the fetch request is accepted.
-        if (memberId == null && memberEpoch < 0) return;
+        if (memberId == null && memberEpoch < 0) {
+            return;
+        }
 
         final StreamsGroupMember member = members.get(memberId, lastCommittedOffset);
         if (member == null) {
@@ -748,7 +849,8 @@ public class StreamsGroup implements Group {
      * Validates the OffsetDelete request.
      */
     @Override
-    public void validateOffsetDelete() {}
+    public void validateOffsetDelete() {
+    }
 
     /**
      * Validates the DeleteGroups request.
@@ -773,20 +875,21 @@ public class StreamsGroup implements Group {
     @Override
     public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId(), memberId))
+            records.add(CoordinatorRecordHelpers.newStreamsCurrentAssignmentTombstoneRecord(groupId(), memberId))
         );
 
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId(), memberId))
+            records.add(CoordinatorRecordHelpers.newStreamsTargetAssignmentTombstoneRecord(groupId(), memberId))
         );
-        records.add(CoordinatorRecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(CoordinatorRecordHelpers.newStreamsTargetAssignmentEpochTombstoneRecord(groupId()));
 
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId(), memberId))
+            records.add(CoordinatorRecordHelpers.newStreamsMemberSubscriptionTombstoneRecord(groupId(), memberId))
         );
 
-        records.add(CoordinatorRecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
-        records.add(CoordinatorRecordHelpers.newGroupEpochTombstoneRecord(groupId()));
+        records.add(CoordinatorRecordHelpers.newStreamsGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(CoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId()));
+        records.add(CoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId()));
     }
 
     @Override
@@ -810,8 +913,7 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Throws a StaleMemberEpochException if the received member epoch does not match
-     * the expected member epoch.
+     * Throws a StaleMemberEpochException if the received member epoch does not match the expected member epoch.
      */
     private void validateMemberEpoch(
         int receivedMemberEpoch,
@@ -843,30 +945,6 @@ public class StreamsGroup implements Group {
         }
 
         state.set(newState);
-    }
-
-    /**
-     * Compute the subscription type of the consumer group.
-     *
-     * @param subscribedTopicNames      A map of topic names to the count of members subscribed to each topic.
-     *
-     * @return {@link org.apache.kafka.coordinator.group.assignor.SubscriptionType#HOMOGENEOUS} if all members are subscribed to exactly the same topics;
-     *         otherwise, {@link org.apache.kafka.coordinator.group.assignor.SubscriptionType#HETEROGENEOUS}.
-     */
-    public static SubscriptionType subscriptionType(
-        Map<String, Integer> subscribedTopicNames,
-        int numberOfMembers
-    ) {
-        if (subscribedTopicNames.isEmpty()) {
-            return HOMOGENEOUS;
-        }
-
-        for (int subscriberCount : subscribedTopicNames.values()) {
-            if (subscriberCount != numberOfMembers) {
-                return HETEROGENEOUS;
-            }
-        }
-        return HOMOGENEOUS;
     }
 
     /**
@@ -936,8 +1014,7 @@ public class StreamsGroup implements Group {
      *
      * @param assignment    The assignment.
      * @param expectedEpoch The expected epoch.
-     * @throws IllegalStateException if the epoch does not match the expected one.
-     * package-private for testing.
+     * @throws IllegalStateException if the epoch does not match the expected one. package-private for testing.
      */
     private void removeTaskEpochs(
         Map<String, Set<Integer>> assignment,
@@ -972,12 +1049,11 @@ public class StreamsGroup implements Group {
     /**
      * Adds the partitions epoch based on the provided assignment.
      *
-     * @param activeTasks   The assigned active tasks.
-     * @param standbyTasks  The assigned standby tasks.
-     * @param warmupTasks   The assigned warmup tasks.
-     * @param epoch         The new epoch.
-     * @throws IllegalStateException if the partition already has an epoch assigned.
-     * package-private for testing.
+     * @param activeTasks  The assigned active tasks.
+     * @param standbyTasks The assigned standby tasks.
+     * @param warmupTasks  The assigned warmup tasks.
+     * @param epoch        The new epoch.
+     * @throws IllegalStateException if the partition already has an epoch assigned. package-private for testing.
      */
     void addTaskEpochs(
         Map<String, Set<Integer>> activeTasks,
@@ -1014,11 +1090,12 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Decrements value by 1; returns null when reaching zero. This helper is
-     * meant to be used with Map#compute.
+     * Decrements value by 1; returns null when reaching zero. This helper is meant to be used with Map#compute.
      */
     private static Integer decValue(String key, Integer value) {
-        if (value == null) return null;
+        if (value == null) {
+            return null;
+        }
         return value == 1 ? null : value - 1;
     }
 
@@ -1044,7 +1121,7 @@ public class StreamsGroup implements Group {
         records.add(CoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId(), groupEpoch()));
 
         members().forEach((streamsGroupMemberId, streamsGroupMember) ->
-            records.add(CoordinatorRecordHelpers.newTargetAssignmentRecord(
+            records.add(CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord(
                 groupId(),
                 streamsGroupMemberId,
                 targetAssignment(streamsGroupMemberId).activeTasks(),
@@ -1054,9 +1131,10 @@ public class StreamsGroup implements Group {
         );
 
         records.add(CoordinatorRecordHelpers.newStreamsTargetAssignmentEpochRecord(groupId(), groupEpoch()));
+        records.add(CoordinatorRecordHelpers.newStreamsGroupSubscriptionMetadataRecord(groupId(), subscriptionMetadata()));
 
         members().forEach((__, streamsGroupMember) ->
-            records.add(CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId(), streamsGroupMember))
+            records.add(CoordinatorRecordHelpers.newStreamsCurrentAssignmentRecord(groupId(), streamsGroupMember))
         );
     }
 
@@ -1083,8 +1161,7 @@ public class StreamsGroup implements Group {
      * Checks whether the member has any unreleased tasks.
      *
      * @param member The member to check.
-     * @return A boolean indicating whether the member has partitions in the target
-     *         assignment that hasn't been revoked by other members.
+     * @return A boolean indicating whether the member has partitions in the target assignment that hasn't been revoked by other members.
      */
     public boolean waitingOnUnreleasedActiveTasks(StreamsGroupMember member) {
         if (member.state() == MemberState.UNRELEASED_TASKS) {
