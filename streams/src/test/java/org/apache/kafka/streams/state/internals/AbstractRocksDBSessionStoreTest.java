@@ -16,15 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.Stores;
-
-import static java.time.Duration.ofMillis;
-
 public abstract class AbstractRocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
 
-    private static final String STORE_NAME = "rocksDB session store";
+    @Override
+    String getStoreName() {
+        return "rocksDB session store";
+    }
 
     abstract StoreType storeType();
 
@@ -32,44 +29,5 @@ public abstract class AbstractRocksDBSessionStoreTest extends AbstractSessionByt
     StoreType getStoreType() {
         return storeType();
     }
-
-    @Override
-    <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
-                                                final Serde<K> keySerde,
-                                                final Serde<V> valueSerde) {
-        switch (storeType()) {
-            case RocksDBSessionStore: {
-                return Stores.sessionStoreBuilder(
-                        Stores.persistentSessionStore(
-                                STORE_NAME,
-                                ofMillis(retentionPeriod)),
-                        keySerde,
-                        valueSerde).build();
-            }
-            case RocksDBTimeOrderedSessionStoreWithIndex: {
-                return Stores.sessionStoreBuilder(
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                                STORE_NAME,
-                                retentionPeriod,
-                                true
-                        ),
-                        keySerde,
-                        valueSerde
-                ).build();
-            }
-            case RocksDBTimeOrderedSessionStoreWithoutIndex: {
-                return Stores.sessionStoreBuilder(
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                                STORE_NAME,
-                                retentionPeriod,
-                                false
-                        ),
-                        keySerde,
-                        valueSerde
-                ).build();
-            }
-            default:
-                throw new IllegalStateException("Unknown StoreType: " + storeType());
-        }
-    }
+    
 }

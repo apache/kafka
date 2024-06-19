@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -54,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -90,11 +92,55 @@ public abstract class AbstractSessionBytesStoreTest {
 
     InternalMockProcessorContext context;
 
-    abstract <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
+    <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
                                                          final Serde<K> keySerde,
-                                                         final Serde<V> valueSerde);
+                                                         final Serde<V> valueSerde) {
+        switch (getStoreType()) {
+            case RocksDBSessionStore: {
+                return Stores.sessionStoreBuilder(
+                        Stores.persistentSessionStore(
+                                getStoreName(),
+                                ofMillis(retentionPeriod)),
+                        keySerde,
+                        valueSerde).build();
+            }
+            case RocksDBTimeOrderedSessionStoreWithIndex: {
+                return Stores.sessionStoreBuilder(
+                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                                getStoreName(),
+                                retentionPeriod,
+                                true
+                        ),
+                        keySerde,
+                        valueSerde
+                ).build();
+            }
+            case RocksDBTimeOrderedSessionStoreWithoutIndex: {
+                return Stores.sessionStoreBuilder(
+                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                                getStoreName(),
+                                retentionPeriod,
+                                false
+                        ),
+                        keySerde,
+                        valueSerde
+                ).build();
+            }
+            case InMemoryStore: {
+                return Stores.sessionStoreBuilder(
+                        Stores.inMemorySessionStore(
+                                getStoreName(),
+                                ofMillis(retentionPeriod)),
+                        keySerde,
+                        valueSerde).build();
+            }
+            default:
+                throw new IllegalStateException("Unknown StoreType: " + getStoreType());
+        }
+    }
 
     abstract StoreType getStoreType();
+    abstract String getStoreName();
 
     @BeforeEach
     public void setUp() {
