@@ -234,4 +234,19 @@ public class ClusterTestExtensionsTest {
         Assertions.assertTrue(clusterInstance.supportedGroupProtocols().contains(CLASSIC));
         Assertions.assertEquals(1, clusterInstance.supportedGroupProtocols().size());
     }
+
+    @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
+    public void testClusterAliveBrokers(ClusterInstance clusterInstance) throws Exception {
+        clusterInstance.waitForReadyBrokers();
+
+        // Remove broker id 0
+        clusterInstance.shutdownBroker(0);
+        Assertions.assertFalse(clusterInstance.aliveBrokers().containsKey(0));
+        Assertions.assertTrue(clusterInstance.brokers().containsKey(0));
+
+        // add broker id 0 back
+        clusterInstance.startBroker(0);
+        Assertions.assertTrue(clusterInstance.aliveBrokers().containsKey(0));
+        Assertions.assertTrue(clusterInstance.brokers().containsKey(0));
+    }
 }

@@ -733,6 +733,10 @@ class BrokerServer(
     }
   }
 
+  override def isShutdown(): Boolean = {
+    status == SHUTDOWN || status == SHUTTING_DOWN
+  }
+
   override def awaitShutdown(): Unit = {
     lock.lock()
     try {

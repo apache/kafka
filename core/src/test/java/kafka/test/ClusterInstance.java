@@ -52,6 +52,11 @@ public interface ClusterInstance {
 
     Map<Integer, KafkaBroker> brokers();
 
+    default Map<Integer, KafkaBroker> aliveBrokers() {
+        return brokers().entrySet().stream().filter(entry -> !entry.getValue().isShutdown())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
     Map<Integer, ControllerServer> controllers();
 
     /**

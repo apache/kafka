@@ -97,6 +97,7 @@ trait KafkaBroker extends Logging {
   def awaitShutdown(): Unit
   def shutdown(): Unit = shutdown(Duration.ofMinutes(5))
   def shutdown(timeout: Duration): Unit
+  def isShutdown(): Boolean
   def brokerTopicStats: BrokerTopicStats
   def credentialProvider: CredentialProvider
   def clientToControllerChannelManager: NodeToControllerChannelManager
