@@ -408,7 +408,10 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_7_IV4)) {
+        // TODO: update this to 3.9 when it is available
+        if (this.isAtLeast(IBP_4_0_IV0)) {
+            return 17;
+        } else if (this.isAtLeast(IBP_3_7_IV4)) {
             return 16;
         } else if (this.isAtLeast(IBP_3_5_IV1)) {
             return 15;

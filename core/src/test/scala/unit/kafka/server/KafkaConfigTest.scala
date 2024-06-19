@@ -1294,7 +1294,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testControllerListenersCannotBeAdvertisedForKRaftBroker(): Unit = {
+  def testControllerListenersCanBeAdvertisedForKRaftCombined(): Unit = {
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
     val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
@@ -1304,11 +1304,8 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT,SSL")
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
-    assertBadConfigContainingMessage(props,
-      "The advertised.listeners config must not contain KRaft controller listeners from controller.listener.names when process.roles contains the broker role")
 
-    // Valid now
-    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "SASL_SSL://C:9094")
+    // Valid
     KafkaConfig.fromProps(props)
 
     // Also valid if we allow advertised listeners to derive from listeners/controller.listener.names
@@ -1317,8 +1314,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testAdvertisedListenersDisallowedForKRaftControllerOnlyRole(): Unit = {
-    // Test that advertised listeners cannot be set when KRaft and server is controller only.
+  def testAdvertisedListenersAllowedForKRaftControllerOnlyRole(): Unit = {
     // Test that listeners must enumerate every controller listener
     // Test that controller listener must enumerate every listener
     val correctListeners = "PLAINTEXT://A:9092,SSL://B:9093"
@@ -1329,21 +1325,18 @@ class KafkaConfigTest {
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, correctListeners)
-    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, incorrectListeners)
+    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, correctListeners)
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, correctControllerListenerNames)
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
-    var expectedExceptionContainsText = "The advertised.listeners config must be empty when process.roles=controller"
-    assertBadConfigContainingMessage(props, expectedExceptionContainsText)
 
-    // Invalid if advertised listeners is explicitly to the set
-    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, correctListeners)
-    assertBadConfigContainingMessage(props, expectedExceptionContainsText)
+    // Valid
+    KafkaConfig.fromProps(props)
 
     // Invalid if listeners contains names not in controller.listener.names
     props.remove(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, incorrectListeners)
-    expectedExceptionContainsText = """The listeners config must only contain KRaft controller listeners from
+    var expectedExceptionContainsText = """The listeners config must only contain KRaft controller listeners from
     |controller.listener.names when process.roles=controller""".stripMargin.replaceAll("\n", " ")
     assertBadConfigContainingMessage(props, expectedExceptionContainsText)
 
