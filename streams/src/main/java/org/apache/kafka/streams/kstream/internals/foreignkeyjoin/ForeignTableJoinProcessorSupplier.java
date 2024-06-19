@@ -30,7 +30,6 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
@@ -41,15 +40,15 @@ import java.nio.ByteBuffer;
 public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
     ProcessorSupplier<KO, Change<VO>, K, SubscriptionResponseWrapper<VO>> {
     private static final Logger LOG = LoggerFactory.getLogger(ForeignTableJoinProcessorSupplier.class);
-    private final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder;
+    private final String storeName;
     private final CombinedKeySchema<KO, K> keySchema;
     private boolean useVersionedSemantics = false;
 
     public ForeignTableJoinProcessorSupplier(
-        final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder,
+        final String storeName,
         final CombinedKeySchema<KO, K> keySchema) {
 
-        this.storeBuilder = storeBuilder;
+        this.storeName = storeName;
         this.keySchema = keySchema;
     }
 
@@ -80,7 +79,7 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
                 internalProcessorContext.taskId().toString(),
                 internalProcessorContext.metrics()
             );
-            subscriptionStore = internalProcessorContext.getStateStore(storeBuilder);
+            subscriptionStore = internalProcessorContext.getStateStore(storeName);
         }
 
         @Override
