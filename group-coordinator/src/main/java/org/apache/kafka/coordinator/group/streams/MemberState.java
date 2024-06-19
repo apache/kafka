@@ -20,8 +20,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * The various states that a member can be in. For their definition,
- * refer to the documentation of {{@link org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilder}}.
+ * The various states that a member can be in. For their definition, refer to the documentation of
+ * {{@link org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilder}}.
  */
 public enum MemberState {
 
@@ -31,28 +31,25 @@ public enum MemberState {
     STABLE((byte) 1),
 
     /**
-     * The member must revoke some tasks in order to be able to
-     * transition to the next epoch.
+     * The member must revoke some tasks in order to be able to transition to the next epoch.
      */
     UNREVOKED_TASKS((byte) 2),
 
     /**
-     * The member transitioned to the last epoch but waits on some
-     * tasks which have not been revoked by their previous
-     * owners yet.
+     * The member transitioned to the last epoch but waits on some tasks which have not been revoked by their previous owners yet.
      */
     UNRELEASED_TASKS((byte) 3),
 
     /**
-     * The member is in an unknown state. This can only happen if a future
-     * version of the software introduces a new state unknown by this version.
+     * The member is in an unknown state. This can only happen if a future version of the software introduces a new state unknown by this
+     * version.
      */
     UNKNOWN((byte) 127);
 
     private final static Map<Byte, MemberState> VALUES_TO_ENUMS = new HashMap<>();
 
     static {
-        for (MemberState state: MemberState.values()) {
+        for (MemberState state : MemberState.values()) {
             VALUES_TO_ENUMS.put(state.value(), state);
         }
     }
