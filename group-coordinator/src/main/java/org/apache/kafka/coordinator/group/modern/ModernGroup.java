@@ -26,7 +26,7 @@ import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Utils;
-import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.image.ClusterImage;
@@ -45,8 +45,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
-import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 
 /**
  * The abstract group provides definitions for the consumer and share group.

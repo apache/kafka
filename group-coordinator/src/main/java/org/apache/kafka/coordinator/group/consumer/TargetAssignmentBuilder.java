@@ -23,14 +23,6 @@ import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
-import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
-import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
-import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.image.TopicsImage;
 
