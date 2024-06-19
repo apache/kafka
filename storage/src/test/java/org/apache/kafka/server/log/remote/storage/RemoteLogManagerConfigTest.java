@@ -69,6 +69,21 @@ public class RemoteLogManagerConfigTest {
                 new RemoteLogManagerConfig(emptyStringProps));
     }
 
+    @Test
+    public void testDynamicConfigs() {
+        Map<String, Object> emptyProps = new HashMap<>();
+        RemoteLogManagerConfig rlmConfig = new RemoteLogManagerConfig(emptyProps);
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND,
+                rlmConfig.remoteLogManagerCopyMaxBytesPerSecond());
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND,
+                rlmConfig.remoteLogManagerFetchMaxBytesPerSecond());
+
+        rlmConfig.updateCurrentConfig(Collections.singletonMap(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP, 100L));
+        assertEquals(100L, rlmConfig.remoteLogManagerCopyMaxBytesPerSecond());
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND,
+                rlmConfig.remoteLogManagerFetchMaxBytesPerSecond());
+    }
+
     private Map<String, Object> getRLMProps(String rsmPrefix, String rlmmPrefix) {
 
         Map<String, Object> props = new HashMap<>();
