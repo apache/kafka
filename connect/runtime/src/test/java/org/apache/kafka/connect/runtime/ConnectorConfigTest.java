@@ -26,7 +26,8 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -34,12 +35,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
@@ -52,7 +53,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     private static final SinkRecord DUMMY_RECORD = new SinkRecord(null, 0, null, null, null, null, 0L);
 
-    public static abstract class TestConnector extends Connector {
+    public abstract static class TestConnector extends Connector {
     }
 
     public static class SimpleTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
@@ -393,7 +394,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         }
     }
 
-    public static abstract class AbstractTestPredicate<R extends ConnectRecord<R>> implements Predicate<R>, Versioned {
+    public abstract static class AbstractTestPredicate<R extends ConnectRecord<R>> implements Predicate<R>, Versioned {
 
         @Override
         public String version() {
@@ -404,7 +405,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     }
 
-    public static abstract class AbstractTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
+    public abstract static class AbstractTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
 
         @Override
         public String version() {
@@ -413,7 +414,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     }
 
-    public static abstract class AbstractKeyValueTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
+    public abstract static class AbstractKeyValueTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
         @Override
         public R apply(R record) {
             return null;
@@ -469,8 +470,8 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
     private static void assertEnrichedConfigDef(ConfigDef def, String prefix, String keyName, ConfigDef.Type expectedType) {
         assertNull(def.configKeys().get(keyName));
         ConfigDef.ConfigKey configKey = def.configKeys().get(prefix + keyName);
-        assertNotNull(prefix + keyName + "' config must be present", configKey);
-        assertEquals(prefix + keyName + "' config should be a " + expectedType, expectedType, configKey.type);
+        assertNotNull(configKey, prefix + keyName + "' config must be present");
+        assertEquals(expectedType, configKey.type, prefix + keyName + "' config should be a " + expectedType);
     }
 
     public static class HasDuplicateConfigTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {

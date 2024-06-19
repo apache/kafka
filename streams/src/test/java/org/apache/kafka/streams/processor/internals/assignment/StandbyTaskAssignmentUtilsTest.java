@@ -17,13 +17,13 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -49,7 +49,7 @@ public class StandbyTaskAssignmentUtilsTest {
 
     private static final Set<TaskId> ACTIVE_TASKS = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
-    private Map<UUID, ClientState> clients;
+    private Map<ProcessId, ClientState> clients;
     private ConstrainedPrioritySet clientsByTaskLoad;
 
     @Before

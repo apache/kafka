@@ -20,8 +20,6 @@ import java.util.List;
 import java.util.OptionalInt;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor;
-import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 
 /**
  * Assignment related configs for the Kafka Streams {@link TaskAssignor}.
@@ -43,26 +41,8 @@ public class AssignmentConfigs {
         final long probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
         final List<String> rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         final String rackAwareAssignmentStrategy = configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
-        Integer rackAwareTrafficCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
-        Integer rackAwareNonOverlapCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
-
-        final String assignorClassName = configs.getString(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
-        if (StickyTaskAssignor.class.getName().equals(assignorClassName)) {
-            if (rackAwareTrafficCost == null) {
-                rackAwareTrafficCost = StickyTaskAssignor.DEFAULT_STICKY_TRAFFIC_COST;
-            }
-            if (rackAwareNonOverlapCost == null) {
-                rackAwareNonOverlapCost = StickyTaskAssignor.DEFAULT_STICKY_NON_OVERLAP_COST;
-            }
-        } else if (HighAvailabilityTaskAssignor.class.getName().equals(assignorClassName)) {
-            // TODO KAFKA-16869: replace with the HighAvailabilityTaskAssignor class once it implements the new TaskAssignor interface
-            if (rackAwareTrafficCost == null) {
-                rackAwareTrafficCost = HighAvailabilityTaskAssignor.DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST;
-            }
-            if (rackAwareNonOverlapCost == null) {
-                rackAwareNonOverlapCost = HighAvailabilityTaskAssignor.DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST;
-            }
-        }
+        final Integer rackAwareTrafficCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
+        final Integer rackAwareNonOverlapCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
 
         return new AssignmentConfigs(
             acceptableRecoveryLag,
@@ -82,7 +62,7 @@ public class AssignmentConfigs {
                              final long probingRebalanceIntervalMs,
                              final List<String> rackAwareAssignmentTags,
                              final OptionalInt rackAwareTrafficCost,
-                             final OptionalInt  rackAwareNonOverlapCost,
+                             final OptionalInt rackAwareNonOverlapCost,
                              final String rackAwareAssignmentStrategy) {
         this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
         this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
@@ -90,16 +70,36 @@ public class AssignmentConfigs {
         this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
         this.rackAwareAssignmentTags = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rackAwareAssignmentTags);
         this.rackAwareTrafficCost = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG,
-            rackAwareTrafficCost
+            defaultRackAwareTrafficCost(rackAwareTrafficCost)
         );
         this.rackAwareNonOverlapCost = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
-            rackAwareNonOverlapCost
+            defaultRackAwareNonOverlapCost(rackAwareNonOverlapCost)
         );
         this.rackAwareAssignmentStrategy = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
             rackAwareAssignmentStrategy
         );
     }
 
+    public AssignmentConfigs(final long acceptableRecoveryLag,
+                             final int maxWarmupReplicas,
+                             final int numStandbyReplicas,
+                             final long probingRebalanceIntervalMs,
+                             final List<String> rackAwareAssignmentTags,
+                             final int rackAwareTrafficCost,
+                             final int rackAwareNonOverlapCost,
+                             final String rackAwareAssignmentStrategy) {
+        this(acceptableRecoveryLag, maxWarmupReplicas, numStandbyReplicas, probingRebalanceIntervalMs, rackAwareAssignmentTags,
+            OptionalInt.of(rackAwareTrafficCost), OptionalInt.of(rackAwareNonOverlapCost), rackAwareAssignmentStrategy);
+    }
+
+    public AssignmentConfigs(final Long acceptableRecoveryLag,
+                             final Integer maxWarmupReplicas,
+                             final Integer numStandbyReplicas,
+                             final Long probingRebalanceIntervalMs,
+                             final List<String> rackAwareAssignmentTags) {
+        this(acceptableRecoveryLag, maxWarmupReplicas, numStandbyReplicas, probingRebalanceIntervalMs, rackAwareAssignmentTags,
+             OptionalInt.empty(), OptionalInt.empty(), StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
+    }
 
     /**
      * The configured acceptable recovery lag according to
@@ -185,5 +185,19 @@ public class AssignmentConfigs {
                "\n  rackAwareNonOverlapCost=" + rackAwareNonOverlapCost +
                "\n  rackAwareAssignmentStrategy=" + rackAwareAssignmentStrategy +
                "\n}";
+    }
+
+    private static OptionalInt defaultRackAwareTrafficCost(final OptionalInt rackAwareTrafficCost) {
+        if (rackAwareTrafficCost == null) {
+            return OptionalInt.empty();
+        }
+        return rackAwareTrafficCost;
+    }
+
+    private static OptionalInt defaultRackAwareNonOverlapCost(final OptionalInt rackAwareNonOverlapCost) {
+        if (rackAwareNonOverlapCost == null) {
+            return OptionalInt.empty();
+        }
+        return rackAwareNonOverlapCost;
     }
 }

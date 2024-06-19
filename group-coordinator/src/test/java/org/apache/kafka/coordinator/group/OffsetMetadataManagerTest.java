@@ -48,20 +48,21 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
-import org.apache.kafka.coordinator.group.classic.ClassicGroup;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -2596,7 +2597,7 @@ public class OffsetMetadataManagerTest {
         assertEquals(Collections.emptyList(), records);
     }
 
-    static private OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(
+    private static OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(
         int partition,
         long offset,
         int leaderEpoch,
@@ -2609,7 +2610,7 @@ public class OffsetMetadataManagerTest {
             .setMetadata(metadata);
     }
 
-    static private OffsetFetchResponseData.OffsetFetchResponsePartitions mkInvalidOffsetPartitionResponse(int partition) {
+    private static OffsetFetchResponseData.OffsetFetchResponsePartitions mkInvalidOffsetPartitionResponse(int partition) {
         return new OffsetFetchResponseData.OffsetFetchResponsePartitions()
             .setPartitionIndex(partition)
             .setCommittedOffset(INVALID_OFFSET)
@@ -2617,7 +2618,7 @@ public class OffsetMetadataManagerTest {
             .setMetadata("");
     }
 
-    static private OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(int partition, Errors error) {
+    private static OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(int partition, Errors error) {
         return new OffsetFetchResponseData.OffsetFetchResponsePartitions()
             .setPartitionIndex(partition)
             .setErrorCode(error.code())

@@ -26,6 +26,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.slf4j.Logger;
 
 import java.util.Arrays;
@@ -41,7 +42,7 @@ public class PartitionRegistration {
     /**
      * A builder class which creates a PartitionRegistration.
      */
-    static public class Builder {
+    public static class Builder {
         private int[] replicas;
         private Uuid[] directories;
         private int[] isr;
@@ -448,20 +449,18 @@ public class PartitionRegistration {
 
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder("PartitionRegistration(");
-        builder.append("replicas=").append(Arrays.toString(replicas));
-        builder.append(", directories=").append(Arrays.toString(directories));
-        builder.append(", isr=").append(Arrays.toString(isr));
-        builder.append(", removingReplicas=").append(Arrays.toString(removingReplicas));
-        builder.append(", addingReplicas=").append(Arrays.toString(addingReplicas));
-        builder.append(", elr=").append(Arrays.toString(elr));
-        builder.append(", lastKnownElr=").append(Arrays.toString(lastKnownElr));
-        builder.append(", leader=").append(leader);
-        builder.append(", leaderRecoveryState=").append(leaderRecoveryState);
-        builder.append(", leaderEpoch=").append(leaderEpoch);
-        builder.append(", partitionEpoch=").append(partitionEpoch);
-        builder.append(")");
-        return builder.toString();
+        return "PartitionRegistration(" + "replicas=" + Arrays.toString(replicas) +
+                ", directories=" + Arrays.toString(directories) +
+                ", isr=" + Arrays.toString(isr) +
+                ", removingReplicas=" + Arrays.toString(removingReplicas) +
+                ", addingReplicas=" + Arrays.toString(addingReplicas) +
+                ", elr=" + Arrays.toString(elr) +
+                ", lastKnownElr=" + Arrays.toString(lastKnownElr) +
+                ", leader=" + leader +
+                ", leaderRecoveryState=" + leaderRecoveryState +
+                ", leaderEpoch=" + leaderEpoch +
+                ", partitionEpoch=" + partitionEpoch +
+                ")";
     }
 
     public boolean hasSameAssignment(PartitionRegistration registration) {

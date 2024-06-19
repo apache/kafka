@@ -206,6 +206,21 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeTopicsWithNames(quorum: String): Unit = {
+    client = createAdminClient
+
+    val existingTopic = "existing-topic"
+    client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
+    waitForTopics(client, Seq(existingTopic), List())
+    ensureConsistentKRaftMetadata()
+
+    val existingTopicId = brokers.head.metadataCache.getTopicId(existingTopic)
+    val results = client.describeTopics(TopicCollection.ofTopicNames(Seq(existingTopic).asJava)).topicNameValues()
+    assertEquals(existingTopicId, results.get(existingTopic).get.topicId())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeCluster(quorum: String): Unit = {
     client = createAdminClient
     val result = client.describeCluster
@@ -984,6 +999,25 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val describeResult2 = client.describeConfigs(Collections.singletonList(invalidTopic))
 
     assertTrue(assertThrows(classOf[ExecutionException], () => describeResult2.values.get(invalidTopic).get).getCause.isInstanceOf[InvalidTopicException])
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testIncludeDocumentation(quorum: String): Unit = {
+    createTopic(topic)
+    client = createAdminClient
+
+    val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    val resources = Collections.singletonList(resource)
+    val includeDocumentation = new DescribeConfigsOptions().includeDocumentation(true)
+    var describeConfigs = client.describeConfigs(resources, includeDocumentation)
+    var configEntries = describeConfigs.values().get(resource).get().entries()
+    configEntries.forEach(e => assertNotNull(e.documentation()))
+
+    val excludeDocumentation = new DescribeConfigsOptions().includeDocumentation(false)
+    describeConfigs = client.describeConfigs(resources, excludeDocumentation)
+    configEntries = describeConfigs.values().get(resource).get().entries()
+    configEntries.forEach(e => assertNull(e.documentation()))
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
@@ -2644,7 +2678,8 @@ object PlaintextAdminIntegrationTest {
 
     // Verify that topics were updated correctly
     test.ensureConsistentKRaftMetadata()
-    var describeResult = admin.describeConfigs(Seq(topicResource1, topicResource2).asJava)
+    // Intentionally include duplicate resources to test if describeConfigs can handle them correctly.
+    var describeResult = admin.describeConfigs(Seq(topicResource1, topicResource2, topicResource2).asJava)
     var configs = describeResult.all.get
 
     assertEquals(2, configs.size)

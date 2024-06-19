@@ -22,11 +22,6 @@ import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
-import org.apache.kafka.server.config.ServerLogConfigs;
-import org.apache.kafka.server.util.MockTime;
-import org.apache.kafka.storage.internals.log.CleanerConfig;
-import org.apache.kafka.storage.internals.log.LogConfig;
-import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -34,13 +29,20 @@ import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.TestUtils;
-import org.apache.kafka.common.Uuid;
+
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.Scheduler;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Level;
@@ -61,8 +63,8 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import scala.collection.JavaConverters;
 import scala.Option;
+import scala.collection.JavaConverters;
 
 @Warmup(iterations = 5)
 @Measurement(iterations = 5)

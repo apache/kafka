@@ -1359,7 +1359,7 @@ public class MetadataTest {
     }
 
     /**
-     * For testUpdatePartially, validates that updatedMetadata is matching expected part1Metadata, part2Metadata, interalPartMetadata, nodes & more.
+     * For testUpdatePartially, validates that updatedMetadata is matching expected part1Metadata, part2Metadata, internalPartMetadata, nodes & more.
      */
     void validateForUpdatePartitionLeadership(Metadata updatedMetadata,
                                               PartitionMetadata part1Metadata, PartitionMetadata part2Metadata, PartitionMetadata part12Metadata,
@@ -1379,7 +1379,7 @@ public class MetadataTest {
         assertEquals(expectedController, updatedCluster.controller());
         assertEquals(expectedTopicIds, updatedMetadata.topicIds());
 
-        Map<Integer, Node> nodeMap = expectedNodes.stream().collect(Collectors.toMap(e -> e.id(), e -> e));
+        Map<Integer, Node> nodeMap = expectedNodes.stream().collect(Collectors.toMap(Node::id, e -> e));
         for (PartitionMetadata partitionMetadata: Arrays.asList(part1Metadata, part2Metadata, part12Metadata, internalPartMetadata)) {
             TopicPartition tp = new TopicPartition(partitionMetadata.topic(), partitionMetadata.partition());
 

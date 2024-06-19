@@ -435,7 +435,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testSubscription(GroupProtocol groupProtocol) {
         consumer = newConsumer(groupProtocol, groupId);
 
@@ -3195,8 +3195,9 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
     // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
     //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(value = GroupProtocol.class)
     public void configurableObjectsShouldSeeGeneratedClientId(GroupProtocol groupProtocol) {
+        CLIENT_IDS.clear();
         Properties props = new Properties();
         props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");

@@ -16,18 +16,20 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.protocol.ApiMessage;
 
 import java.util.concurrent.CompletableFuture;
 
 public abstract class RaftRequest implements RaftMessage {
     private final int correlationId;
+    private final short apiVersion;
     private final ApiMessage data;
     private final long createdTimeMs;
 
-    public RaftRequest(int correlationId, ApiMessage data, long createdTimeMs) {
+    public RaftRequest(int correlationId, short apiVersion, ApiMessage data, long createdTimeMs) {
         this.correlationId = correlationId;
+        this.apiVersion = apiVersion;
         this.data = data;
         this.createdTimeMs = createdTimeMs;
     }
@@ -35,6 +37,11 @@ public abstract class RaftRequest implements RaftMessage {
     @Override
     public int correlationId() {
         return correlationId;
+    }
+
+    @Override
+    public short apiVersion() {
+        return apiVersion;
     }
 
     @Override
@@ -46,11 +53,11 @@ public abstract class RaftRequest implements RaftMessage {
         return createdTimeMs;
     }
 
-    public final static class Inbound extends RaftRequest {
+    public static final class Inbound extends RaftRequest {
         public final CompletableFuture<RaftResponse.Outbound> completion = new CompletableFuture<>();
 
-        public Inbound(int correlationId, ApiMessage data, long createdTimeMs) {
-            super(correlationId, data, createdTimeMs);
+        public Inbound(int correlationId, short apiVersion, ApiMessage data, long createdTimeMs) {
+            super(correlationId, apiVersion, data, createdTimeMs);
         }
 
         @Override
@@ -64,12 +71,12 @@ public abstract class RaftRequest implements RaftMessage {
         }
     }
 
-    public final static class Outbound extends RaftRequest {
+    public static final class Outbound extends RaftRequest {
         private final Node destination;
         public final CompletableFuture<RaftResponse.Inbound> completion = new CompletableFuture<>();
 
-        public Outbound(int correlationId, ApiMessage data, Node destination, long createdTimeMs) {
-            super(correlationId, data, createdTimeMs);
+        public Outbound(int correlationId, short apiVersion, ApiMessage data, Node destination, long createdTimeMs) {
+            super(correlationId, apiVersion, data, createdTimeMs);
             this.destination = destination;
         }
 

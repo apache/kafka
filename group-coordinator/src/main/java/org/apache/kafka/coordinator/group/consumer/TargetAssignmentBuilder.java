@@ -18,6 +18,11 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
@@ -25,6 +30,7 @@ import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.image.TopicsImage;
 
@@ -295,11 +301,11 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
      * @throws PartitionAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
-        Map<String, MemberSubscriptionSpecImpl> memberSpecs = new HashMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) ->
-            memberSpecs.put(memberId, createMemberSubscriptionSpecImpl(
+            memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
                 member,
                 targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
                 topicsImage
@@ -321,7 +327,7 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
                     }
                 }
 
-                memberSpecs.put(memberId, createMemberSubscriptionSpecImpl(
+                memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
                     updatedMemberOrNull,
                     assignment,
                     topicsImage
@@ -345,7 +351,7 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
                 subscriptionType,
                 invertedTargetAssignment
             ),
-            new SubscribedTopicMetadata(topicMetadataMap)
+            new SubscribedTopicDescriberImpl(topicMetadataMap)
         );
 
         // Compute delta from previous to new target assignment and create the
@@ -379,19 +385,19 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
     ) {
         MemberAssignment newMemberAssignment = newGroupAssignment.members().get(memberId);
         if (newMemberAssignment != null) {
-            return new Assignment(newMemberAssignment.targetPartitions());
+            return new Assignment(newMemberAssignment.partitions());
         } else {
             return Assignment.EMPTY;
         }
     }
 
     // private for testing
-    static <T extends ModernGroupMember> MemberSubscriptionSpecImpl createMemberSubscriptionSpecImpl(
+    static <T extends ModernGroupMember> MemberSubscriptionAndAssignmentImpl createMemberSubscriptionAndAssignment(
         T member,
         Assignment memberAssignment,
         TopicsImage topicsImage
     ) {
-        return new MemberSubscriptionSpecImpl(
+        return new MemberSubscriptionAndAssignmentImpl(
             Optional.ofNullable(member.rackId()),
             new TopicIds(member.subscribedTopicNames(), topicsImage),
             memberAssignment

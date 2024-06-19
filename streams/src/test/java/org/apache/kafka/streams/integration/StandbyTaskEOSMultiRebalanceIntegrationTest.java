@@ -65,7 +65,7 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(StandbyTaskEOSMultiRebalanceIntegrationTest.class);
 
-    private final static long TWO_MINUTE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
+    private static final long TWO_MINUTE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
 
     private String appId;
     private String inputTopic;

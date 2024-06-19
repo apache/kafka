@@ -401,7 +401,7 @@ class AdminApiDriverTest {
         Set<String> groupIds = new HashSet<>(Arrays.asList("g1", "g2"));
         DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(lc);
         AdminApiFuture<CoordinatorKey, Void> future = AdminApiFuture.forKeys(
-                groupIds.stream().map(g -> CoordinatorKey.byGroupId(g)).collect(Collectors.toSet()));
+                groupIds.stream().map(CoordinatorKey::byGroupId).collect(Collectors.toSet()));
 
         AdminApiDriver<CoordinatorKey, Void> driver = new AdminApiDriver<>(
             handler,
@@ -660,13 +660,13 @@ class AdminApiDriverTest {
                 new LogContext()
             );
 
-            staticKeys.forEach((key, brokerId) -> {
-                assertMappedKey(this, key, brokerId);
-            });
+            staticKeys.forEach((key, brokerId) ->
+                assertMappedKey(this, key, brokerId)
+            );
 
-            dynamicKeys.keySet().forEach(key -> {
-                assertUnmappedKey(this, key);
-            });
+            dynamicKeys.keySet().forEach(key ->
+                assertUnmappedKey(this, key)
+            );
         }
 
         public static TestContext staticMapped(Map<String, Integer> staticKeys) {
@@ -681,22 +681,22 @@ class AdminApiDriverTest {
             RequestSpec<String> requestSpec,
             LookupResult<String> result
         ) {
-            requestSpec.keys.forEach(key -> {
-                assertUnmappedKey(this, key);
-            });
+            requestSpec.keys.forEach(key ->
+                assertUnmappedKey(this, key)
+            );
 
             // The response is just a placeholder. The result is all we are interested in
             MetadataResponse response = new MetadataResponse(new MetadataResponseData(),
                 ApiKeys.METADATA.latestVersion());
             driver.onResponse(time.milliseconds(), requestSpec, response, Node.noNode());
 
-            result.mappedKeys.forEach((key, brokerId) -> {
-                assertMappedKey(this, key, brokerId);
-            });
+            result.mappedKeys.forEach((key, brokerId) ->
+                assertMappedKey(this, key, brokerId)
+            );
 
-            result.failedKeys.forEach((key, exception) -> {
-                assertFailedKey(this, key, exception);
-            });
+            result.failedKeys.forEach((key, exception) ->
+                assertFailedKey(this, key, exception)
+            );
         }
 
         private void assertResponse(
@@ -707,9 +707,9 @@ class AdminApiDriverTest {
             int brokerId = requestSpec.scope.destinationBrokerId().orElseThrow(() ->
                 new AssertionError("Fulfillment requests must specify a target brokerId"));
 
-            requestSpec.keys.forEach(key -> {
-                assertMappedKey(this, key, brokerId);
-            });
+            requestSpec.keys.forEach(key ->
+                assertMappedKey(this, key, brokerId)
+            );
 
             // The response is just a placeholder. The result is all we are interested in
             MetadataResponse response = new MetadataResponse(new MetadataResponseData(),
@@ -717,17 +717,17 @@ class AdminApiDriverTest {
 
             driver.onResponse(time.milliseconds(), requestSpec, response, node);
 
-            result.unmappedKeys.forEach(key -> {
-                assertUnmappedKey(this, key);
-            });
+            result.unmappedKeys.forEach(key ->
+                assertUnmappedKey(this, key)
+            );
 
-            result.failedKeys.forEach((key, exception) -> {
-                assertFailedKey(this, key, exception);
-            });
+            result.failedKeys.forEach((key, exception) ->
+                assertFailedKey(this, key, exception)
+            );
 
-            result.completedKeys.forEach((key, value) -> {
-                assertCompletedKey(this, key, value);
-            });
+            result.completedKeys.forEach((key, value) ->
+                assertCompletedKey(this, key, value)
+            );
         }
 
         private MockLookupStrategy<String> lookupStrategy() {

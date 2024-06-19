@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
@@ -51,6 +50,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.Utils.toOptional;
+import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.RECONCILING;
@@ -633,12 +634,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
-            ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(
-                ByteBuffer.wrap(classicGroupMember.assignment())
+            Map<Uuid, Set<Integer>> assignedPartitions = toTopicPartitionMap(
+                ConsumerProtocol.deserializeConsumerProtocolAssignment(
+                    ByteBuffer.wrap(classicGroupMember.assignment())
+                ),
+                topicsImage
             );
-            Map<Uuid, Set<Integer>> partitions = topicPartitionMapFromList(assignment.partitions(), topicsImage);
-
-            ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(
+            ConsumerProtocolSubscription subscription = ConsumerProtocol.deserializeConsumerProtocolSubscription(
                 ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().get()))
             );
 
@@ -651,12 +653,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 .setState(MemberState.STABLE)
                 .setPreviousMemberEpoch(classicGroup.generationId())
                 .setInstanceId(classicGroupMember.groupInstanceId().orElse(null))
-                .setRackId(subscription.rackId().orElse(null))
+                .setRackId(toOptional(subscription.rackId()).orElse(null))
                 .setRebalanceTimeoutMs(classicGroupMember.rebalanceTimeoutMs())
                 .setClientId(classicGroupMember.clientId())
                 .setClientHost(classicGroupMember.clientHost())
                 .setSubscribedTopicNames(subscription.topics())
-                .setAssignedPartitions(partitions)
+                .setAssignedPartitions(assignedPartitions)
                 .setClassicMemberMetadata(
                     new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                         .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())
@@ -665,7 +667,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                         ))
                 )
                 .build();
-            consumerGroup.updateTargetAssignment(newMember.memberId(), new Assignment(partitions));
+            consumerGroup.updateTargetAssignment(newMember.memberId(), new Assignment(assignedPartitions));
             consumerGroup.updateMember(newMember);
         });
 
@@ -699,25 +701,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         members().forEach((__, consumerGroupMember) ->
             records.add(CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId(), consumerGroupMember))
         );
-    }
-
-    /**
-     * @return The map of topic id and partition set converted from the list of TopicPartition.
-     */
-    private static Map<Uuid, Set<Integer>> topicPartitionMapFromList(
-        List<TopicPartition> partitions,
-        TopicsImage topicsImage
-    ) {
-        Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
-        partitions.forEach(topicPartition -> {
-            TopicImage topicImage = topicsImage.getTopic(topicPartition.topic());
-            if (topicImage != null) {
-                topicPartitionMap
-                    .computeIfAbsent(topicImage.id(), __ -> new HashSet<>())
-                    .add(topicPartition.partition());
-            }
-        });
-        return topicPartitionMap;
     }
 
     /**

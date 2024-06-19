@@ -397,27 +397,15 @@ public class ConsumerGroupMember extends ModernGroupMember {
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            String topicName = lookupTopicNameById(topicId, topicsImage);
-            if (topicName != null) {
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            if (topicImage != null) {
                 topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
                     .setTopicId(topicId)
-                    .setTopicName(topicName)
+                    .setTopicName(topicImage.name())
                     .setPartitions(new ArrayList<>(partitionSet)));
             }
         });
         return topicPartitions;
-    }
-
-    private static String lookupTopicNameById(
-        Uuid topicId,
-        TopicsImage topicsImage
-    ) {
-        TopicImage topicImage = topicsImage.getTopic(topicId);
-        if (topicImage != null) {
-            return topicImage.name();
-        } else {
-            return null;
-        }
     }
 
     /**

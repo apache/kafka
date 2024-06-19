@@ -19,7 +19,7 @@ package org.apache.kafka.connect.test.util;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConcurrencyUtils {
 
@@ -33,7 +33,7 @@ public class ConcurrencyUtils {
      */
     public static void awaitLatch(CountDownLatch latch, long timeoutMs, String message) {
         try {
-            assertTrue(message, latch.await(timeoutMs, TimeUnit.MILLISECONDS));
+            assertTrue(latch.await(timeoutMs, TimeUnit.MILLISECONDS), message);
         } catch (InterruptedException e) {
             throw new AssertionError(message, e);
         }

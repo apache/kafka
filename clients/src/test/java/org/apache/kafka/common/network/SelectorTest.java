@@ -272,7 +272,7 @@ public class SelectorTest {
         return metrics.metrics().entrySet().stream().
             filter(e -> e.getKey().description().
                 contains("The number of connections with this SSL cipher and protocol.")).
-            map(e -> e.getValue()).
+            map(Map.Entry::getValue).
             collect(Collectors.toList());
     }
 

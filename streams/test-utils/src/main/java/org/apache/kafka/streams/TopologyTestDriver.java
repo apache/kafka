@@ -40,6 +40,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
@@ -70,7 +71,6 @@ import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
-import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -88,6 +88,7 @@ import org.apache.kafka.streams.state.internals.ReadOnlyKeyValueStoreFacade;
 import org.apache.kafka.streams.state.internals.ReadOnlyWindowStoreFacade;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.test.TestRecord;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -221,8 +222,8 @@ public class TopologyTestDriver implements Closeable {
     private final Time mockWallClockTime;
     private InternalTopologyBuilder internalTopologyBuilder;
 
-    private final static int PARTITION_ID = 0;
-    private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
+    private static final int PARTITION_ID = 0;
+    private static final TaskId TASK_ID = new TaskId(0, PARTITION_ID);
     StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
     private GlobalStateManager globalStateManager;

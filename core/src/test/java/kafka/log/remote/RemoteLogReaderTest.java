@@ -19,6 +19,7 @@ package kafka.log.remote;
 import kafka.log.remote.quota.RLMQuotaManager;
 import kafka.server.BrokerTopicStats;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
@@ -26,11 +27,15 @@ import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
+
+import com.yammer.metrics.core.Timer;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
+import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,11 +54,13 @@ public class RemoteLogReaderTest {
     RLMQuotaManager mockQuotaManager = mock(RLMQuotaManager.class);
     LogOffsetMetadata logOffsetMetadata = new LogOffsetMetadata(100);
     Records records = mock(Records.class);
+    Timer timer = mock(Timer.class);
 
     @BeforeEach
-    public void setUp() {
+    public void setUp() throws Exception {
         TestUtils.clearYammerMetrics();
         brokerTopicStats = new BrokerTopicStats(true);
+        when(timer.time(any(Callable.class))).thenAnswer(ans -> ans.getArgument(0, Callable.class).call());
     }
 
     @Test
@@ -64,7 +71,8 @@ public class RemoteLogReaderTest {
 
         Consumer<RemoteLogReadResult> callback = mock(Consumer.class);
         RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicPartition(TOPIC, 0), null, null, false);
-        RemoteLogReader remoteLogReader = new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats, mockQuotaManager);
+        RemoteLogReader remoteLogReader =
+                new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats, mockQuotaManager, timer);
         remoteLogReader.call();
 
         // verify the callback did get invoked with the expected remoteLogReadResult
@@ -96,7 +104,8 @@ public class RemoteLogReaderTest {
 
         Consumer<RemoteLogReadResult> callback = mock(Consumer.class);
         RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicPartition(TOPIC, 0), null, null, false);
-        RemoteLogReader remoteLogReader = new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats, mockQuotaManager);
+        RemoteLogReader remoteLogReader =
+                new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats, mockQuotaManager, timer);
         remoteLogReader.call();
 
         // verify the callback did get invoked with the expected remoteLogReadResult

@@ -134,6 +134,10 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
                                 "coordinator is still in the process of loading state. Will retry",
                         transactionalIdKey.idValue);
                 return ApiResult.empty();
+            case CONCURRENT_TRANSACTIONS:
+                log.debug("InitProducerId request for transactionalId `{}` failed because of " +
+                                "a concurrent transaction. Will retry", transactionalIdKey.idValue);
+                return ApiResult.empty();
 
             case NOT_COORDINATOR:
             case COORDINATOR_NOT_AVAILABLE:

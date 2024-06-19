@@ -25,12 +25,12 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
@@ -78,7 +78,8 @@ public class TaskAssignorIntegrationTest {
     public TestName testName = new TestName();
 
     // Just a dummy implementation so we can check the config
-    public static final class MyTaskAssignor extends HighAvailabilityTaskAssignor implements TaskAssignor { }
+    public static final class MyLegacyTaskAssignor extends HighAvailabilityTaskAssignor implements
+        LegacyTaskAssignor { }
 
     @SuppressWarnings("unchecked")
     @Test
@@ -116,7 +117,7 @@ public class TaskAssignorIntegrationTest {
                 mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "7"),
                 mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000"),
                 mkEntry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener),
-                mkEntry(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, MyTaskAssignor.class.getName())
+                mkEntry(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, MyLegacyTaskAssignor.class.getName())
             )
         );
 
@@ -147,24 +148,24 @@ public class TaskAssignorIntegrationTest {
 
             final Field assignmentConfigs = StreamsPartitionAssignor.class.getDeclaredField("assignmentConfigs");
             assignmentConfigs.setAccessible(true);
-            final AssignorConfiguration.AssignmentConfigs configs = (AssignorConfiguration.AssignmentConfigs) assignmentConfigs.get(streamsPartitionAssignor);
+            final AssignmentConfigs configs = (AssignmentConfigs) assignmentConfigs.get(streamsPartitionAssignor);
 
             final Field assignmentListenerField = StreamsPartitionAssignor.class.getDeclaredField("assignmentListener");
             assignmentListenerField.setAccessible(true);
             final AssignmentListener actualAssignmentListener = (AssignmentListener) assignmentListenerField.get(streamsPartitionAssignor);
 
-            final Field taskAssignorSupplierField = StreamsPartitionAssignor.class.getDeclaredField("internalTaskAssignorSupplier");
+            final Field taskAssignorSupplierField = StreamsPartitionAssignor.class.getDeclaredField("legacyTaskAssignorSupplier");
             taskAssignorSupplierField.setAccessible(true);
-            final Supplier<TaskAssignor> taskAssignorSupplier =
-                (Supplier<TaskAssignor>) taskAssignorSupplierField.get(streamsPartitionAssignor);
-            final TaskAssignor taskAssignor = taskAssignorSupplier.get();
+            final Supplier<LegacyTaskAssignor> taskAssignorSupplier =
+                (Supplier<LegacyTaskAssignor>) taskAssignorSupplierField.get(streamsPartitionAssignor);
+            final LegacyTaskAssignor taskAssignor = taskAssignorSupplier.get();
 
-            assertThat(configs.numStandbyReplicas, is(5));
-            assertThat(configs.acceptableRecoveryLag, is(6L));
-            assertThat(configs.maxWarmupReplicas, is(7));
-            assertThat(configs.probingRebalanceIntervalMs, is(480000L));
+            assertThat(configs.numStandbyReplicas(), is(5));
+            assertThat(configs.acceptableRecoveryLag(), is(6L));
+            assertThat(configs.maxWarmupReplicas(), is(7));
+            assertThat(configs.probingRebalanceIntervalMs(), is(480000L));
             assertThat(actualAssignmentListener, sameInstance(configuredAssignmentListener));
-            assertThat(taskAssignor, instanceOf(MyTaskAssignor.class));
+            assertThat(taskAssignor, instanceOf(MyLegacyTaskAssignor.class));
         }
     }
 }

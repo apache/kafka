@@ -33,11 +33,12 @@ import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataV
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, UserScramCredentialRecord}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
+import org.mockito.Mockito
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -660,6 +661,38 @@ Found problem:
         "production use yet.", exitString)
       assertEquals(1, exitStatus)
     }
+  }
+
+  @Test
+  def testFormatValidatesConfigForMetadataVersion(): Unit = {
+    val config = Mockito.spy(new KafkaConfig(TestUtils.createBrokerConfig(10, null)))
+    val args = Array("format",
+      "-c", "dummy.properties",
+      "-t", "XcZZOzUqS4yHOjhMQB6JLQ",
+      "--release-version", MetadataVersion.LATEST_PRODUCTION.toString)
+    val exitCode = StorageTool.runFormatCommand(StorageTool.parseArguments(args), config)
+    Mockito.verify(config, Mockito.times(1)).validateWithMetadataVersion(MetadataVersion.LATEST_PRODUCTION)
+    assertEquals(0, exitCode)
+  }
+
+  @Test
+  def testJbodSupportValidation(): Unit = {
+    def formatWith(logDirCount: Int, metadataVersion: MetadataVersion): Integer = {
+      val properties = TestUtils.createBrokerConfig(10, null, logDirCount = logDirCount)
+      properties.remove(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)
+      val configFile = TestUtils.tempPropertiesFile(properties.asScala.toMap).toPath.toString
+      StorageTool.execute(Array("format",
+        "-c", configFile,
+        "-t", "XcZZOzUqS4yHOjhMQB6JLQ",
+        "--release-version", metadataVersion.toString))
+    }
+
+    assertEquals(0, formatWith(1, MetadataVersion.IBP_3_6_IV2))
+    assertEquals("Invalid configuration for metadata version: " +
+      "requirement failed: Multiple log directories (aka JBOD) are not supported in the current MetadataVersion 3.6-IV2. Need 3.7-IV2 or higher",
+      assertThrows(classOf[TerseFailure], () => formatWith(2, MetadataVersion.IBP_3_6_IV2)).getMessage)
+    assertEquals(0, formatWith(1, MetadataVersion.IBP_3_7_IV2))
+    assertEquals(0, formatWith(2, MetadataVersion.IBP_3_7_IV2))
   }
 }
 

@@ -125,7 +125,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     killBroker(firstLeaderId)
 
     // Check leader error codes
-    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, topicPartition, firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, topicPartition, oldLeaderOpt = Some(firstLeaderId))
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, brokers)
     assertResponseErrorForEpoch(Errors.NONE, secondLeaderId, Optional.empty())
     assertResponseErrorForEpoch(Errors.NONE, secondLeaderId, Optional.of(secondLeaderEpoch))
@@ -198,7 +198,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
     killBroker(firstLeaderId)
-    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, partition, firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, partition, oldLeaderOpt = Some(firstLeaderId))
     // make sure high watermark of new leader has caught up
     TestUtils.waitUntilTrue(() => sendRequest(secondLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1).errorCode != Errors.OFFSET_NOT_AVAILABLE.code,
       "the second leader does not sync to follower")

@@ -17,15 +17,14 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Iterator;
-import java.util.Map.Entry;
-import java.util.Map;
-
 import org.apache.kafka.metadata.VersionRange;
+
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
 
 
 public interface ClusterFeatureSupportDescriber {
     Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported();
     Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported();
 }
-

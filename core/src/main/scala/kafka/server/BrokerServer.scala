@@ -186,7 +186,7 @@ class BrokerServer(
       kafkaScheduler.startup()
 
       /* register broker metrics */
-      brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.enableRemoteStorageSystem())
+      brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
 
@@ -447,6 +447,7 @@ class BrokerServer(
         rlm.startup()
       }
 
+      metadataPublishers.add(new MetadataVersionConfigValidator(config, sharedServer.metadataPublishingFaultHandler))
       brokerMetadataPublisher = new BrokerMetadataPublisher(config,
         metadataCache,
         logManager,
@@ -486,6 +487,7 @@ class BrokerServer(
       brokerRegistrationTracker = new BrokerRegistrationTracker(config.brokerId,
         () => lifecycleManager.resendBrokerRegistrationUnlessZkMode())
       metadataPublishers.add(brokerRegistrationTracker)
+
 
       // Register parts of the broker that can be reconfigured via dynamic configs.  This needs to
       // be done before we publish the dynamic configs, so that we don't miss anything.
@@ -568,6 +570,7 @@ class BrokerServer(
       val serde = new CoordinatorRecordSerde
       val groupCoordinatorConfig = new GroupCoordinatorConfig(
         config.groupCoordinatorNumThreads,
+        config.groupCoordinatorAppendLingerMs,
         config.consumerGroupSessionTimeoutMs,
         config.consumerGroupHeartbeatIntervalMs,
         config.consumerGroupMaxSize,
@@ -617,8 +620,8 @@ class BrokerServer(
   }
 
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
-    if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
-      Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
+    if (config.remoteLogManagerConfig.isRemoteStorageSystemEnabled()) {
+      Some(new RemoteLogManager(config, config.brokerId, config.logDirs.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).asJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
           logManager.getLog(tp).foreach { log =>

@@ -181,13 +181,11 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
         Long issuedAt = ClaimValidationUtils.validateIssuedAt(ReservedClaimNames.ISSUED_AT,
             issuedAtRaw != null ? issuedAtRaw.getValueInMillis() : null);
 
-        OAuthBearerToken token = new BasicOAuthBearerToken(accessToken,
+        return new BasicOAuthBearerToken(accessToken,
             scopes,
             expiration,
             sub,
             issuedAt);
-
-        return token;
     }
 
     private <T> T getClaim(ClaimSupplier<T> supplier, String claimName) throws ValidateException {

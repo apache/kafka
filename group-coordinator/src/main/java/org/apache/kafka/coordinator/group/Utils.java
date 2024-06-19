@@ -17,9 +17,19 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ConsumerProtocolAssignment;
+import org.apache.kafka.common.message.ConsumerProtocolSubscription;
+import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.TopicsImage;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -84,5 +94,84 @@ public class Utils {
      */
     public static Integer incValue(String key, Integer value) {
         return value == null ? 1 : value + 1;
+    }
+
+    /**
+     * @return An Optional containing the provided string if it is not null and not empty,
+     *         otherwise an empty Optional.
+     */
+    public static Optional<String> toOptional(String str) {
+        return str == null || str.isEmpty() ? Optional.empty() : Optional.of(str);
+    }
+
+    /**
+     * Converts a map of topic id and partition set to a ConsumerProtocolAssignment.
+     *
+     * @param assignment    The map to convert.
+     * @param topicsImage   The TopicsImage.
+     * @return The converted ConsumerProtocolAssignment.
+     */
+    public static ConsumerProtocolAssignment toConsumerProtocolAssignment(
+        Map<Uuid, Set<Integer>> assignment,
+        TopicsImage topicsImage
+    ) {
+        ConsumerProtocolAssignment.TopicPartitionCollection collection =
+            new ConsumerProtocolAssignment.TopicPartitionCollection();
+        assignment.forEach((topicId, partitions) -> {
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            if (topicImage != null) {
+                collection.add(new ConsumerProtocolAssignment.TopicPartition()
+                    .setTopic(topicImage.name())
+                    .setPartitions(new ArrayList<>(partitions)));
+            }
+        });
+        return new ConsumerProtocolAssignment()
+            .setAssignedPartitions(collection);
+    }
+
+    /**
+     * Converts a map of topic id and partition set to a ConsumerProtocolAssignment.
+     *
+     * @param consumerProtocolAssignment    The ConsumerProtocolAssignment.
+     * @param topicsImage                   The TopicsImage.
+     * @return The converted map.
+     */
+    public static Map<Uuid, Set<Integer>> toTopicPartitionMap(
+        ConsumerProtocolAssignment consumerProtocolAssignment,
+        TopicsImage topicsImage
+    ) {
+        Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
+        consumerProtocolAssignment.assignedPartitions().forEach(topicPartition -> {
+            TopicImage topicImage = topicsImage.getTopic(topicPartition.topic());
+            if (topicImage != null) {
+                topicPartitionMap.put(topicImage.id(), new HashSet<>(topicPartition.partitions()));
+            }
+        });
+        return topicPartitionMap;
+    }
+
+    /**
+     * Converts a ConsumerProtocolSubscription.TopicPartitionCollection to a list of ConsumerGroupHeartbeatRequestData.TopicPartitions.
+     *
+     * @param topicPartitionCollection  The TopicPartitionCollection to convert.
+     * @param topicsImage               The TopicsImage.
+     * @return a list of ConsumerGroupHeartbeatRequestData.TopicPartitions.
+     */
+    public static List<ConsumerGroupHeartbeatRequestData.TopicPartitions> toTopicPartitions(
+        ConsumerProtocolSubscription.TopicPartitionCollection topicPartitionCollection,
+        TopicsImage topicsImage
+    ) {
+        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> res = new ArrayList<>();
+        for (ConsumerProtocolSubscription.TopicPartition tp : topicPartitionCollection) {
+            TopicImage topicImage = topicsImage.getTopic(tp.topic());
+            if (topicImage != null) {
+                res.add(
+                    new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                        .setTopicId(topicImage.id())
+                        .setPartitions(tp.partitions())
+                );
+            }
+        }
+        return res;
     }
 }

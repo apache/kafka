@@ -30,10 +30,11 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -44,18 +45,18 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final public class KafkaRaftClientSnapshotTest {
+public final class KafkaRaftClientSnapshotTest {
     @Test
     public void testLatestSnapshotId() throws Exception {
         int localId = 0;
@@ -1959,7 +1960,7 @@ final public class KafkaRaftClientSnapshotTest {
             .build(new StringSerde());
     }
 
-    private final static class MemorySnapshotWriter implements RawSnapshotWriter {
+    private static final class MemorySnapshotWriter implements RawSnapshotWriter {
         private final OffsetAndEpoch snapshotId;
         private final AtomicLong frozenPosition;
         private ByteBuffer data;

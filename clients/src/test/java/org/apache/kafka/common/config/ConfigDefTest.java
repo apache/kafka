@@ -502,7 +502,7 @@ public class ConfigDefTest {
                 .define("opt3", Type.LIST, Arrays.asList("a", "b"), Importance.LOW, "docs3")
                 .define("opt4", Type.BOOLEAN, false, Importance.LOW, null);
 
-        final String expectedRst = "" +
+        final String expectedRst =
                 "``opt2``\n" +
                 "  docs2\n" +
                 "\n" +
@@ -547,7 +547,7 @@ public class ConfigDefTest {
                         "Group Two", 0, Width.NONE, "..", singletonList("some.option"))
                 .define("poor.opt", Type.STRING, "foo", Importance.HIGH, "Doc doc doc doc.");
 
-        final String expectedRst = "" +
+        final String expectedRst =
                 "``poor.opt``\n" +
                 "  Doc doc doc doc.\n" +
                 "\n" +

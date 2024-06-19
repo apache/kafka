@@ -82,7 +82,7 @@ public abstract class Type {
     /**
      * A Type that can return its description for documentation purposes.
      */
-    public static abstract class DocumentedType extends Type {
+    public abstract static class DocumentedType extends Type {
 
         /**
          * Short name of the type to identify it in documentation;
