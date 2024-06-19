@@ -116,7 +116,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
       props.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "0.11.0")
       props.put(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
       val kafkaConfig = KafkaConfig.fromProps(props)
-      val logDir = new File(kafkaConfig.logDirs.head)
+      val logDir = new File(kafkaConfig.logDirs.asScala.head)
       // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
       CoreUtils.swallow(Utils.delete(logDir), this)
       Files.createFile(logDir.toPath)

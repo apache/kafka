@@ -39,12 +39,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
@@ -156,7 +158,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     @SuppressWarnings("deprecation")
     public static List<BrokerLocalStorage> localStorages(Seq<KafkaBroker> brokers) {
         return JavaConverters.seqAsJavaList(brokers).stream()
-                .map(b -> new BrokerLocalStorage(b.config().brokerId(), b.config().logDirs(),
+                .map(b -> new BrokerLocalStorage(b.config().brokerId(), new HashSet<>(b.config().logDirs()),
                         STORAGE_WAIT_TIMEOUT_SEC))
                 .collect(Collectors.toList());
     }

@@ -258,7 +258,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
     // case 2: test the offsets from recovery path.
     // server will rebuild offset index according to log files if the index files are nonexistent
-    val indexFiles = brokers.flatMap(_.config.logDirs).toSet
+    val indexFiles = brokers.flatMap(_.config.logDirs.asScala).toSet
     brokers.foreach(b => killBroker(b.config.brokerId))
     indexFiles.foreach { root =>
       val files = new File(s"$root/$topic-0").listFiles()

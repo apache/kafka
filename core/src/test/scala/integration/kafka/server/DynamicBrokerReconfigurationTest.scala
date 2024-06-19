@@ -24,12 +24,13 @@ import java.lang.management.ManagementFactory
 import java.security.KeyStore
 import java.time.Duration
 import java.util
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 import java.util.concurrent._
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
 import kafka.api.{KafkaSasl, SaslSetup}
+import kafka.cluster.EndPoint
 import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
 import kafka.log.UnifiedLog
 import kafka.network.{DataPlaneAcceptor, Processor, RequestChannel}
@@ -80,6 +81,7 @@ import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 
 object DynamicBrokerReconfigurationTest {
   val Plain = "PLAIN"
@@ -1121,7 +1123,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       val passwordConfigs = props.asScala.filter { case (k, _) => DynamicBrokerConfig.isPasswordConfig(k) }
       assertTrue(passwordConfigs.nonEmpty, "Password configs not found")
       val passwordDecoder = createPasswordEncoder(config, config.passwordEncoderSecret)
-      val passwordEncoder = createPasswordEncoder(config, Some(new Password(oldSecret)))
+      val passwordEncoder = createPasswordEncoder(config, Optional.of(new Password(oldSecret)))
       passwordConfigs.foreach { case (name, value) =>
         val decoded = passwordDecoder.decode(value).value
         propsEncodedWithOldSecret.put(name, passwordEncoder.encode(new Password(decoded)))
@@ -1211,10 +1213,11 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
                           saslMechanisms: Seq[String]): Unit = {
     val config = servers.head.config
     val existingListenerCount = config.listeners.size
-    val listeners = config.listeners
+    val listeners = config.listeners.asScala
+      .map(EndPoint.fromJava)
       .map(e => s"${e.listenerName.value}://${e.host}:${e.port}")
       .mkString(",") + s",$listenerName://localhost:0"
-    val listenerMap = config.effectiveListenerSecurityProtocolMap
+    val listenerMap = config.effectiveListenerSecurityProtocolMap.asScala
       .map { case (name, protocol) => s"${name.value}:${protocol.name}" }
       .mkString(",") + s",$listenerName:${securityProtocol.name}"
 
@@ -1321,11 +1324,12 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     val config = servers.head.config
     val existingListenerCount = config.listeners.size
-    val listeners = config.listeners
+    val listeners = config.listeners.asScala
+      .map(EndPoint.fromJava)
       .filter(e => e.listenerName.value != securityProtocol.name)
       .map(e => s"${e.listenerName.value}://${e.host}:${e.port}")
       .mkString(",")
-    val listenerMap = config.effectiveListenerSecurityProtocolMap
+    val listenerMap = config.effectiveListenerSecurityProtocolMap.asScala
       .filter { case (listenerName, _) => listenerName.value != securityProtocol.name }
       .map { case (listenerName, protocol) => s"${listenerName.value}:${protocol.name}" }
       .mkString(",")
@@ -1515,11 +1519,12 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private def alterAdvertisedListener(adminClient: Admin, externalAdminClient: Admin, oldHost: String, newHost: String): Unit = {
     val configs = servers.map { server =>
       val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
-      val newListeners = server.config.effectiveAdvertisedListeners.map { e =>
-        if (e.listenerName.value == SecureExternal)
-          s"${e.listenerName.value}://$newHost:${server.boundPort(e.listenerName)}"
+      val newListeners = server.config.effectiveAdvertisedListeners.asScala.map { e =>
+        val endPoint = EndPoint.fromJava(e)
+        if (endPoint.listenerName.value == SecureExternal)
+          s"${endPoint.listenerName.value}://$newHost:${server.boundPort(endPoint.listenerName)}"
         else
-          s"${e.listenerName.value}://${e.host}:${server.boundPort(e.listenerName)}"
+          s"${endPoint.listenerName.value}://${e.host}:${server.boundPort(endPoint.listenerName)}"
       }.mkString(",")
       val configEntry = new ConfigEntry(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, newListeners)
       (resource, new Config(Collections.singleton(configEntry)))
@@ -1527,7 +1532,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     adminClient.alterConfigs(configs).all.get
     servers.foreach { server =>
       TestUtils.retry(10000) {
-        val externalListener = server.config.effectiveAdvertisedListeners.find(_.listenerName.value == SecureExternal)
+        val externalListener = server.config.effectiveAdvertisedListeners.asScala.find(EndPoint.fromJava(_).listenerName.value == SecureExternal)
           .getOrElse(throw new IllegalStateException("External listener not found"))
         assertEquals(newHost, externalListener.host, "Config not updated")
       }
@@ -1595,7 +1600,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val externalListenerPrefix = listenerPrefix(SecureExternal)
     val sslStoreProps = new Properties
     sslStoreProps ++= securityProps(sslProperties, KEYSTORE_PROPS, externalListenerPrefix)
-    sslStoreProps.put(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG, kafkaConfig.passwordEncoderSecret.map(_.value).orNull)
+    sslStoreProps.put(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG, kafkaConfig.passwordEncoderSecret.map(_.value).asScala.orNull)
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
 
     val entityType = ConfigType.BROKER
@@ -1625,8 +1630,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       passwordEncoder.decode(brokerProps.getProperty(s"$externalListenerPrefix$SSL_KEY_PASSWORD_CONFIG")))
   }
 
-  private def createPasswordEncoder(config: KafkaConfig, secret: Option[Password]): PasswordEncoder = {
-    val encoderSecret = secret.getOrElse(throw new IllegalStateException("Password encoder secret not configured"))
+  private def createPasswordEncoder(config: KafkaConfig, secret: Optional[Password]): PasswordEncoder = {
+    val encoderSecret = secret.orElseThrow(() => new IllegalStateException("Password encoder secret not configured"))
     PasswordEncoder.encrypting(encoderSecret,
       config.passwordEncoderKeyFactoryAlgorithm,
       config.passwordEncoderCipherAlgorithm,

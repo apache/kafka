@@ -66,7 +66,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
         .setBrokerId(server.config.brokerId)
         .setHost("localhost")
         .setPort(server.socketServer.boundPort(listenerName))
-        .setRack(server.config.rack.orNull)
+        .setRack(server.config.rack.orElse(null))
     }.toSet
 
     var expectedControllerId = 0

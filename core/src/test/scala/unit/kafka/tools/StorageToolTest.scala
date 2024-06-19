@@ -671,7 +671,7 @@ Found problem:
       "-t", "XcZZOzUqS4yHOjhMQB6JLQ",
       "--release-version", MetadataVersion.LATEST_PRODUCTION.toString)
     val exitCode = StorageTool.runFormatCommand(StorageTool.parseArguments(args), config)
-    Mockito.verify(config, Mockito.times(1)).validateWithMetadataVersion(MetadataVersion.LATEST_PRODUCTION)
+    Mockito.verify(config, Mockito.times(1)).validator().validateWithMetadataVersion(MetadataVersion.LATEST_PRODUCTION)
     assertEquals(0, exitCode)
   }
 

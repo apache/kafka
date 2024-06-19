@@ -18,6 +18,8 @@
 package org.apache.kafka.server.utils;
 
 
+import org.apache.commons.validator.routines.InetAddressValidator;
+
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.ListenerName;
@@ -33,11 +35,11 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import org.apache.commons.validator.routines.InetAddressValidator;
 
 public class EndpointUtils {
     private static InetAddressValidator inetAddressValidator = InetAddressValidator.getInstance();
-    private final static Map<ListenerName, SecurityProtocol> DEFAULT_SECURITY_PROTOCOL_MAP = Arrays.stream(SecurityProtocol.values())
+
+    private static final Map<ListenerName, SecurityProtocol> DEFAULT_SECURITY_PROTOCOL_MAP = Arrays.stream(SecurityProtocol.values())
             .collect(Collectors.toMap(sp -> ListenerName.forSecurityProtocol(sp), sp -> sp));
     private static Pattern uriParseExp = Pattern.compile("^(.*)://\\[?([0-9a-zA-Z\\-%._:]*)\\]?:(-?[0-9]+)");
 
@@ -135,7 +137,7 @@ public class EndpointUtils {
         Matcher matcher = uriParseExp.matcher(connectionString);
 
         if (matcher.matches()) {
-            String listenerNameString = matcher.group(1);
+            String listenerNameString = matcher.group(1).toUpperCase();
             String host = matcher.group(2).equals("") ? null : matcher.group(2);
             String port = matcher.group(3);
             ListenerName listenerName = ListenerName.normalised(listenerNameString);

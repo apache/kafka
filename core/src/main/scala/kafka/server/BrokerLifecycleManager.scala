@@ -398,7 +398,7 @@ class BrokerLifecycleManager(
         setFeatures(features).
         setIncarnationId(incarnationId).
         setListeners(_advertisedListeners).
-        setRack(rack.orNull).
+        setRack(rack.orElse(null)).
         setPreviousBrokerEpoch(previousBrokerEpoch.orElse(-1L)).
         setLogDirs(sortedLogDirs)
     if (isDebugEnabled) {

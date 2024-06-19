@@ -158,7 +158,7 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
     val startupException = assertThrows(classOf[RuntimeException], () => serverB2.startup())
     assertTrue(startupException.getMessage.startsWith("Stored node id 1 doesn't match previous node id 2"),
       "Unexpected exception message " + startupException.getMessage)
-    serverB2.config.logDirs.foreach(logDir => Utils.delete(new File(logDir)))
+    serverB2.config.logDirs.forEach(logDir => Utils.delete(new File(logDir)))
     propsB.setProperty(ServerConfigs.BROKER_ID_CONFIG, "3")
     val serverB3 = new KafkaServer(KafkaConfig.fromProps(propsB),
       threadNamePrefix = Option(this.getClass.getName))
@@ -174,8 +174,8 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  def verifyBrokerMetadata(logDirs: Seq[String], brokerId: Int): Boolean = {
-    for (logDir <- logDirs) {
+  def verifyBrokerMetadata(logDirs: java.util.List[String], brokerId: Int): Boolean = {
+    logDirs.forEach { logDir =>
       val properties = PropertiesUtils.readPropertiesFile(
         new File(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath)
       val metaProps = new MetaProperties.Builder(properties).build()

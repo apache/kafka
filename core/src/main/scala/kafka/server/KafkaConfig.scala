@@ -32,7 +32,6 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import java.util
 import java.util.{Collections, Properties}
-import scala.annotation.nowarn
 import scala.collection.{Map, Seq}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -274,7 +273,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
    * Any validations related to ZK mode will stay here until we cleanup the ZK code.
    * Other validations will be defined in {@link org.apache.kafka.server.config.KafkaConfigValidator}
    */
-  @nowarn("cat=deprecation")
   private def validateValues(): Unit = {
     configValidator.validateNodeAndBrokerId()
 

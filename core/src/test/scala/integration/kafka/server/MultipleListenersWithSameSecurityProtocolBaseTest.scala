@@ -21,6 +21,7 @@ package kafka.server
 import java.util.{Collections, Objects, Properties}
 import java.util.concurrent.TimeUnit
 import kafka.api.SaslSetup
+import kafka.cluster.EndPoint
 import kafka.utils.JaasTestUtils.JaasSection
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.utils.Implicits._
@@ -115,7 +116,8 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
 
     createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
 
-    servers.head.config.listeners.foreach { endPoint =>
+    servers.head.config.listeners.forEach { e =>
+      val endPoint = EndPoint.fromJava(e)
       val listenerName = endPoint.listenerName
 
       val trustStoreFile =

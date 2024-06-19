@@ -59,8 +59,8 @@ class MetadataCacheControllerNodeProvider(
   val quorumControllerNodeProvider: () => Option[ControllerInformation]
 ) extends ControllerNodeProvider {
 
-  private val zkControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
-  private val zkControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
+  private val zkControllerListenerName = config.controlPlaneListenerName.orElse(config.interBrokerListenerName)
+  private val zkControllerSecurityProtocol = config.controlPlaneSecurityProtocol.orElse(config.interBrokerSecurityProtocol)
   private val zkControllerSaslMechanism = config.saslMechanismInterBrokerProtocol
 
   val emptyZkControllerInfo =  ControllerInformation(
@@ -89,8 +89,8 @@ object RaftControllerNodeProvider {
     raftManager: RaftManager[ApiMessageAndVersion],
     config: KafkaConfig,
   ): RaftControllerNodeProvider = {
-    val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
-    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
+    val controllerListenerName = new ListenerName(config.controllerListenerNames.asScala.head)
+    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.asScala.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
     val controllerSaslMechanism = config.saslMechanismControllerProtocol
     new RaftControllerNodeProvider(
       raftManager,

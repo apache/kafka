@@ -39,7 +39,6 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.util
 import java.util.{OptionalInt, Properties}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import scala.jdk.CollectionConverters._
 
 @Timeout(value = 60)
 class ControllerRegistrationManagerTest {
@@ -77,7 +76,7 @@ class ControllerRegistrationManagerTest {
       createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),
       false,
       RecordTestUtils.createTestControllerRegistration(1, false).incarnationId(),
-      ListenerInfo.create(context.config.controllerListeners.map(_.toJava).asJava),
+      ListenerInfo.create(context.config.controllerListeners),
       new ExponentialBackoff(1, 2, 100, 0.02))
   }
 

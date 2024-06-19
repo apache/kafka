@@ -30,6 +30,8 @@ import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogDirFailureChannel}
 
+import scala.jdk.CollectionConverters.CollectionHasAsScala
+
 class HighwatermarkPersistenceTest {
 
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps)
@@ -37,7 +39,7 @@ class HighwatermarkPersistenceTest {
   val configRepository = new MockConfigRepository()
   val logManagers = configs map { config =>
     TestUtils.createLogManager(
-      logDirs = config.logDirs.map(new File(_)),
+      logDirs = config.logDirs.asScala.map(new File(_)).toBuffer,
       cleanerConfig = new CleanerConfig(true))
   }
 
@@ -191,7 +193,7 @@ class HighwatermarkPersistenceTest {
   }
 
   private def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long = {
-    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath).read().getOrElse(
+    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.asScala.head).getAbsolutePath).read().getOrElse(
       new TopicPartition(topic, partition), 0L)
   }
 }

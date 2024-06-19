@@ -238,7 +238,7 @@ object TestUtils extends Logging {
     listenerName: ListenerName
   ): String = {
     brokers.map { s =>
-      val listener = s.config.effectiveAdvertisedListeners.asScala.find(_.listenerName.asScala.contains(listenerName)).getOrElse(
+      val listener = s.config.effectiveAdvertisedListeners.asScala.find(_.listenerName.asScala.contains(listenerName.value())).getOrElse(
         sys.error(s"Could not find listener with name ${listenerName.value}"))
       formatAddress(listener.host, s.boundPort(listenerName))
     }.mkString(",")
@@ -252,7 +252,7 @@ object TestUtils extends Logging {
     val future = Future.traverse(brokers) { s =>
       Future {
         s.shutdown()
-        if (deleteLogDirs) CoreUtils.delete(s.config.logDirs.asScala)
+        if (deleteLogDirs) CoreUtils.delete(s.config.logDirs)
       }
     }
     Await.result(future, FiniteDuration(5, TimeUnit.MINUTES))

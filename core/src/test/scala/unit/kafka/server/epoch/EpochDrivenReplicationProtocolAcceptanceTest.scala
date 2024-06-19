@@ -152,7 +152,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     broker100.shutdown()
 
     //Delete the clean shutdown file to simulate crash
-    new File(broker100.config.logDirs.head, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).delete()
+    new File(broker100.config.logDirs.asScala.head, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).delete()
 
     //Delete 5 messages from the leader's log on 100
     deleteMessagesFromLogFile(5 * msg.length, broker100, 0)
@@ -199,7 +199,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     brokers.foreach { b => b.shutdown() }
 
     //Delete the clean shutdown file to simulate crash
-    new File(brokers(0).config.logDirs(0), CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).delete()
+    new File(brokers(0).config.logDirs.get(0), CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).delete()
 
     //Delete half the messages from the log file
     deleteMessagesFromLogFile(getLogFile(brokers(0), 0).length() / 2, brokers(0), 0)

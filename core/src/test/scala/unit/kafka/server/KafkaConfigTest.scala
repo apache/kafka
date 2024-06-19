@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.{CompressionType, Records}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.compress.{GzipCompression, Lz4Compression, ZstdCompression}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
@@ -49,6 +50,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
 
+import java.util.stream.Collectors
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
@@ -165,7 +167,7 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"PLAINTEXT://$hostName:$port")
     val serverConfig = KafkaConfig.fromProps(props)
 
-    val endpoints = serverConfig.effectiveAdvertisedListeners
+    val endpoints = serverConfig.effectiveAdvertisedListeners.asScala
     assertEquals(1, endpoints.size)
     val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
     assertEquals(endpoint.host, hostName)
@@ -181,7 +183,7 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"PLAINTEXT://$advertisedHostName:$advertisedPort")
 
     val serverConfig = KafkaConfig.fromProps(props)
-    val endpoints = serverConfig.effectiveAdvertisedListeners
+    val endpoints = serverConfig.effectiveAdvertisedListeners.asScala
     val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
 
     assertEquals(endpoint.host, advertisedHostName)
@@ -274,14 +276,14 @@ class KafkaConfigTest {
     assertEquals(SecurityProtocol.SSL, controlEndpoint.securityProtocol)
 
     //advertised listener should contain control-plane listener
-    val advertisedEndpoints = serverConfig.effectiveAdvertisedListeners
+    val advertisedEndpoints = serverConfig.effectiveAdvertisedListeners.asScala.map(EndPoint.fromJava)
     assertTrue(advertisedEndpoints.exists { endpoint =>
-      endpoint.securityProtocol == controlEndpoint.securityProtocol && endpoint.listenerName.value().equals(controlEndpoint.listenerName.value())
+      endpoint.securityProtocol == controlEndpoint.securityProtocol && endpoint.listenerName.value().equals(controlEndpoint.listenerName.get())
     })
 
     // interBrokerListener name should be different from control-plane listener name
     val interBrokerListenerName = serverConfig.interBrokerListenerName
-    assertFalse(interBrokerListenerName.value().equals(controlEndpoint.listenerName.value()))
+    assertFalse(interBrokerListenerName.value().equals(controlEndpoint.listenerName.get()))
   }
 
   @Test
@@ -414,7 +416,7 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
     val controllerListenerName = new ListenerName("CONTROLLER")
-    assertEquals(Some(SecurityProtocol.PLAINTEXT),
+    assertEquals(SecurityProtocol.PLAINTEXT,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(controllerListenerName))
     // ensure we don't map it to PLAINTEXT when there is a SSL or SASL controller listener
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER,SSL")
@@ -427,7 +429,7 @@ class KafkaConfigTest {
     props.remove(SocketServerConfigs.LISTENERS_CONFIG)
     // ensure we don't map it to PLAINTEXT when it is explicitly mapped otherwise
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:SSL")
-    assertEquals(Some(SecurityProtocol.SSL),
+    assertEquals(SecurityProtocol.SSL,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(controllerListenerName))
     // ensure we don't map it to PLAINTEXT when anything is explicitly given
     // (i.e. it is only part of the default value, even with KRaft)
@@ -436,7 +438,7 @@ class KafkaConfigTest {
     // ensure we can map it to a non-PLAINTEXT security protocol by default (i.e. when nothing is given)
     props.remove(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-    assertEquals(Some(SecurityProtocol.SSL),
+    assertEquals(SecurityProtocol.SSL,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("SSL")))
   }
 
@@ -448,9 +450,9 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER1,CONTROLLER2")
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
-    assertEquals(Some(SecurityProtocol.PLAINTEXT),
+    assertEquals(SecurityProtocol.PLAINTEXT,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("CONTROLLER1")))
-    assertEquals(Some(SecurityProtocol.PLAINTEXT),
+    assertEquals(SecurityProtocol.PLAINTEXT,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("CONTROLLER2")))
   }
 
@@ -464,7 +466,7 @@ class KafkaConfigTest {
       "Error creating broker listeners from 'CONTROLLER://localhost:9092': No security protocol defined for listener CONTROLLER")
     // Valid now
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092")
-    assertEquals(None, KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("CONTROLLER")))
+    assertTrue(Option(KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("CONTROLLER"))).isEmpty)
   }
 
   @Test
@@ -491,12 +493,12 @@ class KafkaConfigTest {
       EndPoint("localhost", 9091, new ListenerName("CLIENT"), SecurityProtocol.SSL),
       EndPoint("localhost", 9092, new ListenerName("REPLICATION"), SecurityProtocol.SSL),
       EndPoint("localhost", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT))
-    assertEquals(expectedListeners, config.listeners)
-    assertEquals(expectedListeners, config.effectiveAdvertisedListeners)
-    val expectedSecurityProtocolMap = Map(
-      new ListenerName("CLIENT") -> SecurityProtocol.SSL,
-      new ListenerName("REPLICATION") -> SecurityProtocol.SSL,
-      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT
+    assertEquals(expectedListeners, config.listeners.asScala.map(EndPoint.fromJava))
+    assertEquals(expectedListeners, config.effectiveAdvertisedListeners.asScala.map(EndPoint.fromJava))
+    val expectedSecurityProtocolMap = Utils.mkMap(
+      Utils.mkEntry(new ListenerName("CLIENT"), SecurityProtocol.SSL),
+      Utils.mkEntry(new ListenerName("REPLICATION"), SecurityProtocol.SSL),
+        Utils.mkEntry(new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
     )
     assertEquals(expectedSecurityProtocolMap, config.effectiveListenerSecurityProtocolMap)
   }
@@ -517,19 +519,19 @@ class KafkaConfigTest {
       EndPoint("localhost", 9091, new ListenerName("EXTERNAL"), SecurityProtocol.SSL),
       EndPoint("localhost", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
     )
-    assertEquals(expectedListeners, config.listeners)
+    assertEquals(expectedListeners, config.listeners.asScala.map(EndPoint.fromJava))
 
     val expectedAdvertisedListeners = Seq(
       EndPoint("lb1.example.com", 9000, new ListenerName("EXTERNAL"), SecurityProtocol.SSL),
       EndPoint("host1", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
     )
-    assertEquals(expectedAdvertisedListeners, config.effectiveAdvertisedListeners)
+    assertEquals(expectedAdvertisedListeners, config.effectiveAdvertisedListeners.asScala.map(EndPoint.fromJava))
 
     val expectedSecurityProtocolMap = Map(
       new ListenerName("EXTERNAL") -> SecurityProtocol.SSL,
       new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT
     )
-    assertEquals(expectedSecurityProtocolMap, config.effectiveListenerSecurityProtocolMap)
+    assertEquals(expectedSecurityProtocolMap, config.effectiveListenerSecurityProtocolMap.asScala)
   }
 
   @Test
@@ -573,8 +575,9 @@ class KafkaConfigTest {
     props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "plaintext://localhost:9091,SsL://localhost:9092")
     val config = KafkaConfig.fromProps(props)
-    assertEquals(Some("SSL://localhost:9092"), config.listeners.find(_.listenerName.value == "SSL").map(_.connectionString))
-    assertEquals(Some("PLAINTEXT://localhost:9091"), config.listeners.find(_.listenerName.value == "PLAINTEXT").map(_.connectionString))
+    val endPoints = config.listeners.asScala.map(EndPoint.fromJava)
+    assertEquals(Some("SSL://localhost:9092"), endPoints.find(_.listenerName.value == "SSL").map(_.connectionString))
+    assertEquals(Some("PLAINTEXT://localhost:9091"), endPoints.find(_.listenerName.value == "PLAINTEXT").map(_.connectionString))
   }
 
   private def listenerListToEndPoints(listenerList: String,
@@ -589,9 +592,10 @@ class KafkaConfigTest {
 
     // configuration with no listeners
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(listenerListToEndPoints("PLAINTEXT://:9092"), conf.listeners)
-    assertNull(conf.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
-    assertEquals(conf.effectiveAdvertisedListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
+    val listeners = conf.listeners.asScala.map(EndPoint.fromJava)
+    assertEquals(listenerListToEndPoints("PLAINTEXT://:9092"), listeners)
+    assertNull(listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
+    assertEquals(conf.effectiveAdvertisedListeners.asScala.map(EndPoint.fromJava), listenerListToEndPoints("PLAINTEXT://:9092"))
   }
 
   @nowarn("cat=deprecation")
@@ -1220,9 +1224,9 @@ class KafkaConfigTest {
     assertEquals(false, config.brokerIdGenerationEnable)
     assertEquals(1, config.maxReservedBrokerId)
     assertEquals(1, config.brokerId)
-    assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.effectiveAdvertisedListeners.map(_.connectionString))
-    assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
-    assertEquals(List("/tmp1", "/tmp2"), config.logDirs)
+    assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.effectiveAdvertisedListeners.asScala.map(EndPoint.fromJava(_).connectionString))
+    assertEquals(Utils.mkMap(Utils.mkEntry("127.0.0.1", 2), Utils.mkEntry("127.0.0.2", 3)), config.maxConnectionsPerIpOverrides)
+    assertEquals(Arrays.asList("/tmp1", "/tmp2"), config.logDirs)
     assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
     assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
     assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
@@ -1571,7 +1575,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(metadataDir, config.metadataLogDir)
-    assertEquals(Seq(dataDir), config.logDirs)
+    assertEquals(Collections.singletonList(dataDir), config.logDirs)
   }
 
   @Test
@@ -1589,7 +1593,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(dataDir1, config.metadataLogDir)
-    assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
+    assertEquals(Arrays.asList(dataDir1, dataDir2), config.logDirs)
   }
 
   @Test
@@ -1707,7 +1711,11 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9093")
     val config = new KafkaConfig(props)
-    assertEquals(Set("CONTROLLER"), config.earlyStartListeners.map(_.value()))
+    val earlyStartListeners: util.Set[String] = config.earlyStartListeners.stream()
+      .map(_.value())
+      .collect(Collectors.toSet())
+
+    assertEquals(Utils.mkSet("CONTROLLER"), earlyStartListeners)
   }
 
   @Test
@@ -1721,7 +1729,7 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG,
       "INTERNAL://127.0.0.1:9092,INTERNAL2://127.0.0.1:9093")
     val config = new KafkaConfig(props)
-    assertEquals(Set(new ListenerName("INTERNAL"), new ListenerName("INTERNAL2")),
+    assertEquals(Utils.mkSet(new ListenerName("INTERNAL"), new ListenerName("INTERNAL2")),
       config.earlyStartListeners)
   }
 

@@ -79,7 +79,7 @@ object KafkaRaftManager {
    */
   private def hasDifferentLogDir(config: KafkaConfig): Boolean = {
     !config
-      .logDirs
+      .logDirs.asScala
       .map(Paths.get(_).toAbsolutePath)
       .contains(Paths.get(config.metadataLogDir).toAbsolutePath)
   }
@@ -95,7 +95,7 @@ object KafkaRaftManager {
    */
   def maybeDeleteMetadataLogDir(config: KafkaConfig): Unit = {
     // These constraints are enforced in KafkaServer, but repeating them here to guard against future callers
-    if (config.processRoles.nonEmpty) {
+    if (!config.processRoles.isEmpty) {
       throw new RuntimeException("Not deleting metadata log dir since this node is in KRaft mode.")
     } else if (!config.migrationEnabled) {
       throw new RuntimeException("Not deleting metadata log dir since migrations are not enabled.")
@@ -171,7 +171,7 @@ class KafkaRaftManager[T](
     val differentMetadataLogDir = KafkaRaftManager.hasDifferentLogDir(config)
 
     // Or this node is only a controller
-    val isOnlyController = config.processRoles == Set(ProcessRole.ControllerRole)
+    val isOnlyController = config.processRoles == Utils.mkSet(ProcessRole.ControllerRole)
 
     if (differentMetadataLogDir || isOnlyController) {
       Some(KafkaRaftManager.lockDataDir(new File(config.metadataLogDir)))
@@ -260,8 +260,8 @@ class KafkaRaftManager[T](
   }
 
   private def buildNetworkClient(): (ListenerName, NetworkClient) = {
-    val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
-    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(
+    val controllerListenerName = new ListenerName(config.controllerListenerNames.asScala.head)
+    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.asScala.getOrElse(
       controllerListenerName,
       SecurityProtocol.forName(controllerListenerName.value())
     )

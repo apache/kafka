@@ -202,10 +202,8 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  def forgeBrokerMetadata(logDirs: Seq[String], brokerId: Int, clusterId: String): Unit = {
-    for (logDir <- logDirs) {
-      forgeBrokerMetadata(logDir, brokerId, clusterId)
-    }
+  def forgeBrokerMetadata(logDirs: java.util.List[String], brokerId: Int, clusterId: String): Unit = {
+    logDirs.forEach(logDir => forgeBrokerMetadata(logDir, brokerId, clusterId))
   }
 
   def forgeBrokerMetadata(logDir: String, brokerId: Int, clusterId: String): Unit = {
@@ -218,8 +216,8 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
       new File(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath, false)
   }
 
-  def verifyBrokerMetadata(logDirs: Seq[String], clusterId: String): Boolean = {
-    for (logDir <- logDirs) {
+  def verifyBrokerMetadata(logDirs: java.util.List[String], clusterId: String): Boolean = {
+    logDirs.forEach { logDir =>
       val properties = PropertiesUtils.readPropertiesFile(
         new File(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath)
       val metaProps = new MetaProperties.Builder(properties).build()

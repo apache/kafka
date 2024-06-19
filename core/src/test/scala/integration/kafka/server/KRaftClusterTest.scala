@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.cluster.EndPoint
 import kafka.log.UnifiedLog
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
@@ -115,7 +116,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       val controller = cluster.controllers().values().iterator().asScala.filter(_.controller.isActive).next()
-      val port = controller.socketServer.boundPort(controller.config.controllerListeners.head.listenerName)
+      val port = controller.socketServer.boundPort(EndPoint.fromJava(controller.config.controllerListeners.asScala.head).listenerName)
 
       // shutdown active controller
       controller.shutdown()
@@ -1555,7 +1556,7 @@ class KRaftClusterTest {
         // Copy foo-0 to targetParentDir
         // This is so that we can rename the main replica to a future down below
         val parentDir = log.parentDir
-        val targetParentDir = broker0.config.logDirs.filter(_ != parentDir).head
+        val targetParentDir = broker0.config.logDirs.asScala.filter(_ != parentDir).head
         val targetDirFile = new File(targetParentDir, log.dir.getName)
         FileUtils.copyDirectory(log.dir, targetDirFile)
         assertTrue(targetDirFile.exists())

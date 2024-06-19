@@ -47,13 +47,14 @@ import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.CredentialProvider
-import org.apache.kafka.server.config.{ServerConfigs, QuotaConfigs}
+import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.FutureUtils
 import org.slf4j.event.Level
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.jdk.CollectionConverters._
 import scala.util.control.ControlThrowable
 
@@ -102,7 +103,7 @@ class SocketServer(val config: KafkaConfig,
   val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests, DataPlaneAcceptor.MetricPrefix, time, apiVersionManager.newRequestMetrics)
   // control-plane
   private[network] var controlPlaneAcceptorOpt: Option[ControlPlaneAcceptor] = None
-  val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.map(_ =>
+  val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.asScala.map(_ =>
     new RequestChannel(20, ControlPlaneAcceptor.MetricPrefix, time, apiVersionManager.newRequestMetrics))
 
   private[this] val nextProcessorId: AtomicInteger = new AtomicInteger(0)
@@ -171,10 +172,10 @@ class SocketServer(val config: KafkaConfig,
   // structures. It does not start the acceptors and processors or their associated JVM
   // threads.
   if (apiVersionManager.listenerType.equals(ListenerType.CONTROLLER)) {
-    config.controllerListeners.foreach(createDataPlaneAcceptorAndProcessors)
+    config.controllerListeners.forEach(l => createDataPlaneAcceptorAndProcessors(EndPoint.fromJava(l)))
   } else {
-    config.controlPlaneListener.foreach(createControlPlaneAcceptorAndProcessor)
-    config.dataPlaneListeners.foreach(createDataPlaneAcceptorAndProcessors)
+    config.controlPlaneListener.map(l => createControlPlaneAcceptorAndProcessor(EndPoint.fromJava(l)))
+    config.dataPlaneListeners.forEach(l => createDataPlaneAcceptorAndProcessors(EndPoint.fromJava(l)))
   }
 
   // Processors are now created by each Acceptor. However to preserve compatibility, we need to number the processors
@@ -266,7 +267,10 @@ class SocketServer(val config: KafkaConfig,
     info(s"Created control-plane acceptor and processor for endpoint : ${endpoint.listenerName}")
   }
 
-  private def endpoints = config.listeners.map(l => l.listenerName -> l).toMap
+  private def endpoints = config.listeners.asScala.map(l => {
+    val endpoint = EndPoint.fromJava(l)
+    endpoint.listenerName -> endpoint
+  }).toMap
 
   protected def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel): DataPlaneAcceptor = {
     new DataPlaneAcceptor(this, endPoint, config, nodeId, connectionQuotas, time, isPrivilegedListener, requestChannel, metrics, credentialProvider, logContext, memoryPool, apiVersionManager)
@@ -327,14 +331,15 @@ class SocketServer(val config: KafkaConfig,
   /**
    * This method is called to dynamically add listeners.
    */
-  def addListeners(listenersAdded: Seq[EndPoint]): Unit = synchronized {
+  def addListeners(listenersAdded: Seq[Endpoint]): Unit = synchronized {
     if (stopped) {
       throw new RuntimeException("can't add new listeners: SocketServer is stopped.")
     }
     info(s"Adding data-plane listeners for endpoints $listenersAdded")
-    listenersAdded.foreach { endpoint =>
+    listenersAdded.foreach { l =>
+      val endpoint = EndPoint.fromJava(l)
       createDataPlaneAcceptorAndProcessors(endpoint)
-      val acceptor = dataPlaneAcceptors.get(endpoint)
+      val acceptor = dataPlaneAcceptors.get(l)
       // There is no authorizer future for this new listener endpoint. So start the
       // listener once all authorizer futures are complete.
       allAuthorizerFuturesComplete.whenComplete((_, e) => {
@@ -371,8 +376,8 @@ class SocketServer(val config: KafkaConfig,
       info(s"Updating maxConnectionsPerIp: $maxConnectionsPerIp")
       connectionQuotas.updateMaxConnectionsPerIp(maxConnectionsPerIp)
     }
-    val maxConnectionsPerIpOverrides = newConfig.maxConnectionsPerIpOverrides
-    if (maxConnectionsPerIpOverrides != oldConfig.maxConnectionsPerIpOverrides) {
+    val maxConnectionsPerIpOverrides = newConfig.maxConnectionsPerIpOverrides.asScala.view.mapValues(_.toInt).toMap
+    if (maxConnectionsPerIpOverrides != oldConfig.maxConnectionsPerIpOverrides.asScala.view.mapValues(_.toInt).toMap) {
       info(s"Updating maxConnectionsPerIpOverrides: ${maxConnectionsPerIpOverrides.map { case (k, v) => s"$k=$v" }.mkString(",")}")
       connectionQuotas.updateMaxConnectionsPerIpOverride(maxConnectionsPerIpOverrides)
     }
@@ -1435,7 +1440,7 @@ object ConnectionQuotas {
 class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extends Logging with AutoCloseable {
 
   @volatile private var defaultMaxConnectionsPerIp: Int = config.maxConnectionsPerIp
-  @volatile private var maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides.map { case (host, count) => (InetAddress.getByName(host), count) }
+  @volatile private var maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides.asScala.map { case (host, count) => (InetAddress.getByName(host), count.toInt) }.toMap
   @volatile private var brokerMaxConnections = config.maxConnections
   private val interBrokerListenerName = config.interBrokerListenerName
   private val counts = mutable.Map[InetAddress, Int]()
@@ -1473,7 +1478,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   }
 
   private[network] def updateMaxConnectionsPerIpOverride(overrideQuotas: Map[String, Int]): Unit = {
-    maxConnectionsPerIpOverrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
+    maxConnectionsPerIpOverrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }.toMap
   }
 
   private[network] def updateBrokerMaxConnections(maxConnections: Int): Unit = {

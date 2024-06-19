@@ -39,7 +39,6 @@ import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
-import scala.compat.java8.OptionConverters;
 
 import java.util.ArrayList;
 import java.util.Arrays;

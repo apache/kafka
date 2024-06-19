@@ -56,6 +56,7 @@ import java.util
 import java.util.{Optional, OptionalLong}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.stream.Collectors
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
@@ -159,7 +160,7 @@ class ControllerServer(
         metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
       }
 
-      authorizer = config.createNewAuthorizer()
+      authorizer = config.createNewAuthorizer().asScala
       authorizer.foreach(_.configure(config.originals))
 
       metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
@@ -187,20 +188,24 @@ class ControllerServer(
         credentialProvider,
         apiVersionManager)
 
-      val listenerInfo = ListenerInfo.create(config.controllerListeners.map(_.toJava).asJava).
+      val listenerInfo = ListenerInfo.create(config.controllerListeners).
         withWildcardHostnamesResolved().
         withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
       socketServerFirstBoundPortFuture.complete(listenerInfo.firstListener().port())
 
       val endpointReadyFutures = {
         val builder = new EndpointReadyFutures.Builder()
+        val earlyStartListeners: util.Set[String] = config.earlyStartListeners.stream()
+          .map(_.value())
+          .collect(Collectors.toSet())
+
         builder.build(authorizer.asJava,
           new KafkaAuthorizerServerInfo(
             new ClusterResource(clusterId),
             config.nodeId,
             listenerInfo.listeners().values(),
             listenerInfo.firstListener(),
-            config.earlyStartListeners.map(_.value()).asJava))
+            earlyStartListeners))
       }
 
       sharedServer.startForController()
@@ -234,7 +239,7 @@ class ControllerServer(
           OptionalLong.empty()
         }
 
-        val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
+        val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.asScala.fold(OptionalLong.empty)(interval => OptionalLong.of(interval))
 
         quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.migrationEnabled)
 
@@ -278,7 +283,7 @@ class ControllerServer(
 
       if (config.migrationEnabled) {
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
-        val zkConfigEncoder = config.passwordEncoderSecret match {
+        val zkConfigEncoder = config.passwordEncoderSecret.asScala match {
           case Some(secret) => PasswordEncoder.encrypting(secret,
             config.passwordEncoderKeyFactoryAlgorithm,
             config.passwordEncoderCipherAlgorithm,

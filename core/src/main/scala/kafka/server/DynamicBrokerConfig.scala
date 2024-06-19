@@ -17,35 +17,35 @@
 
 package kafka.server
 
-import java.util
-import java.util.{Collections, Properties}
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogManager}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.server.DynamicBrokerConfig._
-import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
+import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
-import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter}
 import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.config._
+import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
+import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.{ConfigType, ServerConfigs, ReplicationConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ZooKeeperInternals}
+import org.apache.kafka.server.config._
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, MetricConfigs}
 import org.apache.kafka.server.telemetry.ClientTelemetry
 import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
 
+import java.util
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.{Collections, Properties}
 import scala.annotation.nowarn
 import scala.collection._
 import scala.compat.java8.OptionConverters.RichOptionalGeneric
@@ -1105,8 +1105,8 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     val newListenerMap = listenersToMap(newListeners)
     val oldListeners = oldConfig.listeners
     val oldListenerMap = listenersToMap(oldListeners)
-    val listenersRemoved = oldListeners.asScala.filterNot(e => newListenerMap.contains(e.listenerName)).toSeq
-    val listenersAdded = newListeners.asScala.filterNot(e => oldListenerMap.contains(e.listenerName)).toSeq
+    val listenersRemoved = oldListeners.asScala.map(EndPoint.fromJava).filterNot(e => newListenerMap.contains(e.listenerName)).toSeq
+    val listenersAdded = newListeners.asScala.filterNot(e => oldListenerMap.contains(EndPoint.fromJava(e).listenerName)).toSeq
     if (listenersRemoved.nonEmpty || listenersAdded.nonEmpty) {
       LoginManager.closeAll() // Clear SASL login cache to force re-login
       if (listenersRemoved.nonEmpty) server.socketServer.removeListeners(listenersRemoved)
@@ -1122,6 +1122,8 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     }
   }
 
+  private def listenersToMap(listeners: util.List[Endpoint]): Map[ListenerName, EndPoint] =
+    listenersToMap(listeners.asScala.map(EndPoint.fromJava))
   private def listenersToMap(listeners: Seq[EndPoint]): Map[ListenerName, EndPoint] =
     listeners.map(e => (e.listenerName, e)).toMap
 

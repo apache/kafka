@@ -18,6 +18,7 @@ package org.apache.kafka.server.config;
 
 import org.slf4j.Logger;
 
+import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -33,6 +34,8 @@ import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.ProcessRole;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.storage.internals.log.LogConfig;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -95,10 +98,6 @@ public class KafkaConfigValidator {
         Utils.require(config.logRollTimeJitterMillis() >= 0, "log.roll.jitter.ms must be greater than or equal to 0");
         Utils.require(config.logRetentionTimeMillis() >= 1 || config.logRetentionTimeMillis() == -1, "log.retention.ms must be unlimited (-1) or, greater than or equal to 1");
         Utils.require(!config.logDirs().isEmpty(), "At least one log directory must be defined via log.dirs or log.dir.");
-        if (config.isRemoteLogStorageSystemEnabled() && config.logDirs().size() > 1) {
-            throw new ConfigException(String.format("Multiple log directories `%s` are not supported when remote log storage is enabled",
-                    String.join(",", config.logDirs())));
-        }
         Utils.require(config.logCleanerDedupeBufferSize() / config.logCleanerThreads() > 1024 * 1024, "log.cleaner.dedupe.buffer.size must be at least 1MB per cleaner thread.");
     }
 
@@ -187,8 +186,9 @@ public class KafkaConfigValidator {
     }
 
     public void validateListenerNames() {
-        Set<ListenerName> listenerNames = config.extractListenerNames(config.listeners());
-        Set<ListenerName> advertisedListenerNames = config.extractListenerNames(config.effectiveAdvertisedListeners());
+        Set<ListenerName> listenerNames = config.extractListenerNames();
+        List<Endpoint> effectiveAdvertisedListeners = config.effectiveAdvertisedListeners();
+        Set<ListenerName> advertisedListenerNames = config.extractListenerNames(effectiveAdvertisedListeners);
 
         Set<ProcessRole> processRoles = config.processRoles();
         if (processRoles.isEmpty() || processRoles.contains(ProcessRole.BrokerRole)) {
@@ -206,21 +206,22 @@ public class KafkaConfigValidator {
                             String.join(", ", listenerNames.stream().map(ListenerName::value).collect(Collectors.toSet()))));
         }
 
-        Utils.require(config.effectiveAdvertisedListeners().stream().noneMatch(endpoint -> "0.0.0.0".equals(endpoint.host())),
+        Utils.require(effectiveAdvertisedListeners.stream().noneMatch(endpoint -> "0.0.0.0".equals(endpoint.host())),
                 String.format("%s cannot use the nonroutable meta-address 0.0.0.0. Use a routable IP address.",
                         SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG));
         // validate control.plane.listener.name config
-        if (config.controlPlaneListenerName().isPresent()) {
-            Utils.require(advertisedListenerNames.contains(config.controlPlaneListenerName().get()),
+        Optional<ListenerName> controlPlaneListenerName = config.controlPlaneListenerName();
+        if (controlPlaneListenerName.isPresent()) {
+            Utils.require(advertisedListenerNames.contains(controlPlaneListenerName.get()),
                     String.format("%s must be a listener name defined in %s. The valid options based on currently configured listeners are %s",
                             SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG, SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG,
                             String.join(",", advertisedListenerNames.stream().map(ListenerName::value).collect(Collectors.toSet()))
                     ));
             // controlPlaneListenerName should be different from interBrokerListenerName
-            Utils.require(!config.controlPlaneListenerName().get().value().equals(config.interBrokerListenerName().value()),
+            Utils.require(!controlPlaneListenerName.get().value().equals(config.interBrokerListenerName().value()),
                     String.format("%s, when defined, should have a different value from the inter broker listener name. " +
                                     "Currently they both have the value %s",
-                            SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG, config.controlPlaneListenerName().get()
+                            SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG, controlPlaneListenerName.get()
                     ));
         }
     }
@@ -369,6 +370,18 @@ public class KafkaConfigValidator {
         if (config.nodeId() != config.brokerId()) {
             throw new ConfigException(String.format("You must set `%s` to the same value as `%s`.",
                     KRaftConfigs.NODE_ID_CONFIG, ServerConfigs.BROKER_ID_CONFIG));
+        }
+    }
+
+    /**
+     * Validate some configurations for new MetadataVersion. A new MetadataVersion can take place when
+     * a FeatureLevelRecord for "metadata.version" is read from the cluster metadata.
+     */
+    public void validateWithMetadataVersion(MetadataVersion metadataVersion) {
+        if (config.processRoles().contains(ProcessRole.BrokerRole) && config.logDirs().size() > 1) {
+            Utils.require(metadataVersion.isDirectoryAssignmentSupported(),
+                    "Multiple log directories (aka JBOD) are not supported in the current MetadataVersion " + metadataVersion + ". Need " +
+                            MetadataVersion.IBP_3_7_IV2 + " or higher");
         }
     }
 }

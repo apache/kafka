@@ -116,6 +116,6 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String], featu
     val interBrokerEndpoint: Endpoint = endPoint(config.interBrokerListenerName).toJava
     val brokerEndpoints: util.List[Endpoint] = endPoints.toList.map(_.toJava).asJava
     Broker.ServerInfo(clusterResource, id, brokerEndpoints, interBrokerEndpoint,
-      config.earlyStartListeners.map(_.value()).asJava)
+      config.earlyStartListeners().asScala.map(_.value()).asJava)
   }
 }

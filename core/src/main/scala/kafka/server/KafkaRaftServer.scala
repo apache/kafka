@@ -136,7 +136,7 @@ object KafkaRaftServer {
     // Load and verify the original ensemble.
     val loader = new MetaPropertiesEnsemble.Loader()
     loader.addMetadataLogDir(config.metadataLogDir)
-    config.logDirs.foreach(loader.addLogDir)
+    config.logDirs.forEach(loader.addLogDir)
     val initialMetaPropsEnsemble = loader.load()
     val verificationFlags = util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR)
     initialMetaPropsEnsemble.verify(Optional.empty(), OptionalInt.of(config.nodeId), verificationFlags)

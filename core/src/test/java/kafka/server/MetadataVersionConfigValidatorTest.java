@@ -24,6 +24,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.config.KafkaConfigValidator;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.junit.jupiter.api.Test;
 
@@ -69,12 +70,13 @@ public class MetadataVersionConfigValidatorTest {
         MetadataVersion metadataVersion = MetadataVersion.IBP_3_7_IV2;
         KafkaConfig config = mock(KafkaConfig.class);
         FaultHandler faultHandler = mock(FaultHandler.class);
+        KafkaConfigValidator validator = mock(KafkaConfigValidator.class);
 
         when(config.brokerId()).thenReturn(8);
-
+        when(config.validator()).thenReturn(validator);
         testWith(metadataVersion, config, faultHandler);
 
-        verify(config, times(1)).validateWithMetadataVersion(eq(metadataVersion));
+        verify(validator, times(1)).validateWithMetadataVersion(eq(metadataVersion));
         verifyNoMoreInteractions(faultHandler);
     }
 
@@ -85,16 +87,18 @@ public class MetadataVersionConfigValidatorTest {
         Exception exception = new Exception();
         KafkaConfig config = mock(KafkaConfig.class);
         FaultHandler faultHandler = mock(FaultHandler.class);
+        KafkaConfigValidator validator = mock(KafkaConfigValidator.class);
+        when(config.validator()).thenReturn(validator);
 
         when(faultHandler.handleFault(any(), any())).thenReturn(new RuntimeException("returned exception"));
         when(config.brokerId()).thenReturn(8);
         willAnswer(invocation -> {
             throw exception;
-        }).given(config).validateWithMetadataVersion(eq(metadataVersion));
+        }).given(validator).validateWithMetadataVersion(eq(metadataVersion));
 
         testWith(metadataVersion, config, faultHandler);
 
-        verify(config, times(1)).validateWithMetadataVersion(eq(metadataVersion));
+        verify(validator, times(1)).validateWithMetadataVersion(eq(metadataVersion));
         verify(faultHandler, times(1)).handleFault(
                 eq("Broker configuration does not support the cluster MetadataVersion"),
                 eq(exception));

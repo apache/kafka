@@ -60,6 +60,7 @@ import java.util
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, UUID}
 import scala.collection.Seq
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.jdk.CollectionConverters._
 
 object ZkMigrationIntegrationTest {
@@ -248,7 +249,7 @@ class ZkMigrationIntegrationTest {
 
     val zkClient = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
     val kafkaConfig = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying.servers.head.config
-    val zkConfigEncoder = kafkaConfig.passwordEncoderSecret match {
+    val zkConfigEncoder = kafkaConfig.passwordEncoderSecret.asScala match {
       case Some(secret) =>
         PasswordEncoder.encrypting(secret,
           kafkaConfig.passwordEncoderKeyFactoryAlgorithm,

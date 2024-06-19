@@ -60,7 +60,7 @@ public class MetadataVersionConfigValidator implements MetadataPublisher {
     @SuppressWarnings("ThrowableNotThrown")
     private void onMetadataVersionChanged(MetadataVersion metadataVersion) {
         try {
-            this.config.validateWithMetadataVersion(metadataVersion);
+            this.config.validator().validateWithMetadataVersion(metadataVersion);
         } catch (Throwable t) {
             this.faultHandler.handleFault(
                     "Broker configuration does not support the cluster MetadataVersion", t);

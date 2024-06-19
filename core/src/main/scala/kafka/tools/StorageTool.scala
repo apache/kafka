@@ -152,7 +152,7 @@ object StorageTool extends Logging {
       }
     }
     try {
-      config.validateWithMetadataVersion(metadataVersion)
+      config.validator().validateWithMetadataVersion(metadataVersion)
     } catch {
       case e: IllegalArgumentException => throw new TerseFailure(s"Invalid configuration for metadata version: ${e.getMessage}")
     }
@@ -233,12 +233,12 @@ object StorageTool extends Logging {
 
   def configToLogDirectories(config: KafkaConfig): Seq[String] = {
     val directories = new mutable.TreeSet[String]
-    directories ++= config.logDirs
+    directories ++= config.logDirs.asScala
     Option(config.metadataLogDir).foreach(directories.add)
     directories.toSeq
   }
 
-  private def configToSelfManagedMode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
+  private def configToSelfManagedMode(config: KafkaConfig): Boolean = !config.processRoles.isEmpty
 
   def getMetadataVersion(
     namespace: Namespace,

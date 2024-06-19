@@ -87,7 +87,7 @@ class SocketServerTest {
   private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
   private var logLevelToRestore: Level = _
   def endpoint: EndPoint = {
-    KafkaConfig.fromProps(props, doLog = false).dataPlaneListeners.head
+    EndPoint.fromJava(KafkaConfig.fromProps(props, doLog = false).dataPlaneListeners.asScala.head)
   }
   def listener: String = endpoint.listenerName.value
   val uncaughtExceptions = new AtomicInteger(0)
@@ -367,7 +367,8 @@ class SocketServerTest {
     val config = KafkaConfig.fromProps(testProps)
     val testableServer = new TestableSocketServer(config)
 
-    val updatedEndPoints = config.effectiveAdvertisedListeners.map { endpoint =>
+    val updatedEndPoints = config.effectiveAdvertisedListeners.asScala.map { e =>
+      val endpoint = EndPoint.fromJava(e)
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
     }.map(_.toJava)
 
@@ -2221,7 +2222,7 @@ class SocketServerTest {
       testableAcceptor.processors(0).asInstanceOf[TestableProcessor]
 
     def testableAcceptor: TestableAcceptor = {
-      val endpoint = this.config.dataPlaneListeners.head
+      val endpoint = EndPoint.fromJava(this.config.dataPlaneListeners.asScala.head)
       dataPlaneAcceptors.get(endpoint).asInstanceOf[TestableAcceptor]
     }
 
