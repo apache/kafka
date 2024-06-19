@@ -43,9 +43,6 @@ global_job_config:
       - echo $SEMAPHORE_WORKFLOW_ID
       - echo $SEMAPHORE_GIT_REPO_SLUG
       - checkout
-      - . vault-setup
-      - . vault-sem-get-secret ci-reporting
-      - . vault-sem-get-secret sox-semaphore-build-info
       - sem-version java 21
       - sem-version go 1.16.15
       - git config --global url."git@github.com:".insteadOf "https://github.com/"
