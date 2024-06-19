@@ -757,6 +757,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         Optional<Boolean> handled = maybeHandleCommonResponse(
             error, responseLeaderId, responseEpoch, currentTimeMs);
+        // KAFKA-16529 will need to handle INVALID_VOTER_KEY
         if (handled.isPresent()) {
             return handled.get();
         } else if (error == Errors.NONE) {
@@ -839,7 +840,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      */
-    // TODO: handle the new voter key fields
     // TODO: add test for checking voter key fields
     private BeginQuorumEpochResponseData handleBeginQuorumEpochRequest(
         RaftRequest.Inbound requestMetadata,
@@ -891,7 +891,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (!isValidVoterKey(voterKey)) {
             // TODO: log a message at info
             // The request is not intended to this replica since the replica keys don't match
-            // TODO: this must return an error. We need to update the KIP
             return buildBeginQuorumEpochResponse(
                 requestMetadata.listenerName(),
                 requestMetadata.apiVersion(),
@@ -930,6 +929,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         Optional<Boolean> handled = maybeHandleCommonResponse(
             partitionError, responseLeaderId, responseEpoch, currentTimeMs);
+        // KAFKA-16529 will need to handle INVALID_VOTER_KEY
         if (handled.isPresent()) {
             return handled.get();
         } else if (partitionError == Errors.NONE) {
