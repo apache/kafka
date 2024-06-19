@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.KafkaException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

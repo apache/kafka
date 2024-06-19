@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -205,4 +206,3 @@ public class ProducerInterceptorsTest {
         interceptors.close();
     }
 }
-

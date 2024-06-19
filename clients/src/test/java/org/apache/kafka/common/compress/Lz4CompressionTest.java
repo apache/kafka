@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.common.compress;
 
-import net.jpountz.xxhash.XXHashFactory;
-
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ChunkedBytesStream;
+
+import net.jpountz.xxhash.XXHashFactory;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;

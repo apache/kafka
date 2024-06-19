@@ -103,4 +103,3 @@ public interface ClientQuotaCallback extends Configurable {
      */
     void close();
 }
-

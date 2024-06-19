@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.common.utils.annotation;
 
-import java.util.stream.Stream;
 import org.apache.kafka.common.protocol.ApiKeys;
+
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.support.AnnotationConsumer;
+
+import java.util.stream.Stream;
 
 public class ApiKeyVersionsProvider implements ArgumentsProvider, AnnotationConsumer<ApiKeyVersionsSource> {
     private ApiKeys apiKey;

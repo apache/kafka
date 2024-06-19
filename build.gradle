@@ -201,8 +201,7 @@ def determineCommitId() {
   }
 }
 
-def excludedSpotlessModules = [':clients',
-                               ':connect:runtime',
+def excludedSpotlessModules = [':connect:runtime',
                                ':core',
                                ':streams']
 
