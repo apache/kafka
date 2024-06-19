@@ -1065,18 +1065,32 @@ public final class RaftClientTestContext {
         );
     }
 
+    BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
+        return beginEpochRequest(clusterId.toString(), epoch, leaderId);
+    }
+
     BeginQuorumEpochRequestData beginEpochRequest(String clusterId, int epoch, int leaderId) {
+        ReplicaKey localReplicaKey = kip853Rpc ?
+            ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID) :
+            ReplicaKey.of(localIdOrThrow(), localDirectoryId);
+
+        return beginEpochRequest(clusterId, epoch, leaderId, localReplicaKey);
+    }
+
+    BeginQuorumEpochRequestData beginEpochRequest(
+        String clusterId,
+        int epoch,
+        int leaderId,
+        ReplicaKey voterKey
+    ) {
         return RaftUtil.singletonBeginQuorumEpochRequest(
             metadataPartition,
             clusterId,
             epoch,
             leaderId,
-            voters.listeners(leaderId)
+            voters.listeners(leaderId),
+            voterKey
         );
-    }
-
-    BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
-        return beginEpochRequest(clusterId.toString(), epoch, leaderId);
     }
 
     private BeginQuorumEpochResponseData beginEpochResponse(int epoch, int leaderId) {

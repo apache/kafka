@@ -297,10 +297,12 @@ public class RaftUtil {
         String clusterId,
         int leaderEpoch,
         int leaderId,
-        Endpoints leaderEndponts
+        Endpoints leaderEndponts,
+        ReplicaKey voterKey
     ) {
         return new BeginQuorumEpochRequestData()
             .setClusterId(clusterId)
+            .setVoterId(voterKey.id())
             .setTopics(
                 Collections.singletonList(
                     new BeginQuorumEpochRequestData.TopicData()
@@ -311,6 +313,7 @@ public class RaftUtil {
                                     .setPartitionIndex(topicPartition.partition())
                                     .setLeaderEpoch(leaderEpoch)
                                     .setLeaderId(leaderId)
+                                    .setVoterDirectoryId(voterKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                             )
                         )
                 )
@@ -493,9 +496,20 @@ public class RaftUtil {
         return response;
     }
 
-    static Optional<ReplicaKey> voteRequestVoterId(
+    public static Optional<ReplicaKey> voteRequestVoterKey(
         VoteRequestData request,
         VoteRequestData.PartitionData partition
+    ) {
+        if (request.voterId() < 0) {
+            return Optional.empty();
+        } else {
+            return Optional.of(ReplicaKey.of(request.voterId(), partition.voterDirectoryId()));
+        }
+    }
+
+    public static Optional<ReplicaKey> beginQuorumEpochRequestVoterKey(
+        BeginQuorumEpochRequestData request,
+        BeginQuorumEpochRequestData.PartitionData partition
     ) {
         if (request.voterId() < 0) {
             return Optional.empty();

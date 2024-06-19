@@ -47,6 +47,8 @@
   // Version 15 is the same as version 14 (KIP-903).
   //
   // Version 16 adds the 'NodeEndpoints' field (KIP-951).
+  //
+  // Version 17 no changes to the response (KIP-853).
   "validVersions": "0-17",
   "flexibleVersions": "12+",
   "fields": [

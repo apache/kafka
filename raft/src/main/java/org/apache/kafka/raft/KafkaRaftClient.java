@@ -650,8 +650,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      *      but different from this node
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
-     * - {@link Errors#INCONSISTENT_VOTER_SET} if the request suggests inconsistent voter membership (e.g.
-     *      if this node or the sender is not one of the current known voters)
      * - {@link Errors#INVALID_REQUEST} if the last epoch or offset are invalid
      */
     private VoteResponseData handleVoteRequest(
@@ -700,21 +698,16 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         // Check that the request was intended for this replica
-        Optional<ReplicaKey> voterKey = RaftUtil.voteRequestVoterId(request, partitionRequest);
-        if (voterKey.isPresent()) {
-            if (!OptionalInt.of(voterKey.get().id()).equals(nodeId) ||
-                (voterKey.get().directoryId().isPresent() &&
-                 !voterKey.get().directoryId().get().equals(nodeDirectoryId)
-                )
-            ) {
-                // The request is not intended to this replica since the replica keys don't match
-                return buildVoteResponse(
-                    requestMetadata.listenerName(),
-                    requestMetadata.apiVersion(),
-                    Errors.NONE,
-                    false
-                );
-            }
+        Optional<ReplicaKey> voterKey = RaftUtil.voteRequestVoterKey(request, partitionRequest);
+        if (!isValidVoterKey(voterKey)) {
+            // TODO: log a message at info
+            // The request is not intended to this replica since the replica keys don't match
+            return buildVoteResponse(
+                requestMetadata.listenerName(),
+                requestMetadata.apiVersion(),
+                Errors.INVALID_VOTER_KEY,
+                false
+            );
         }
 
         OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);
@@ -844,10 +837,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
      *      but different from this node
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
-     * - {@link Errors#INCONSISTENT_VOTER_SET} if the request suggests inconsistent voter membership (e.g.
-     *      if this node or the sender is not one of the current known voters)
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      */
+    // TODO: handle the new voter key fields
+    // TODO: add test for checking voter key fields
     private BeginQuorumEpochResponseData handleBeginQuorumEpochRequest(
         RaftRequest.Inbound requestMetadata,
         long currentTimeMs
@@ -892,6 +885,19 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             leaderEndpoints,
             currentTimeMs
         );
+
+        // Check that the request was intended for this replica
+        Optional<ReplicaKey> voterKey = RaftUtil.beginQuorumEpochRequestVoterKey(request, partitionRequest);
+        if (!isValidVoterKey(voterKey)) {
+            // TODO: log a message at info
+            // The request is not intended to this replica since the replica keys don't match
+            // TODO: this must return an error. We need to update the KIP
+            return buildBeginQuorumEpochResponse(
+                requestMetadata.listenerName(),
+                requestMetadata.apiVersion(),
+                Errors.INVALID_VOTER_KEY
+            );
+        }
 
         return buildBeginQuorumEpochResponse(
             requestMetadata.listenerName(),
@@ -963,8 +969,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
      *      but different from this node
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
-     * - {@link Errors#INCONSISTENT_VOTER_SET} if the request suggests inconsistent voter membership (e.g.
-     *      if this node or the sender is not one of the current known voters)
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      */
     private EndQuorumEpochResponseData handleEndQuorumEpochRequest(
@@ -1989,6 +1993,17 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
+    /**
+     * Return true if the voter key matches the local replica's key
+     */
+    private boolean isValidVoterKey(Optional<ReplicaKey> voterKey) {
+        return voterKey
+            .map(key ->
+                OptionalInt.of(key.id()).equals(nodeId) &&
+                key.directoryId().equals(Optional.of(nodeDirectoryId))
+            )
+            .orElse(true);
+    }
     /**
      * Validate a request which is intended for the current quorum leader.
      * If an error is present in the returned value, it should be returned

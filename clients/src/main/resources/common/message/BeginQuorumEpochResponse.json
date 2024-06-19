@@ -17,6 +17,7 @@
   "apiKey": 53,
   "type": "response",
   "name": "BeginQuorumEpochResponse",
+  // Version 1 adds flexible versions and leader endpoint (KIP-853)
   "validVersions": "0-1",
   "flexibleVersions": "1+",
   "fields": [

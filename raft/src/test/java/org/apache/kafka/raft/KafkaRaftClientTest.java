@@ -1988,7 +1988,7 @@ public class KafkaRaftClientTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), false);
+        context.assertSentVoteResponse(Errors.INVALID_VOTER_KEY, epoch + 1, OptionalInt.empty(), false);
 
         // invalid voter directory id is rejected
         context.deliverRequest(
@@ -2002,7 +2002,7 @@ public class KafkaRaftClientTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentVoteResponse(Errors.NONE, epoch + 2, OptionalInt.empty(), false);
+        context.assertSentVoteResponse(Errors.INVALID_VOTER_KEY, epoch + 2, OptionalInt.empty(), false);
     }
 
     @ParameterizedTest

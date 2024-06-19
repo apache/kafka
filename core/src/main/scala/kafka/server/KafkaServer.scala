@@ -441,7 +441,8 @@ class KafkaServer(
             threadNamePrefix,
             CompletableFuture.completedFuture(quorumVoters),
             QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
-            // Endpoint information is only needed for controllers (voters). ZK brokers can never be controllers
+            // Endpoint information is only needed for KRaft controllers (voters). ZK brokers
+            // (observers) can never be KRaft controllers
             Endpoints.empty(),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )

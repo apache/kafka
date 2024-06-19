@@ -18,6 +18,7 @@
   "type": "request",
   "listeners": ["controller"],
   "name": "BeginQuorumEpochRequest",
+  // Version 1 adds flexible versions, voter key and leader endpoints (KIP-853)
   "validVersions": "0-1",
   "flexibleVersions": "1+",
   "fields": [
