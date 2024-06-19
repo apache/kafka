@@ -2032,7 +2032,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       results.forEach { topic =>
         if (topic.name() == Topic.CLUSTER_METADATA_TOPIC_NAME) {
           topic.setErrorCode(Errors.INVALID_REQUEST.code)
-          topic.setErrorMessage("Internal topic creation is prohibited.")
+          topic.setErrorMessage(s"Creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME} is prohibited.")
         } else if (results.findAll(topic.name).size > 1) {
           topic.setErrorCode(Errors.INVALID_REQUEST.code)
           topic.setErrorMessage("Found multiple entries for this topic.")

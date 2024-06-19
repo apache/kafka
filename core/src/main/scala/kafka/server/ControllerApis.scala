@@ -439,7 +439,7 @@ class ControllerApis(
           response.topics().add(new CreatableTopicResult().
             setName(name).
             setErrorCode(INVALID_REQUEST.code).
-            setErrorMessage("Internal topic creation is prohibited."))
+            setErrorMessage(s"Creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME} is prohibited."))
         } else if (!authorizedTopicNames.contains(name)) {
           response.topics().add(new CreatableTopicResult().
             setName(name).

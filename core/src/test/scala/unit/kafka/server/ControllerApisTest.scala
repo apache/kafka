@@ -685,7 +685,7 @@ class ControllerApisTest {
         setErrorMessage("Authorization failed."),
       new CreatableTopicResult().setName(Topic.CLUSTER_METADATA_TOPIC_NAME).
         setErrorCode(INVALID_REQUEST.code()).
-        setErrorMessage("Internal topic creation is prohibited."))
+        setErrorMessage(s"Creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME} is prohibited."))
     assertEquals(expectedResponse, controllerApis.createTopics(ANONYMOUS_CONTEXT, request,
       hasClusterAuth = false,
       _ => Set("baz", "indescribable"),
