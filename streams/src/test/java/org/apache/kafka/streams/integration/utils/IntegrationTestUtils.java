@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import java.util.Locale;
-import java.util.stream.IntStream;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
 import org.apache.kafka.clients.admin.Admin;
@@ -31,7 +29,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -101,7 +98,6 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -975,7 +971,7 @@ public class IntegrationTestUtils {
 
             while (result.size() < numRecords) {
                 final ConsumerRecords<K, V> polled = consumer.poll(Duration.ofSeconds(5));
-                for (ConsumerRecord<K, V> record : polled) {
+                for (final ConsumerRecord<K, V> record : polled) {
                     result.add(new KeyValue<>(record.key(), record.value()));
                 }
 

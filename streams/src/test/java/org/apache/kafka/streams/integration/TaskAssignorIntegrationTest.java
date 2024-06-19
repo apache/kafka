@@ -127,7 +127,7 @@ public class TaskAssignorIntegrationTest {
     private static final TaskId PARTITION_1_TASK = new TaskId(0, PARTITION_1);
     private static final TaskId POISON_PARTITION_TASK = new TaskId(0, POISON_PARTITION);
 
-    private final static String CONTAINER_CONFIG = "task.assignor.test.container";
+    private static final String CONTAINER_CONFIG = "task.assignor.test.container";
 
     private final Map<String, Object> configMap = new HashMap<>();
 
@@ -300,9 +300,9 @@ public class TaskAssignorIntegrationTest {
 
             waitForStreamsState(kafkaStreams, State.RUNNING);
 
-            assertThat(assignorConfigs.taskAssignorConfigured.get(), is((true)));
-            assertThat(assignorConfigs.taskAssignorReceivedFinalAssignment.get(), is((true)));
-            assertThat(assignorConfigs.taskAssignorErrored.get(), is((false)));
+            assertThat(assignorConfigs.taskAssignorConfigured.get(), is(true));
+            assertThat(assignorConfigs.taskAssignorReceivedFinalAssignment.get(), is(true));
+            assertThat(assignorConfigs.taskAssignorErrored.get(), is(false));
 
             verifyOutputRecordsForInputPartition(String.valueOf(PARTITION_0), 0L);
 
