@@ -386,8 +386,14 @@ public class SharePartitionManager implements AutoCloseable {
         // Initialize the topic partitions for which the fetch should be attempted.
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
         ShareFetchPartitionData shareFetchPartitionData = fetchQueue.poll();
+        if (shareFetchPartitionData == null) {
+            // No more requests to process, so release the lock. Though we should not reach here as the lock
+            // is acquired only when there are requests in the queue. But still, it's safe to release the lock.
+            releaseProcessFetchQueueLock();
+            return;
+        }
+
         try {
-            assert shareFetchPartitionData != null;
             shareFetchPartitionData.topicIdPartitions.forEach(topicIdPartition -> {
                 SharePartitionKey sharePartitionKey = sharePartitionKey(
                     shareFetchPartitionData.groupId,
@@ -400,12 +406,8 @@ public class SharePartitionManager implements AutoCloseable {
                 // Add the share partition to the list of partitions to be fetched only if we can
                 // acquire the fetch lock on it.
                 if (sharePartition.maybeAcquireFetchLock()) {
-                    // Fetching over a topic should be able to proceed if any one of the following 2 conditions are met:
-                    // 1. The fetch is to happen somewhere in between the record states cached in the share partition.
-                    //    This is because in this case we don't need to check for the partition limit for in flight messages
-                    // 2. If condition 1 is not true, then that means we will be fetching new records which haven't been cached before.
-                    //    In this case it is necessary to check if the partition limit for in flight messages has been reached.
-                    if (sharePartition.nextFetchOffset() != (sharePartition.endOffset() + 1) || sharePartition.canFetchRecords()) {
+                    // If the share partition is already at capacity, we should not attempt to fetch.
+                    if (sharePartition.canAcquireRecords()) {
                         topicPartitionData.put(
                             topicIdPartition,
                             new FetchRequest.PartitionData(
@@ -460,11 +462,14 @@ public class SharePartitionManager implements AutoCloseable {
                             }
                             // Releasing the lock to move ahead with the next request in queue.
                             releaseFetchQueueAndPartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
-                            if (!fetchQueue.isEmpty())
-                                maybeProcessFetchQueue();
                         });
                     return BoxedUnit.UNIT;
                 });
+
+            // If there are more requests in the queue, then process them.
+            if (!fetchQueue.isEmpty())
+                maybeProcessFetchQueue();
+
         } catch (Exception e) {
             // In case exception occurs then release the locks so queue can be further processed.
             log.error("Error processing fetch queue for share partitions", e);
@@ -587,6 +592,14 @@ public class SharePartitionManager implements AutoCloseable {
                 SharePartitionKey that = (SharePartitionKey) obj;
                 return groupId.equals(that.groupId) && Objects.equals(topicIdPartition, that.topicIdPartition);
             }
+        }
+
+        @Override
+        public String toString() {
+            return "SharePartitionKey{" +
+                "groupId='" + groupId +
+                ", topicIdPartition=" + topicIdPartition +
+                '}';
         }
     }
 

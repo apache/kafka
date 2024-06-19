@@ -1177,11 +1177,7 @@ public class SharePartitionManagerTest {
 
         SharePartition sp0 = mock(SharePartition.class);
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
-        // Simulating the case where the SharePartition has reached the maximum in-flight records limit, and the
-        // nextFetchOffset points to endOffset + 1
-        when(sp0.nextFetchOffset()).thenReturn((long) 200);
-        when(sp0.canFetchRecords()).thenReturn(false);
-        when(sp0.endOffset()).thenReturn((long) 199);
+        when(sp0.canAcquireRecords()).thenReturn(false);
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp0), sp0);
 
@@ -1190,8 +1186,6 @@ public class SharePartitionManagerTest {
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
             sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, Collections.singletonList(tp0), partitionMaxBytes);
-        // Since the nextFetchOffset points to endOffset + 1, i.e. none of the records in the cachedState are AVAILABLE,
-        // and the maxInFlightMessages limit is exceeded, replicaManager.fetchMessages should not be called
         Mockito.verify(replicaManager, times(0)).fetchMessages(
             any(), any(), any(ReplicaQuota.class), any());
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result = future.join();
@@ -1213,11 +1207,7 @@ public class SharePartitionManagerTest {
 
         SharePartition sp0 = mock(SharePartition.class);
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
-        // Simulating the case where the SharePartition has reached the maximum in-flight records limit, and the
-        // nextFetchOffset does not point to endOffset + 1
-        when(sp0.nextFetchOffset()).thenReturn((long) 100);
-        when(sp0.canFetchRecords()).thenReturn(false);
-        when(sp0.endOffset()).thenReturn((long) 199);
+        when(sp0.canAcquireRecords()).thenReturn(true);
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp0), sp0);
 

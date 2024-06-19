@@ -289,31 +289,31 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testCanFetchRecordsWithEmptyCache() {
+    public void testCanAcquireRecordsWithEmptyCache() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(1).build();
-        assertTrue(sharePartition.canFetchRecords());
+        assertTrue(sharePartition.canAcquireRecords());
     }
 
     @Test
-    public void testCanFetchRecordsWithCachedDataAndLimitNotReached() {
+    public void testCanAcquireRecordsWithCachedDataAndLimitNotReached() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(6).build();
         sharePartition.acquire(
             MEMBER_ID,
             new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
         // Limit not reached as only 6 in-flight messages is the limit.
-        assertTrue(sharePartition.canFetchRecords());
+        assertTrue(sharePartition.canAcquireRecords());
     }
 
     @Test
-    public void testCanFetchRecordsWithCachedDataAndLimitReached() {
+    public void testCanAcquireRecordsWithCachedDataAndLimitReached() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(1).build();
         sharePartition.acquire(
             MEMBER_ID,
             new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
         // Limit reached as only one in-flight message is the limit.
-        assertFalse(sharePartition.canFetchRecords());
+        assertFalse(sharePartition.canAcquireRecords());
     }
 
     @Test
