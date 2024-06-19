@@ -26,6 +26,7 @@ import kafka.test.junit.ZkClusterInvocationContext;
 import kafka.zk.AdminZkClient;
 import kafka.zk.BrokerInfo;
 import kafka.zk.KafkaZkClient;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
@@ -36,6 +37,7 @@ import org.apache.kafka.security.PasswordEncoder;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ZooKeeperInternals;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.platform.commons.util.StringUtils;
