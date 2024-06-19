@@ -97,6 +97,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.singleton;
 import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -933,6 +934,59 @@ public class IntegrationTestUtils {
             });
         }
         return accumData;
+    }
+
+
+    /**
+     * Reads an exact number of key-value records from the given topic and partition starting at the supplied offset,
+     * and verifies that there are no more or less than the expected number of records between
+     * the passed-in starting offset and the end offset of this topic partition
+     *
+     * @param topic            Topic to consume from
+     * @param partition        Partition to consumer from
+     * @param startOffset      Offset at which to begin consuming records
+     * @param numRecords       Exact number of expected records, if more records are found this method will throw
+     * @param consumerConfigs  Kafka Consumer configuration
+     * @return a List of exactly numRecords KeyValue pairs
+     * @throws AssertionError if the number of records in the topic partition between the start offset and end
+     *                        is lower or higher than the supplied numEvents
+     */
+    public static <K, V> List<KeyValue<K, V>> readExactNumRecordsFromOffset(final String topic,
+                                                                            final int partition,
+                                                                            final long startOffset,
+                                                                            final int numRecords,
+                                                                            final Map<String, Object> consumerConfigs) {
+        final long timeoutMs = 30 * 1000L;
+
+        final Map<String, Object> properties = new HashMap<>(consumerConfigs);
+        properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, numRecords * 2);
+
+        final TopicPartition tp = new TopicPartition(topic, partition);
+        try (final KafkaConsumer<K, V> consumer = new KafkaConsumer<>(properties)) {
+            consumer.assign(singleton(tp));
+            consumer.seek(tp, startOffset);
+
+            final long end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+            final List<KeyValue<K, V>> result = new ArrayList<>(numRecords);
+
+            while (result.size() < numRecords) {
+                final ConsumerRecords<K, V> polled = consumer.poll(Duration.ofSeconds(5));
+                for (final ConsumerRecord<K, V> record : polled) {
+                    result.add(new KeyValue<>(record.key(), record.value()));
+                }
+
+                if (result.size() > numRecords) {
+                    throw new AssertionError("Polled more than the expected number of records, received " + result.size());
+                }
+
+                if (System.nanoTime() > end) {
+                    throw new AssertionError(
+                        "Timed out trying to read " + numRecords + " events from " + tp
+                            + ". Read " + result);
+                }
+            }
+            return result;
+        }
     }
 
     @SuppressWarnings("WeakerAccess")
