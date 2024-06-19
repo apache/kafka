@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Collections;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -38,9 +39,8 @@ import java.util.OptionalLong;
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkStreamsAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTaskAssignment;
-import static org.apache.kafka.server.immutable.ImmutableSet.singleton;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkAssignment;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTaskAssignment;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -164,9 +164,9 @@ public class StreamsGroupTest {
 
         member = new StreamsGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setAssignedActiveTasks(mkStreamsAssignment(
+            .setAssignedActiveTasks(mkAssignment(
                 mkTaskAssignment(fooSubtopology, 1, 2, 3)))
-            .setActiveTasksPendingRevocation(mkStreamsAssignment(
+            .setActiveTasksPendingRevocation(mkAssignment(
                 mkTaskAssignment(barSubtopology, 4, 5, 6)))
             .build();
 
@@ -184,9 +184,9 @@ public class StreamsGroupTest {
 
         member = new StreamsGroupMember.Builder(member)
             .setMemberEpoch(11)
-            .setAssignedActiveTasks(mkStreamsAssignment(
+            .setAssignedActiveTasks(mkAssignment(
                 mkTaskAssignment(barSubtopology, 1, 2, 3)))
-            .setActiveTasksPendingRevocation(mkStreamsAssignment(
+            .setActiveTasksPendingRevocation(mkAssignment(
                 mkTaskAssignment(zarSubtopology, 4, 5, 6)))
             .build();
 
@@ -215,7 +215,7 @@ public class StreamsGroupTest {
             .setAssignedActiveTasks(emptyMap())
             .setAssignedStandbyTasks(emptyMap())
             .setAssignedWarmupTasks(emptyMap())
-            .setActiveTasksPendingRevocation(mkStreamsAssignment(
+            .setActiveTasksPendingRevocation(mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 1)))
             .build();
 
@@ -225,7 +225,7 @@ public class StreamsGroupTest {
 
         member = new StreamsGroupMember.Builder(member)
             .setMemberEpoch(11)
-            .setAssignedActiveTasks(mkStreamsAssignment(mkTaskAssignment(fooSubtopologyId, 1)))
+            .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)))
             .setAssignedStandbyTasks(emptyMap())
             .setAssignedWarmupTasks(emptyMap())
             .setActiveTasksPendingRevocation(emptyMap())
@@ -243,7 +243,7 @@ public class StreamsGroupTest {
 
         StreamsGroupMember m1 = new StreamsGroupMember.Builder("m1")
             .setMemberEpoch(10)
-            .setAssignedActiveTasks(mkStreamsAssignment(mkTaskAssignment(fooSubtopologyId, 1)))
+            .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)))
             .setAssignedStandbyTasks(emptyMap())
             .setAssignedWarmupTasks(emptyMap())
             .build();
@@ -252,7 +252,7 @@ public class StreamsGroupTest {
 
         StreamsGroupMember m2 = new StreamsGroupMember.Builder("m2")
             .setMemberEpoch(10)
-            .setAssignedActiveTasks(mkStreamsAssignment(mkTaskAssignment(fooSubtopologyId, 1)))
+            .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)))
             .setAssignedStandbyTasks(emptyMap())
             .setAssignedWarmupTasks(emptyMap())
             .build();
@@ -269,20 +269,20 @@ public class StreamsGroupTest {
 
         // Removing should fail because there is no epoch set.
         assertThrows(IllegalStateException.class, () -> streamsGroup.removeActiveTaskEpochs(
-            mkStreamsAssignment(mkTaskAssignment(fooSubtopologyId, 1)),
+            mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)),
             10
         ));
 
         StreamsGroupMember m1 = new StreamsGroupMember.Builder("m1")
             .setMemberEpoch(10)
-            .setAssignedActiveTasks(mkStreamsAssignment(mkTaskAssignment(fooSubtopologyId, 1)))
+            .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)))
             .build();
 
         streamsGroup.updateMember(m1);
 
         // Removing should fail because the expected epoch is incorrect.
         assertThrows(IllegalStateException.class, () -> streamsGroup.removeActiveTaskEpochs(
-            mkStreamsAssignment(mkTaskAssignment(fooSubtopologyId, 1)),
+            mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)),
             11
         ));
     }
@@ -293,7 +293,7 @@ public class StreamsGroupTest {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 
         streamsGroup.addTaskEpochs(
-            mkStreamsAssignment(mkTaskAssignment(fooSubtopologyId, 1)),
+            mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)),
             emptyMap(),
             emptyMap(),
             10
@@ -302,10 +302,10 @@ public class StreamsGroupTest {
         // Changing the epoch should fail because the owner of the partition
         // should remove it first.
         assertThrows(IllegalStateException.class, () -> streamsGroup.addTaskEpochs(
-                mkStreamsAssignment(mkTaskAssignment(fooSubtopologyId, 1)),
-                emptyMap(),
-                emptyMap(),
-                11
+            mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)),
+            emptyMap(),
+            emptyMap(),
+            11
         ));
     }
 
@@ -320,9 +320,9 @@ public class StreamsGroupTest {
 
         member = new StreamsGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setAssignedActiveTasks(mkStreamsAssignment(
+            .setAssignedActiveTasks(mkAssignment(
                 mkTaskAssignment(fooSubtopology, 1, 2, 3)))
-            .setActiveTasksPendingRevocation(mkStreamsAssignment(
+            .setActiveTasksPendingRevocation(mkAssignment(
                 mkTaskAssignment(barSubtopology, 4, 5, 6)))
             .build();
 
@@ -362,7 +362,7 @@ public class StreamsGroupTest {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         streamsGroup.updateTargetAssignment(memberId1,
             new Assignment(
-                mkStreamsAssignment(
+                mkAssignment(
                     mkTaskAssignment(fooSubtopology, 1, 2, 3),
                     mkTaskAssignment(zarSubtopology, 7, 8, 9)
                 ),
@@ -373,10 +373,10 @@ public class StreamsGroupTest {
         StreamsGroupMember member1 = new StreamsGroupMember.Builder(memberId1)
             .setMemberEpoch(10)
             .setState(MemberState.UNRELEASED_TASKS)
-            .setAssignedActiveTasks(mkStreamsAssignment(
+            .setAssignedActiveTasks(mkAssignment(
                 mkTaskAssignment(fooSubtopology, 1, 2, 3)
             ))
-            .setActiveTasksPendingRevocation(mkStreamsAssignment(
+            .setActiveTasksPendingRevocation(mkAssignment(
                 mkTaskAssignment(barSubtopology, 4, 5, 6)
             ))
             .build();
@@ -386,7 +386,7 @@ public class StreamsGroupTest {
 
         StreamsGroupMember member2 = new StreamsGroupMember.Builder(memberId2)
             .setMemberEpoch(10)
-            .setActiveTasksPendingRevocation(mkStreamsAssignment(
+            .setActiveTasksPendingRevocation(mkAssignment(
                 mkTaskAssignment(zarSubtopology, 7)))
             .build();
         streamsGroup.updateMember(member2);
@@ -478,7 +478,7 @@ public class StreamsGroupTest {
 
         // Initial assignment for member1
         Assignment initialAssignment = new Assignment(
-            mkStreamsAssignment(mkTaskAssignment(subtopologyId, 0)),
+            mkAssignment(mkTaskAssignment(subtopologyId, 0)),
             emptyMap(),
             emptyMap()
         );
@@ -494,7 +494,7 @@ public class StreamsGroupTest {
 
         // New assignment for member1
         Assignment newAssignment = new Assignment(
-            mkStreamsAssignment(mkTaskAssignment(subtopologyId, 1)),
+            mkAssignment(mkTaskAssignment(subtopologyId, 1)),
             emptyMap(),
             emptyMap()
         );
@@ -510,7 +510,7 @@ public class StreamsGroupTest {
 
         // New assignment for member2 to add partition 1
         Assignment newAssignment2 = new Assignment(
-            mkStreamsAssignment(mkTaskAssignment(subtopologyId, 1)),
+            mkAssignment(mkTaskAssignment(subtopologyId, 1)),
             emptyMap(),
             emptyMap()
         );
@@ -526,7 +526,7 @@ public class StreamsGroupTest {
 
         // New assignment for member1 to revoke partition 1 and assign partition 0
         Assignment newAssignment1 = new Assignment(
-            mkStreamsAssignment(mkTaskAssignment(subtopologyId, 0)),
+            mkAssignment(mkTaskAssignment(subtopologyId, 0)),
             emptyMap(),
             emptyMap()
         );
@@ -717,14 +717,14 @@ public class StreamsGroupTest {
         );
         StreamsGroup group = new StreamsGroup(snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.getOrCreateSnapshot(0);
-        assertTrue(group.isInStates(singleton("empty"), 0));
-        assertFalse(group.isInStates(singleton("Empty"), 0));
+        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
+        assertFalse(group.isInStates(Collections.singleton("Empty"), 0));
 
         group.updateMember(new StreamsGroupMember.Builder("member1")
             .build());
         snapshotRegistry.getOrCreateSnapshot(1);
-        assertTrue(group.isInStates(singleton("empty"), 0));
-        assertTrue(group.isInStates(singleton("stable"), 1));
-        assertFalse(group.isInStates(singleton("empty"), 1));
+        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
+        assertTrue(group.isInStates(Collections.singleton("stable"), 1));
+        assertFalse(group.isInStates(Collections.singleton("empty"), 1));
     }
 }

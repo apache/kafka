@@ -20,9 +20,9 @@
   "validVersions": "11",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "5",
+    { "name": "GroupId", "type": "string", "versions": "11",
       "about": "The group id." },
-    { "name": "MemberId", "type": "string", "versions": "5",
+    { "name": "MemberId", "type": "string", "versions": "11",
       "about": "The member id." }
   ]
 }

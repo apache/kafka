@@ -14,11 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group;
+package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.taskassignor.AssignmentMemberSpec;
+import org.apache.kafka.coordinator.group.taskassignor.GroupAssignment;
 
 import java.util.AbstractMap;
 import java.util.Arrays;
@@ -31,40 +30,50 @@ import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class AssignmentTestUtil {
-    public static Map.Entry<Uuid, Set<Integer>> mkTopicAssignment(
-        Uuid topicId,
-        Integer... partitions
+public class TaskAssignmentTestUtil {
+
+    public static Map.Entry<String, Set<Integer>> mkTaskAssignment(
+        String subtopologyId,
+        Integer... tasks
     ) {
         return new AbstractMap.SimpleEntry<>(
-            topicId,
-            new HashSet<>(Arrays.asList(partitions))
+            subtopologyId,
+            new HashSet<>(Arrays.asList(tasks))
         );
     }
 
-    public static Map.Entry<Uuid, Set<Integer>> mkSortedTopicAssignment(
-        Uuid topicId,
-        Integer... partitions
+    public static Map.Entry<String, Set<Integer>> mkSortedTaskAssignment(
+        String subtopologyId,
+        Integer... tasks
     ) {
         return new AbstractMap.SimpleEntry<>(
-            topicId,
-            new TreeSet<>(Arrays.asList(partitions))
+            subtopologyId,
+            new TreeSet<>(Arrays.asList(tasks))
         );
     }
 
     @SafeVarargs
-    public static Map<Uuid, Set<Integer>> mkAssignment(Map.Entry<Uuid, Set<Integer>>... entries) {
-        Map<Uuid, Set<Integer>> assignment = new HashMap<>();
-        for (Map.Entry<Uuid, Set<Integer>> entry : entries) {
+    public static Map<String, Set<Integer>> mkAssignment(Map.Entry<String, Set<Integer>>... entries) {
+        Map<String, Set<Integer>> assignment = new HashMap<>();
+        for (Map.Entry<String, Set<Integer>> entry : entries) {
             assignment.put(entry.getKey(), entry.getValue());
         }
         return assignment;
     }
 
     @SafeVarargs
-    public static Map<Uuid, Set<Integer>> mkSortedAssignment(Map.Entry<Uuid, Set<Integer>>... entries) {
-        Map<Uuid, Set<Integer>> assignment = new LinkedHashMap<>();
-        for (Map.Entry<Uuid, Set<Integer>> entry : entries) {
+    public static Map<String, Set<Integer>> mkSortedAssignment(Map.Entry<String, Set<Integer>>... entries) {
+        Map<String, Set<Integer>> assignment = new LinkedHashMap<>();
+        for (Map.Entry<String, Set<Integer>> entry : entries) {
+            assignment.put(entry.getKey(), entry.getValue());
+        }
+        return assignment;
+    }
+
+    @SafeVarargs
+    public static Map<String, Set<Integer>> mkStreamsAssignment(Map.Entry<String, Set<Integer>>... entries) {
+        Map<String, Set<Integer>> assignment = new HashMap<>();
+        for (Map.Entry<String, Set<Integer>> entry : entries) {
             assignment.put(entry.getKey(), entry.getValue());
         }
         return assignment;
@@ -74,12 +83,12 @@ public class AssignmentTestUtil {
      * Verifies that the expected assignment is equal to the computed assignment for every member in the group.
      */
     public static void assertAssignment(
-        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment,
+        Map<String, Map<String, Set<Integer>>> expectedAssignment,
         GroupAssignment computedGroupAssignment
     ) {
         assertEquals(expectedAssignment.size(), computedGroupAssignment.members().size());
         computedGroupAssignment.members().forEach((memberId, memberAssignment) -> {
-            Map<Uuid, Set<Integer>> computedAssignmentForMember = memberAssignment.targetPartitions();
+            Map<String, Set<Integer>> computedAssignmentForMember = memberAssignment.activeTasks();
             assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
         });
     }
@@ -87,25 +96,25 @@ public class AssignmentTestUtil {
     /**
      * Generate a reverse look up map of partition to member target assignments from the given member spec.
      *
-     * @param memberSpec        A map where the key is the member Id and the value is an
-     *                          AssignmentMemberSpec object containing the member's partition assignments.
+     * @param memberSpec A map where the key is the member Id and the value is an AssignmentMemberSpec object containing the member's
+     *                   partition assignments.
      * @return Map of topic partition to member assignments.
      */
-    public static Map<Uuid, Map<Integer, String>> invertedTargetAssignment(
+    public static Map<String, Map<Integer, String>> invertedTargetAssignment(
         Map<String, AssignmentMemberSpec> memberSpec
     ) {
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
+        Map<String, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
         for (Map.Entry<String, AssignmentMemberSpec> memberEntry : memberSpec.entrySet()) {
             String memberId = memberEntry.getKey();
-            Map<Uuid, Set<Integer>> topicsAndPartitions = memberEntry.getValue().assignedPartitions();
+            Map<String, Set<Integer>> topicsAndTasks = memberEntry.getValue().activeTasks();
 
-            for (Map.Entry<Uuid, Set<Integer>> topicEntry : topicsAndPartitions.entrySet()) {
-                Uuid topicId = topicEntry.getKey();
-                Set<Integer> partitions = topicEntry.getValue();
+            for (Map.Entry<String, Set<Integer>> topicEntry : topicsAndTasks.entrySet()) {
+                String subtopologyId = topicEntry.getKey();
+                Set<Integer> tasks = topicEntry.getValue();
 
-                Map<Integer, String> partitionMap = invertedTargetAssignment.computeIfAbsent(topicId, k -> new HashMap<>());
+                Map<Integer, String> partitionMap = invertedTargetAssignment.computeIfAbsent(subtopologyId, k -> new HashMap<>());
 
-                for (Integer partitionId : partitions) {
+                for (Integer partitionId : tasks) {
                     partitionMap.put(partitionId, memberId);
                 }
             }
