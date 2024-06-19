@@ -46,7 +46,7 @@ public final class MessageUtilTest {
         assertEquals("[1, 2, 3]",
             MessageUtil.deepToString(Arrays.asList(1, 2, 3).iterator()));
         assertEquals("[foo]",
-            MessageUtil.deepToString(Arrays.asList("foo").iterator()));
+            MessageUtil.deepToString(Collections.singletonList("foo").iterator()));
     }
 
     @Test

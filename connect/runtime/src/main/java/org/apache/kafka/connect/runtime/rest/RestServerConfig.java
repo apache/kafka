@@ -207,7 +207,7 @@ public abstract class RestServerConfig extends AbstractConfig {
                 ).define(
                         BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
                         ConfigDef.Type.STRING,
-                        SslClientAuth.NONE.toString(),
+                        BrokerSecurityConfigs.SSL_CLIENT_AUTH_DEFAULT,
                         in(Utils.enumOptions(SslClientAuth.class)),
                         ConfigDef.Importance.LOW,
                         BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC);

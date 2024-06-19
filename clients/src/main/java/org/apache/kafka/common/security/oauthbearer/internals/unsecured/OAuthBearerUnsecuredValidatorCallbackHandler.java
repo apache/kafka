@@ -117,9 +117,8 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
             throw new IllegalArgumentException(
                     String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)",
                             jaasConfigEntries.size()));
-        final Map<String, String> unmodifiableModuleOptions = Collections
+        this.moduleOptions = Collections
                 .unmodifiableMap((Map<String, String>) jaasConfigEntries.get(0).getOptions());
-        this.moduleOptions = unmodifiableModuleOptions;
         configured = true;
     }
 

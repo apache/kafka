@@ -73,6 +73,7 @@ import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
@@ -634,6 +635,7 @@ public class WorkerTest {
                 Collections.singletonMap(TASK_ID, origProps),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -689,6 +691,7 @@ public class WorkerTest {
                 Collections.singletonMap(TASK_ID, origProps),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -759,6 +762,7 @@ public class WorkerTest {
                 Collections.singletonMap(TASK_ID, origProps),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -2602,7 +2606,7 @@ public class WorkerTest {
         Map<String, String> taskConfig = new HashMap<>();
 
         // No warnings or exceptions when a connector generates an empty list of task configs
-        when(sourceConnector.taskConfigs(1)).thenReturn(Arrays.asList());
+        when(sourceConnector.taskConfigs(1)).thenReturn(Collections.emptyList());
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Worker.class)) {
             connectorProps.put(TASKS_MAX_CONFIG, "1");
             List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, new ConnectorConfig(plugins, connectorProps));
@@ -2611,7 +2615,7 @@ public class WorkerTest {
         }
 
         // No warnings or exceptions when a connector generates the maximum permitted number of task configs
-        when(sourceConnector.taskConfigs(1)).thenReturn(Arrays.asList(taskConfig));
+        when(sourceConnector.taskConfigs(1)).thenReturn(Collections.singletonList(taskConfig));
         when(sourceConnector.taskConfigs(2)).thenReturn(Arrays.asList(taskConfig, taskConfig));
         when(sourceConnector.taskConfigs(3)).thenReturn(Arrays.asList(taskConfig, taskConfig, taskConfig));
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Worker.class)) {
@@ -2672,7 +2676,7 @@ public class WorkerTest {
         }
 
         // One last sanity check in case the connector is reconfigured and respects tasks.max
-        when(sourceConnector.taskConfigs(1)).thenReturn(Arrays.asList(taskConfig));
+        when(sourceConnector.taskConfigs(1)).thenReturn(Collections.singletonList(taskConfig));
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Worker.class)) {
             connectorProps.put(TASKS_MAX_CONFIG, "1");
             List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, new ConnectorConfig(plugins, connectorProps));
@@ -2728,6 +2732,7 @@ public class WorkerTest {
                 Collections.singletonMap(TASK_ID, origProps),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(connName, new AppliedConnectorConfig(connectorConfigs)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );

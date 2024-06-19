@@ -421,8 +421,8 @@ public class ConfigCommandTest {
     public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String...args) {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
         createOpts.checkArgs();
-        assertEquals(createOpts.entityTypes().toSeq(), ConfigCommandIntegrationTest.seq(expectedTypes));
-        assertEquals(createOpts.entityNames().toSeq(), ConfigCommandIntegrationTest.seq(expectedNames));
+        assertEquals(createOpts.entityTypes().toSeq(), seq(expectedTypes));
+        assertEquals(createOpts.entityNames().toSeq(), seq(expectedNames));
     }
 
     public void doTestOptionEntityTypeNames(boolean zkConfig) {
@@ -1710,7 +1710,7 @@ public class ConfigCommandTest {
     public void checkEntities(List<String> opts, Map<String, List<String>> expectedFetches, List<String> expectedEntityNames) {
         ConfigCommand.ConfigEntity entity = ConfigCommand.parseEntity(new ConfigCommand.ConfigCommandOptions(toArray(opts, Collections.singletonList("--describe"))));
         expectedFetches.forEach((name, values) ->
-            when(zkClient.getAllEntitiesWithConfig(name)).thenReturn(ConfigCommandIntegrationTest.seq(values)));
+            when(zkClient.getAllEntitiesWithConfig(name)).thenReturn(seq(values)));
         Seq<ConfigCommand.ConfigEntity> entities0 = entity.getAllEntities(zkClient);
         List<ConfigCommand.ConfigEntity> entities = new ArrayList<>();
         entities0.foreach(e -> {
@@ -1995,5 +1995,10 @@ public class ConfigCommandTest {
         public AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options) {
             return mock(AlterClientQuotasResult.class);
         }
+    }
+
+    @SuppressWarnings({"deprecation"})
+    private <T> Seq<T> seq(Collection<T> seq) {
+        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
     }
 }

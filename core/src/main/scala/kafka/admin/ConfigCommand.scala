@@ -19,7 +19,7 @@ package kafka.admin
 
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 import joptsimple._
 import kafka.server.{DynamicBrokerConfig, DynamicConfig, KafkaConfig}
 import kafka.utils.Implicits._
@@ -210,15 +210,19 @@ object ConfigCommand extends Logging {
     }
   }
 
-  def createPasswordEncoder(encoderConfigs: Map[String, String]): PasswordEncoder = {
-    encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG)
-    val encoderSecret = encoderConfigs.getOrElse(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG,
-      throw new IllegalArgumentException("Password encoder secret not specified"))
+  def createPasswordEncoder(encoderConfigs: java.util.Map[String, String]): PasswordEncoder = {
+    val encoderSecret = Optional.ofNullable(encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG))
+      .orElseThrow(() => new IllegalArgumentException("Password encoder secret not specified"))
     PasswordEncoder.encrypting(new Password(encoderSecret),
       null,
-      encoderConfigs.getOrElse(PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG, PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT),
-      encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_CONFIG).map(_.toInt).getOrElse(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_DEFAULT),
-      encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG).map(_.toInt).getOrElse(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_DEFAULT))
+      encoderConfigs.getOrDefault(PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG, PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT),
+      Optional.ofNullable(encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_CONFIG))
+        .map[Int](Integer.parseInt)
+        .orElse(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_DEFAULT),
+      Optional.ofNullable(encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG))
+        .map[Int](Integer.parseInt)
+        .orElse(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_DEFAULT)
+    )
   }
 
   /**
@@ -244,8 +248,11 @@ object ConfigCommand extends Logging {
           " to override the default encoding parameters. Password encoder configs will not be persisted" +
           " in ZooKeeper."
       )
-
-      val passwordEncoder = createPasswordEncoder(passwordEncoderConfigs.asScala)
+      val passwordConfigsMap = new java.util.HashMap[String, String]
+      passwordEncoderConfigs.forEach { (key, value) =>
+        passwordConfigsMap.put(key.toString, value.toString)
+      }
+      val passwordEncoder = createPasswordEncoder(passwordConfigsMap)
       passwordConfigs.foreach { configName =>
         val encodedValue = passwordEncoder.encode(new Password(configsToBeAdded.getProperty(configName)))
         configsToBeAdded.setProperty(configName, encodedValue)

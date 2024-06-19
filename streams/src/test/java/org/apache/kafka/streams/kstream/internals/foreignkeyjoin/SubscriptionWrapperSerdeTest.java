@@ -21,12 +21,12 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.internals.Murmur3;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class SubscriptionWrapperSerdeTest {
@@ -246,16 +246,16 @@ public class SubscriptionWrapperSerdeTest {
         assertThrows(NullPointerException.class, () -> swSerde.serializer().serialize(null, wrapper));
     }
 
-    @Test (expected = UnsupportedVersionException.class)
+    @Test
     public void shouldThrowExceptionOnUnsupportedVersionTest() {
         final String originalKey = "originalKey";
         final long[] hashedValue = null;
         final Integer primaryPartition = 10;
-        new SubscriptionWrapper<>(
+        assertThrows(UnsupportedVersionException.class, () -> new SubscriptionWrapper<>(
             hashedValue,
             SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
             originalKey,
             (byte) 0x80,
-            primaryPartition);
+            primaryPartition));
     }
 }

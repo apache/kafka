@@ -19,14 +19,15 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.errors.AuthorizationException;
+
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,12 +43,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -156,6 +157,31 @@ public class ProducerPerformanceTest {
     }
 
     @Test
+    public void testMutuallyExclusiveGroup() {
+        String[] args1 = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--payload-monotonic",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        ArgumentParser parser1 = ProducerPerformance.argParser();
+        ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () ->  parser1.parseArgs(args1));
+        assertEquals("argument --payload-monotonic: not allowed with argument --record-size", thrown.getMessage());
+
+        String[] args2 = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--payload-file",  "abc.txt",
+            "--payload-monotonic",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        ArgumentParser parser2 = ProducerPerformance.argParser();
+        thrown = assertThrows(ArgumentParserException.class, () -> parser2.parseArgs(args2));
+        assertEquals("argument --payload-monotonic: not allowed with argument --payload-file", thrown.getMessage());
+    }
+
+    @Test
     public void testUnexpectedArg() {
         String[] args = new String[] {
             "--test", "test", 
@@ -170,6 +196,18 @@ public class ProducerPerformanceTest {
     }
 
     @Test
+    public void testFractionalThroughput() {
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "1.25",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        ArgumentParser parser = ProducerPerformance.argParser();
+        assertDoesNotThrow(() -> parser.parseArgs(args));
+    }
+
+    @Test
     public void testGenerateRandomPayloadByPayloadFile() {
         Integer recordSize = null;
         String inputString = "Hello Kafka";
@@ -179,7 +217,7 @@ public class ProducerPerformanceTest {
         byte[] payload = null;
         SplittableRandom random = new SplittableRandom(0);
 
-        payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random);
+        payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random, false, 0L);
         assertEquals(inputString, new String(payload));
     }
 
@@ -190,9 +228,22 @@ public class ProducerPerformanceTest {
         List<byte[]> payloadByteList = new ArrayList<>();
         SplittableRandom random = new SplittableRandom(0);
 
-        payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random);
+        payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random, false, 0L);
         for (byte b : payload) {
             assertNotEquals(0, b);
+        }
+    }
+
+    @Test
+    public void testGenerateMonotonicPayload() {
+        byte[] payload = null;
+        List<byte[]> payloadByteList = new ArrayList<>();
+        SplittableRandom random = new SplittableRandom(0);
+
+        for (int i = 0; i < 10; i++) {
+            payload = ProducerPerformance.generateRandomPayload(null, payloadByteList, payload, random, true, i);
+            assertEquals(1, payload.length);
+            assertEquals(i + '0', payload[0]);
         }
     }
 
@@ -203,8 +254,8 @@ public class ProducerPerformanceTest {
         List<byte[]> payloadByteList = new ArrayList<>();
         SplittableRandom random = new SplittableRandom(0);
 
-        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random));
-        assertEquals("no payload File Path or record Size provided", thrown.getMessage());
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random, false, 0L));
+        assertEquals("no payload File Path or record Size or payload-monotonic option provided", thrown.getMessage());
     }
 
     @Test

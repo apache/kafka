@@ -121,9 +121,9 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
         Map<TopicPartition, Throwable> failed,
         Function<TopicPartition, Throwable> exceptionGenerator
     ) {
-        partitions.stream().filter(tp -> tp.topic().equals(topic)).forEach(tp -> {
-            failed.put(tp, exceptionGenerator.apply(tp));
-        });
+        partitions.stream().filter(tp -> tp.topic().equals(topic)).forEach(tp ->
+            failed.put(tp, exceptionGenerator.apply(tp))
+        );
     }
 
     private void handlePartitionError(

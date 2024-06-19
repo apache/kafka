@@ -19,6 +19,7 @@ package kafka.test;
 
 import kafka.test.annotation.Type;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.io.File;
@@ -58,13 +59,15 @@ public class ClusterConfig {
     private final Map<String, String> saslClientProperties;
     private final List<String> tags;
     private final Map<Integer, Map<String, String>> perServerProperties;
+    private final Map<Features, Short> features;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     private ClusterConfig(Set<Type> types, int brokers, int controllers, int disksPerBroker, boolean autoStart,
                   SecurityProtocol securityProtocol, String listenerName, File trustStoreFile,
                   MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
                   Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
-                  Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties, List<String> tags) {
+                  Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties, List<String> tags,
+                  Map<Features, Short> features) {
         // do fail fast. the following values are invalid for both zk and kraft modes.
         if (brokers < 0) throw new IllegalArgumentException("Number of brokers must be greater or equal to zero.");
         if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
@@ -87,6 +90,7 @@ public class ClusterConfig {
         this.saslClientProperties = Objects.requireNonNull(saslClientProperties);
         this.perServerProperties = Objects.requireNonNull(perServerProperties);
         this.tags = Objects.requireNonNull(tags);
+        this.features = Objects.requireNonNull(features);
     }
 
     public Set<Type> clusterTypes() {
@@ -157,6 +161,10 @@ public class ClusterConfig {
         return tags;
     }
 
+    public Map<Features, Short> features() {
+        return features;
+    }
+
     public Set<String> displayTags() {
         Set<String> displayTags = new LinkedHashSet<>(tags);
         displayTags.add("MetadataVersion=" + metadataVersion);
@@ -198,7 +206,8 @@ public class ClusterConfig {
                 .setSaslServerProperties(clusterConfig.saslServerProperties)
                 .setSaslClientProperties(clusterConfig.saslClientProperties)
                 .setPerServerProperties(clusterConfig.perServerProperties)
-                .setTags(clusterConfig.tags);
+                .setTags(clusterConfig.tags)
+                .setFeatures(clusterConfig.features);
     }
 
     public static class Builder {
@@ -219,6 +228,7 @@ public class ClusterConfig {
         private Map<String, String> saslClientProperties = Collections.emptyMap();
         private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
         private List<String> tags = Collections.emptyList();
+        private Map<Features, Short> features = Collections.emptyMap();
 
         private Builder() {}
 
@@ -309,11 +319,16 @@ public class ClusterConfig {
             return this;
         }
 
+        public Builder setFeatures(Map<Features, Short> features) {
+            this.features = Collections.unmodifiableMap(features);
+            return this;
+        }
+
         public ClusterConfig build() {
             return new ClusterConfig(types, brokers, controllers, disksPerBroker, autoStart, securityProtocol, listenerName,
                     trustStoreFile, metadataVersion, serverProperties, producerProperties, consumerProperties,
                     adminClientProperties, saslServerProperties, saslClientProperties,
-                    perServerProperties, tags);
+                    perServerProperties, tags, features);
         }
     }
 }

@@ -65,25 +65,25 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Timeout(600)
 @Tag("integration")
 public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
-    private final static int NUM_BROKERS = 1;
+    private static final int NUM_BROKERS = 1;
 
-    public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
-    private final static MockTime MOCK_TIME = CLUSTER.time;
-    private final static String TABLE_1 = "table1";
-    private final static String TABLE_2 = "table2";
-    private final static String TABLE_3 = "table3";
-    private final static String OUTPUT = "output-";
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private static final MockTime MOCK_TIME = CLUSTER.time;
+    private static final String TABLE_1 = "table1";
+    private static final String TABLE_2 = "table2";
+    private static final String TABLE_3 = "table3";
+    private static final String OUTPUT = "output-";
     private final Properties streamsConfig = getStreamsConfig();
     private final Properties streamsConfigTwo = getStreamsConfig();
     private final Properties streamsConfigThree = getStreamsConfig();
     private KafkaStreams streams;
     private KafkaStreams streamsTwo;
     private KafkaStreams streamsThree;
-    private final static Properties CONSUMER_CONFIG = new Properties();
+    private static final Properties CONSUMER_CONFIG = new Properties();
 
-    private final static Properties PRODUCER_CONFIG_1 = new Properties();
-    private final static Properties PRODUCER_CONFIG_2 = new Properties();
-    private final static Properties PRODUCER_CONFIG_3 = new Properties();
+    private static final Properties PRODUCER_CONFIG_1 = new Properties();
+    private static final Properties PRODUCER_CONFIG_2 = new Properties();
+    private static final Properties PRODUCER_CONFIG_3 = new Properties();
 
     @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {

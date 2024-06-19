@@ -43,13 +43,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class ClientQuotasImageTest {
-    public final static ClientQuotasImage IMAGE1;
+    public static final ClientQuotasImage IMAGE1;
 
-    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
 
-    final static ClientQuotasDelta DELTA1;
+    static final ClientQuotasDelta DELTA1;
 
-    final static ClientQuotasImage IMAGE2;
+    static final ClientQuotasImage IMAGE2;
 
     static {
         Map<ClientQuotaEntity, ClientQuotaImage> entities1 = new HashMap<>();
@@ -73,13 +73,13 @@ public class ClientQuotasImageTest {
                 setRemove(true), CLIENT_QUOTA_RECORD.highestSupportedVersion()));
         // alter quota
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ClientQuotaRecord().
-            setEntity(Arrays.asList(
+            setEntity(Collections.singletonList(
                 new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("foo"))).
             setKey(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG).
             setValue(234.0), CLIENT_QUOTA_RECORD.highestSupportedVersion()));
         // add quota to entity with existing quota
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ClientQuotaRecord().
-            setEntity(Arrays.asList(
+            setEntity(Collections.singletonList(
                 new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("foo"))).
             setKey(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG).
             setValue(999.0), CLIENT_QUOTA_RECORD.highestSupportedVersion()));

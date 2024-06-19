@@ -72,7 +72,7 @@ public class ConnectRestServerTest {
     @Mock private Plugins plugins;
     private ConnectRestServer server;
     private CloseableHttpClient httpClient;
-    private Collection<CloseableHttpResponse> responses = new ArrayList<>();
+    private final Collection<CloseableHttpResponse> responses = new ArrayList<>();
 
     protected static final String KAFKA_CLUSTER_ID = "Xbafgnagvar";
 

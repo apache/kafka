@@ -84,24 +84,24 @@ import static org.mockito.Mockito.when;
 
 class DefaultStateUpdaterTest {
 
-    private final static int COMMIT_INTERVAL = 100;
-    private final static long CALL_TIMEOUT = 1000;
-    private final static long VERIFICATION_TIMEOUT = 30000;
-    private final static TopicPartition TOPIC_PARTITION_A_0 = new TopicPartition("topicA", 0);
-    private final static TopicPartition TOPIC_PARTITION_A_1 = new TopicPartition("topicA", 1);
-    private final static TopicPartition TOPIC_PARTITION_B_0 = new TopicPartition("topicB", 0);
-    private final static TopicPartition TOPIC_PARTITION_B_1 = new TopicPartition("topicB", 1);
-    private final static TopicPartition TOPIC_PARTITION_C_0 = new TopicPartition("topicC", 0);
-    private final static TopicPartition TOPIC_PARTITION_D_0 = new TopicPartition("topicD", 0);
-    private final static TaskId TASK_0_0 = new TaskId(0, 0);
-    private final static TaskId TASK_0_1 = new TaskId(0, 1);
-    private final static TaskId TASK_0_2 = new TaskId(0, 2);
-    private final static TaskId TASK_1_0 = new TaskId(1, 0);
-    private final static TaskId TASK_1_1 = new TaskId(1, 1);
-    private final static TaskId TASK_A_0_0 = new TaskId(0, 0, "A");
-    private final static TaskId TASK_A_0_1 = new TaskId(0, 1, "A");
-    private final static TaskId TASK_B_0_0 = new TaskId(0, 0, "B");
-    private final static TaskId TASK_B_0_1 = new TaskId(0, 1, "B");
+    private static final int COMMIT_INTERVAL = 100;
+    private static final long CALL_TIMEOUT = 1000;
+    private static final long VERIFICATION_TIMEOUT = 30000;
+    private static final TopicPartition TOPIC_PARTITION_A_0 = new TopicPartition("topicA", 0);
+    private static final TopicPartition TOPIC_PARTITION_A_1 = new TopicPartition("topicA", 1);
+    private static final TopicPartition TOPIC_PARTITION_B_0 = new TopicPartition("topicB", 0);
+    private static final TopicPartition TOPIC_PARTITION_B_1 = new TopicPartition("topicB", 1);
+    private static final TopicPartition TOPIC_PARTITION_C_0 = new TopicPartition("topicC", 0);
+    private static final TopicPartition TOPIC_PARTITION_D_0 = new TopicPartition("topicD", 0);
+    private static final TaskId TASK_0_0 = new TaskId(0, 0);
+    private static final TaskId TASK_0_1 = new TaskId(0, 1);
+    private static final TaskId TASK_0_2 = new TaskId(0, 2);
+    private static final TaskId TASK_1_0 = new TaskId(1, 0);
+    private static final TaskId TASK_1_1 = new TaskId(1, 1);
+    private static final TaskId TASK_A_0_0 = new TaskId(0, 0, "A");
+    private static final TaskId TASK_A_0_1 = new TaskId(0, 1, "A");
+    private static final TaskId TASK_B_0_0 = new TaskId(0, 0, "B");
+    private static final TaskId TASK_B_0_1 = new TaskId(0, 1, "B");
 
     // need an auto-tick timer to work for draining with timeout
     private final Time time = new MockTime(1L);

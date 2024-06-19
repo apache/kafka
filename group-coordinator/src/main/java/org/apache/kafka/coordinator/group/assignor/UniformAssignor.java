@@ -16,12 +16,18 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
-import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 
 /**
  * The Uniform Assignor distributes topic partitions among group members for a
@@ -30,21 +36,21 @@ import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOG
  * subscriptions across the group members:
  * <ul>
  *     <li>
- *         <b> Optimized Uniform Assignment Builder: </b> This strategy is used when all members have subscribed
+ *         <b> Uniform Homogeneous Assignment Builder: </b> This strategy is used when all members have subscribed
  *         to the same set of topics.
  *     </li>
  *     <li>
- *         <b> General Uniform Assignment Builder: </b> This strategy is used when members have varied topic
+ *         <b> Uniform Heterogeneous Assignment Builder: </b> This strategy is used when members have varied topic
  *         subscriptions.
  *     </li>
  * </ul>
  *
  * The appropriate strategy is automatically chosen based on the current members' topic subscriptions.
  *
- * @see OptimizedUniformAssignmentBuilder
- * @see GeneralUniformAssignmentBuilder
+ * @see UniformHomogeneousAssignmentBuilder
+ * @see UniformHeterogeneousAssignmentBuilder
  */
-public class UniformAssignor implements PartitionAssignor {
+public class UniformAssignor implements ConsumerGroupPartitionAssignor {
     private static final Logger LOG = LoggerFactory.getLogger(UniformAssignor.class);
     public static final String UNIFORM_ASSIGNOR_NAME = "uniform";
 
@@ -66,21 +72,19 @@ public class UniformAssignor implements PartitionAssignor {
         GroupSpec groupSpec,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
-        AbstractUniformAssignmentBuilder assignmentBuilder;
-
-        if (groupSpec.members().isEmpty())
+        if (groupSpec.memberIds().isEmpty())
             return new GroupAssignment(Collections.emptyMap());
 
         if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
             LOG.debug("Detected that all members are subscribed to the same set of topics, invoking the "
-                + "optimized assignment algorithm");
-            assignmentBuilder = new OptimizedUniformAssignmentBuilder(groupSpec, subscribedTopicDescriber);
+                + "homogeneous assignment algorithm");
+            return new UniformHomogeneousAssignmentBuilder(groupSpec, subscribedTopicDescriber)
+                .build();
         } else {
             LOG.debug("Detected that the members are subscribed to different sets of topics, invoking the "
-                + "general assignment algorithm");
-            assignmentBuilder = new GeneralUniformAssignmentBuilder(groupSpec, subscribedTopicDescriber);
+                + "heterogeneous assignment algorithm");
+            return new UniformHeterogeneousAssignmentBuilder(groupSpec, subscribedTopicDescriber)
+                .build();
         }
-
-        return assignmentBuilder.buildAssignment();
     }
 }

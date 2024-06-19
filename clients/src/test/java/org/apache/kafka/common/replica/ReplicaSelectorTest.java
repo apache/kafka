@@ -50,9 +50,9 @@ public class ReplicaSelectorTest {
         });
 
         selected = selector.select(tp, metadata("not-a-rack"), partitionView);
-        assertOptional(selected, replicaInfo -> {
-            assertEquals(replicaInfo, leader, "Expect leader when we can't find any nodes in given rack");
-        });
+        assertOptional(selected, replicaInfo ->
+            assertEquals(replicaInfo, leader, "Expect leader when we can't find any nodes in given rack")
+        );
 
         selected = selector.select(tp, metadata("rack-a"), partitionView);
         assertOptional(selected, replicaInfo -> {

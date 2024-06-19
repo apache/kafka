@@ -324,7 +324,7 @@ public class ConnectorConfig extends AbstractConfig {
                     @SuppressWarnings("unchecked")
                     Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
-                    transformations.add(new TransformationStage<>(predicate, negate == null ? false : Boolean.parseBoolean(negate.toString()), transformation));
+                    transformations.add(new TransformationStage<>(predicate, negate != null && Boolean.parseBoolean(negate.toString()), transformation));
                 } else {
                     transformations.add(new TransformationStage<>(transformation));
                 }
@@ -419,7 +419,7 @@ public class ConnectorConfig extends AbstractConfig {
      * The abstract method pattern is used to cope with this.
      * @param <T> The type of plugin (either {@code Transformation} or {@code Predicate}).
      */
-    static abstract class EnrichablePlugin<T> {
+    abstract static class EnrichablePlugin<T> {
 
         private final String aliasKind;
         private final String aliasConfig;

@@ -157,6 +157,10 @@ public class StateStoreMetrics {
     private static final String ITERATOR_DURATION_MAX_DESCRIPTION =
             MAX_DESCRIPTION_PREFIX + ITERATOR_DURATION_DESCRIPTION;
 
+    private static final String OLDEST_ITERATOR_OPEN_SINCE_MS = "oldest-iterator-open-since-ms";
+    private static final String OLDEST_ITERATOR_OPEN_SINCE_MS_DESCRIPTION =
+            "The UNIX timestamp the oldest still open iterator was created, in milliseconds";
+
     public static Sensor putSensor(final String taskId,
                                    final String storeType,
                                    final String storeName,
@@ -449,6 +453,22 @@ public class StateStoreMetrics {
                 numOpenIteratorsGauge
         );
 
+    }
+
+    public static void addOldestOpenIteratorGauge(final String taskId,
+                                                  final String storeType,
+                                                  final String storeName,
+                                                  final StreamsMetricsImpl streamsMetrics,
+                                                  final Gauge<Long> oldestOpenIteratorGauge) {
+        streamsMetrics.addStoreLevelMutableMetric(
+                taskId,
+                storeType,
+                storeName,
+                OLDEST_ITERATOR_OPEN_SINCE_MS,
+                OLDEST_ITERATOR_OPEN_SINCE_MS_DESCRIPTION,
+                RecordingLevel.INFO,
+                oldestOpenIteratorGauge
+        );
     }
 
     private static Sensor sizeOrCountSensor(final String taskId,

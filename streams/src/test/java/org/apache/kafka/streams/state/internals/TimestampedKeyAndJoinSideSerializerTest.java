@@ -34,7 +34,7 @@ public class TimestampedKeyAndJoinSideSerializerTest {
     public void shouldSerializeKeyWithJoinSideAsTrue() {
         final String value = "some-string";
 
-        final TimestampedKeyAndJoinSide<String> timestampedKeyAndJoinSide = TimestampedKeyAndJoinSide.make(true, value, 10);
+        final TimestampedKeyAndJoinSide<String> timestampedKeyAndJoinSide = TimestampedKeyAndJoinSide.makeLeft(value, 10);
 
         final byte[] serialized =
             STRING_SERDE.serializer().serialize(TOPIC, timestampedKeyAndJoinSide);
@@ -51,7 +51,7 @@ public class TimestampedKeyAndJoinSideSerializerTest {
     public void shouldSerializeKeyWithJoinSideAsFalse() {
         final String value = "some-string";
 
-        final TimestampedKeyAndJoinSide<String> timestampedKeyAndJoinSide = TimestampedKeyAndJoinSide.make(false, value, 20);
+        final TimestampedKeyAndJoinSide<String> timestampedKeyAndJoinSide = TimestampedKeyAndJoinSide.makeRight(value, 20);
 
         final byte[] serialized =
             STRING_SERDE.serializer().serialize(TOPIC, timestampedKeyAndJoinSide);
@@ -67,6 +67,6 @@ public class TimestampedKeyAndJoinSideSerializerTest {
     @Test
     public void shouldThrowIfSerializeNullData() {
         assertThrows(NullPointerException.class,
-            () -> STRING_SERDE.serializer().serialize(TOPIC, TimestampedKeyAndJoinSide.make(true, null, 0)));
+            () -> STRING_SERDE.serializer().serialize(TOPIC, TimestampedKeyAndJoinSide.makeLeft(null, 0)));
     }
 }

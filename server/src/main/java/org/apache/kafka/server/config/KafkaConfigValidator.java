@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordVersion;
@@ -38,9 +39,9 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_2_1_IV0;
 
 public class KafkaConfigValidator {
-    KafkaConfig config;
+    AbstractKafkaConfig config;
     Logger log;
-    public KafkaConfigValidator(KafkaConfig config, Logger log) {
+    public KafkaConfigValidator(AbstractKafkaConfig config, Logger log) {
         this.config = config;
         this.log = log;
     }
@@ -78,7 +79,7 @@ public class KafkaConfigValidator {
 
         Utils.require(!advertisedListenerNames.isEmpty(),
                 "There must be at least one advertised listener." + (
-                        config.processRoles.contains(ProcessRole.BrokerRole) ?
+                        config.processRoles().contains(ProcessRole.BrokerRole) ?
                                 String.format(" Perhaps all listeners appear in %s?", KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG) :
                                 ""));
     }
@@ -189,7 +190,8 @@ public class KafkaConfigValidator {
         Set<ListenerName> listenerNames = config.extractListenerNames(config.listeners());
         Set<ListenerName> advertisedListenerNames = config.extractListenerNames(config.effectiveAdvertisedListeners());
 
-        if (config.processRoles.isEmpty() || config.processRoles.contains(ProcessRole.BrokerRole)) {
+        Set<ProcessRole> processRoles = config.processRoles();
+        if (processRoles.isEmpty() || processRoles.contains(ProcessRole.BrokerRole)) {
             // validations for all broker setups (i.e. ZooKeeper and KRaft broker-only and KRaft co-located)
             validateAdvertisedListenersNonEmptyForBroker();
             Utils.require(advertisedListenerNames.contains(config.interBrokerListenerName()),
@@ -256,7 +258,41 @@ public class KafkaConfigValidator {
         }
     }
 
+    public void validateSharedGroupConfigs() {
+        Utils.require(config.shareGroupMaxHeartbeatIntervalMs() >= config.shareGroupMinHeartbeatIntervalMs(),
+                ShareGroupConfigs.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equals to " +
+                        ShareGroupConfigs.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
+        Utils.require(config.shareGroupHeartbeatIntervalMs() >= config.shareGroupMinHeartbeatIntervalMs(),
+                ShareGroupConfigs.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equals to " +
+                        ShareGroupConfigs.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
+        Utils.require(config.shareGroupHeartbeatIntervalMs() <= config.shareGroupMaxHeartbeatIntervalMs(),
+                ShareGroupConfigs.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG + " must be less than or equals to " +
+                        ShareGroupConfigs.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
 
+        Utils.require(config.shareGroupMaxSessionTimeoutMs() >= config.shareGroupMinSessionTimeoutMs(),
+                ShareGroupConfigs.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG + " must be greater than or equals to " +
+                        ShareGroupConfigs.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+        Utils.require(config.shareGroupSessionTimeoutMs() >= config.shareGroupMinSessionTimeoutMs(),
+                ShareGroupConfigs.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG + " must be greater than or equals to " +
+                        ShareGroupConfigs.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+        Utils.require(config.shareGroupSessionTimeoutMs() <= config.shareGroupMaxSessionTimeoutMs(),
+                ShareGroupConfigs.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG + " must be less than or equals to " +
+                        ShareGroupConfigs.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+
+        Utils.require(config.shareGroupMaxRecordLockDurationMs() >= config.shareGroupMinRecordLockDurationMs(),
+                ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG + " must be greater than or equals to " +
+                        ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG);
+        Utils.require(config.shareGroupRecordLockDurationMs() >= config.shareGroupMinRecordLockDurationMs(),
+                ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG + " must be greater than or equals to " +
+                        ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG);
+        Utils.require(config.shareGroupMaxRecordLockDurationMs() >= config.shareGroupRecordLockDurationMs(),
+                ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG + " must be greater than or equals to " +
+                        ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG);
+
+    }
+
+
+    @SuppressWarnings("deprecation")
     public void validateMessageFormatConfigs() {
         if (new LogConfig.MessageFormatVersion(config.logMessageFormatVersionString(), config.interBrokerProtocolVersionString()).shouldWarn()) {
             log.warn(createBrokerWarningMessage());
@@ -303,12 +339,12 @@ public class KafkaConfigValidator {
                 "Only GSSAPI mechanism is supported for inter-broker communication with SASL when inter.broker.protocol.version is set to " + config.interBrokerProtocolVersionString());
         Utils.require(!interBrokerUsesSasl || config.saslEnabledMechanisms(config.interBrokerListenerName()).contains(config.saslMechanismInterBrokerProtocol()),
                 String.format("%s must be included in %s when SASL is used for inter-broker communication",
-                        KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG));
+                        BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG));
 
-        Class<?> principalBuilderClass = config.getClass(KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
-        Utils.require(principalBuilderClass != null, KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG + " must be non-null");
+        Class<?> principalBuilderClass = config.getClass(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
+        Utils.require(principalBuilderClass != null, BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG + " must be non-null");
         Utils.require(KafkaPrincipalSerde.class.isAssignableFrom(principalBuilderClass),
-                KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG + " must implement KafkaPrincipalSerde");
+                BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG + " must implement KafkaPrincipalSerde");
     }
 
     public void validateQueueMaxByte() {

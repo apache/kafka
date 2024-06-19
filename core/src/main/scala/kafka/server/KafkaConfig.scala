@@ -21,13 +21,12 @@ import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
-import org.apache.kafka.common.config._
 import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config._
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -69,10 +68,8 @@ object KafkaConfig {
       zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG).isDefined
   }
 
-  val configDef = org.apache.kafka.server.config.KafkaConfig.CONFIG_DEF
-
   /** ********* Remote Log Management Configuration *********/
-  RemoteLogManagerConfig.CONFIG_DEF.configKeys().values().forEach(key => configDef.define(key))
+  val configDef = AbstractKafkaConfig.CONFIG_DEF
 
   def configNames: Seq[String] = configDef.names.asScala.toBuffer.sorted
   private[server] def defaultValues: Map[String, _] = configDef.defaultValues.asScala
@@ -115,7 +112,7 @@ object KafkaConfig {
     if (configType != null) {
       Some(configType)
     } else {
-      val configKey = DynamicConfig.Broker.brokerConfigDef.configKeys().get(exactName)
+      val configKey = DynamicConfig.Broker.configKeys.get(exactName)
       if (configKey != null) {
         Some(configKey.`type`)
       } else {
@@ -156,8 +153,14 @@ object KafkaConfig {
   }
 }
 
+/**
+ * The class extend {@link AbstractKafkaConfig} which will be the future KafkaConfig.
+ * When add any new methods if it doesn't depend on anything in Core, then move it to org.apache.kafka.server.config.KafkaConfig instead of here.
+ * Any code depends on kafka.server.KafkaConfig will keep for using kafka.server.KafkaConfig for the time being until we move it out of core
+ * For more details check KAFKA-15853
+ */
 class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynamicConfigOverride: Option[DynamicBrokerConfig])
-  extends org.apache.kafka.server.config.KafkaConfig(KafkaConfig.configDef, props, Utils.castToStringObjectMap(props), doLog) with Logging {
+  extends AbstractKafkaConfig(KafkaConfig.configDef, props, Utils.castToStringObjectMap(props), doLog) with Logging {
 
   def this(props: java.util.Map[_, _]) = this(true, KafkaConfig.populateSynonyms(props), None)
   def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, KafkaConfig.populateSynonyms(props), None)
@@ -175,12 +178,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   // and defines the default values this instance will use if no explicit config is given.
   // We make it part of each instance rather than the object to facilitate testing.
   private val zkClientConfigViaSystemProperties = new ZKClientConfig()
-
-  //  During dynamic update, we use the values from this config, these are only used in DynamicBrokerConfig
-  private[server] def originalsFromThisConfig: util.Map[String, AnyRef] = super.originals
-  private[server] def valuesFromThisConfig: util.Map[String, _] = super.values
-  def valuesFromThisConfigWithPrefixOverride(prefix: String): util.Map[String, AnyRef] =
-    super.valuesWithPrefixOverride(prefix)
 
   /** ********* Zookeeper Configuration ********** */
   val zkConnect: String = getString(ZkConfigs.ZK_CONNECT_CONFIG)
@@ -342,5 +339,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     configValidator.validateQueueMaxByte()
     configValidator.validateConnectionConfigs()
     configValidator.validateNewGroupCoordinatorConfigs()
+    configValidator.validateSharedGroupConfigs
   }
 }

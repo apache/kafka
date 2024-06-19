@@ -18,7 +18,7 @@ package kafka.docker
 
 import kafka.Kafka
 import kafka.tools.StorageTool
-import kafka.utils.Exit
+import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.store
 import net.sourceforge.argparse4j.inf.Namespace
@@ -26,7 +26,7 @@ import net.sourceforge.argparse4j.inf.Namespace
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
 
-object KafkaDockerWrapper {
+object KafkaDockerWrapper extends Logging {
   def main(args: Array[String]): Unit = {
     val namespace = parseArguments(args)
     val command = namespace.getString("command")
@@ -48,6 +48,7 @@ object KafkaDockerWrapper {
         StorageTool.main(formatCmd)
       case "start" =>
         val configFile = namespace.getString("config")
+        info("Starting Kafka server in the native mode.")
         Kafka.main(Array(configFile))
       case _ =>
         throw new RuntimeException(s"Unknown operation $command. " +

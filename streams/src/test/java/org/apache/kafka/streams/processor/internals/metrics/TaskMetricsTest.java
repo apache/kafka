@@ -34,8 +34,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 public class TaskMetricsTest {
 
-    private final static String THREAD_ID = "test-thread";
-    private final static String TASK_ID = "test-task";
+    private static final String THREAD_ID = "test-thread";
+    private static final String TASK_ID = "test-task";
 
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
     private final Sensor expectedSensor = mock(Sensor.class);
