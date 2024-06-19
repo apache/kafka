@@ -128,6 +128,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic, inputTopic2, outputTopic, outputTopic2);
         final KStream<String, String> stream = builder.stream(inputTopic);
         stream.process(() -> new ShutdownProcessor(processorValueCollector), Named.as("process"));
+        properties = basicProps();
     }
 
     @AfterEach
@@ -137,7 +138,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     @Test
     public void shouldShutdownThreadUsingOldHandler() throws Exception {
-        properties = basicProps();
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             final AtomicInteger counter = new AtomicInteger(0);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> counter.incrementAndGet());
@@ -158,8 +158,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     @Test
     public void shouldShutdownClient() throws Exception {
-        properties = basicProps();
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), basicProps())) {
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
 
             kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_CLIENT);
@@ -201,7 +200,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     @Test
     public void shouldShutDownClientIfGlobalStreamThreadWantsToReplaceThread() throws Exception {
-        properties = basicProps();
         builder.addGlobalStore(
             new KeyValueStoreBuilder<>(
                 Stores.persistentKeyValueStore("globalStore"),
@@ -231,7 +229,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     @Test
     public void shouldEmitSameRecordAfterFailover() throws Exception {
-        properties = basicProps();
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300000L);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
@@ -340,7 +337,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     private void testShutdownApplication(final int numThreads) throws Exception {
-        properties = basicProps();
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
 
         final Topology topology = builder.build();
@@ -362,7 +358,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     private void testReplaceThreads(final int numThreads) throws Exception {
-        properties = basicProps();
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
