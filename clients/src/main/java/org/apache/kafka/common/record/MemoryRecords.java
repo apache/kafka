@@ -703,8 +703,7 @@ public class MemoryRecords extends AbstractRecords {
     public static MemoryRecords withEndTransactionMarker(long initialOffset, long timestamp, int partitionLeaderEpoch,
                                                          long producerId, short producerEpoch,
                                                          EndTransactionMarker marker) {
-        int endTxnMarkerBatchSize = DefaultRecordBatch.RECORD_BATCH_OVERHEAD +
-                EndTransactionMarker.CURRENT_END_TXN_SCHEMA_RECORD_SIZE;
+        int endTxnMarkerBatchSize = DefaultRecordBatch.RECORD_BATCH_OVERHEAD + marker.endTxnMarkerValueSize();
         ByteBuffer buffer = ByteBuffer.allocate(endTxnMarkerBatchSize);
         writeEndTransactionalMarker(buffer, initialOffset, timestamp, partitionLeaderEpoch, producerId,
                 producerEpoch, marker);
