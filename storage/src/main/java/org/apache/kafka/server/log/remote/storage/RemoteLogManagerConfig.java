@@ -186,6 +186,12 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
     public static final String REMOTE_FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will wait before answering the remote fetch request";
     public static final int DEFAULT_REMOTE_FETCH_MAX_WAIT_MS = 500;
 
+    // dynamic configs
+    private long remoteLogIndexFileCacheTotalSizeBytes;
+    private long remoteLogManagerCopyMaxBytesPerSecond;
+    private long remoteLogManagerFetchMaxBytesPerSecond;
+    private int remoteFetchMaxWaitMs;
+
     public static ConfigDef configDef() {
         return new ConfigDef()
                 .define(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP,
@@ -356,6 +362,29 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
 
     public RemoteLogManagerConfig(Map<?, ?> props) {
         super(configDef(), props);
+        this.remoteLogIndexFileCacheTotalSizeBytes = getLong(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP);
+        this.remoteLogManagerCopyMaxBytesPerSecond = getLong(REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP);
+        this.remoteLogManagerFetchMaxBytesPerSecond = getLong(REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP);
+        this.remoteFetchMaxWaitMs = getInt(REMOTE_FETCH_MAX_WAIT_MS_PROP);
+    }
+
+    /**
+     * Update the current configuration with the given properties.
+     * @param props
+     */
+    public void updateCurrentConfig(Map<?, ?> props) {
+        if (props.containsKey(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)) {
+            this.remoteLogIndexFileCacheTotalSizeBytes = Long.parseLong(String.valueOf(props.get(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)));
+        }
+        if (props.containsKey(REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP)) {
+            this.remoteLogManagerCopyMaxBytesPerSecond = Long.parseLong(String.valueOf(props.get(REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP)));
+        }
+        if (props.containsKey(REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP)) {
+            this.remoteLogManagerFetchMaxBytesPerSecond = Long.parseLong(String.valueOf(props.get(REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP)));
+        }
+        if (props.containsKey(REMOTE_FETCH_MAX_WAIT_MS_PROP)) {
+            this.remoteFetchMaxWaitMs = Integer.parseInt(String.valueOf(props.get(REMOTE_FETCH_MAX_WAIT_MS_PROP)));
+        }
     }
 
     public boolean isRemoteStorageSystemEnabled() {
@@ -457,6 +486,23 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
 
     public int remoteLogManagerFetchQuotaWindowSizeSeconds() {
         return getInt(REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP);
+    }
+
+    // Dynamic Configs
+    public long remoteLogIndexFileCacheTotalSizeBytes() {
+        return remoteLogIndexFileCacheTotalSizeBytes;
+    }
+
+    public long remoteLogManagerCopyMaxBytesPerSecond() {
+        return remoteLogManagerCopyMaxBytesPerSecond;
+    }
+
+    public long remoteLogManagerFetchMaxBytesPerSecond() {
+        return remoteLogManagerFetchMaxBytesPerSecond;
+    }
+
+    public int remoteFetchMaxWaitMs() {
+        return remoteFetchMaxWaitMs;
     }
 
     public static void main(String[] args) {

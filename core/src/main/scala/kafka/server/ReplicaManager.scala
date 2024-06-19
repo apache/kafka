@@ -1479,7 +1479,7 @@ class ReplicaManager(val config: KafkaConfig,
         return Some(createLogReadResult(e))
     }
 
-    val remoteFetchMaxWaitMs = config.remoteFetchMaxWaitMs.toLong
+    val remoteFetchMaxWaitMs = config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong
     val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteFetchResult, remoteFetchInfo, remoteFetchMaxWaitMs,
       fetchPartitionStatus, params, logReadResults, this, responseCallback)
     delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, Seq(key))

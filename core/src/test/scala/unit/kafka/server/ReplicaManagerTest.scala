@@ -4093,11 +4093,11 @@ class ReplicaManagerTest {
     props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
     // set log reader threads number to 2
     props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, 2.toString)
-    val config = KafkaConfig.fromProps(props)
+    val remoteLogManagerConfig = new RemoteLogManagerConfig(props)
     val mockLog = mock(classOf[UnifiedLog])
-    val brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
+    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.isRemoteStorageSystemEnabled())
     val remoteLogManager = new RemoteLogManager(
-      config,
+      remoteLogManagerConfig,
       0,
       TestUtils.tempRelativeDir("data").getAbsolutePath,
       "clusterId",
@@ -4199,11 +4199,11 @@ class ReplicaManagerTest {
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
     props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
     props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
-    val config = KafkaConfig.fromProps(props)
+    val remoteLogManagerConfig = new RemoteLogManagerConfig(props)
     val dummyLog = mock(classOf[UnifiedLog])
-    val brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
+    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.isRemoteStorageSystemEnabled())
     val remoteLogManager = new RemoteLogManager(
-      config,
+      remoteLogManagerConfig,
       0,
       TestUtils.tempRelativeDir("data").getAbsolutePath,
       "clusterId",
