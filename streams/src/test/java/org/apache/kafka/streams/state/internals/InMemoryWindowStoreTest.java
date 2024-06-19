@@ -65,7 +65,6 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldRestore() {
-        setup();
         // should be empty initially
         assertFalse(windowStore.all().hasNext());
 
@@ -94,7 +93,6 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldNotExpireFromOpenIterator() {
-        setup();
         windowStore.put(1, "one", 0L);
         windowStore.put(1, "two", 10L);
 
@@ -125,7 +123,6 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     @Test
     public void testExpiration() {
-        setup();
         long currentTime = 0;
         windowStore.put(1, "one", currentTime);
 
@@ -169,7 +166,6 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldMatchPositionAfterPut() {
-        setup();
         final MeteredWindowStore<Integer, String> meteredSessionStore = (MeteredWindowStore<Integer, String>) windowStore;
         final ChangeLoggingWindowBytesStore changeLoggingSessionBytesStore = (ChangeLoggingWindowBytesStore) meteredSessionStore.wrapped();
         final InMemoryWindowStore inMemoryWindowStore = (InMemoryWindowStore) changeLoggingSessionBytesStore.wrapped();

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-public class RocksDBTimeOrderedSessionSchemaWithoutIndexSegmentedBytesStoreTest extends AbstractRocksDBTimeOrderedWindowSegmentedBytesStoreTest {
+public class RocksDBTimeOrderedSessionSchemaWithoutIndexSegmentedBytesStoreTest extends AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
     @Override
     boolean hasIndex() {

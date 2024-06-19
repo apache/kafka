@@ -46,14 +46,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class ListValueStoreTest {
     private enum StoreType { InMemory, RocksDB }
 
-    private StoreType storeType;
     private KeyValueStore<Integer, String> listStore;
 
     final File baseDir = TestUtils.tempDirectory("test");
 
     public void setup(final StoreType storeType) {
-        this.storeType = storeType;
-        listStore = buildStore(Serdes.Integer(), Serdes.String());
+        listStore = buildStore(Serdes.Integer(), Serdes.String(), storeType);
 
         final MockRecordCollector recordCollector = new MockRecordCollector();
         final InternalMockProcessorContext<Integer, String> context = new InternalMockProcessorContext<>(
@@ -76,7 +74,8 @@ public class ListValueStoreTest {
     }
 
     <K, V> KeyValueStore<K, V> buildStore(final Serde<K> keySerde,
-                                          final Serde<V> valueSerde) {
+                                          final Serde<V> valueSerde,
+                                          final StoreType storeType) {
         return new ListValueStoreBuilder<>(
             storeType == StoreType.RocksDB ? Stores.persistentKeyValueStore("rocksDB list store")
                 : Stores.inMemoryKeyValueStore("in-memory list store"),
