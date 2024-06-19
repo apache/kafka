@@ -203,7 +203,6 @@ def determineCommitId() {
 
 def excludedSpotlessModules = [':clients',
                                ':connect:runtime',
-                               ':core',
                                ':streams']
 
 
@@ -524,7 +523,6 @@ subprojects {
     } else {
       useJUnitPlatform {
         includeTags "integration"
-        includeTags 'org.apache.kafka.test.IntegrationTest'
       }
     }
 
@@ -562,7 +560,6 @@ subprojects {
     } else {
       useJUnitPlatform {
         excludeTags "integration"
-        excludeTags 'org.apache.kafka.test.IntegrationTest'
       }
     }
 
@@ -3194,8 +3191,6 @@ project(':connect:runtime') {
     testImplementation project(':group-coordinator')
 
     testImplementation libs.junitJupiter
-    testImplementation libs.junitVintageEngine
-    testImplementation libs.mockitoJunitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
     testImplementation libs.mockitoJunitJupiter
