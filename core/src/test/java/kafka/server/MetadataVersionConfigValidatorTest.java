@@ -25,6 +25,7 @@ import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
+
 import org.junit.jupiter.api.Test;
 
 import static org.mockito.ArgumentMatchers.any;
