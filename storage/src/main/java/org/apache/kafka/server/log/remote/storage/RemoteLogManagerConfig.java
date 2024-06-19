@@ -187,10 +187,10 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
     public static final int DEFAULT_REMOTE_FETCH_MAX_WAIT_MS = 500;
 
     // dynamic configs
-    private long remoteLogIndexFileCacheTotalSizeBytes;
-    private long remoteLogManagerCopyMaxBytesPerSecond;
-    private long remoteLogManagerFetchMaxBytesPerSecond;
-    private int remoteFetchMaxWaitMs;
+    private volatile long remoteLogIndexFileCacheTotalSizeBytes;
+    private volatile long remoteLogManagerCopyMaxBytesPerSecond;
+    private volatile long remoteLogManagerFetchMaxBytesPerSecond;
+    private volatile int remoteFetchMaxWaitMs;
 
     public static ConfigDef configDef() {
         return new ConfigDef()
