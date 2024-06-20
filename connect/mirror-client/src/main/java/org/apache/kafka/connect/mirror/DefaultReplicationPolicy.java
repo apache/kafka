@@ -18,11 +18,11 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.Configurable;
 
-import java.util.Map;
-import java.util.regex.Pattern;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Map;
+import java.util.regex.Pattern;
 
 /** Defines remote topics like "us-west.topic1". The separator is customizable and defaults to a period. */
 public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable {

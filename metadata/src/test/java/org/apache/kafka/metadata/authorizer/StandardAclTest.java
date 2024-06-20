@@ -23,6 +23,7 @@ import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceType;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -37,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @Timeout(value = 40)
 public class StandardAclTest {
-    public final static List<StandardAcl> TEST_ACLS = new ArrayList<>();
+    public static final List<StandardAcl> TEST_ACLS = new ArrayList<>();
 
     static {
         TEST_ACLS.add(new StandardAcl(

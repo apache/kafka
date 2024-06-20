@@ -20,17 +20,18 @@ import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.junit.ClusterTestExtensions;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -56,7 +57,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
     private static final int SEG_SIZE = 1048576;
     private final ClusterInstance clusterInstance;
     private final RemotePartitionMetadataStore spyRemotePartitionMetadataEventHandler = spy(new RemotePartitionMetadataStore());
-    private final Time time = new SystemTime();
+    private final Time time = Time.SYSTEM;
     private TopicBasedRemoteLogMetadataManager remoteLogMetadataManager;
 
     TopicBasedRemoteLogMetadataManagerTest(ClusterInstance clusterInstance) {

@@ -30,7 +30,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.server.metadata.{OffsetTrackingListener, ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
-import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
+import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -827,7 +827,8 @@ class KafkaServer(
           time,
           false,
           new ApiVersions,
-          logContext)
+          logContext,
+          MetadataRecoveryStrategy.NONE)
       }
 
       var shutdownSucceeded: Boolean = false
@@ -1081,6 +1082,13 @@ class KafkaServer(
         fatal("Fatal error during KafkaServer shutdown.", e)
         isShuttingDown.set(false)
         throw e
+    }
+  }
+
+  override def isShutdown(): Boolean = {
+    BrokerState.fromValue(brokerState.value()) match {
+      case BrokerState.SHUTTING_DOWN | BrokerState.NOT_RUNNING => true
+      case _ => false
     }
   }
 

@@ -26,7 +26,9 @@ import kafka.test.junit.ZkClusterInvocationContext;
 import kafka.zk.AdminZkClient;
 import kafka.zk.BrokerInfo;
 import kafka.zk.KafkaZkClient;
+
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.network.ListenerName;
@@ -36,6 +38,7 @@ import org.apache.kafka.security.PasswordEncoder;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ZooKeeperInternals;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.platform.commons.util.StringUtils;
@@ -46,6 +49,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -227,15 +231,17 @@ public class ConfigCommandIntegrationTest {
             alterAndVerifyConfig(client, Optional.empty(), singletonMap("message.max.bytes", "140000"));
 
             // Delete config
-            deleteAndVerifyConfig(client, Optional.of(defaultBrokerId), singleton("message.max.bytes"));
+            deleteAndVerifyConfigValue(client, defaultBrokerId, singleton("message.max.bytes"), true);
 
             // Listener configs: should work only with listener name
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
                     singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"));
-            alterConfigWithKraft(client, Optional.empty(),
-                    singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"));
-            deleteAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singleton("listener.name.internal.ssl.keystore.location"));
+            // Per-broker config configured at default cluster-level should fail
+            assertThrows(ExecutionException.class,
+                    () -> alterConfigWithKraft(client, Optional.empty(), 
+                            singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks")));
+            deleteAndVerifyConfigValue(client, defaultBrokerId,
+                    singleton("listener.name.internal.ssl.keystore.location"), false);
             alterConfigWithKraft(client, Optional.of(defaultBrokerId),
                     singletonMap("listener.name.external.ssl.keystore.password", "secret"));
 
@@ -358,7 +364,7 @@ public class ConfigCommandIntegrationTest {
 
             alterConfigWithKraft(client, Optional.of(defaultBrokerId),
                     singletonMap(listenerName + "ssl.truststore.password", "password"));
-            verifyConfigDefaultValue(client, Optional.of(defaultBrokerId),
+            verifyConfigSecretValue(client, Optional.of(defaultBrokerId),
                     singleton(listenerName + "ssl.truststore.password"));
         }
     }
@@ -476,8 +482,7 @@ public class ConfigCommandIntegrationTest {
 
     private List<String> generateDefaultAlterOpts(String bootstrapServers) {
         return asList("--bootstrap-server", bootstrapServers,
-                "--entity-type", "brokers",
-                "--entity-name", "0", "--alter");
+                "--entity-type", "brokers", "--alter");
     }
 
     private void alterAndVerifyConfig(Admin client, Optional<String> brokerId, Map<String, String> config) throws Exception {
@@ -493,36 +498,59 @@ public class ConfigCommandIntegrationTest {
     }
 
     private void verifyConfig(Admin client, Optional<String> brokerId, Map<String, String> config) throws Exception {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(defaultBrokerId));
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
         TestUtils.waitForCondition(() -> {
-            Map<String, String> current = client.describeConfigs(singletonList(configResource))
-                    .all()
-                    .get()
-                    .values()
-                    .stream()
-                    .flatMap(e -> e.entries().stream())
-                    .collect(HashMap::new, (map, entry) -> map.put(entry.name(), entry.value()), HashMap::putAll);
+            Map<String, String> current = getConfigEntryStream(client, configResource)
+                    .filter(configEntry -> Objects.nonNull(configEntry.value()))
+                    .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
             return config.entrySet().stream().allMatch(e -> e.getValue().equals(current.get(e.getKey())));
         }, 10000, config + " are not updated");
     }
 
-    private void deleteAndVerifyConfig(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
-        ConfigCommand.ConfigCommandOptions deleteOpts =
-                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
-                        asList("--delete-config", String.join(",", config))));
-        ConfigCommand.alterConfig(client, deleteOpts);
-        verifyConfigDefaultValue(client, brokerId, config);
+    private Stream<ConfigEntry> getConfigEntryStream(Admin client,
+                                                     ConfigResource configResource) throws InterruptedException, ExecutionException {
+        return client.describeConfigs(singletonList(configResource))
+                .all()
+                .get()
+                .values()
+                .stream()
+                .flatMap(e -> e.entries().stream());
     }
 
-    private void verifyConfigDefaultValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(defaultBrokerId));
+    private void deleteAndVerifyConfigValue(Admin client, 
+                                            String brokerId, 
+                                            Set<String> config, 
+                                            boolean hasDefaultValue) throws Exception {
+        ConfigCommand.ConfigCommandOptions deleteOpts =
+                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", brokerId),
+                        asList("--delete-config", String.join(",", config))));
+        ConfigCommand.alterConfig(client, deleteOpts);
+        verifyPerBrokerConfigValue(client, brokerId, config, hasDefaultValue);
+    }
+
+    private void verifyPerBrokerConfigValue(Admin client,
+                                            String brokerId,
+                                            Set<String> config,
+                                            boolean hasDefaultValue) throws Exception {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId);
         TestUtils.waitForCondition(() -> {
-            Map<String, String> current = client.describeConfigs(singletonList(configResource))
-                    .all()
-                    .get()
-                    .values()
-                    .stream()
-                    .flatMap(e -> e.entries().stream())
+            if (hasDefaultValue) {
+                Map<String, String> current = getConfigEntryStream(client, configResource)
+                        .filter(configEntry -> Objects.nonNull(configEntry.value()))
+                        .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
+                return config.stream().allMatch(current::containsKey);
+            } else {
+                return getConfigEntryStream(client, configResource)
+                        .noneMatch(configEntry -> config.contains(configEntry.name()));
+            }
+        }, 5000, config + " are not updated");
+    }
+
+    private void verifyConfigSecretValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
+        TestUtils.waitForCondition(() -> {
+            Map<String, String> current = getConfigEntryStream(client, configResource)
+                    .filter(ConfigEntry::isSensitive)
                     .collect(HashMap::new, (map, entry) -> map.put(entry.name(), entry.value()), HashMap::putAll);
             return config.stream().allMatch(current::containsKey);
         }, 5000, config + " are not updated");

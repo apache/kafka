@@ -71,7 +71,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 
 public class DefaultStateUpdater implements StateUpdater {
 
-    private final static String BUG_ERROR_MESSAGE = "This indicates a bug. " +
+    private static final String BUG_ERROR_MESSAGE = "This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the dev-mailing list (https://kafka.apache.org/contact).";
 
     private class StateUpdaterThread extends Thread {

@@ -17,12 +17,14 @@
 
 package org.apache.kafka.trogdor.fault;
 
-import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.fault.Kibosh.KiboshFaultSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
+
+import com.fasterxml.jackson.databind.node.TextNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.examples.pageview;
 
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -30,11 +27,15 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
+
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -144,29 +145,29 @@ public class PageViewTypedDemo {
     }
 
     // POJO classes
-    static public class PageView implements JSONSerdeCompatible {
+    public static class PageView implements JSONSerdeCompatible {
         public String user;
         public String page;
         public Long timestamp;
     }
 
-    static public class UserProfile implements JSONSerdeCompatible {
+    public static class UserProfile implements JSONSerdeCompatible {
         public String region;
         public Long timestamp;
     }
 
-    static public class PageViewByRegion implements JSONSerdeCompatible {
+    public static class PageViewByRegion implements JSONSerdeCompatible {
         public String user;
         public String page;
         public String region;
     }
 
-    static public class WindowedPageViewByRegion implements JSONSerdeCompatible {
+    public static class WindowedPageViewByRegion implements JSONSerdeCompatible {
         public long windowStart;
         public String region;
     }
 
-    static public class RegionCount implements JSONSerdeCompatible {
+    public static class RegionCount implements JSONSerdeCompatible {
         public long count;
         public String region;
     }

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -656,7 +657,14 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .withClientSslSupport()
-                                .withClientSaslSupport();
+                                .withClientSaslSupport()
+                                .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
+                                        Type.STRING,
+                                        CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
+                                        ConfigDef.CaseInsensitiveValidString
+                                                .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
+                                        Importance.LOW,
+                                        CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC);
     }
 
     @Override

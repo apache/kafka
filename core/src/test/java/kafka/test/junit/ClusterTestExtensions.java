@@ -18,15 +18,17 @@
 package kafka.test.junit;
 
 import kafka.test.ClusterConfig;
+import kafka.test.annotation.AutoStart;
+import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterFeature;
+import kafka.test.annotation.ClusterTemplate;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
-import kafka.test.annotation.ClusterTemplate;
-import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.Type;
-import kafka.test.annotation.AutoStart;
+
 import org.apache.kafka.server.common.Features;
+
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
@@ -203,7 +205,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     }
 
     @ClusterTestDefaults
-    private final static class EmptyClass {
+    private static final class EmptyClass {
         // Just used as a convenience to get default values from the annotation
     }
 }

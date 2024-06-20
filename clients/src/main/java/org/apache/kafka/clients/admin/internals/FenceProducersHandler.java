@@ -28,6 +28,7 @@ import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+
 import org.slf4j.Logger;
 
 import java.util.Collection;
@@ -133,6 +134,10 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
                 log.debug("InitProducerId request for transactionalId `{}` failed because the " +
                                 "coordinator is still in the process of loading state. Will retry",
                         transactionalIdKey.idValue);
+                return ApiResult.empty();
+            case CONCURRENT_TRANSACTIONS:
+                log.debug("InitProducerId request for transactionalId `{}` failed because of " +
+                                "a concurrent transaction. Will retry", transactionalIdKey.idValue);
                 return ApiResult.empty();
 
             case NOT_COORDINATOR:
