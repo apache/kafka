@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.Metrics;
 
 public class ProducerMetrics {
 

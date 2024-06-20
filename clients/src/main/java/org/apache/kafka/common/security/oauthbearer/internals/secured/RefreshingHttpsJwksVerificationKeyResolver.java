@@ -17,9 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import java.io.IOException;
-import java.security.Key;
-import java.util.List;
 import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jwk.JsonWebKey;
 import org.jose4j.jwk.VerificationJwkSelector;
@@ -30,6 +27,10 @@ import org.jose4j.lang.JoseException;
 import org.jose4j.lang.UnresolvableKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.security.Key;
+import java.util.List;
 
 /**
  * <code>RefreshingHttpsJwksVerificationKeyResolver</code> is a

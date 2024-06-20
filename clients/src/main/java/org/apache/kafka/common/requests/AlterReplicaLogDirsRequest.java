@@ -19,6 +19,9 @@ package org.apache.kafka.common.requests;
 
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -27,10 +30,6 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
-import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
-import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 
 public class AlterReplicaLogDirsRequest extends AbstractRequest {
 

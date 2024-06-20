@@ -16,6 +16,35 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.MetadataSnapshot;
+import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.record.AbstractRecords;
+import org.apache.kafka.common.record.CompressionRatioEstimator;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.CopyOnWriteMap;
+import org.apache.kafka.common.utils.ExponentialBackoff;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+import org.apache.kafka.common.utils.Time;
+
+import org.slf4j.Logger;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -30,34 +59,6 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.MetadataSnapshot;
-import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.utils.ExponentialBackoff;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.utils.CopyOnWriteMap;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
-import org.slf4j.Logger;
 
 /**
  * This class acts as a queue that accumulates records into {@link MemoryRecords}

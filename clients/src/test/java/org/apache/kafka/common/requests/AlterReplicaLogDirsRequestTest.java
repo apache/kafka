@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
@@ -28,7 +25,11 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterRepli
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.protocol.Errors;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;

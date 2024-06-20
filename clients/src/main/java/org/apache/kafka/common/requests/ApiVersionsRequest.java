@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.regex.Pattern;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
@@ -26,6 +25,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.AppInfoParser;
 
 import java.nio.ByteBuffer;
+import java.util.regex.Pattern;
 
 public class ApiVersionsRequest extends AbstractRequest {
 
