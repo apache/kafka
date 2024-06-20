@@ -49,6 +49,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
+import org.opentest4j.AssertionFailedError;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -493,6 +494,31 @@ public class KafkaRaftClientTest {
         context.assertElectedLeader(resignedEpoch + 1, remoteId1);
         assertEquals(new LeaderAndEpoch(OptionalInt.of(remoteId1), resignedEpoch + 1),
             context.listener.currentLeaderAndEpoch());
+    }
+
+    @Test
+    public void testBeginQuorumHeartbeat() throws Exception {
+        int localId = 0;
+        int remoteId1 = 1;
+        int remoteId2 = 2;
+        Set<Integer> voters = Utils.mkSet(localId, remoteId1, remoteId2);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+
+        context.becomeLeader();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+
+        // begin epoch requests should be sent out every beginQuorumEpochTimeoutMs
+        context.time.sleep(context.beginQuorumEpochTimeoutMs);
+        context.client.poll();
+        context.expectBeginEpoch(context.currentEpoch());
+
+        context.client.poll();
+        assertThrows(AssertionFailedError.class, () -> context.expectBeginEpoch(context.currentEpoch()));
+
+        context.time.sleep(context.beginQuorumEpochTimeoutMs);
+        context.client.poll();
+        context.expectBeginEpoch(context.currentEpoch());
     }
 
     @Test

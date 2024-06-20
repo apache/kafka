@@ -2132,15 +2132,30 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             currentTimeMs
         );
 
-        long timeUntilSend = maybeSendRequests(
-            currentTimeMs,
-            partitionState
-                .lastVoterSet()
-                .voterNodes(state.nonAcknowledgingVoters().stream(), channel.listenerName()),
-            this::buildBeginQuorumEpochRequest
-        );
+        long timeUntilNextBeginQuorumSend = state.timeUntilBeginQuorumEpochTimerExpires(currentTimeMs);
 
-        return Math.min(timeUntilFlush, Math.min(timeUntilSend, timeUntilCheckQuorumExpires));
+        if (timeUntilNextBeginQuorumSend == 0) {
+            System.out.println("timeUntilNextBeginQuorumSend = 0");
+            timeUntilNextBeginQuorumSend = maybeSendRequests(
+                currentTimeMs,
+                partitionState
+                    .lastVoterSet()
+                    .voterNodes(channel.listenerName()),
+                this::buildBeginQuorumEpochRequest
+            );
+            state.resetBeginQuorumEpochTimer(currentTimeMs);
+
+        } else if (!state.nonAcknowledgingVoters().isEmpty()) {
+            timeUntilNextBeginQuorumSend = maybeSendRequests(
+                currentTimeMs,
+                partitionState
+                    .lastVoterSet()
+                    .voterNodes(state.nonAcknowledgingVoters().stream(), channel.listenerName()),
+                this::buildBeginQuorumEpochRequest
+            );
+        }
+
+        return Math.min(timeUntilFlush, Math.min(timeUntilNextBeginQuorumSend, timeUntilCheckQuorumExpires));
     }
 
     private long maybeSendVoteRequests(

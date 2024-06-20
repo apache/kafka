@@ -64,6 +64,8 @@ public class LeaderState<T> implements EpochState {
     private final Set<Integer> fetchedVoters = new HashSet<>();
     private final Timer checkQuorumTimer;
     private final int checkQuorumTimeoutMs;
+    private final Timer beginQuorumEpochTimer;
+    private final int beginQuorumEpochTimeoutMs;
 
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
@@ -93,6 +95,18 @@ public class LeaderState<T> implements EpochState {
         // use the 1.5x of fetch timeout to tolerate some network transition time or other IO time.
         this.checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
         this.checkQuorumTimer = time.timer(checkQuorumTimeoutMs);
+        this.beginQuorumEpochTimeoutMs = fetchTimeoutMs;
+        this.beginQuorumEpochTimer = time.timer(beginQuorumEpochTimeoutMs);
+    }
+
+    public long timeUntilBeginQuorumEpochTimerExpires(long currentTimeMs) {
+        beginQuorumEpochTimer.update(currentTimeMs);
+        return beginQuorumEpochTimer.remainingMs();
+    }
+
+    public void resetBeginQuorumEpochTimer(long currentTimeMs) {
+        beginQuorumEpochTimer.update(currentTimeMs);
+        beginQuorumEpochTimer.reset(beginQuorumEpochTimeoutMs);
     }
 
     /**

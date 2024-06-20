@@ -219,7 +219,7 @@ public class RequestManager {
             return 0;
         }
 
-        return  state.remainingBackoffMs(timeMs);
+        return state.remainingBackoffMs(timeMs);
     }
 
     public boolean isResponseExpected(Node node, long correlationId) {

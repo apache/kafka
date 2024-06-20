@@ -51,6 +51,7 @@ public class LeaderStateTest {
     private final MockTime time = new MockTime();
     private final int fetchTimeoutMs = 2000;
     private final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
+    private final int beginQuorumEpochTimeoutMs = fetchTimeoutMs;
 
     private LeaderState<?> newLeaderState(
         Set<Integer> voters,
@@ -787,6 +788,27 @@ public class LeaderStateTest {
         assertFalse(state.canGrantVote(ReplicaKey.of(1, Optional.empty()), isLogUpToDate));
         assertFalse(state.canGrantVote(ReplicaKey.of(2, Optional.empty()), isLogUpToDate));
         assertFalse(state.canGrantVote(ReplicaKey.of(3, Optional.empty()), isLogUpToDate));
+    }
+
+    @Test
+    public void testBeginQuorumEpochTimer() {
+        MockTime time = new MockTime();
+        int leader = localId;
+        int follower1 = 1;
+        long epochStartOffset = 10L;
+
+        Set<Integer> voterSet = mkSet(leader, follower1);
+        LeaderState<?> state = newLeaderState(voterSet, epochStartOffset);
+
+        long resetTime = time.milliseconds();
+        state.resetBeginQuorumEpochTimer(resetTime);
+        assertEquals(beginQuorumEpochTimeoutMs, state.timeUntilBeginQuorumEpochTimerExpires(resetTime));
+
+        time.sleep(5);
+        assertEquals(beginQuorumEpochTimeoutMs - 5, state.timeUntilBeginQuorumEpochTimerExpires(time.milliseconds()));
+
+        time.sleep(beginQuorumEpochTimeoutMs);
+        assertEquals(0, state.timeUntilBeginQuorumEpochTimerExpires(time.milliseconds()));
     }
 
     private static class MockOffsetMetadata implements OffsetMetadata {

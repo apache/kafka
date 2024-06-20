@@ -99,6 +99,7 @@ public final class RaftClientTestContext {
     final int fetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
     final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
+    final int beginQuorumEpochTimeoutMs = fetchTimeoutMs;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
 
     private int electionTimeoutMs;
@@ -410,6 +411,7 @@ public final class RaftClientTestContext {
         time.sleep(electionTimeoutMs * 2L);
         expectAndGrantVotes(currentEpoch + 1);
         expectBeginEpoch(currentEpoch + 1);
+        client.poll();
     }
 
     public OptionalInt currentLeader() {
@@ -444,13 +446,12 @@ public final class RaftClientTestContext {
         return localId.orElseThrow(() -> new AssertionError("Required local id is not defined"));
     }
 
-    private void expectBeginEpoch(int epoch) throws Exception {
+    public void expectBeginEpoch(int epoch) throws Exception {
         pollUntilRequest();
         for (RaftRequest.Outbound request : collectBeginEpochRequests(epoch)) {
             BeginQuorumEpochResponseData beginEpochResponse = beginEpochResponse(epoch, localIdOrThrow());
             deliverResponse(request.correlationId(), request.destination(), beginEpochResponse);
         }
-        client.poll();
     }
 
     public void pollUntil(TestCondition condition) throws InterruptedException {

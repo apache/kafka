@@ -57,6 +57,14 @@ final public class VoterSet {
     }
 
     /**
+     * Returns the node information for all the voters
+     */
+    public Set<Node> voterNodes(ListenerName listenerName) {
+        // todo make more optimized
+        return voterNodes(voters.keySet().stream(), listenerName);
+    }
+
+    /**
      * Returns the node information for all the given voter ids and listener.
      *
      * @param voterIds the ids of the voters
