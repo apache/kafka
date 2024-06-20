@@ -615,7 +615,7 @@ public class SharePartition {
 
     private void initialize() {
         log.debug("Initializing share partition: {}-{}", groupId, topicIdPartition);
-        // Initialize the partition by issuing an initialize RPC call to persister.
+        // Initialize the share partition by reading the state from the persister.
         ReadShareGroupStateResult response;
         try {
             response = persister.readState(new ReadShareGroupStateParameters.Builder()
@@ -647,7 +647,7 @@ public class SharePartition {
 
         PartitionAllData partitionData = state.partitions().get(0);
         // Set the state epoch and end offset from the persisted state.
-        startOffset = partitionData.startOffset();
+        startOffset = partitionData.startOffset() != -1 ? partitionData.startOffset() : 0;
         stateEpoch = partitionData.stateEpoch();
 
         List<PersisterStateBatch> stateBatches = partitionData.stateBatches();
@@ -658,7 +658,7 @@ public class SharePartition {
                     stateBatch.firstOffset(), startOffset);
                 throw new IllegalStateException(String.format("Failed to initialize the share partition %s-%s", groupId, topicIdPartition));
             }
-            InFlightBatch inFlightBatch = new InFlightBatch("", stateBatch.firstOffset(),
+            InFlightBatch inFlightBatch = new InFlightBatch(EMPTY_MEMBER_ID, stateBatch.firstOffset(),
                 stateBatch.lastOffset(), RecordState.forId(stateBatch.deliveryState()), stateBatch.deliveryCount(), null);
             cachedState.put(stateBatch.firstOffset(), inFlightBatch);
         }
