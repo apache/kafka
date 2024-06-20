@@ -43,10 +43,6 @@ global_job_config:
       - echo $SEMAPHORE_WORKFLOW_ID
       - echo $SEMAPHORE_GIT_REPO_SLUG
       - checkout
-      - |
-        if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
-          . vault-setup
-        fi
       - sem-version java 21
       - sem-version go 1.16.15
       - git config --global url."git@github.com:".insteadOf "https://github.com/"
@@ -57,41 +53,38 @@ blocks:
   - name: Gradle Build
     dependencies: []
     task:
-      prologue:
-        commands:
-          - make init-ci
       jobs:
         - name: Build, Compile, Validations, Publish
           commands:
-            - >-
-              if [ "$NANO_VERSION" = "true" ] && [ "$RELEASE_JOB" = "false" ] && [ "$ENABLE_PUBLISH_ARTIFACTS" = "true" ]; then
-                . ci-tools ci-update-version
-              fi
-            - make compile-validate
-            - make check-scala-compatibility
+          # Skip in public CI
             - |
-              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]] && [ "$PUBLISH" = "true" ] && [ "$SEMAPHORE_GIT_REF_TYPE" != "pull-request" ] && [ "$ENABLE_PUBLISH_ARTIFACTS" = "true" ]; then \
-                if [[ "$RELEASE_JOB" = "false" ]]; then \
-                  . ci-tools ci-push-tag; \
-                  mavenUrl=$(vault kv get v1/ci/kv/gradle/artifactory_snapshots_settings | grep mavenUrl | cut -d "," -f 2 | cut -d "'" -f 2); \
-                elif [[ "$SEMAPHORE_GIT_BRANCH" == *-alpha* ]]; then \
-                  mavenUrl=$(vault kv get v1/ci/kv/gradle/artifactory_preview_release_settings | grep mavenUrl | cut -d "," -f 2 | cut -d "'" -f 2); \
-                fi; \
-                ./gradlewAll -PmavenUrl=$mavenUrl -PkeepAliveMode=session uploadArchives; \
-              fi
-            - |
-              echo "PUBLISH: $PUBLISH, RELEASE_JOB: $RELEASE_JOB, SEMAPHORE_GIT_REF_TYPE: $SEMAPHORE_GIT_REF_TYPE, ENABLE_DOWNSTREAM_TRIGGER: $ENABLE_DOWNSTREAM_TRIGGER"
-              if [ "$PUBLISH" = "true" ] && [ "$RELEASE_JOB" = "false" ] && [ "$SEMAPHORE_GIT_REF_TYPE" != "pull-request" ] && [ "$ENABLE_DOWNSTREAM_TRIGGER" = "true" ]; then
-                for project in $DOWNSTREAM_PROJECTS; do
-                  sem-trigger -p $project -b $DOWNSTREAM_BRANCH_NAME -f .semaphore/semaphore.yml
-                done
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
+                make init-ci
+                . vault-setup
+                if [ "$NANO_VERSION" = "true" ] && [ "$RELEASE_JOB" = "false" ] && [ "$ENABLE_PUBLISH_ARTIFACTS" = "true" ]; then
+                  . ci-tools ci-update-version
+                fi
+                make compile-validate
+                make check-scala-compatibility
+                if [ "$PUBLISH" = "true" ] && [ "$SEMAPHORE_GIT_REF_TYPE" != "pull-request" ] && [ "$ENABLE_PUBLISH_ARTIFACTS" = "true" ]; then
+                  if [[ "$RELEASE_JOB" = "false" ]]; then
+                    . ci-tools ci-push-tag
+                    mavenUrl=$(vault kv get v1/ci/kv/gradle/artifactory_snapshots_settings | grep mavenUrl | cut -d "," -f 2 | cut -d "'" -f 2)
+                  elif [[ "$SEMAPHORE_GIT_BRANCH" == *-alpha* ]]; then \
+                    mavenUrl=$(vault kv get v1/ci/kv/gradle/artifactory_preview_release_settings | grep mavenUrl | cut -d "," -f 2 | cut -d "'" -f 2)
+                  fi
+                  ./gradlewAll -PmavenUrl=$mavenUrl -PkeepAliveMode=session uploadArchives
+                fi
+                echo "PUBLISH: $PUBLISH, RELEASE_JOB: $RELEASE_JOB, SEMAPHORE_GIT_REF_TYPE: $SEMAPHORE_GIT_REF_TYPE, ENABLE_DOWNSTREAM_TRIGGER: $ENABLE_DOWNSTREAM_TRIGGER"
+                if [ "$PUBLISH" = "true" ] && [ "$RELEASE_JOB" = "false" ] && [ "$SEMAPHORE_GIT_REF_TYPE" != "pull-request" ] && [ "$ENABLE_DOWNSTREAM_TRIGGER" = "true" ]; then
+                  for project in $DOWNSTREAM_PROJECTS; do
+                    sem-trigger -p $project -b $DOWNSTREAM_BRANCH_NAME -f .semaphore/semaphore.yml
+                  done
+                fi
               fi
   - name: Tests
     dependencies: []
     task:
-      prologue:
-        commands:
-          - make init-ci
       jobs:
         - name: Unit tests and Integration tests
           commands:
