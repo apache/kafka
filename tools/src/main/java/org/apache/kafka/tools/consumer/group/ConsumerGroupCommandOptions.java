@@ -149,7 +149,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("timeout (ms)")
             .ofType(Long.class)
-            .defaultsTo(5000L);
+            .defaultsTo(30000L);
         commandConfigOpt = parser.accepts("command-config", COMMAND_CONFIG_DOC)
             .withRequiredArg()
             .describedAs("command config property file")
