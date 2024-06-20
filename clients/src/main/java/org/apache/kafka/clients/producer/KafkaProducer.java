@@ -50,6 +50,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
@@ -1176,12 +1177,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata.awaitUpdate(version, remainingWaitMs);
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
-                final String errorMessage = String.format("Topic %s not present in metadata after %d ms.",
-                        topic, maxWaitMs);
-                if (metadata.getError(topic) != null) {
-                    throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
-                }
-                throw new TimeoutException(errorMessage);
+                throw new TimeoutException(String.format("Topic %s not present in metadata after %d ms.",
+                        topic, maxWaitMs));
             }
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - nowMs;
@@ -1191,7 +1188,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                                 topic, maxWaitMs) :
                         String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
                                 partition, topic, partitionsCount, maxWaitMs);
-                if (metadata.getError(topic) != null) {
+                if (metadata.getError(topic) != null && metadata.getError(topic).exception() instanceof RetriableException) {
                     throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
                 throw new TimeoutException(errorMessage);
