@@ -980,6 +980,106 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
   }
 
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "disabled")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testUpgradeWithDisabledMigrationPolicy(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Classic member 1 joins and creates the classic group.
+    val groupId = "grp"
+
+    joinDynamicConsumerGroupWithOldProtocol(
+      groupId = groupId,
+      metadata = metadata(List.empty),
+      assignment = assignment(List(0, 1, 2))
+    )
+
+    // The consumerGroupHeartbeat request is rejected.
+    consumerGroupHeartbeat(
+      groupId = groupId,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.GROUP_ID_NOT_FOUND
+    )
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "disabled")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testDowngradeWithDisabledMigrationPolicy(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    val groupId = "grp"
+
+    // Consumer member 1 joins the group.
+    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId)
+
+    // Classic member 2 joins the group.
+    val joinGroupResponseData = sendJoinRequest(
+      groupId = groupId
+    )
+    sendJoinRequest(
+      groupId = groupId,
+      memberId = joinGroupResponseData.memberId,
+      metadata = metadata(List.empty)
+    ).memberId
+
+    // Try to downgrade the group by leaving member 1.
+    leaveGroupWithNewProtocol(
+      groupId = groupId,
+      memberId = memberId1
+    )
+
+    // The group is still a consumer group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.ASSIGNING.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+  }
+
   private def metadata(ownedPartitions: List[Int]): Array[Byte] = {
     ConsumerProtocol.serializeSubscription(
       new ConsumerPartitionAssignor.Subscription(
