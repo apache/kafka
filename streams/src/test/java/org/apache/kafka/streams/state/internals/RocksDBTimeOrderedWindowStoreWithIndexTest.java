@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-public class RocksDBWindowStoreTest extends AbstractRocksDBWindowStoreTest {
+public class RocksDBTimeOrderedWindowStoreWithIndexTest extends AbstractRocksDBWindowStoreTest {
 
     @Override
     StoreType storeType() {
-        return StoreType.RocksDBWindowStore;
+        return StoreType.RocksDBTimeOrderedWindowStoreWithIndex;
     }
 }
