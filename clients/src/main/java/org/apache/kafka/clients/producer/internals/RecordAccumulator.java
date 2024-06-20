@@ -293,7 +293,7 @@ public class RecordAccumulator {
                                      boolean abortOnNewBatch,
                                      long nowMs,
                                      Cluster cluster) throws InterruptedException {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(logContext, k, batchSize));
+        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize)));
 
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
@@ -1033,8 +1033,13 @@ public class RecordAccumulator {
      * Get the deque for the given topic-partition, creating it if necessary.
      */
     private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(tp.topic(), k -> new TopicInfo(logContext, k, batchSize));
+        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(tp.topic(),
+                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize)));
         return topicInfo.batches.computeIfAbsent(tp.partition(), k -> new ArrayDeque<>());
+    }
+
+    BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
+        return new BuiltInPartitioner(logContext, topic, stickyBatchSize);
     }
 
     /**
@@ -1261,8 +1266,8 @@ public class RecordAccumulator {
         public final ConcurrentMap<Integer /*partition*/, Deque<ProducerBatch>> batches = new CopyOnWriteMap<>();
         public final BuiltInPartitioner builtInPartitioner;
 
-        public TopicInfo(LogContext logContext, String topic, int stickyBatchSize) {
-            builtInPartitioner = new BuiltInPartitioner(logContext, topic, stickyBatchSize);
+        public TopicInfo(BuiltInPartitioner builtInPartitioner) {
+            this.builtInPartitioner = builtInPartitioner;
         }
     }
 

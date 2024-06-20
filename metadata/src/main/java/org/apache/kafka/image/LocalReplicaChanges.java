@@ -22,8 +22,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
 
-import java.util.Set;
 import java.util.Map;
+import java.util.Set;
 
 public final class LocalReplicaChanges {
     // partitions for which the broker is not a replica anymore

@@ -16,23 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoField;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Optional;
-import java.util.Properties;
-
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -56,17 +39,34 @@ import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.query.VersionedKeyQuery;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.VersionedRecord;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
 
-@Category({IntegrationTest.class})
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoField;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.Properties;
+
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+@Tag("integration")
 public class IQv2VersionedStoreIntegrationTest {
     private static final int NUM_BROKERS = 1;
     private static final String INPUT_TOPIC_NAME = "input-topic";
@@ -89,7 +89,7 @@ public class IQv2VersionedStoreIntegrationTest {
 
     private KafkaStreams kafkaStreams;
 
-    @BeforeClass
+    @BeforeAll
     public static void before() throws Exception {
         CLUSTER.start();
 
@@ -106,7 +106,7 @@ public class IQv2VersionedStoreIntegrationTest {
         INPUT_POSITION.withComponent(INPUT_TOPIC_NAME, 0, 3);
     }
 
-    @Before
+    @BeforeEach
     public void beforeTest() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(INPUT_TOPIC_NAME,
@@ -119,7 +119,7 @@ public class IQv2VersionedStoreIntegrationTest {
         kafkaStreams = IntegrationTestUtils.getStartedStreams(configs, builder, true);
     }
 
-    @After
+    @AfterEach
     public void afterTest() {
         if (kafkaStreams != null) {
             kafkaStreams.close();
@@ -127,7 +127,7 @@ public class IQv2VersionedStoreIntegrationTest {
         }
     }
 
-    @AfterClass
+    @AfterAll
     public static void after() {
         CLUSTER.stop();
     }

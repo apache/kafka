@@ -35,28 +35,29 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+
 import org.junit.jupiter.api.Assertions;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -65,12 +66,9 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-
-@RunWith(Parameterized.class)
-@Category(IntegrationTest.class)
+@Tag("integration")
+@Timeout(600)
 public class KTableKTableForeignKeyJoinIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     protected static final String LEFT_TABLE = "left_table";
     protected static final String RIGHT_TABLE = "right_table";
     protected static final String OUTPUT = "output-topic";
@@ -78,57 +76,63 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
 
     private final MockTime time = new MockTime();
 
-    protected final boolean leftJoin;
-    protected final boolean materialized;
-    private final String optimization;
-    protected final boolean rejoin;
-    protected final boolean leftVersioned;
-    protected final boolean rightVersioned;
-
-    protected Properties streamsConfig;
     protected long baseTimestamp;
 
-    public KTableKTableForeignKeyJoinIntegrationTest(final boolean leftJoin,
-                                                     final String optimization,
-                                                     final boolean materialized,
-                                                     final boolean rejoin) {
-        // versioning is disabled for these tests, even though the code supports building a
-        // topology with versioned tables, since KTableKTableForeignKeyVersionedJoinIntegrationTest
-        // extends this test class.
-        this(leftJoin, optimization, materialized, rejoin, false, false);
-    }
-
-    protected KTableKTableForeignKeyJoinIntegrationTest(final boolean leftJoin,
-                                                        final String optimization,
-                                                        final boolean materialized,
-                                                        final boolean rejoin,
-                                                        final boolean leftVersioned,
-                                                        final boolean rightVersioned) {
-        this.rejoin = rejoin;
-        this.leftJoin = leftJoin;
-        this.materialized = materialized;
-        this.optimization = optimization;
-        this.leftVersioned = leftVersioned;
-        this.rightVersioned = rightVersioned;
-    }
-
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
+    @BeforeEach
     public void before() {
-        streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimization)
-        ));
         baseTimestamp = time.milliseconds();
     }
 
-    @Parameterized.Parameters(name = "leftJoin={0}, optimization={1}, materialized={2}, rejoin={3}")
-    public static Collection<Object[]> data() {
-        final List<Boolean> booleans = Arrays.asList(true, false);
-        final List<String> optimizations = Arrays.asList(StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION);
-        return buildParameters(booleans, optimizations, booleans, booleans);
+    private static Properties getStreamsProperties(final String optimization) {
+        return mkProperties(mkMap(
+                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+                mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimization)
+        ));
+    }
+
+    // versioning is disabled for these tests, even though the code supports building a
+    // topology with versioned tables, since KTableKTableForeignKeyVersionedJoinIntegrationTest
+    // extends this test class.
+    private static Collection<Object[]> data() {
+        final List<Boolean> leftJoin = Arrays.asList(true, false);
+        final List<String> optimization = Arrays.asList(StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION);
+        final List<Boolean> materialized = Arrays.asList(true, false);
+        final List<Boolean> rejoin = Arrays.asList(true, false);
+        final List<Boolean> leftVersioned = Collections.singletonList(false);
+        final List<Boolean> rightVersioned = Collections.singletonList(false);
+        return buildParameters(leftJoin, optimization, materialized, rejoin, leftVersioned, rightVersioned);
+    }
+
+    // optimizations and rejoin are disabled for these tests, as these tests focus on versioning.
+    // see KTableKTableForeignKeyJoinIntegrationTest for test coverage for optimizations and rejoin
+    private static Collection<Object[]> versionedData() {
+        final List<Boolean> leftJoin = Arrays.asList(true, false);
+        final List<String> optimization = Collections.singletonList(StreamsConfig.NO_OPTIMIZATION);
+        final List<Boolean> materialized = Arrays.asList(true, false);
+        final List<Boolean> rejoin = Collections.singletonList(false);
+        final List<Boolean> leftVersioned = Arrays.asList(true, false);
+        final List<Boolean> rightVersioned = Arrays.asList(true, false);
+        return buildParameters(leftJoin, optimization, materialized, rejoin, leftVersioned, rightVersioned);
+    }
+
+    // deduplicate test cases in data and versionedData
+    private static Stream<Arguments> testCases() {
+        return Stream.concat(data().stream().map(Arrays::asList), versionedData().stream().map(Arrays::asList))
+                .collect(Collectors.toSet())
+                .stream()
+                .map(a -> Arguments.of(a.toArray()));
+    }
+
+    // remove first argument: leftJoin and deduplicate test cases
+    private static Stream<Arguments> testCasesWithoutLeftJoinArg() {
+        return testCases().map(arguments -> Arrays.asList(Arrays.copyOfRange(arguments.get(), 1, arguments.get().length)))
+                .collect(Collectors.toSet())
+                .stream()
+                .map(a -> Arguments.of(a.toArray()));
+    }
+
+    private static Stream<Arguments> versionedDataTestCases() {
+        return versionedData().stream().map(Arguments::of);
     }
 
     protected static Collection<Object[]> buildParameters(final List<?>... argOptions) {
@@ -155,8 +159,15 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         return result;
     }
 
-    @Test
-    public void doJoinFromLeftThenDeleteLeftEntity() {
+    @ParameterizedTest
+    @MethodSource("testCases")
+    public void doJoinFromLeftThenDeleteLeftEntity(final boolean leftJoin,
+                                                   final String optimization,
+                                                   final boolean materialized,
+                                                   final boolean rejoin,
+                                                   final boolean leftVersioned,
+                                                   final boolean rightVersioned) {
+        final Properties streamsConfig = getStreamsProperties(optimization);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
@@ -273,8 +284,15 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         }
     }
 
-    @Test
-    public void doJoinFromRightThenDeleteRightEntity() {
+    @ParameterizedTest
+    @MethodSource("testCases")
+    public void doJoinFromRightThenDeleteRightEntity(final boolean leftJoin,
+                                                     final String optimization,
+                                                     final boolean materialized,
+                                                     final boolean rejoin,
+                                                     final boolean leftVersioned,
+                                                     final boolean rightVersioned) {
+        final Properties streamsConfig = getStreamsProperties(optimization);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
@@ -386,8 +404,15 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldEmitTombstoneWhenDeletingNonJoiningRecords() {
+    @ParameterizedTest
+    @MethodSource("testCases")
+    public void shouldEmitTombstoneWhenDeletingNonJoiningRecords(final boolean leftJoin,
+                                                                 final String optimization,
+                                                                 final boolean materialized,
+                                                                 final boolean rejoin,
+                                                                 final boolean leftVersioned,
+                                                                 final boolean rightVersioned) {
+        final Properties streamsConfig = getStreamsProperties(optimization);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
@@ -445,8 +470,15 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldNotEmitTombstonesWhenDeletingNonExistingRecords() {
+    @ParameterizedTest
+    @MethodSource("testCases")
+    public void shouldNotEmitTombstonesWhenDeletingNonExistingRecords(final boolean leftJoin,
+                                                                      final String optimization,
+                                                                      final boolean materialized,
+                                                                      final boolean rejoin,
+                                                                      final boolean leftVersioned,
+                                                                      final boolean rightVersioned) {
+        final Properties streamsConfig = getStreamsProperties(optimization);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
@@ -470,8 +502,15 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         }
     }
 
-    @Test
-    public void joinShouldProduceNullsWhenValueHasNonMatchingForeignKey() {
+    @ParameterizedTest
+    @MethodSource("testCases")
+    public void joinShouldProduceNullsWhenValueHasNonMatchingForeignKey(final boolean leftJoin,
+                                                                        final String optimization,
+                                                                        final boolean materialized,
+                                                                        final boolean rejoin,
+                                                                        final boolean leftVersioned,
+                                                                        final boolean rightVersioned) {
+        final Properties streamsConfig = getStreamsProperties(optimization);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
@@ -570,8 +609,15 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldUnsubscribeOldForeignKeyIfLeftSideIsUpdated() {
+    @ParameterizedTest
+    @MethodSource("testCases")
+    public void shouldUnsubscribeOldForeignKeyIfLeftSideIsUpdated(final boolean leftJoin,
+                                                                  final String optimization,
+                                                                  final boolean materialized,
+                                                                  final boolean rejoin,
+                                                                  final boolean leftVersioned,
+                                                                  final boolean rightVersioned) {
+        final Properties streamsConfig = getStreamsProperties(optimization);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
@@ -649,8 +695,14 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldEmitRecordOnNullForeignKeyForLeftJoins() {
+    @ParameterizedTest
+    @MethodSource("testCasesWithoutLeftJoinArg")
+    public void shouldEmitRecordOnNullForeignKeyForLeftJoins(final String optimization,
+                                                             final boolean materialized,
+                                                             final boolean rejoin,
+                                                             final boolean leftVersioned,
+                                                             final boolean rightVersioned) {
+        final Properties streamsConfig = getStreamsProperties(optimization);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, true, rejoin, leftVersioned, rightVersioned, value -> null);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
@@ -670,8 +722,13 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldEmitRecordWhenOldAndNewFkDiffer() {
+    @ParameterizedTest
+    @MethodSource("testCasesWithoutLeftJoinArg")
+    public void shouldEmitRecordWhenOldAndNewFkDiffer(final String optimization,
+                                                      final boolean materialized,
+                                                      final boolean rejoin,
+                                                      final boolean leftVersioned,
+                                                      final boolean rightVersioned) {
         final Function<String, String> foreignKeyExtractor = value -> {
             final String split = value.split("\\|")[1];
             if (split.equals("returnNull")) {
@@ -682,6 +739,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 return split;
             }
         };
+        final Properties streamsConfig = getStreamsProperties(optimization);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, true, rejoin, leftVersioned, rightVersioned, foreignKeyExtractor);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
@@ -847,5 +905,268 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         }
 
         return builder.build(streamsConfig);
+    }
+
+    @ParameterizedTest
+    @MethodSource("versionedDataTestCases")
+    public void shouldIgnoreOutOfOrderRecordsIffVersioned(final boolean leftJoin,
+                                                          final String optimization,
+                                                          final boolean materialized,
+                                                          final boolean rejoin,
+                                                          final boolean leftVersioned,
+                                                          final boolean rightVersioned) {
+        final Properties streamsConfig = getStreamsProperties(optimization);
+        final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+            final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+
+            // RHS record
+            right.pipeInput("rhs1", "rhsValue1", baseTimestamp + 4);
+
+            assertThat(
+                    outputTopic.readKeyValuesToMap(),
+                    is(emptyMap())
+            );
+            if (materialized) {
+                assertThat(
+                        asMap(store),
+                        is(emptyMap())
+                );
+            }
+
+            // LHS records with match to existing RHS record
+            left.pipeInput("lhs1", "lhsValue1|rhs1", baseTimestamp + 3);
+            left.pipeInput("lhs2", "lhsValue2|rhs1", baseTimestamp + 5);
+            {
+                final Map<String, String> expected = mkMap(
+                        mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
+                        mkEntry("lhs2", "(lhsValue2|rhs1,rhsValue1)")
+                );
+                assertThat(
+                        outputTopic.readKeyValuesToMap(),
+                        is(expected)
+                );
+                if (materialized) {
+                    assertThat(
+                            asMap(store),
+                            is(expected)
+                    );
+                }
+            }
+
+            // replace with tombstone, to validate behavior when latest record is null
+            left.pipeInput("lhs2", null, baseTimestamp + 6);
+            {
+                assertThat(
+                        outputTopic.readKeyValuesToMap(),
+                        is(mkMap(
+                                mkEntry("lhs2", null)
+                        ))
+                );
+                if (materialized) {
+                    assertThat(
+                            asMap(store),
+                            is(mkMap(
+                                    mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)")
+                            ))
+                    );
+                }
+            }
+
+            // out-of-order LHS record (for existing key) does not produce a new result iff LHS is versioned
+            left.pipeInput("lhs1", "lhsValue1_ooo|rhs1", baseTimestamp + 2);
+            left.pipeInput("lhs2", "lhsValue2_ooo|rhs1", baseTimestamp + 2);
+            if (leftVersioned) {
+                assertThat(
+                        outputTopic.readKeyValuesToMap(),
+                        is(emptyMap())
+                );
+                if (materialized) {
+                    assertThat(
+                            asMap(store),
+                            is(mkMap(
+                                    mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)")
+                            ))
+                    );
+                }
+            } else {
+                final Map<String, String> expected = mkMap(
+                        mkEntry("lhs1", "(lhsValue1_ooo|rhs1,rhsValue1)"),
+                        mkEntry("lhs2", "(lhsValue2_ooo|rhs1,rhsValue1)")
+                );
+                assertThat(
+                        outputTopic.readKeyValuesToMap(),
+                        is(expected)
+                );
+                if (materialized) {
+                    assertThat(
+                            asMap(store),
+                            is(expected)
+                    );
+                }
+            }
+
+            // out-of-order LHS tombstone (for existing key) is similarly ignored (iff LHS is versioned)
+            left.pipeInput("lhs1", null, baseTimestamp + 2);
+            if (leftVersioned) {
+                assertThat(
+                        outputTopic.readKeyValuesToMap(),
+                        is(emptyMap())
+                );
+                if (materialized) {
+                    assertThat(
+                            asMap(store),
+                            is(mkMap(
+                                    mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)")
+                            ))
+                    );
+                }
+            } else {
+                assertThat(
+                        outputTopic.readKeyValuesToMap(),
+                        is(mkMap(
+                                mkEntry("lhs1", null)
+                        ))
+                );
+                if (materialized) {
+                    assertThat(
+                            asMap(store),
+                            is(mkMap(
+                                    mkEntry("lhs2", "(lhsValue2_ooo|rhs1,rhsValue1)")
+                            ))
+                    );
+                }
+            }
+
+            // LHS record with larger timestamp always produces a new result
+            left.pipeInput("lhs1", "lhsValue1_new|rhs1", baseTimestamp + 8);
+            left.pipeInput("lhs2", "lhsValue2_new|rhs1", baseTimestamp + 8);
+            {
+                final Map<String, String> expected = mkMap(
+                        mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1)"),
+                        mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1)")
+                );
+                assertThat(
+                        outputTopic.readKeyValuesToMap(),
+                        is(expected)
+                );
+                if (materialized) {
+                    assertThat(
+                            asMap(store),
+                            is(expected)
+                    );
+                }
+            }
+
+            // out-of-order RHS record (for existing key) does not produce a new result iff RHS is versioned
+            right.pipeInput("rhs1", "rhsValue1_ooo", baseTimestamp + 1);
+            if (rightVersioned) {
+                assertThat(
+                        outputTopic.readKeyValuesToMap(),
+                        is(emptyMap())
+                );
+                if (materialized) {
+                    assertThat(
+                            asMap(store),
+                            is(mkMap(
+                                    mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1)"),
+                                    mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1)")
+                            ))
+                    );
+                }
+            } else {
+                assertThat(
+                        outputTopic.readKeyValuesToMap(),
+                        is(mkMap(
+                                mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1_ooo)"),
+                                mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1_ooo)")
+                        ))
+                );
+                if (materialized) {
+                    assertThat(
+                            asMap(store),
+                            is(mkMap(
+                                    mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1_ooo)"),
+                                    mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1_ooo)")
+                            ))
+                    );
+                }
+            }
+
+            // out-of-order RHS tombstone (for existing key) is similarly ignored (iff RHS is versioned)
+            right.pipeInput("rhs1", null, baseTimestamp + 1);
+            if (rightVersioned) {
+                assertThat(
+                        outputTopic.readKeyValuesToMap(),
+                        is(emptyMap())
+                );
+                if (materialized) {
+                    assertThat(
+                            asMap(store),
+                            is(mkMap(
+                                    mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1)"),
+                                    mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1)")
+                            ))
+                    );
+                }
+            } else {
+                if (leftJoin) {
+                    assertThat(
+                            outputTopic.readKeyValuesToMap(),
+                            is(mkMap(
+                                    mkEntry("lhs1", "(lhsValue1_new|rhs1,null)"),
+                                    mkEntry("lhs2", "(lhsValue2_new|rhs1,null)")
+                            ))
+                    );
+                    if (materialized) {
+                        assertThat(
+                                asMap(store),
+                                is(mkMap(
+                                        mkEntry("lhs1", "(lhsValue1_new|rhs1,null)"),
+                                        mkEntry("lhs2", "(lhsValue2_new|rhs1,null)")
+                                ))
+                        );
+                    }
+                } else {
+                    assertThat(
+                            outputTopic.readKeyValuesToMap(),
+                            is(mkMap(
+                                    mkEntry("lhs1", null),
+                                    mkEntry("lhs2", null)
+                            ))
+                    );
+                    if (materialized) {
+                        assertThat(
+                                asMap(store),
+                                is(emptyMap())
+                        );
+                    }
+                }
+            }
+
+            // RHS record with larger timestamps always produces new results
+            right.pipeInput("rhs1", "rhsValue1_new", baseTimestamp + 6);
+            {
+                assertThat(
+                        outputTopic.readKeyValuesToMap(),
+                        is(mkMap(
+                                mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1_new)"),
+                                mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1_new)")
+                        ))
+                );
+                if (materialized) {
+                    assertThat(
+                            asMap(store),
+                            is(mkMap(
+                                    mkEntry("lhs1", "(lhsValue1_new|rhs1,rhsValue1_new)"),
+                                    mkEntry("lhs2", "(lhsValue2_new|rhs1,rhsValue1_new)")
+                            ))
+                    );
+                }
+            }
+        }
     }
 }

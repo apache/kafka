@@ -378,10 +378,6 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
         return getString(REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP);
     }
 
-    public long remoteLogIndexFileCacheTotalSizeBytes() {
-        return getLong(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP);
-    }
-
     public int remoteLogManagerThreadPoolSize() {
         return getInt(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP);
     }
@@ -447,20 +443,12 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
         return prefixProp == null ? Collections.emptyMap() : Collections.unmodifiableMap(originalsWithPrefix(prefixProp));
     }
 
-    public long remoteLogManagerCopyMaxBytesPerSecond() {
-        return getLong(REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP);
-    }
-
     public int remoteLogManagerCopyNumQuotaSamples() {
         return getInt(REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_PROP);
     }
 
     public int remoteLogManagerCopyQuotaWindowSizeSeconds() {
         return getInt(REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP);
-    }
-
-    public long remoteLogManagerFetchMaxBytesPerSecond() {
-        return getLong(REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP);
     }
 
     public int remoteLogManagerFetchNumQuotaSamples() {

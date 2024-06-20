@@ -822,7 +822,7 @@ class ConnectDistributedTest(Test):
 
         assert success, "Found validation errors:\n" + "\n  ".join(errors)
 
-    @cluster(num_nodes=6)
+    @cluster(num_nodes=7)
     @matrix(
         clean=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],

@@ -203,38 +203,7 @@ def determineCommitId() {
 
 def excludedSpotlessModules = [':clients',
                                ':connect:runtime',
-                               ':core',
-                               ':metadata',
-                               ':server',
-                               ':storage',
-                               ':storage:storage-api', //  rename in settings.gradle
-                               ':streams',
-                               ':streams:examples',
-                               ':streams:streams-scala',
-                               ':streams:test-utils',
-                               ':streams:upgrade-system-tests-0100',
-                               ':streams:upgrade-system-tests-0101',
-                               ':streams:upgrade-system-tests-0102',
-                               ':streams:upgrade-system-tests-0110',
-                               ':streams:upgrade-system-tests-10',
-                               ':streams:upgrade-system-tests-11',
-                               ':streams:upgrade-system-tests-20',
-                               ':streams:upgrade-system-tests-21',
-                               ':streams:upgrade-system-tests-22',
-                               ':streams:upgrade-system-tests-23',
-                               ':streams:upgrade-system-tests-24',
-                               ':streams:upgrade-system-tests-25',
-                               ':streams:upgrade-system-tests-26',
-                               ':streams:upgrade-system-tests-27',
-                               ':streams:upgrade-system-tests-28',
-                               ':streams:upgrade-system-tests-30',
-                               ':streams:upgrade-system-tests-31',
-                               ':streams:upgrade-system-tests-32',
-                               ':streams:upgrade-system-tests-33',
-                               ':streams:upgrade-system-tests-34',
-                               ':streams:upgrade-system-tests-35',
-                               ':streams:upgrade-system-tests-36',
-                               ':streams:upgrade-system-tests-37']
+                               ':streams']
 
 
 apply from: file('wrapper.gradle')
@@ -554,7 +523,6 @@ subprojects {
     } else {
       useJUnitPlatform {
         includeTags "integration"
-        includeTags 'org.apache.kafka.test.IntegrationTest'
       }
     }
 
@@ -592,7 +560,6 @@ subprojects {
     } else {
       useJUnitPlatform {
         excludeTags "integration"
-        excludeTags 'org.apache.kafka.test.IntegrationTest'
       }
     }
 
@@ -3224,8 +3191,6 @@ project(':connect:runtime') {
     testImplementation project(':group-coordinator')
 
     testImplementation libs.junitJupiter
-    testImplementation libs.junitVintageEngine
-    testImplementation libs.mockitoJunitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
     testImplementation libs.mockitoJunitJupiter

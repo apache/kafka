@@ -17,15 +17,16 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Optional;
-
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Optional;
 
 import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
