@@ -22,11 +22,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
 
 public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
 
@@ -34,7 +35,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     private KeyValueStore<Bytes, byte[]> store;
     private ThreadCache cache;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         store = new InMemoryKeyValueStore(namespace);
         cache = new ThreadCache(new LogContext("testCache "), 10000L, new MockStreamsMetrics(new Metrics()));
