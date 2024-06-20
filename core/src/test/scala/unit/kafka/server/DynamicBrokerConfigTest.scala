@@ -798,6 +798,7 @@ class DynamicBrokerConfigTest {
     val config = KafkaConfig(props)
     val kafkaBroker = mock(classOf[KafkaBroker])
     when(kafkaBroker.config).thenReturn(config)
+    when(kafkaBroker.remoteLogManagerOpt).thenReturn(None)
     assertEquals(500, config.remoteLogManagerConfig.remoteFetchMaxWaitMs)
 
     val dynamicRemoteLogConfig = new DynamicRemoteLogConfig(kafkaBroker)
