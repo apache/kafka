@@ -1182,7 +1182,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
-                throw new TimeoutException();
+                throw new TimeoutException(errorMessage);
             }
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - nowMs;
