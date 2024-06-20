@@ -43,6 +43,10 @@ global_job_config:
       - echo $SEMAPHORE_WORKFLOW_ID
       - echo $SEMAPHORE_GIT_REPO_SLUG
       - checkout
+      - |
+        if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
+          . vault-setup
+        fi
       - sem-version java 21
       - sem-version go 1.16.15
       - git config --global url."git@github.com:".insteadOf "https://github.com/"
@@ -66,7 +70,7 @@ blocks:
             - make compile-validate
             - make check-scala-compatibility
             - |
-              if [ "$PUBLISH" = "true" ] && [ "$SEMAPHORE_GIT_REF_TYPE" != "pull-request" ] && [ "$ENABLE_PUBLISH_ARTIFACTS" = "true" ]; then \
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]] && [ "$PUBLISH" = "true" ] && [ "$SEMAPHORE_GIT_REF_TYPE" != "pull-request" ] && [ "$ENABLE_PUBLISH_ARTIFACTS" = "true" ]; then \
                 if [[ "$RELEASE_JOB" = "false" ]]; then \
                   . ci-tools ci-push-tag; \
                   mavenUrl=$(vault kv get v1/ci/kv/gradle/artifactory_snapshots_settings | grep mavenUrl | cut -d "," -f 2 | cut -d "'" -f 2); \
