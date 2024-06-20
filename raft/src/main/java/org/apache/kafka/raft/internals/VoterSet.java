@@ -60,8 +60,12 @@ final public class VoterSet {
      * Returns the node information for all the voters
      */
     public Set<Node> voterNodes(ListenerName listenerName) {
-        // todo make more optimized
-        return voterNodes(voters.keySet().stream(), listenerName);
+        Set<Node> allVoters = new HashSet<>();
+        for (VoterNode voter : voters.values()) {
+            voter.address(listenerName).ifPresent(address ->
+                allVoters.add(new Node(voter.voterKey().id(), address.getHostString(), address.getPort())));
+        }
+        return allVoters;
     }
 
     /**
