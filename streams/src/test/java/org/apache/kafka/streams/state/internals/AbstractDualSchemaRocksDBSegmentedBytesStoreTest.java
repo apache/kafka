@@ -109,7 +109,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
     final long segmentInterval = 60_000L;
     final String storeName = "bytes-store";
 
-    abstract boolean hasIndex();
     abstract SchemaType schemaType();
 
     enum SchemaType {
@@ -171,22 +170,36 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
     AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> getBytesStore() {
         switch (schemaType()) {
             case WindowSchemaWithIndex:
+                return new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                        storeName,
+                        METRICS_SCOPE,
+                        retention,
+                        segmentInterval,
+                        true
+                );
             case WindowSchemaWithoutIndex:
                 return new RocksDBTimeOrderedWindowSegmentedBytesStore(
                         storeName,
                         METRICS_SCOPE,
                         retention,
                         segmentInterval,
-                        hasIndex()
+                        false
                 );
             case SessionSchemaWithIndex:
+                return new RocksDBTimeOrderedSessionSegmentedBytesStore(
+                        storeName,
+                        METRICS_SCOPE,
+                        retention,
+                        segmentInterval,
+                        true
+                );
             case SessionSchemaWithoutIndex:
                 return new RocksDBTimeOrderedSessionSegmentedBytesStore(
                         storeName,
                         METRICS_SCOPE,
                         retention,
                         segmentInterval,
-                        hasIndex()
+                        false
                 );
             default:
                 throw new IllegalStateException("Unknown SchemaType: " + schemaType());
@@ -211,16 +224,13 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
     }
 
     KeySchema getIndexSchema() {
-        if (!hasIndex()) {
-            return null;
-        }
         switch (schemaType()) {
             case WindowSchemaWithIndex:
                 return new KeyFirstWindowKeySchema();
             case SessionSchemaWithIndex:
                 return new KeyFirstSessionKeySchema();
             default:
-                throw new IllegalStateException("Unknown SchemaType: " + schemaType());
+                return null;
         }
     }
 

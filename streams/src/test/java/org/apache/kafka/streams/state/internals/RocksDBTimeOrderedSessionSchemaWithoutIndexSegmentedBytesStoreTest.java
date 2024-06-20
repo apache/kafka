@@ -19,11 +19,6 @@ package org.apache.kafka.streams.state.internals;
 public class RocksDBTimeOrderedSessionSchemaWithoutIndexSegmentedBytesStoreTest extends AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
     @Override
-    boolean hasIndex() {
-        return false;
-    }
-
-    @Override
     SchemaType schemaType() {
         return SchemaType.SessionSchemaWithoutIndex;
     }
