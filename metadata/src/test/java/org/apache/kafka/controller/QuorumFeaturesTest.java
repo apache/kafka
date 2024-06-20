@@ -58,7 +58,7 @@ public class QuorumFeaturesTest {
             MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         for (Features feature : Features.PRODUCTION_FEATURES) {
             expectedFeatures.put(feature.featureName(), VersionRange.of(
-                1,
+                0,
                 feature.defaultValue(MetadataVersion.LATEST_PRODUCTION)
             ));
         }
@@ -73,7 +73,7 @@ public class QuorumFeaturesTest {
             MetadataVersion.latestTesting().featureLevel()));
         for (Features feature : Features.PRODUCTION_FEATURES) {
             expectedFeatures.put(feature.featureName(), VersionRange.of(
-                1,
+                0,
                 feature.defaultValue(MetadataVersion.latestTesting())
             ));
         }

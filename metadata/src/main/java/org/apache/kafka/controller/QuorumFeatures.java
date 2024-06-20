@@ -64,7 +64,7 @@ public final class QuorumFeatures {
                     MetadataVersion.latestProduction().featureLevel()));
         for (Features feature : Features.PRODUCTION_FEATURES) {
             features.put(feature.featureName(), VersionRange.of(
-                1,
+                0,
                 enableUnstable ?
                     feature.latestTesting() :
                     feature.latestProduction()));
