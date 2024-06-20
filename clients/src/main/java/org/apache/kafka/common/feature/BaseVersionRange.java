@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 /**
  * Represents an immutable basic version range using 2 attributes: min and max, each of type short.
  * The min and max attributes need to satisfy 2 rules:
- *  - they are each expected to be >= 0, as we only consider non-negative version values to be valid.
+ *  - they are each expected to be >= 1, as we only consider positive version values to be valid.
  *  - max should be >= min.
  *
  * The class also provides API to convert the version range to a map.
@@ -60,10 +60,10 @@ class BaseVersionRange {
      *                                     - minKeyLabel is empty, OR, minKeyLabel is empty.
      */
     protected BaseVersionRange(String minKeyLabel, short minValue, String maxKeyLabel, short maxValue) {
-        if (minValue < 0 || maxValue < 0 || maxValue < minValue) {
+        if (minValue < 1 || maxValue < 1 || maxValue < minValue) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected minValue >= 0, maxValue >= 0 and maxValue >= minValue, but received" +
+                    "Expected minValue >= 1, maxValue >= 1 and maxValue >= minValue, but received" +
                     " minValue: %d, maxValue: %d", minValue, maxValue));
         }
         if (minKeyLabel.isEmpty()) {
