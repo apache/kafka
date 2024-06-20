@@ -14,40 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.mirror;
-
 /**
- * Directional pair of clusters, where source is mirrored to target.
+ * Provides APIs for the MirrorMaker connectors and utilities to manage MirrorMaker resources.
  */
-public class SourceAndTarget {
-    private final String source;
-    private final String target;
-
-    public SourceAndTarget(String source, String target) {
-        this.source = source;
-        this.target = target;
-    }
-
-    public String source() {
-        return source;
-    }
-
-    public String target() {
-        return target;
-    }
-
-    @Override
-    public String toString() {
-        return source + "->" + target;
-    }
-
-    @Override
-    public int hashCode() {
-        return toString().hashCode();
-    }
-
-    @Override
-    public boolean equals(Object other) {
-        return other != null && toString().equals(other.toString());
-    }
-}
+package org.apache.kafka.connect.mirror;
