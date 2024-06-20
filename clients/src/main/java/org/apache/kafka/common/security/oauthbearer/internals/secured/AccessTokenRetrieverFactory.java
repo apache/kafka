@@ -17,6 +17,12 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import java.net.URL;
+import java.util.Locale;
+import java.util.Map;
+
+import javax.net.ssl.SSLSocketFactory;
+
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
@@ -25,11 +31,6 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
-
-import java.net.URL;
-import java.util.Locale;
-import java.util.Map;
-import javax.net.ssl.SSLSocketFactory;
 
 public class AccessTokenRetrieverFactory  {
 

@@ -22,6 +22,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.DataOutputStream;

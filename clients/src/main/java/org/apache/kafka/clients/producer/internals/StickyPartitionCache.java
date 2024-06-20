@@ -18,12 +18,12 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentHashMap;
-import org.apache.kafka.common.utils.Utils;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * An internal class that implements a cache used for sticky partitioning behavior. The cache tracks the current sticky
