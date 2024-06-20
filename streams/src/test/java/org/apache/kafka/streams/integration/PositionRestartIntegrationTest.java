@@ -61,18 +61,16 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,7 +79,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -92,6 +89,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
@@ -99,11 +97,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 
-@Category({IntegrationTest.class})
-@RunWith(value = Parameterized.class)
+@Tag("integration")
+@Timeout(600)
 public class PositionRestartIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final Logger LOG = LoggerFactory.getLogger(PositionRestartIntegrationTest.class);
     private static final long SEED = new Random().nextLong();
     private static final int NUM_BROKERS = 1;
@@ -116,12 +112,7 @@ public class PositionRestartIntegrationTest {
     private static final long WINDOW_START =
         (RECORD_TIME / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis();
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
-    private final StoresToTest storeToTest;
-    private final String kind;
-    private final boolean cache;
-    private final boolean log;
     private KafkaStreams kafkaStreams;
-    private final Properties streamsConfig;
 
     public enum StoresToTest {
         IN_MEMORY_KV {
@@ -259,10 +250,9 @@ public class PositionRestartIntegrationTest {
         }
     }
 
-    @Parameterized.Parameters(name = "cache={0}, log={1}, supplier={2}, kind={3}")
-    public static Collection<Object[]> data() {
+    public static Stream<Arguments> data() {
         LOG.info("Generating test cases according to random seed: {}", SEED);
-        final List<Object[]> values = new ArrayList<>();
+        final List<Arguments> values = new ArrayList<>();
         for (final boolean cacheEnabled : Arrays.asList(true, false)) {
             for (final boolean logEnabled : Arrays.asList(true, false)) {
                 for (final StoresToTest toTest : StoresToTest.values()) {
@@ -270,33 +260,16 @@ public class PositionRestartIntegrationTest {
                     // survive restarts, since those are by definition not durable.
                     if (logEnabled || toTest.supplier().get().persistent()) {
                         for (final String kind : Arrays.asList("DSL", "PAPI")) {
-                            values.add(new Object[]{cacheEnabled, logEnabled, toTest.name(), kind});
+                            values.add(Arguments.of(cacheEnabled, logEnabled, toTest, kind));
                         }
                     }
                 }
             }
         }
-        return values;
+        return values.stream();
     }
 
-    public PositionRestartIntegrationTest(
-        final boolean cache,
-        final boolean log,
-        final String storeToTest,
-        final String kind) {
-        this.cache = cache;
-        this.log = log;
-        this.storeToTest = StoresToTest.valueOf(storeToTest);
-        this.kind = kind;
-        this.streamsConfig = streamsConfiguration(
-            cache,
-            log,
-            storeToTest,
-            kind
-        );
-    }
-
-    @BeforeClass
+    @BeforeAll
     public static void before()
         throws InterruptedException, IOException, ExecutionException, TimeoutException {
 
@@ -347,65 +320,52 @@ public class PositionRestartIntegrationTest {
         ));
     }
 
-    @Before
-    public void beforeTest() {
-        beforeTest(true);
-    }
-
-    public void beforeTest(final boolean cleanup) {
+    public static StreamsBuilder getStreamBuilder(final boolean cache,
+                                           final boolean log,
+                                           final StoresToTest storeToTest,
+                                           final String kind) {
         final StoreSupplier<?> supplier = storeToTest.supplier();
 
         final StreamsBuilder builder = new StreamsBuilder();
         if (Objects.equals(kind, "DSL") && supplier instanceof KeyValueBytesStoreSupplier) {
-            setUpKeyValueDSLTopology((KeyValueBytesStoreSupplier) supplier, builder);
+            setUpKeyValueDSLTopology((KeyValueBytesStoreSupplier) supplier, builder, cache, log);
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof KeyValueBytesStoreSupplier) {
-            setUpKeyValuePAPITopology((KeyValueBytesStoreSupplier) supplier, builder);
+            setUpKeyValuePAPITopology((KeyValueBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
         } else if (Objects.equals(kind, "DSL") && supplier instanceof WindowBytesStoreSupplier) {
-            setUpWindowDSLTopology((WindowBytesStoreSupplier) supplier, builder);
+            setUpWindowDSLTopology((WindowBytesStoreSupplier) supplier, builder, cache, log);
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof WindowBytesStoreSupplier) {
-            setUpWindowPAPITopology((WindowBytesStoreSupplier) supplier, builder);
+            setUpWindowPAPITopology((WindowBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
         } else if (Objects.equals(kind, "DSL") && supplier instanceof SessionBytesStoreSupplier) {
-            setUpSessionDSLTopology((SessionBytesStoreSupplier) supplier, builder);
+            setUpSessionDSLTopology((SessionBytesStoreSupplier) supplier, builder, cache, log);
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof SessionBytesStoreSupplier) {
-            setUpSessionPAPITopology((SessionBytesStoreSupplier) supplier, builder);
+            setUpSessionPAPITopology((SessionBytesStoreSupplier) supplier, builder, cache, log);
         } else {
             throw new AssertionError("Store supplier is an unrecognized type.");
         }
 
-        kafkaStreams =
-            IntegrationTestUtils.getStartedStreams(
-                streamsConfig,
-                builder,
-                cleanup
-            );
+        return builder;
     }
 
-    @After
+    @AfterEach
     public void afterTest() {
-        afterTest(true);
-    }
-
-    public void afterTest(final boolean cleanup) {
         if (kafkaStreams != null) {
             kafkaStreams.close();
-            if (cleanup) {
-                kafkaStreams.cleanUp();
-            }
+            kafkaStreams.cleanUp();
         }
     }
 
-    @AfterClass
+    @AfterAll
     public static void after() {
         CLUSTER.stop();
     }
 
-    public void reboot() {
-        afterTest(false);
-        beforeTest(false);
-    }
+    @ParameterizedTest
+    @MethodSource("data")
+    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind) {
+        final Properties streamsConfig = streamsConfiguration(cache, log, storeToTest.name(), kind);
+        final StreamsBuilder streamsBuilder = getStreamBuilder(cache, log, storeToTest, kind);
+        kafkaStreams = IntegrationTestUtils.getStartedStreams(streamsConfig, streamsBuilder, true);
 
-    @Test
-    public void verifyStore() {
         final Query<?> query;
         if (storeToTest.keyValue()) {
             query = RangeQuery.withNoBounds();
@@ -422,7 +382,9 @@ public class PositionRestartIntegrationTest {
         }
         shouldReachExpectedPosition(query);
 
-        reboot();
+        // reboot
+        kafkaStreams.close();
+        kafkaStreams = IntegrationTestUtils.getStartedStreams(streamsConfig, streamsBuilder, false);
 
         shouldReachExpectedPosition(query);
     }
@@ -440,8 +402,10 @@ public class PositionRestartIntegrationTest {
         assertThat(result.getPosition(), is(INPUT_POSITION));
     }
 
-    private void setUpSessionDSLTopology(final SessionBytesStoreSupplier supplier,
-                                         final StreamsBuilder builder) {
+    private static void setUpSessionDSLTopology(final SessionBytesStoreSupplier supplier,
+                                         final StreamsBuilder builder,
+                                         final boolean cache,
+                                         final boolean log) {
         final Materialized<Integer, Integer, SessionStore<Bytes, byte[]>> materialized =
             Materialized.as(supplier);
 
@@ -469,8 +433,10 @@ public class PositionRestartIntegrationTest {
             );
     }
 
-    private void setUpWindowDSLTopology(final WindowBytesStoreSupplier supplier,
-                                        final StreamsBuilder builder) {
+    private static void setUpWindowDSLTopology(final WindowBytesStoreSupplier supplier,
+                                        final StreamsBuilder builder,
+                                        final boolean cache,
+                                        final boolean log) {
         final Materialized<Integer, Integer, WindowStore<Bytes, byte[]>> materialized =
             Materialized.as(supplier);
 
@@ -497,8 +463,10 @@ public class PositionRestartIntegrationTest {
             );
     }
 
-    private void setUpKeyValueDSLTopology(final KeyValueBytesStoreSupplier supplier,
-                                          final StreamsBuilder builder) {
+    private static void setUpKeyValueDSLTopology(final KeyValueBytesStoreSupplier supplier,
+                                          final StreamsBuilder builder,
+                                          final boolean cache,
+                                          final boolean log) {
         final Materialized<Integer, Integer, KeyValueStore<Bytes, byte[]>> materialized =
             Materialized.as(supplier);
 
@@ -521,8 +489,11 @@ public class PositionRestartIntegrationTest {
         );
     }
 
-    private void setUpKeyValuePAPITopology(final KeyValueBytesStoreSupplier supplier,
-                                           final StreamsBuilder builder) {
+    private static void setUpKeyValuePAPITopology(final KeyValueBytesStoreSupplier supplier,
+                                           final StreamsBuilder builder,
+                                           final boolean cache,
+                                           final boolean log,
+                                           final StoresToTest storeToTest) {
         final StoreBuilder<?> keyValueStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         if (storeToTest.timestamped()) {
@@ -577,8 +548,11 @@ public class PositionRestartIntegrationTest {
 
     }
 
-    private void setUpWindowPAPITopology(final WindowBytesStoreSupplier supplier,
-                                         final StreamsBuilder builder) {
+    private static void setUpWindowPAPITopology(final WindowBytesStoreSupplier supplier,
+                                         final StreamsBuilder builder,
+                                         final boolean cache,
+                                         final boolean log,
+                                         final StoresToTest storeToTest) {
         final StoreBuilder<?> windowStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         if (storeToTest.timestamped()) {
@@ -634,8 +608,10 @@ public class PositionRestartIntegrationTest {
 
     }
 
-    private void setUpSessionPAPITopology(final SessionBytesStoreSupplier supplier,
-                                          final StreamsBuilder builder) {
+    private static void setUpSessionPAPITopology(final SessionBytesStoreSupplier supplier,
+                                          final StreamsBuilder builder,
+                                          final boolean cache,
+                                          final boolean log) {
         final StoreBuilder<?> sessionStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         sessionStoreStoreBuilder = Stores.sessionStoreBuilder(
@@ -670,8 +646,10 @@ public class PositionRestartIntegrationTest {
             .process(processorSupplier, sessionStoreStoreBuilder.name());
     }
 
-    private static Properties streamsConfiguration(final boolean cache, final boolean log,
-                                                   final String supplier, final String kind) {
+    private static Properties streamsConfiguration(final boolean cache,
+                                            final boolean log,
+                                            final String supplier,
+                                            final String kind) {
         final String safeTestName =
             PositionRestartIntegrationTest.class.getName() + "-" + cache + "-" + log + "-"
                 + supplier + "-" + kind;

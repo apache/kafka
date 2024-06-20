@@ -38,17 +38,16 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -59,6 +58,7 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
@@ -71,43 +71,37 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.st
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.fail;
-import static java.util.Arrays.asList;
+import static org.junit.jupiter.api.Assertions.fail;
 
-@Category(IntegrationTest.class)
 @SuppressWarnings("deprecation") //Need to call the old handler, will remove those calls when the old handler is removed
+@Tag("integration")
+@Timeout(600)
 public class StreamsUncaughtExceptionHandlerIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), Collections.emptyList(), 0L, 0L);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
     public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
-    @Rule
-    public final TestName testName = new TestName();
-
-    private final String testId = safeUniqueTestName(testName);
-    private final String appId = "appId_" + testId;
-    private final String inputTopic = "input" + testId;
-    private final String inputTopic2 = "input2" + testId;
-    private final String outputTopic = "output" + testId;
-    private final String outputTopic2 = "output2" + testId;
+    private String appId;
+    private String inputTopic;
+    private String inputTopic2;
+    private String outputTopic;
+    private String outputTopic2;
     private final StreamsBuilder builder = new StreamsBuilder();
     private final List<String> processorValueCollector = new ArrayList<>();
     private static AtomicBoolean throwError = new AtomicBoolean(true);
 
-    private final Properties properties = basicProps();
+    private Properties properties;
 
     private Properties basicProps() {
         return mkObjectProperties(
@@ -123,14 +117,21 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         );
     }
 
-    @Before
-    public void setup() {
+    @BeforeEach
+    public void setup(final TestInfo testInfo) {
+        final String testId = safeUniqueTestName(testInfo);
+        appId = "appId_" + testId;
+        inputTopic = "input" + testId;
+        inputTopic2 = "input2" + testId;
+        outputTopic = "output" + testId;
+        outputTopic2 = "output2" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic, inputTopic2, outputTopic, outputTopic2);
         final KStream<String, String> stream = builder.stream(inputTopic);
         stream.process(() -> new ShutdownProcessor(processorValueCollector), Named.as("process"));
+        properties = basicProps();
     }
 
-    @After
+    @AfterEach
     public void teardown() throws IOException {
         purgeLocalStreamsState(properties);
     }
