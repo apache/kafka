@@ -1176,9 +1176,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             try {
                 metadata.awaitUpdate(version, remainingWaitMs);
             } catch (TimeoutException ex) {
+                final String errorMessage = String.format("Topic %s not present in metadata after %d ms.",
+                        topic, maxWaitMs);
+                if (metadata.getError(topic) != null) {
+                    throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
+                }
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
-                throw new TimeoutException(String.format("Topic %s not present in metadata after %d ms.",
-                        topic, maxWaitMs));
+                throw new TimeoutException();
             }
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - nowMs;
