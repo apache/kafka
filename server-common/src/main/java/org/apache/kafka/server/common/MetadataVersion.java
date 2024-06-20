@@ -228,7 +228,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_3_7_IV4;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_3_8_IV0;
 
     /**
      * An array containing all of the MetadataVersion entries.
