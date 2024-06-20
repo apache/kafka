@@ -25,4 +25,3 @@ public class UnknownSubscriptionIdException extends ApiException {
         super(message);
     }
 }
-

@@ -253,4 +253,3 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         return new GroupAssignment(newTargetAssignment);
     }
 }
-

@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.storage.internals.utils;
 
-import com.yammer.metrics.core.Meter;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+
+import com.yammer.metrics.core.Meter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

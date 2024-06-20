@@ -17,12 +17,13 @@
 package org.apache.kafka.common;
 
 import org.apache.kafka.common.utils.Serializer;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
  * This test ensures TopicPartition class is serializable and is serialization compatible.

@@ -47,10 +47,10 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
-import org.apache.kafka.streams.query.TimestampedKeyQuery;
-import org.apache.kafka.streams.query.TimestampedRangeQuery;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
+import org.apache.kafka.streams.query.TimestampedKeyQuery;
+import org.apache.kafka.streams.query.TimestampedRangeQuery;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
@@ -67,18 +67,16 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,7 +85,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -105,6 +102,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -116,14 +114,12 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 
-@Category({IntegrationTest.class})
-@RunWith(value = Parameterized.class)
+@Tag("integration")
+@Timeout(600)
 public class IQv2StoreIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
 
     private static final Logger LOG = LoggerFactory.getLogger(IQv2StoreIntegrationTest.class);
 
@@ -146,11 +142,6 @@ public class IQv2StoreIntegrationTest {
         Position.fromMap(mkMap(mkEntry(INPUT_TOPIC_NAME, mkMap(mkEntry(0, 5L)))));
 
     public static class UnknownQuery implements Query<Void> { }
-
-    private final StoresToTest storeToTest;
-    private final String kind;
-    private final boolean cache;
-    private final boolean log;
 
     private KafkaStreams kafkaStreams;
 
@@ -363,15 +354,14 @@ public class IQv2StoreIntegrationTest {
         }
     }
 
-    @Parameterized.Parameters(name = "cache={0}, log={1}, supplier={2}, kind={3}")
-    public static Collection<Object[]> data() {
+    public static Stream<Arguments> data() {
         LOG.info("Generating test cases according to random seed: {}", SEED);
-        final List<Object[]> values = new ArrayList<>();
+        final List<Arguments> values = new ArrayList<>();
         for (final boolean cacheEnabled : Arrays.asList(true, false)) {
             for (final boolean logEnabled : Arrays.asList(true, false)) {
                 for (final StoresToTest toTest : StoresToTest.values()) {
                     for (final String kind : Arrays.asList("DSL", "PAPI")) {
-                        values.add(new Object[]{cacheEnabled, logEnabled, toTest.name(), kind});
+                        values.add(Arguments.of(cacheEnabled, logEnabled, toTest.name(), kind));
                     }
                 }
             }
@@ -381,21 +371,10 @@ public class IQv2StoreIntegrationTest {
         // it for the constant at the top of the file. This will cause exactly the same sequence
         // of pseudorandom values to be generated.
         Collections.shuffle(values, RANDOM);
-        return values;
+        return values.stream();
     }
 
-    public IQv2StoreIntegrationTest(
-        final boolean cache,
-        final boolean log,
-        final String storeToTest,
-        final String kind) {
-        this.cache = cache;
-        this.log = log;
-        this.storeToTest = StoresToTest.valueOf(storeToTest);
-        this.kind = kind;
-    }
-
-    @BeforeClass
+    @BeforeAll
     public static void before()
         throws InterruptedException, IOException, ExecutionException, TimeoutException {
 
@@ -448,8 +427,7 @@ public class IQv2StoreIntegrationTest {
         ));
     }
 
-    @Before
-    public void beforeTest() {
+    public void setup(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind) {
         final StoreSupplier<?> supplier = storeToTest.supplier();
         final Properties streamsConfig = streamsConfiguration(
             cache,
@@ -460,17 +438,17 @@ public class IQv2StoreIntegrationTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
         if (Objects.equals(kind, "DSL") && supplier instanceof KeyValueBytesStoreSupplier) {
-            setUpKeyValueDSLTopology((KeyValueBytesStoreSupplier) supplier, builder);
+            setUpKeyValueDSLTopology((KeyValueBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof KeyValueBytesStoreSupplier) {
-            setUpKeyValuePAPITopology((KeyValueBytesStoreSupplier) supplier, builder);
+            setUpKeyValuePAPITopology((KeyValueBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
         } else if (Objects.equals(kind, "DSL") && supplier instanceof WindowBytesStoreSupplier) {
-            setUpWindowDSLTopology((WindowBytesStoreSupplier) supplier, builder);
+            setUpWindowDSLTopology((WindowBytesStoreSupplier) supplier, builder, cache, log);
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof WindowBytesStoreSupplier) {
-            setUpWindowPAPITopology((WindowBytesStoreSupplier) supplier, builder);
+            setUpWindowPAPITopology((WindowBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
         } else if (Objects.equals(kind, "DSL") && supplier instanceof SessionBytesStoreSupplier) {
-            setUpSessionDSLTopology((SessionBytesStoreSupplier) supplier, builder);
+            setUpSessionDSLTopology((SessionBytesStoreSupplier) supplier, builder, cache, log);
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof SessionBytesStoreSupplier) {
-            setUpSessionPAPITopology((SessionBytesStoreSupplier) supplier, builder);
+            setUpSessionPAPITopology((SessionBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
         } else {
             throw new AssertionError("Store supplier is an unrecognized type.");
         }
@@ -487,7 +465,9 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void setUpSessionDSLTopology(final SessionBytesStoreSupplier supplier,
-                                         final StreamsBuilder builder) {
+                                         final StreamsBuilder builder,
+                                         final boolean cache,
+                                         final boolean log) {
         final Materialized<Integer, Integer, SessionStore<Bytes, byte[]>> materialized =
             Materialized.as(supplier);
 
@@ -516,7 +496,9 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void setUpWindowDSLTopology(final WindowBytesStoreSupplier supplier,
-                                        final StreamsBuilder builder) {
+                                        final StreamsBuilder builder,
+                                        final boolean cache,
+                                        final boolean log) {
         final Materialized<Integer, Integer, WindowStore<Bytes, byte[]>> materialized =
             Materialized.as(supplier);
 
@@ -544,7 +526,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void setUpKeyValueDSLTopology(final KeyValueBytesStoreSupplier supplier,
-                                          final StreamsBuilder builder) {
+                                          final StreamsBuilder builder,
+                                          final boolean cache,
+                                          final boolean log,
+                                          final StoresToTest storeToTest) {
         final Materialized<Integer, Integer, KeyValueStore<Bytes, byte[]>> materialized =
             Materialized.as(supplier);
 
@@ -576,7 +561,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void setUpKeyValuePAPITopology(final KeyValueBytesStoreSupplier supplier,
-                                           final StreamsBuilder builder) {
+                                           final StreamsBuilder builder,
+                                           final boolean cache,
+                                           final boolean log,
+                                           final StoresToTest storeToTest) {
         final StoreBuilder<?> keyValueStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         if (storeToTest.timestamped()) {
@@ -641,7 +629,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void setUpWindowPAPITopology(final WindowBytesStoreSupplier supplier,
-                                         final StreamsBuilder builder) {
+                                         final StreamsBuilder builder,
+                                         final boolean cache,
+                                         final boolean log,
+                                         final StoresToTest storeToTest) {
         final StoreBuilder<?> windowStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         if (storeToTest.timestamped()) {
@@ -709,7 +700,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void setUpSessionPAPITopology(final SessionBytesStoreSupplier supplier,
-                                          final StreamsBuilder builder) {
+                                          final StreamsBuilder builder,
+                                          final boolean cache,
+                                          final boolean log,
+                                          final StoresToTest storeToTest) {
         final StoreBuilder<?> sessionStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         sessionStoreStoreBuilder = Stores.sessionStoreBuilder(
@@ -756,8 +750,7 @@ public class IQv2StoreIntegrationTest {
 
     }
 
-
-    @After
+    @AfterEach
     public void afterTest() {
         // only needed because some of the PAPI cases aren't added yet.
         if (kafkaStreams != null) {
@@ -766,13 +759,15 @@ public class IQv2StoreIntegrationTest {
         }
     }
 
-    @AfterClass
+    @AfterAll
     public static void after() {
         CLUSTER.stop();
     }
 
-    @Test
-    public void verifyStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind) {
+        setup(cache, log, storeToTest, kind);
         try {
             if (storeToTest.global()) {
                 // See KAFKA-13523
@@ -781,7 +776,6 @@ public class IQv2StoreIntegrationTest {
                 shouldRejectUnknownQuery();
                 shouldCollectExecutionInfo();
                 shouldCollectExecutionInfoUnderFailure();
-                final String kind = this.kind;
                 if (storeToTest.keyValue()) {
                     if (storeToTest.timestamped()) {
                         shouldHandleKeyQuery(2,  5);

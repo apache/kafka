@@ -25,7 +25,7 @@ import kafka.utils.TestUtils.random
 import kafka.utils._
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, Config, ConfigEntry}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnknownTopicOrPartitionException}
@@ -83,10 +83,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       try {
         val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
         val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, newVal.toString),
-          SET)
+          OpType.SET)
         val resource2 = new ConfigResource(ConfigResource.Type.BROKER, "")
         val op2 = new AlterConfigOp(new ConfigEntry(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG, newVal.toString),
-          SET)
+          OpType.SET)
         admin.incrementalAlterConfigs(Map(
           resource -> List(op).asJavaCollection,
           resource2 -> List(op2).asJavaCollection,
@@ -124,7 +124,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       try {
         val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
         val op = new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_BYTES_CONFIG, newSegmentSize.toString),
-          SET)
+          OpType.SET)
         admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
       } finally {
         admin.close()
@@ -399,7 +399,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
-      val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "10000"), SET)
+      val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "10000"), OpType.SET)
       admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
       fail("Should fail with UnknownTopicOrPartitionException for topic doesn't exist")
     } catch {
@@ -449,7 +449,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, "")
-      val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "200000"), SET)
+      val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "200000"), OpType.SET)
       val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
       TestUtils.assertFutureExceptionTypeEquals(future, classOf[InvalidRequestException])
     } finally {
@@ -469,6 +469,100 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       TestUtils.assertFutureExceptionTypeEquals(future, classOf[InvalidRequestException])
     } finally {
       admin.close()
+    }
+  }
+
+  private def setBrokerConfigs(brokerId: String, newValue: Long): Unit = alterBrokerConfigs(brokerId, newValue, OpType.SET)
+  private def deleteBrokerConfigs(brokerId: String): Unit = alterBrokerConfigs(brokerId, 0, OpType.DELETE)
+  private def alterBrokerConfigs(brokerId: String, newValue: Long, op: OpType): Unit = {
+    if (isKRaftTest()) {
+      val admin = createAdminClient()
+      try {
+        val resource = new ConfigResource(ConfigResource.Type.BROKER, brokerId)
+        val configOp = new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, newValue.toString), op)
+        val configOp2 = new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, newValue.toString), op)
+        val configOp3 = new AlterConfigOp(new ConfigEntry(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, newValue.toString), op)
+        val configOps = List(configOp, configOp2, configOp3).asJavaCollection
+        admin.incrementalAlterConfigs(Map(
+          resource -> configOps,
+        ).asJava).all.get
+      } finally {
+        admin.close()
+      }
+    } else {
+      val newProps = new Properties()
+      if (op == OpType.SET) {
+        newProps.put(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, newValue.toString)
+        newProps.put(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, newValue.toString)
+        newProps.put(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, newValue.toString)
+      }
+      val brokerIdOption = if (brokerId != "") Option(brokerId.toInt) else None
+      adminZkClient.changeBrokerConfig(brokerIdOption, newProps)
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testBrokerIdConfigChangeAndDelete(quorum: String): Unit = {
+    val newValue: Long = 100000L
+    val brokerId: String = this.brokers.head.config.brokerId.toString
+    setBrokerConfigs(brokerId, newValue)
+    for (b <- this.brokers) {
+      val value = if (b.config.brokerId.toString == brokerId) newValue else QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT
+      TestUtils.retry(10000) {
+        assertEquals(value, b.quotaManagers.leader.upperBound)
+        assertEquals(value, b.quotaManagers.follower.upperBound)
+        assertEquals(value, b.quotaManagers.alterLogDirs.upperBound)
+      }
+    }
+    deleteBrokerConfigs(brokerId)
+    for (b <- this.brokers) {
+      TestUtils.retry(10000) {
+        assertEquals(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, b.quotaManagers.leader.upperBound)
+        assertEquals(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, b.quotaManagers.follower.upperBound)
+        assertEquals(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, b.quotaManagers.alterLogDirs.upperBound)
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDefaultBrokerIdConfigChangeAndDelete(quorum: String): Unit = {
+    val newValue: Long = 100000L
+    val brokerId: String = ""
+    setBrokerConfigs(brokerId, newValue)
+    for (b <- this.brokers) {
+      TestUtils.retry(10000) {
+        assertEquals(newValue, b.quotaManagers.leader.upperBound)
+        assertEquals(newValue, b.quotaManagers.follower.upperBound)
+        assertEquals(newValue, b.quotaManagers.alterLogDirs.upperBound)
+      }
+    }
+    deleteBrokerConfigs(brokerId)
+    for (b <- this.brokers) {
+      TestUtils.retry(10000) {
+        assertEquals(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, b.quotaManagers.leader.upperBound)
+        assertEquals(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, b.quotaManagers.follower.upperBound)
+        assertEquals(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, b.quotaManagers.alterLogDirs.upperBound)
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDefaultAndBrokerIdConfigChange(quorum: String): Unit = {
+    val newValue: Long = 100000L
+    val brokerId: String = this.brokers.head.config.brokerId.toString
+    setBrokerConfigs(brokerId, newValue)
+    val newDefaultValue: Long = 200000L
+    setBrokerConfigs("", newDefaultValue)
+    for (b <- this.brokers) {
+      val value = if (b.config.brokerId.toString == brokerId) newValue else newDefaultValue
+      TestUtils.retry(10000) {
+        assertEquals(value, b.quotaManagers.leader.upperBound)
+        assertEquals(value, b.quotaManagers.follower.upperBound)
+        assertEquals(value, b.quotaManagers.alterLogDirs.upperBound)
+      }
     }
   }
 

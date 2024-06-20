@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collection;
+
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -63,15 +63,14 @@ import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.hamcrest.Matcher;
-import org.junit.Before;
-import org.junit.Test;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Properties;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
+import java.util.stream.Stream;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.Arguments;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
@@ -83,44 +82,43 @@ import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(Parameterized.class)
 public class KStreamWindowAggregateTest {
     private static final String WINDOW_STORE_NAME = "dummy-store-name";
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final String threadId = Thread.currentThread().getName();
 
-    @Parameter
     public StrategyType type;
 
-    @Parameter(1)
     public boolean withCache;
 
     private EmitStrategy emitStrategy;
 
     private boolean emitFinal;
 
-    @Parameterized.Parameters(name = "{0}_cache:{1}")
-    public static Collection<Object[]> getEmitStrategy() {
-        return asList(new Object[][] {
-            {StrategyType.ON_WINDOW_UPDATE, true},
-            {StrategyType.ON_WINDOW_UPDATE, false},
-            {StrategyType.ON_WINDOW_CLOSE, true},
-            {StrategyType.ON_WINDOW_CLOSE, false}
-        });
+    public static Stream<Arguments> getEmitStrategy() {
+        return Stream.of(
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false)
+        );
     }
-
-    @Before
-    public void before() {
+    
+    public void setup(final StrategyType inputType, final boolean inputWithCache) {
+        type = inputType;
+        withCache = inputWithCache;
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
         emitStrategy = StrategyType.forType(type);
     }
 
-    @Test
-    public void testAggBasic() {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void testAggBasic(final StrategyType inputType, final boolean inputWithCache) {
+        setup(inputType, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -213,8 +211,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void testJoin() {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void testJoin(final StrategyType inputType, final boolean inputWithCache) {
+        setup(inputType, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
@@ -461,8 +461,10 @@ public class KStreamWindowAggregateTest {
         );
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullKey() {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldLogAndMeterWhenSkippingNullKey(final StrategyType inputType, final boolean inputWithCache) {
+        setup(inputType, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -487,8 +489,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingExpiredWindow() {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldLogAndMeterWhenSkippingExpiredWindow(final StrategyType inputType, final boolean inputWithCache) {
+        setup(inputType, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -571,8 +575,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingExpiredWindowByGrace() {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldLogAndMeterWhenSkippingExpiredWindowByGrace(final StrategyType inputType, final boolean inputWithCache) {
+        setup(inputType, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -626,8 +632,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldNotEmitFinalIfNotProgressEnough() throws IOException {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldNotEmitFinalIfNotProgressEnough(final StrategyType inputType, final boolean inputWithCache) throws IOException {
+        setup(inputType, inputWithCache);
         final File stateDir = TestUtils.tempDirectory();
         final long windowSize = 10L;
         final Windows<TimeWindow> windows = TimeWindows.ofSizeAndGrace(ofMillis(windowSize), ofMillis(5)).advanceBy(ofMillis(5));
@@ -714,8 +722,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldEmitWithInterval0() throws IOException {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldEmitWithInterval0(final StrategyType inputType, final boolean inputWithCache) throws IOException {
+        setup(inputType, inputWithCache);
         final File stateDir = TestUtils.tempDirectory();
         final long windowSize = 10L;
         final Windows<TimeWindow> windows = TimeWindows.ofSizeAndGrace(ofMillis(windowSize), ofMillis(5)).advanceBy(ofMillis(5));
@@ -781,8 +791,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldEmitWithLargeInterval() throws IOException {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldEmitWithLargeInterval(final StrategyType inputType, final boolean inputWithCache) throws IOException {
+        setup(inputType, inputWithCache);
         final File stateDir = TestUtils.tempDirectory();
         final long windowSize = 10L;
         final Windows<TimeWindow> windows = TimeWindows.ofSizeAndGrace(ofMillis(windowSize), ofMillis(5)).advanceBy(ofMillis(5));
@@ -880,8 +892,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldEmitFromLastEmitTime() throws IOException {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldEmitFromLastEmitTime(final StrategyType inputType, final boolean inputWithCache) throws IOException {
+        setup(inputType, inputWithCache);
         final File stateDir = TestUtils.tempDirectory();
         final long windowSize = 10L;
         final Windows<TimeWindow> windows = TimeWindows.ofSizeAndGrace(ofMillis(windowSize), ofMillis(5)).advanceBy(ofMillis(5));
@@ -960,8 +974,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void showThrowIfEmitFinalUsedWithUnlimitedWindow() {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void showThrowIfEmitFinalUsedWithUnlimitedWindow(final StrategyType inputType, final boolean inputWithCache) {
+        setup(inputType, inputWithCache);
         if (emitFinal) {
             final IllegalArgumentException e = assertThrows(
                 IllegalArgumentException.class, () -> new KStreamWindowAggregate<>(
