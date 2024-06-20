@@ -2135,7 +2135,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         long timeUntilNextBeginQuorumSend = state.timeUntilBeginQuorumEpochTimerExpires(currentTimeMs);
 
         if (timeUntilNextBeginQuorumSend == 0) {
-            System.out.println("timeUntilNextBeginQuorumSend = 0");
             timeUntilNextBeginQuorumSend = maybeSendRequests(
                 currentTimeMs,
                 partitionState
@@ -2144,7 +2143,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                 this::buildBeginQuorumEpochRequest
             );
             state.resetBeginQuorumEpochTimer(currentTimeMs);
-
+            logger.trace("Attempted to send BeginQuorumEpochRequest as heartbeat to all voters. " +
+                "Request can be retried in {} ms", timeUntilNextBeginQuorumSend);
         } else if (!state.nonAcknowledgingVoters().isEmpty()) {
             timeUntilNextBeginQuorumSend = maybeSendRequests(
                 currentTimeMs,
@@ -2153,6 +2153,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                     .voterNodes(state.nonAcknowledgingVoters().stream(), channel.listenerName()),
                 this::buildBeginQuorumEpochRequest
             );
+            logger.trace("Attempted to send BeginQuorumEpochRequest to non-acknowledging voters: {}. " +
+                "Request can be retried in {} ms", state.nonAcknowledgingVoters(), timeUntilNextBeginQuorumSend);
         }
 
         return Math.min(timeUntilFlush, Math.min(timeUntilNextBeginQuorumSend, timeUntilCheckQuorumExpires));
