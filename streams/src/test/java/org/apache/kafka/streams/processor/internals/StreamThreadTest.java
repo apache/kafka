@@ -173,19 +173,6 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StreamThreadTest {
 
-//    @Parameter(0)
-//    public boolean stateUpdaterEnabled = true;
-//
-//    @Parameter(1)
-//    public boolean processingThreadsEnabled = true;
-//
-//    @Parameters
-//    public static Collection<Object[]> data() {
-//        return Arrays.asList(new Object[][] {
-//            {false, false}, {true, false}, {true, true}
-//        });
-//    }
-
     private static final String APPLICATION_ID = "stream-thread-test";
     private static final UUID PROCESS_ID = UUID.fromString("87bf53a8-54f2-485f-a4b6-acdbec0a8b3d");
     private static final String CLIENT_ID = APPLICATION_ID + "-" + PROCESS_ID;
