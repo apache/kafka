@@ -129,7 +129,7 @@ public class NodeApiVersions {
      */
     public short latestUsableVersion(ApiKeys apiKey, short oldestAllowedVersion, short latestAllowedVersion) {
         if (!supportedVersions.containsKey(apiKey))
-            throw new UnsupportedVersionException("The broker does not support " + apiKey);
+            throw new UnsupportedVersionException("The node does not support " + apiKey);
         ApiVersion supportedVersion = supportedVersions.get(apiKey);
         Optional<ApiVersion> intersectVersion = ApiVersionsResponse.intersect(supportedVersion,
             new ApiVersion()
@@ -140,7 +140,7 @@ public class NodeApiVersions {
         if (intersectVersion.isPresent())
             return intersectVersion.get().maxVersion();
         else
-            throw new UnsupportedVersionException("The broker does not support " + apiKey +
+            throw new UnsupportedVersionException("The node does not support " + apiKey +
                 " with version in range [" + oldestAllowedVersion + "," + latestAllowedVersion + "]. The supported" +
                 " range is [" + supportedVersion.minVersion() + "," + supportedVersion.maxVersion() + "].");
     }
@@ -174,10 +174,9 @@ public class NodeApiVersions {
         // which may happen when the remote is too old.
         for (ApiKeys apiKey : ApiKeys.clientApis()) {
             if (!apiKeysText.containsKey(apiKey.id)) {
-                StringBuilder bld = new StringBuilder();
-                bld.append(apiKey.name).append("(").
-                        append(apiKey.id).append("): ").append("UNSUPPORTED");
-                apiKeysText.put(apiKey.id, bld.toString());
+                String bld = apiKey.name + "(" +
+                        apiKey.id + "): " + "UNSUPPORTED";
+                apiKeysText.put(apiKey.id, bld);
             }
         }
         String separator = lineBreaks ? ",\n\t" : ", ";
@@ -185,7 +184,7 @@ public class NodeApiVersions {
         bld.append("(");
         if (lineBreaks)
             bld.append("\n\t");
-        bld.append(Utils.join(apiKeysText.values(), separator));
+        bld.append(String.join(separator, apiKeysText.values()));
         if (lineBreaks)
             bld.append("\n");
         bld.append(")");

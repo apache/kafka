@@ -23,10 +23,10 @@ import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogOffsetMetadata}
+import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
 
-import java.util.{Optional, OptionalInt}
+import java.util.OptionalInt
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -83,7 +83,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     // Now check message's crc
     val batches = FetchResponse.recordsOrFail(partitionData).batches.asScala
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
-    var offsetOfMaxTimestamp = -1L
+    var shallowOffsetOfMaxTimestamp = -1L
     var lastOffset = state.logEndOffset
     var lastEpoch: OptionalInt = OptionalInt.empty()
 
@@ -91,7 +91,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       batch.ensureValid()
       if (batch.maxTimestamp > maxTimestamp) {
         maxTimestamp = batch.maxTimestamp
-        offsetOfMaxTimestamp = batch.baseOffset
+        shallowOffsetOfMaxTimestamp = batch.baseOffset
       }
       state.log.append(batch)
       state.logEndOffset = batch.nextOffset
@@ -102,19 +102,16 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     state.logStartOffset = partitionData.logStartOffset
     state.highWatermark = partitionData.highWatermark
 
-    Some(new LogAppendInfo(Optional.of(new LogOffsetMetadata(fetchOffset)),
+    Some(new LogAppendInfo(fetchOffset,
       lastOffset,
       lastEpoch,
       maxTimestamp,
-      offsetOfMaxTimestamp,
+      shallowOffsetOfMaxTimestamp,
       Time.SYSTEM.milliseconds(),
       state.logStartOffset,
-      RecordConversionStats.EMPTY,
+      RecordValidationStats.EMPTY,
       CompressionType.NONE,
-      CompressionType.NONE,
-      batches.size,
       FetchResponse.recordsSize(partitionData),
-      true,
       batches.headOption.map(_.lastOffset).getOrElse(-1)))
   }
 

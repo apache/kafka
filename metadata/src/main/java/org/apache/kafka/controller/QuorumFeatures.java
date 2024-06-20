@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
@@ -39,7 +40,7 @@ public final class QuorumFeatures {
     private final Map<String, VersionRange> localSupportedFeatures;
     private final List<Integer> quorumNodeIds;
 
-    static public Optional<String> reasonNotSupported(
+    public static Optional<String> reasonNotSupported(
         short newVersion,
         String what,
         VersionRange range
@@ -54,11 +55,20 @@ public final class QuorumFeatures {
         return Optional.empty();
     }
 
-    public static Map<String, VersionRange> defaultFeatureMap() {
+    public static Map<String, VersionRange> defaultFeatureMap(boolean enableUnstable) {
         Map<String, VersionRange> features = new HashMap<>(1);
         features.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                 MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
-                MetadataVersion.latest().featureLevel()));
+                enableUnstable ?
+                    MetadataVersion.latestTesting().featureLevel() :
+                    MetadataVersion.latestProduction().featureLevel()));
+        for (Features feature : Features.PRODUCTION_FEATURES) {
+            features.put(feature.featureName(), VersionRange.of(
+                0,
+                enableUnstable ?
+                    feature.latestTesting() :
+                    feature.latestProduction()));
+        }
         return features;
     }
 
@@ -106,7 +116,7 @@ public final class QuorumFeatures {
         Map<Integer, ControllerRegistration> controllers
     ) {
         if (!metadataVersion.isMigrationSupported()) {
-            return Optional.of("Metadata version too low at " + metadataVersion);
+            return Optional.of("The metadata.version too low at " + metadataVersion);
         } else if (!metadataVersion.isControllerRegistrationSupported()) {
             return Optional.empty();
         }
@@ -139,7 +149,7 @@ public final class QuorumFeatures {
     @Override
     public String toString() {
         List<String> features = new ArrayList<>();
-        localSupportedFeatures.entrySet().forEach(f -> features.add(f.getKey() + ": " + f.getValue()));
+        localSupportedFeatures.forEach((key, value) -> features.add(key + ": " + value));
         features.sort(String::compareTo);
         List<String> nodeIds = new ArrayList<>();
         quorumNodeIds.forEach(id -> nodeIds.add("" + id));

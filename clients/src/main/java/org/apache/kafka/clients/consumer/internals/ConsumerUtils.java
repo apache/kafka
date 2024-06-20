@@ -27,22 +27,23 @@ import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.List;
@@ -50,14 +51,23 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 public final class ConsumerUtils {
 
+    /**
+     * This configuration has only package-level visibility in {@link ConsumerConfig}, so it's inaccessible in the
+     * internals package where most of its uses live. Attempts were made to move things around, but it was deemed
+     * better to leave it as is.
+     */
+    static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
+    public static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
     public static final String CONSUMER_JMX_PREFIX = "kafka.consumer";
     public static final String CONSUMER_METRIC_GROUP_PREFIX = "consumer";
+    public static final String COORDINATOR_METRICS_SUFFIX = "-coordinator-metrics";
+    public static final String CONSUMER_METRICS_SUFFIX = "-metrics";
 
     /**
      * A fixed, large enough value will suffice for max.
@@ -74,7 +84,8 @@ public final class ConsumerUtils {
                                                                     Time time,
                                                                     Metadata metadata,
                                                                     Sensor throttleTimeSensor,
-                                                                    long retryBackoffMs) {
+                                                                    long retryBackoffMs,
+                                                                    ClientTelemetrySender clientTelemetrySender) {
         NetworkClient netClient = ClientUtils.createNetworkClient(config,
                 metrics,
                 CONSUMER_METRIC_GROUP_PREFIX,
@@ -83,7 +94,8 @@ public final class ConsumerUtils {
                 time,
                 CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
                 metadata,
-                throttleTimeSensor);
+                throttleTimeSensor,
+                clientTelemetrySender);
 
         // Will avoid blocking an extended period of time to prevent heartbeat thread starvation
         int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -123,6 +135,11 @@ public final class ConsumerUtils {
     }
 
     public static Metrics createMetrics(ConsumerConfig config, Time time) {
+        return createMetrics(config, time, CommonClientConfigs.metricsReporters(
+                config.getString(ConsumerConfig.CLIENT_ID_CONFIG), config));
+    }
+
+    public static Metrics createMetrics(ConsumerConfig config, Time time, List<MetricsReporter> reporters) {
         String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
         Map<String, String> metricsTags = Collections.singletonMap(CONSUMER_CLIENT_ID_METRIC_TAG, clientId);
         MetricConfig metricConfig = new MetricConfig()
@@ -130,7 +147,6 @@ public final class ConsumerUtils {
                 .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                 .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                 .tags(metricsTags);
-        List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
         MetricsContext metricsContext = new KafkaMetricsContext(CONSUMER_JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         return new Metrics(metricConfig, reporters, time, metricsContext);
@@ -140,12 +156,6 @@ public final class ConsumerUtils {
         Set<String> metricsTags = Collections.singleton(CONSUMER_CLIENT_ID_METRIC_TAG);
         FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry(metricsTags, CONSUMER_METRIC_GROUP_PREFIX);
         return new FetchMetricsManager(metrics, metricsRegistry);
-    }
-
-    public static <K, V> FetchConfig<K, V> createFetchConfig(ConsumerConfig config,
-                                                             Deserializers<K, V> deserializers) {
-        IsolationLevel isolationLevel = configuredIsolationLevel(config);
-        return new FetchConfig<>(config, deserializers, isolationLevel);
     }
 
     @SuppressWarnings("unchecked")
@@ -168,14 +178,10 @@ public final class ConsumerUtils {
      *                           committed offsets' metadata.
      * @param subscriptions      Subscription state to update, setting partitions' offsets to the
      *                           committed offsets.
-     * @return False if null <code>offsetsAndMetadata</code> is provided, indicating that the
-     * refresh operation could not be performed. True in any other case.
      */
-    public static boolean refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
-                                                  final ConsumerMetadata metadata,
-                                                  final SubscriptionState subscriptions) {
-        if (offsetsAndMetadata == null) return false;
-
+    public static void refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
+                                               final ConsumerMetadata metadata,
+                                               final SubscriptionState subscriptions) {
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
@@ -200,25 +206,41 @@ public final class ConsumerUtils {
                 }
             }
         }
-        return true;
     }
 
-    public static <T> T getResult(CompletableFuture<T> future, Timer timer) {
+    public static <T> T getResult(Future<T> future, Timer timer) {
         try {
             return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
-            Throwable t = e.getCause();
-
-            if (t instanceof WakeupException)
-                throw new WakeupException();
-            else if (t instanceof KafkaException)
-                throw (KafkaException) t;
-            else
-                throw new KafkaException(t);
+            throw maybeWrapAsKafkaException(e.getCause());
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         } catch (java.util.concurrent.TimeoutException e) {
             throw new TimeoutException(e);
         }
+    }
+
+    public static <T> T getResult(Future<T> future) {
+        try {
+            return future.get();
+        } catch (ExecutionException e) {
+            throw maybeWrapAsKafkaException(e.getCause());
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        }
+    }
+
+    public static KafkaException maybeWrapAsKafkaException(Throwable t) {
+        if (t instanceof KafkaException)
+            return (KafkaException) t;
+        else
+            return new KafkaException(t);
+    }
+
+    public static KafkaException maybeWrapAsKafkaException(Throwable t, String message) {
+        if (t instanceof KafkaException)
+            return (KafkaException) t;
+        else
+            return new KafkaException(message, t);
     }
 }

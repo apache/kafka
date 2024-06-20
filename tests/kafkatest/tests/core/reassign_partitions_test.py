@@ -19,7 +19,7 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.services.kafka import config_property
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService, quorum
+from kafkatest.services.kafka import KafkaService, quorum, consumer_group, TopicPartition
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
@@ -94,6 +94,18 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
             partition_info["partitions"][i]["partition"] = shuffled_list[i]
         self.logger.debug("Jumbled partitions: " + str(partition_info))
 
+        def check_all_partitions():
+            acked_partitions = self.producer.acked_by_partition
+            for i in range(self.num_partitions):
+                if TopicPartition(self.topic, i) not in acked_partitions:
+                    return False
+            return True
+
+        # ensure all partitions have data so we don't hit OutOfOrderExceptions due to broker restarts
+        wait_until(check_all_partitions,
+                   timeout_sec=60,
+                   err_msg="Failed to produce to all partitions in 30s")
+
         # send reassign partitions command
         self.kafka.execute_reassign_partitions(partition_info)
 
@@ -132,10 +144,20 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         time.sleep(6)
 
     @cluster(num_nodes=8)
-    @matrix(bounce_brokers=[True, False],
-            reassign_from_offset_zero=[True, False],
-            metadata_quorum=quorum.all_non_upgrade)
-    def test_reassign_partitions(self, bounce_brokers, reassign_from_offset_zero, metadata_quorum):
+    @matrix(
+        bounce_brokers=[True, False],
+        reassign_from_offset_zero=[True, False],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        bounce_brokers=[True, False],
+        reassign_from_offset_zero=[True, False],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_reassign_partitions(self, bounce_brokers, reassign_from_offset_zero, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """Reassign partitions tests.
         Setup: 1 zk, 4 kafka nodes, 1 topic with partitions=20, replication-factor=3,
         and min.insync.replicas=3
@@ -158,7 +180,8 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers,
                                         self.kafka, self.topic,
                                         consumer_timeout_ms=60000,
-                                        message_validator=is_int)
+                                        message_validator=is_int,
+                                        consumer_properties=consumer_group.maybe_set_group_protocol(group_protocol))
 
         self.enable_idempotence=True
         self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))

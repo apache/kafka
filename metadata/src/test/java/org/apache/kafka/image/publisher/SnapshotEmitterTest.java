@@ -25,6 +25,7 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.SnapshotWriter;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -45,11 +46,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class SnapshotEmitterTest {
     static class MockRaftClient implements RaftClient<ApiMessageAndVersion> {
         TreeMap<OffsetAndEpoch, FakeSnapshotWriter> writers = new TreeMap<>();
-
-        @Override
-        public void initialize() {
-            // nothing to do
-        }
 
         @Override
         public void register(Listener<ApiMessageAndVersion> listener) {
@@ -135,7 +131,7 @@ public class SnapshotEmitterTest {
     }
 
     @Test
-    public void testEmit() throws Exception {
+    public void testEmit() {
         MockRaftClient mockRaftClient = new MockRaftClient();
         MockTime time = new MockTime(0, 10000L, 20000L);
         SnapshotEmitter emitter = new SnapshotEmitter.Builder().

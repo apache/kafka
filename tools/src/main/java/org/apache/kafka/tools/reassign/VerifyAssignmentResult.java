@@ -46,7 +46,7 @@ public final class VerifyAssignmentResult {
     public VerifyAssignmentResult(
         Map<TopicPartition, PartitionReassignmentState> partStates,
         boolean partsOngoing,
-        Map<org.apache.kafka.common.TopicPartitionReplica, LogDirMoveState> moveStates,
+        Map<TopicPartitionReplica, LogDirMoveState> moveStates,
         boolean movesOngoing
     ) {
         this.partStates = partStates;

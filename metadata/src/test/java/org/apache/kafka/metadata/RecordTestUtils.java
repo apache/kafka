@@ -273,7 +273,6 @@ public class RecordTestUtils {
      *
      * @param o     The input object. It will be modified in-place.
      */
-    @SuppressWarnings("unchecked")
     public static void deepSortRecords(Object o) throws Exception {
         if (o == null) {
             return;
@@ -374,7 +373,7 @@ public class RecordTestUtils {
                 ).iterator()
             )).
             setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                Arrays.asList(
+                Collections.singletonList(
                     new RegisterControllerRecord.ControllerFeature().
                         setName(MetadataVersion.FEATURE_NAME).
                         setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).

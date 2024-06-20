@@ -17,7 +17,18 @@
 
 package kafka.testkit;
 
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
+
 public interface TestKitNode {
-    int id();
-    String metadataDirectory();
+    default int id() {
+        return initialMetaPropertiesEnsemble().nodeId().getAsInt();
+    }
+
+    default String metadataDirectory() {
+        return initialMetaPropertiesEnsemble().metadataLogDir().get();
+    }
+
+    MetaPropertiesEnsemble initialMetaPropertiesEnsemble();
+
+    boolean combined();
 }

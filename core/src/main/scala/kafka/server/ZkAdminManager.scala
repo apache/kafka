@@ -20,7 +20,6 @@ import java.util
 import java.util.Properties
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
-import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
 import kafka.utils.Implicits._
@@ -48,6 +47,9 @@ import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.common.AdminOperationException
+import org.apache.kafka.server.config.{ConfigType, QuotaConfigs, ZooKeeperInternals}
+import org.apache.kafka.server.config.ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG
+import org.apache.kafka.server.config.ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
@@ -78,12 +80,12 @@ class ZkAdminManager(val config: KafkaConfig,
   private val configHelper = new ConfigHelper(metadataCache, config, new ZkConfigRepository(adminZkClient))
 
   private val createTopicPolicy =
-    Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
+    Option(config.getConfiguredInstance(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, classOf[CreateTopicPolicy]))
 
   private val alterConfigPolicy =
-    Option(config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
+    Option(config.getConfiguredInstance(ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, classOf[AlterConfigPolicy]))
 
-  def hasDelayedTopicOperations = topicPurgatory.numDelayed != 0
+  def hasDelayedTopicOperations: Boolean = topicPurgatory.numDelayed != 0
 
   private val defaultNumPartitions = config.numPartitions.intValue()
   private val defaultReplicationFactor = config.defaultReplicationFactor.shortValue()
@@ -439,7 +441,7 @@ class ZkAdminManager(val config: KafkaConfig,
   private def alterTopicConfigs(resource: ConfigResource, validateOnly: Boolean,
                                 configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
     val topic = resource.name
-    if (topic.isEmpty()) {
+    if (topic.isEmpty) {
       throw new InvalidRequestException("Default topic resources are not allowed.")
     }
 
@@ -508,7 +510,7 @@ class ZkAdminManager(val config: KafkaConfig,
             if (resource.name.isEmpty) {
               throw new InvalidRequestException("Default topic resources are not allowed.")
             }
-            val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
+            val configProps = adminZkClient.fetchEntityConfig(ConfigType.TOPIC, resource.name)
             prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys.asScala)
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
 
@@ -516,8 +518,8 @@ class ZkAdminManager(val config: KafkaConfig,
             val brokerId = getBrokerId(resource)
             val perBrokerConfig = brokerId.nonEmpty
 
-            val persistentProps = if (perBrokerConfig) adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.get.toString)
-            else adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default)
+            val persistentProps = if (perBrokerConfig) adminZkClient.fetchEntityConfig(ConfigType.BROKER, brokerId.get.toString)
+            else adminZkClient.fetchEntityConfig(ConfigType.BROKER, ZooKeeperInternals.DEFAULT_STRING)
 
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
             prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
@@ -558,13 +560,13 @@ class ZkAdminManager(val config: KafkaConfig,
 
   private def sanitizeEntityName(entityName: String): String =
     Option(entityName) match {
-      case None => ConfigEntityName.Default
+      case None => ZooKeeperInternals.DEFAULT_STRING
       case Some(name) => Sanitizer.sanitize(name)
     }
 
   private def desanitizeEntityName(sanitizedEntityName: String): String =
     sanitizedEntityName match {
-      case ConfigEntityName.Default => null
+      case ZooKeeperInternals.DEFAULT_STRING => null
       case name => Sanitizer.desanitize(name)
     }
 
@@ -581,10 +583,10 @@ class ZkAdminManager(val config: KafkaConfig,
         case ClientQuotaEntity.USER => user = sanitizedEntityName
         case ClientQuotaEntity.CLIENT_ID => clientId = sanitizedEntityName
         case ClientQuotaEntity.IP => ip = sanitizedEntityName
-        case _ => throw new InvalidRequestException(s"Unhandled client quota entity type: ${entityType}")
+        case _ => throw new InvalidRequestException(s"Unhandled client quota entity type: $entityType")
       }
       if (entityName != null && entityName.isEmpty)
-        throw new InvalidRequestException(s"Empty ${entityType} not supported")
+        throw new InvalidRequestException(s"Empty $entityType not supported")
     }
     (user, clientId, ip)
   }
@@ -615,7 +617,7 @@ class ZkAdminManager(val config: KafkaConfig,
           throw new InvalidRequestException(s"Unexpected empty filter component entity type")
         case et =>
           // Supplying other entity types is not yet supported.
-          throw new UnsupportedVersionException(s"Custom entity type '${et}' not supported")
+          throw new UnsupportedVersionException(s"Custom entity type '$et' not supported")
       }
     }
     if ((userComponent.isDefined || clientIdComponent.isDefined) && ipComponent.isDefined)
@@ -648,8 +650,9 @@ class ZkAdminManager(val config: KafkaConfig,
 
   private def sanitized(name: Option[String]): String = name.map(n => sanitizeEntityName(n)).getOrElse("")
 
-  def handleDescribeClientQuotas(userComponent: Option[ClientQuotaFilterComponent],
-    clientIdComponent: Option[ClientQuotaFilterComponent], strict: Boolean): Map[ClientQuotaEntity, Map[String, Double]] = {
+  private def handleDescribeClientQuotas(userComponent: Option[ClientQuotaFilterComponent],
+                                         clientIdComponent: Option[ClientQuotaFilterComponent],
+                                         strict: Boolean): Map[ClientQuotaEntity, Map[String, Double]] = {
 
     val user = userComponent.flatMap(c => toOption(c.`match`))
     val clientId = clientIdComponent.flatMap(c => toOption(c.`match`))
@@ -660,23 +663,23 @@ class ZkAdminManager(val config: KafkaConfig,
     val exactUser = wantExact(userComponent)
     val exactClientId = wantExact(clientIdComponent)
 
-    def wantExcluded(component: Option[ClientQuotaFilterComponent]): Boolean = strict && !component.isDefined
+    def wantExcluded(component: Option[ClientQuotaFilterComponent]): Boolean = strict && component.isEmpty
     val excludeUser = wantExcluded(userComponent)
     val excludeClientId = wantExcluded(clientIdComponent)
 
     val userEntries = if (exactUser && excludeClientId)
-      Map((Some(user.get), None) -> adminZkClient.fetchEntityConfig(ConfigType.User, sanitizedUser))
+      Map((Some(user.get), None) -> adminZkClient.fetchEntityConfig(ConfigType.USER, sanitizedUser))
     else if (!excludeUser && !exactClientId)
-      adminZkClient.fetchAllEntityConfigs(ConfigType.User).map { case (name, props) =>
+      adminZkClient.fetchAllEntityConfigs(ConfigType.USER).map { case (name, props) =>
         (Some(desanitizeEntityName(name)), None) -> props
       }
     else
       Map.empty
 
     val clientIdEntries = if (excludeUser && exactClientId)
-      Map((None, Some(clientId.get)) -> adminZkClient.fetchEntityConfig(ConfigType.Client, sanitizedClientId))
+      Map((None, Some(clientId.get)) -> adminZkClient.fetchEntityConfig(ConfigType.CLIENT, sanitizedClientId))
     else if (!exactUser && !excludeClientId)
-      adminZkClient.fetchAllEntityConfigs(ConfigType.Client).map { case (name, props) =>
+      adminZkClient.fetchAllEntityConfigs(ConfigType.CLIENT).map { case (name, props) =>
         (None, Some(desanitizeEntityName(name))) -> props
       }
     else
@@ -684,12 +687,12 @@ class ZkAdminManager(val config: KafkaConfig,
 
     val bothEntries = if (exactUser && exactClientId)
       Map((Some(user.get), Some(clientId.get)) ->
-        adminZkClient.fetchEntityConfig(ConfigType.User, s"${sanitizedUser}/clients/${sanitizedClientId}"))
+        adminZkClient.fetchEntityConfig(ConfigType.USER, s"${sanitizedUser}/clients/${sanitizedClientId}"))
     else if (!excludeUser && !excludeClientId)
-      adminZkClient.fetchAllChildEntityConfigs(ConfigType.User, ConfigType.Client).map { case (name, props) =>
+      adminZkClient.fetchAllChildEntityConfigs(ConfigType.USER, ConfigType.CLIENT).map { case (name, props) =>
         val components = name.split("/")
         if (components.size != 3 || components(1) != "clients")
-          throw new IllegalArgumentException(s"Unexpected config path: ${name}")
+          throw new IllegalArgumentException(s"Unexpected config path: $name")
         (Some(desanitizeEntityName(components(0))), Some(desanitizeEntityName(components(2)))) -> props
       }
     else
@@ -714,14 +717,14 @@ class ZkAdminManager(val config: KafkaConfig,
     }.toMap
   }
 
-  def handleDescribeIpQuotas(ipComponent: Option[ClientQuotaFilterComponent], strict: Boolean): Map[ClientQuotaEntity, Map[String, Double]] = {
+  private def handleDescribeIpQuotas(ipComponent: Option[ClientQuotaFilterComponent], strict: Boolean): Map[ClientQuotaEntity, Map[String, Double]] = {
     val ip = ipComponent.flatMap(c => toOption(c.`match`))
     val exactIp = wantExact(ipComponent)
     val allIps = ipComponent.exists(_.`match` == null) || (ipComponent.isEmpty && !strict)
     val ipEntries = if (exactIp)
-      Map(Some(ip.get) -> adminZkClient.fetchEntityConfig(ConfigType.Ip, sanitized(ip)))
+      Map(Some(ip.get) -> adminZkClient.fetchEntityConfig(ConfigType.IP, sanitized(ip)))
     else if (allIps)
-      adminZkClient.fetchAllEntityConfigs(ConfigType.Ip).map { case (name, props) =>
+      adminZkClient.fetchAllEntityConfigs(ConfigType.IP).map { case (name, props) =>
         Some(desanitizeEntityName(name)) -> props
       }
     else
@@ -743,13 +746,13 @@ class ZkAdminManager(val config: KafkaConfig,
   def alterClientQuotas(entries: Seq[ClientQuotaAlteration], validateOnly: Boolean): Map[ClientQuotaEntity, ApiError] = {
     def alterEntityQuotas(entity: ClientQuotaEntity, ops: Iterable[ClientQuotaAlteration.Op]): Unit = {
       val (path, configType, configKeys, isUserClientId) = parseAndSanitizeQuotaEntity(entity) match {
-        case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys, true)
-        case (Some(user), None, None) => (user, ConfigType.User, DynamicConfig.User.configKeys, false)
-        case (None, Some(clientId), None) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys, false)
+        case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.USER, DynamicConfig.User.configKeys, true)
+        case (Some(user), None, None) => (user, ConfigType.USER, DynamicConfig.User.configKeys, false)
+        case (None, Some(clientId), None) => (clientId, ConfigType.CLIENT, DynamicConfig.Client.configKeys, false)
         case (None, None, Some(ip)) =>
           if (!DynamicConfig.Ip.isValidIpEntity(ip))
             throw new InvalidRequestException(s"$ip is not a valid IP or resolvable host.")
-          (ip, ConfigType.Ip, DynamicConfig.Ip.configKeys, false)
+          (ip, ConfigType.IP, DynamicConfig.Ip.configKeys, false)
         case (_, _, Some(_)) => throw new InvalidRequestException(s"Invalid quota entity combination, " +
           s"IP entity should not be used with user/client ID entity.")
         case _ => throw new InvalidRequestException("Invalid client quota entity")
@@ -802,7 +805,7 @@ class ZkAdminManager(val config: KafkaConfig,
   private val attemptToDescribeUserThatDoesNotExist = "Attempt to describe a user credential that does not exist"
 
   def describeUserScramCredentials(users: Option[Seq[String]]): DescribeUserScramCredentialsResponseData = {
-    val describingAllUsers = !users.isDefined || users.get.isEmpty
+    val describingAllUsers = users.isEmpty || users.get.isEmpty
     val retval = new DescribeUserScramCredentialsResponseData()
     val userResults = mutable.Map[String, DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult]()
 
@@ -847,7 +850,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
     try {
       if (describingAllUsers)
-        adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach {
+        adminZkClient.fetchAllEntityConfigs(ConfigType.USER).foreach {
           case (user, properties) => addToResultsIfHasScramCredential(Sanitizer.desanitize(user), properties) }
       else {
         // describing specific users
@@ -867,8 +870,8 @@ class ZkAdminManager(val config: KafkaConfig,
         val usersToSkip = illegalUsers ++ duplicatedUsers
         users.get.filterNot(usersToSkip.contains).foreach { user =>
           try {
-            val userConfigs = adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user))
-            addToResultsIfHasScramCredential(user, userConfigs, true)
+            val userConfigs = adminZkClient.fetchEntityConfig(ConfigType.USER, Sanitizer.sanitize(user))
+            addToResultsIfHasScramCredential(user, userConfigs, explicitUser = true)
           } catch {
             case e: Exception => {
               val apiError = apiErrorFrom(e, errorProcessingDescribe)
@@ -891,7 +894,7 @@ class ZkAdminManager(val config: KafkaConfig,
     retval
   }
 
-  def apiErrorFrom(e: Exception, message: String): ApiError = {
+  private def apiErrorFrom(e: Exception, message: String): ApiError = {
     if (e.isInstanceOf[ApiException])
       info(message, e)
     else
@@ -899,7 +902,7 @@ class ZkAdminManager(val config: KafkaConfig,
     ApiError.fromThrowable(e)
   }
 
-  case class requestStatus(user: String, mechanism: Option[ScramMechanism], legalRequest: Boolean, iterations: Int) {}
+  private case class requestStatus(user: String, mechanism: Option[ScramMechanism], legalRequest: Boolean, iterations: Int) {}
 
   def alterUserScramCredentials(upsertions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion],
                                 deletions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialDeletion]): AlterUserScramCredentialsResponseData = {
@@ -918,23 +921,23 @@ class ZkAdminManager(val config: KafkaConfig,
     val maxIterations = 16384
     val illegalUpsertions = upsertions.map(upsertion =>
       if (upsertion.name.isEmpty)
-        requestStatus(upsertion.name, None, false, upsertion.iterations) // no determined mechanism -- empty user is the cause of failure
+        requestStatus(upsertion.name, None, legalRequest = false, upsertion.iterations) // no determined mechanism -- empty user is the cause of failure
       else {
         val publicScramMechanism = scramMechanism(upsertion.mechanism)
         if (publicScramMechanism == ScramMechanism.UNKNOWN) {
-          requestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // unknown mechanism is the cause of failure
+          requestStatus(upsertion.name, Some(publicScramMechanism), legalRequest = false, upsertion.iterations) // unknown mechanism is the cause of failure
         } else {
           if (upsertion.iterations < InternalScramMechanism.forMechanismName(publicScramMechanism.mechanismName).minIterations
             || upsertion.iterations > maxIterations) {
-            requestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // known mechanism, bad iterations is the cause of failure
+            requestStatus(upsertion.name, Some(publicScramMechanism), legalRequest = false, upsertion.iterations) // known mechanism, bad iterations is the cause of failure
           } else {
-            requestStatus(upsertion.name, Some(publicScramMechanism), true, upsertion.iterations) // legal
+            requestStatus(upsertion.name, Some(publicScramMechanism), legalRequest = true, upsertion.iterations) // legal
           }
         }
       }).filter { !_.legalRequest }
     val illegalDeletions = deletions.map(deletion =>
       if (deletion.name.isEmpty) {
-        requestStatus(deletion.name, None, false, 0) // no determined mechanism -- empty user is the cause of failure
+        requestStatus(deletion.name, None, legalRequest = false, 0) // no determined mechanism -- empty user is the cause of failure
       } else {
         val publicScramMechanism = scramMechanism(deletion.mechanism)
         requestStatus(deletion.name, Some(publicScramMechanism), publicScramMechanism != ScramMechanism.UNKNOWN, 0)
@@ -953,10 +956,10 @@ class ZkAdminManager(val config: KafkaConfig,
       ).toMap ++ illegalUpsertions.map(requestStatus =>
         if (requestStatus.user.isEmpty) {
           (requestStatus.user, usernameMustNotBeEmptyMsg)
-        } else if (requestStatus.mechanism == Some(ScramMechanism.UNKNOWN)) {
+        } else if (requestStatus.mechanism.contains(ScramMechanism.UNKNOWN)) {
           (requestStatus.user, unknownScramMechanismMsg)
         } else {
-          (requestStatus.user, if (requestStatus.iterations > maxIterations) {tooManyIterationsMsg} else {tooFewIterationsMsg})
+          (requestStatus.user, if (requestStatus.iterations > maxIterations) {tooManyIterationsMsg} else tooFewIterationsMsg)
         }
       ).toMap
 
@@ -966,10 +969,10 @@ class ZkAdminManager(val config: KafkaConfig,
         .setErrorMessage(errorMessage)) }
 
     val invalidUsers = (illegalUpsertions ++ illegalDeletions).map(_.user).toSet
-    val initiallyValidUserMechanismPairs = (upsertions.filter(upsertion => !invalidUsers.contains(upsertion.name)).map(upsertion => (upsertion.name, upsertion.mechanism)) ++
-      deletions.filter(deletion => !invalidUsers.contains(deletion.name)).map(deletion => (deletion.name, deletion.mechanism)))
+    val initiallyValidUserMechanismPairs = upsertions.filter(upsertion => !invalidUsers.contains(upsertion.name)).map(upsertion => (upsertion.name, upsertion.mechanism)) ++
+      deletions.filter(deletion => !invalidUsers.contains(deletion.name)).map(deletion => (deletion.name, deletion.mechanism))
 
-    val usersWithDuplicateUserMechanismPairs = initiallyValidUserMechanismPairs.groupBy(identity).filter (
+    val usersWithDuplicateUserMechanismPairs = initiallyValidUserMechanismPairs.groupBy(identity).filter(
       userMechanismPairAndOccurrencesTuple => userMechanismPairAndOccurrencesTuple._2.length > 1).keys.map(userMechanismPair => userMechanismPair._1).toSet
     usersWithDuplicateUserMechanismPairs.foreach { user =>
       retval.results.add(new AlterUserScramCredentialsResult()
@@ -979,7 +982,7 @@ class ZkAdminManager(val config: KafkaConfig,
     def potentiallyValidUserMechanismPairs = initiallyValidUserMechanismPairs.filter(pair => !usersWithDuplicateUserMechanismPairs.contains(pair._1))
 
     val potentiallyValidUsers = potentiallyValidUserMechanismPairs.map(_._1).toSet
-    val configsByPotentiallyValidUser = potentiallyValidUsers.map(user => (user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user)))).toMap
+    val configsByPotentiallyValidUser = potentiallyValidUsers.map(user => (user, adminZkClient.fetchEntityConfig(ConfigType.USER, Sanitizer.sanitize(user)))).toMap
 
     // check for deletion of a credential that does not exist
     val invalidDeletions = deletions.filter(deletion => potentiallyValidUsers.contains(deletion.name)).filter(deletion =>
@@ -1015,7 +1018,7 @@ class ZkAdminManager(val config: KafkaConfig,
     // now persist the properties we have prepared, again keeping track of whatever fails
     val usersFailedToPersist = usersToTryToAlter.filterNot(usersFailedToPrepareProperties.contains).map(user => {
       try {
-        adminZkClient.changeConfigs(ConfigType.User, Sanitizer.sanitize(user), configsByPotentiallyValidUser(user))
+        adminZkClient.changeConfigs(ConfigType.USER, Sanitizer.sanitize(user), configsByPotentiallyValidUser(user))
         (user) // success, 1 element, won't be matched
       } catch {
         case e: Exception =>

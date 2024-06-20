@@ -108,18 +108,6 @@ public final class LoggingContext implements AutoCloseable {
 
     /**
      * Modify the current {@link MDC} logging context to set the {@link #CONNECTOR_CONTEXT connector context} to include the
-     * supplied connector name and the {@link Scope#VALIDATE} scope.
-     *
-     * @param connectorName the connector name
-     */
-    public static LoggingContext forValidation(String connectorName) {
-        LoggingContext context = new LoggingContext();
-        MDC.put(CONNECTOR_CONTEXT, prefixFor(connectorName, Scope.VALIDATE, null));
-        return context;
-    }
-
-    /**
-     * Modify the current {@link MDC} logging context to set the {@link #CONNECTOR_CONTEXT connector context} to include the
      * connector name and task number using the supplied {@link ConnectorTaskId}, and to set the scope to {@link Scope#TASK}.
      *
      * @param id the connector task ID; may not be null

@@ -39,8 +39,8 @@ public interface AdminApiHandler<K, V> {
      * Build the requests necessary for the given keys. The set of keys is derived by
      * {@link AdminApiDriver} during the lookup stage as the set of keys which all map
      * to the same destination broker. Handlers can choose to issue a single request for
-     * all of the provided keys (see {@link Batched}, issue one request per key (see
-     * {@link Unbatched}, or implement their own custom grouping logic if necessary.
+     * all of the provided keys (see {@link Batched}), issue one request per key (see
+     * {@link Unbatched}), or implement their own custom grouping logic if necessary.
      *
      * @param brokerId the target brokerId for the request
      * @param keys the set of keys that should be handled by this request

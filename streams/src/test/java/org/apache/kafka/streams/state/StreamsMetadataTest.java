@@ -20,8 +20,8 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsMetadata;
 import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 import java.util.Set;
@@ -44,7 +44,7 @@ public class StreamsMetadataTest {
 
     private StreamsMetadata streamsMetadata;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         streamsMetadata = new StreamsMetadataImpl(
             HOST_INFO,

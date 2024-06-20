@@ -19,13 +19,13 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Records;
@@ -36,10 +36,13 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -51,7 +54,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchConfig;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
@@ -62,27 +64,34 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * This tests the {@link FetchCollector} functionality in addition to what {@link FetcherTest} tests during the course
  * of its tests.
  */
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class FetchCollectorTest {
 
-    private final static int DEFAULT_RECORD_COUNT = 10;
-    private final static int DEFAULT_MAX_POLL_RECORDS = ConsumerConfig.DEFAULT_MAX_POLL_RECORDS;
+    private static final int DEFAULT_RECORD_COUNT = 10;
+    private static final int DEFAULT_MAX_POLL_RECORDS = ConsumerConfig.DEFAULT_MAX_POLL_RECORDS;
     private final Time time = new MockTime(0, 0, 0);
     private final TopicPartition topicAPartition0 = new TopicPartition("topic-a", 0);
     private final TopicPartition topicAPartition1 = new TopicPartition("topic-a", 1);
     private final TopicPartition topicAPartition2 = new TopicPartition("topic-a", 2);
     private final Set<TopicPartition> allPartitions = partitions(topicAPartition0, topicAPartition1, topicAPartition2);
-    private LogContext logContext;
+    private final LogContext logContext = new LogContext();
 
     private SubscriptionState subscriptions;
-    private FetchConfig<String, String> fetchConfig;
+    private FetchConfig fetchConfig;
     private FetchMetricsManager metricsManager;
     private ConsumerMetadata metadata;
     private FetchBuffer fetchBuffer;
+    private Deserializers<String, String> deserializers;
     private FetchCollector<String, String> fetchCollector;
     private CompletedFetchBuilder completedFetchBuilder;
 
@@ -193,6 +202,7 @@ public class FetchCollectorTest {
                 metadata,
                 subscriptions,
                 fetchConfig,
+                deserializers,
                 metricsManager,
                 time) {
 
@@ -405,6 +415,228 @@ public class FetchCollectorTest {
         assertThrows(IllegalStateException.class, () -> fetchCollector.collectFetch(fetchBuffer));
     }
 
+    @Test
+    public void testCollectFetchInitializationWithNullPosition() {
+        final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
+        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(null);
+        final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
+        final Records records = createRecords();
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            .setPartitionIndex(topicPartition0.partition())
+            .setHighWatermark(1000)
+            .setRecords(records);
+        final CompletedFetch completedFetch = new CompletedFetchBuilder()
+            .partitionData(partitionData)
+            .partition(topicPartition0).build();
+        final FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        when(fetchBuffer.nextInLineFetch()).thenReturn(null);
+        when(fetchBuffer.peek()).thenReturn(completedFetch).thenReturn(null);
+
+        final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+
+        assertTrue(fetch.isEmpty());
+        verify(fetchBuffer).setNextInLineFetch(null);
+    }
+
+    @Test
+    public void testCollectFetchInitializationWithUpdateHighWatermarkOnNotAssignedPartition() {
+        final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
+        final long fetchOffset = 42;
+        final long highWatermark = 1000;
+        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.tryUpdatingHighWatermark(topicPartition0, highWatermark)).thenReturn(false);
+        final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
+        final Records records = createRecords();
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            .setPartitionIndex(topicPartition0.partition())
+            .setHighWatermark(highWatermark)
+            .setRecords(records);
+        final CompletedFetch completedFetch = new CompletedFetchBuilder()
+            .partitionData(partitionData)
+            .partition(topicPartition0)
+            .fetchOffset(fetchOffset).build();
+        final FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        when(fetchBuffer.nextInLineFetch()).thenReturn(null);
+        when(fetchBuffer.peek()).thenReturn(completedFetch).thenReturn(null);
+
+        final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+
+        assertTrue(fetch.isEmpty());
+        verify(fetchBuffer).setNextInLineFetch(null);
+    }
+
+    @Test
+    public void testCollectFetchInitializationWithUpdateLogStartOffsetOnNotAssignedPartition() {
+        final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
+        final long fetchOffset = 42;
+        final long highWatermark = 1000;
+        final long logStartOffset = 10;
+        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.tryUpdatingHighWatermark(topicPartition0, highWatermark)).thenReturn(true);
+        when(subscriptions.tryUpdatingLogStartOffset(topicPartition0, logStartOffset)).thenReturn(false);
+        final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
+        final Records records = createRecords();
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            .setPartitionIndex(topicPartition0.partition())
+            .setHighWatermark(highWatermark)
+            .setRecords(records)
+            .setLogStartOffset(logStartOffset);
+        final CompletedFetch completedFetch = new CompletedFetchBuilder()
+            .partitionData(partitionData)
+            .partition(topicPartition0)
+            .fetchOffset(fetchOffset).build();
+        final FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        when(fetchBuffer.nextInLineFetch()).thenReturn(null);
+        when(fetchBuffer.peek()).thenReturn(completedFetch).thenReturn(null);
+
+        final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+
+        assertTrue(fetch.isEmpty());
+        verify(fetchBuffer).setNextInLineFetch(null);
+    }
+
+    @Test
+    public void testCollectFetchInitializationWithUpdateLastStableOffsetOnNotAssignedPartition() {
+        final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
+        final long fetchOffset = 42;
+        final long highWatermark = 1000;
+        final long logStartOffset = 10;
+        final long lastStableOffset = 900;
+        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.tryUpdatingHighWatermark(topicPartition0, highWatermark)).thenReturn(true);
+        when(subscriptions.tryUpdatingLogStartOffset(topicPartition0, logStartOffset)).thenReturn(true);
+        when(subscriptions.tryUpdatingLastStableOffset(topicPartition0, lastStableOffset)).thenReturn(false);
+        final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
+        final Records records = createRecords();
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            .setPartitionIndex(topicPartition0.partition())
+            .setHighWatermark(highWatermark)
+            .setRecords(records)
+            .setLogStartOffset(logStartOffset)
+            .setLastStableOffset(lastStableOffset);
+        final CompletedFetch completedFetch = new CompletedFetchBuilder()
+            .partitionData(partitionData)
+            .partition(topicPartition0)
+            .fetchOffset(fetchOffset).build();
+        final FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        when(fetchBuffer.nextInLineFetch()).thenReturn(null);
+        when(fetchBuffer.peek()).thenReturn(completedFetch).thenReturn(null);
+
+        final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+
+        assertTrue(fetch.isEmpty());
+        verify(fetchBuffer).setNextInLineFetch(null);
+    }
+
+    @Test
+    public void testCollectFetchInitializationWithUpdatePreferredReplicaOnNotAssignedPartition() {
+        final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
+        final long fetchOffset = 42;
+        final long highWatermark = 1000;
+        final long logStartOffset = 10;
+        final long lastStableOffset = 900;
+        final int preferredReadReplicaId = 21;
+        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.tryUpdatingHighWatermark(topicPartition0, highWatermark)).thenReturn(true);
+        when(subscriptions.tryUpdatingLogStartOffset(topicPartition0, logStartOffset)).thenReturn(true);
+        when(subscriptions.tryUpdatingLastStableOffset(topicPartition0, lastStableOffset)).thenReturn(true);
+        when(subscriptions.tryUpdatingPreferredReadReplica(eq(topicPartition0), eq(preferredReadReplicaId), any())).thenReturn(false);
+        final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
+        final Records records = createRecords();
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            .setPartitionIndex(topicPartition0.partition())
+            .setHighWatermark(highWatermark)
+            .setRecords(records)
+            .setLogStartOffset(logStartOffset)
+            .setLastStableOffset(lastStableOffset)
+            .setPreferredReadReplica(preferredReadReplicaId);
+        final CompletedFetch completedFetch = new CompletedFetchBuilder()
+            .partitionData(partitionData)
+            .partition(topicPartition0)
+            .fetchOffset(fetchOffset).build();
+        final FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        when(fetchBuffer.nextInLineFetch()).thenReturn(null);
+        when(fetchBuffer.peek()).thenReturn(completedFetch).thenReturn(null);
+
+        final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+
+        assertTrue(fetch.isEmpty());
+        verify(fetchBuffer).setNextInLineFetch(null);
+    }
+
+    @Test
+    public void testCollectFetchInitializationOffsetOutOfRangeErrorWithNullPosition() {
+        final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
+        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(null);
+        final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            .setPartitionIndex(topicPartition0.partition())
+            .setErrorCode(Errors.OFFSET_OUT_OF_RANGE.code());
+        final CompletedFetch completedFetch = new CompletedFetchBuilder()
+            .partitionData(partitionData)
+            .partition(topicPartition0).build();
+        final FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        when(fetchBuffer.nextInLineFetch()).thenReturn(null);
+        when(fetchBuffer.peek()).thenReturn(completedFetch).thenReturn(null);
+
+        final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+
+        assertTrue(fetch.isEmpty());
+        verify(fetchBuffer).setNextInLineFetch(null);
+    }
+
+    @Test
+    public void testCollectFetchInitializationOffsetOutOfRangeErrorWithOffsetReset() {
+        final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
+        final long fetchOffset = 42;
+        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.hasDefaultOffsetResetPolicy()).thenReturn(true);
+        final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            .setPartitionIndex(topicPartition0.partition())
+            .setErrorCode(Errors.OFFSET_OUT_OF_RANGE.code());
+        final CompletedFetch completedFetch = new CompletedFetchBuilder()
+            .partitionData(partitionData)
+            .partition(topicPartition0)
+            .fetchOffset(fetchOffset).build();
+        final FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        when(fetchBuffer.nextInLineFetch()).thenReturn(null);
+        when(fetchBuffer.peek()).thenReturn(completedFetch).thenReturn(null);
+
+        final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+
+        assertTrue(fetch.isEmpty());
+        verify(subscriptions).requestOffsetResetIfPartitionAssigned(topicPartition0);
+        verify(fetchBuffer).setNextInLineFetch(null);
+    }
+
+    private FetchCollector<String, String> createFetchCollector(final SubscriptionState subscriptions) {
+        final Properties consumerProps = consumerProps();
+        return new FetchCollector<>(
+            logContext,
+            mock(ConsumerMetadata.class),
+            subscriptions,
+            new FetchConfig(new ConsumerConfig(consumerProps)),
+            new Deserializers<>(new StringDeserializer(), new StringDeserializer()),
+            mock(FetchMetricsManager.class),
+            new MockTime()
+        );
+    }
+
     /**
      * This is a handy utility method for returning a set from a varargs array.
      */
@@ -417,20 +649,13 @@ public class FetchCollectorTest {
     }
 
     private void buildDependencies(int maxPollRecords) {
-        logContext = new LogContext();
-
-        Properties p = new Properties();
-        p.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        p.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        p.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        p.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, String.valueOf(maxPollRecords));
-
+        Properties p = consumerProperties(maxPollRecords);
         ConsumerConfig config = new ConsumerConfig(p);
 
-        Deserializers<String, String> deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
+        deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
 
         subscriptions = createSubscriptionState(config, logContext);
-        fetchConfig = createFetchConfig(config, deserializers);
+        fetchConfig = new FetchConfig(config);
 
         Metrics metrics = createMetrics(config, time);
         metricsManager = createFetchMetricsManager(metrics);
@@ -448,10 +673,25 @@ public class FetchCollectorTest {
                 metadata,
                 subscriptions,
                 fetchConfig,
+                deserializers,
                 metricsManager,
                 time);
         fetchBuffer = new FetchBuffer(logContext);
         completedFetchBuilder = new CompletedFetchBuilder();
+    }
+
+    private Properties consumerProps() {
+        return consumerProperties(DEFAULT_MAX_POLL_RECORDS);
+    }
+
+    private Properties consumerProperties(final int maxPollRecords) {
+        Properties p = new Properties();
+        p.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        p.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        p.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        p.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, String.valueOf(maxPollRecords));
+
+        return p;
     }
 
     private void assign(TopicPartition... partitions) {
@@ -525,6 +765,10 @@ public class FetchCollectorTest {
 
         private int recordCount = DEFAULT_RECORD_COUNT;
 
+        private TopicPartition topicPartition = topicAPartition0;
+
+        private FetchResponseData.PartitionData partitionData = null;
+
         private Errors error = null;
 
         private CompletedFetchBuilder fetchOffset(long fetchOffset) {
@@ -542,24 +786,29 @@ public class FetchCollectorTest {
             return this;
         }
 
+        private CompletedFetchBuilder partitionData(FetchResponseData.PartitionData partitionData) {
+            this.partitionData = partitionData;
+            return this;
+        }
+
+        private CompletedFetchBuilder partition(TopicPartition topicPartition) {
+            this.topicPartition = topicPartition;
+            return this;
+        }
+
         private CompletedFetch build() {
-            Records records;
-            ByteBuffer allocate = ByteBuffer.allocate(1024);
+            Records records = createRecords(recordCount);
 
-            try (MemoryRecordsBuilder builder = MemoryRecords.builder(allocate,
-                    CompressionType.NONE,
-                    TimestampType.CREATE_TIME,
-                    0)) {
-                for (int i = 0; i < recordCount; i++)
-                    builder.append(0L, "key".getBytes(), ("value-" + i).getBytes());
-
-                records = builder.build();
-            }
-
-            FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            if (partitionData == null) {
+                partitionData = new FetchResponseData.PartitionData()
                     .setPartitionIndex(topicAPartition0.partition())
                     .setHighWatermark(1000)
                     .setRecords(records);
+            }
+
+            if (topicPartition != null) {
+                partitionData.setPartitionIndex(topicPartition.partition());
+            }
 
             if (error != null)
                 partitionData.setErrorCode(error.code());
@@ -569,11 +818,29 @@ public class FetchCollectorTest {
                     logContext,
                     subscriptions,
                     BufferSupplier.create(),
-                    topicAPartition0,
+                    topicPartition,
                     partitionData,
                     metricsAggregator,
                     fetchOffset,
                     ApiKeys.FETCH.latestVersion());
+        }
+    }
+
+    private Records createRecords() {
+        return createRecords(DEFAULT_RECORD_COUNT);
+    }
+
+    private Records createRecords(final int recordCount) {
+        ByteBuffer allocate = ByteBuffer.allocate(1024);
+
+        try (MemoryRecordsBuilder builder = MemoryRecords.builder(allocate,
+            Compression.NONE,
+            TimestampType.CREATE_TIME,
+            0)) {
+            for (int i = 0; i < recordCount; i++)
+                builder.append(0L, "key".getBytes(), ("value-" + i).getBytes());
+
+            return builder.build();
         }
     }
 }

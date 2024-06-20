@@ -19,13 +19,23 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 /**
  * Interface common for all groups.
  */
 public interface Group {
     enum GroupType {
         CONSUMER("consumer"),
-        GENERIC("generic");
+        CLASSIC("classic"),
+        UNKNOWN("unknown");
 
         private final String name;
 
@@ -36,6 +46,24 @@ public interface Group {
         @Override
         public String toString() {
             return name;
+        }
+
+        private static final Map<String, GroupType> NAME_TO_ENUM = Arrays.stream(values())
+            .collect(Collectors.toMap(type -> type.name.toLowerCase(Locale.ROOT), Function.identity()));
+
+        /**
+         * Parse a string into the corresponding {@code GroupType} enum value, in a case-insensitive manner.
+         *
+         * @return The {{@link GroupType}} according to the string passed. Unknown group type is returned if
+         * the string doesn't correspond to a valid group type.
+         */
+        public static GroupType parse(String name) {
+            if (name == null) {
+                return UNKNOWN;
+            }
+            GroupType type = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
+
+            return type == null ? UNKNOWN : type;
         }
     }
 
@@ -57,7 +85,7 @@ public interface Group {
     /**
      * @return the group formatted as a list group response based on the committed offset.
      */
-    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
+    ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
 
     /**
      * @return The group id.
@@ -71,11 +99,16 @@ public interface Group {
      * @param groupInstanceId           The group instance id.
      * @param generationIdOrMemberEpoch The generation id for genetic groups or the member epoch
      *                                  for consumer groups.
+     * @param isTransactional           Whether the offset commit is transactional or not.
+     * @param apiVersion                The api version.
      */
     void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
-        int generationIdOrMemberEpoch
+        int generationIdOrMemberEpoch,
+        boolean isTransactional,
+        short apiVersion
+
     ) throws KafkaException;
 
     /**
@@ -90,4 +123,50 @@ public interface Group {
         int memberEpoch,
         long lastCommittedOffset
     ) throws KafkaException;
+
+    /**
+     * Validates the OffsetDelete request.
+     */
+    void validateOffsetDelete() throws KafkaException;
+
+    /**
+     * Validates the DeleteGroups request.
+     */
+    void validateDeleteGroup() throws KafkaException;
+
+    /**
+     * Returns true if the group is actively subscribed to the topic.
+     *
+     * @param topic  The topic name.
+     *
+     * @return Whether the group is subscribed to the topic.
+     */
+    boolean isSubscribedToTopic(String topic);
+
+    /**
+     * Populates the list of records with tombstone(s) for deleting the group.
+     *
+     * @param records The list of records.
+     */
+    void createGroupTombstoneRecords(List<CoordinatorRecord> records);
+
+    /**
+     * @return Whether the group is in Empty state.
+     */
+    boolean isEmpty();
+
+    /**
+     * See {@link OffsetExpirationCondition}
+     *
+     * @return The offset expiration condition for the group or Empty if no such condition exists.
+     */
+    Optional<OffsetExpirationCondition> offsetExpirationCondition();
+
+    /**
+     * Returns true if the statesFilter contains the current state with given committedOffset.
+     *
+     * @param statesFilter The states to filter, which must be lowercase.
+     * @return true if the state includes, false otherwise.
+     */
+    boolean isInStates(Set<String> statesFilter, long committedOffset);
 }

@@ -24,15 +24,17 @@ import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, OffsetPosition}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments, OffsetPosition}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
+import java.util
 import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.Pattern
 import java.util.{Collections, Optional}
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 /**
@@ -171,9 +173,9 @@ class LocalLog(@volatile private var _dir: File,
     val currentRecoveryPoint = recoveryPoint
     if (currentRecoveryPoint <= offset) {
       val segmentsToFlush = segments.values(currentRecoveryPoint, offset)
-      segmentsToFlush.foreach(_.flush())
+      segmentsToFlush.forEach(_.flush())
       // If there are any new segments, we need to flush the parent directory for crash consistency.
-      if (segmentsToFlush.exists(_.baseOffset >= currentRecoveryPoint)) {
+      if (segmentsToFlush.stream().anyMatch(_.baseOffset >= currentRecoveryPoint)) {
         // The directory might be renamed concurrently for topic deletion, which may cause NoSuchFileException here.
         // Since the directory is to be deleted anyways, we just swallow NoSuchFileException and let it go.
         Utils.flushDirIfExists(dir.toPath)
@@ -248,40 +250,10 @@ class LocalLog(@volatile private var _dir: File,
    */
   private[log] def deleteAllSegments(): Iterable[LogSegment] = {
     maybeHandleIOException(s"Error while deleting all segments for $topicPartition in dir ${dir.getParent}") {
-      val deletableSegments = List[LogSegment]() ++ segments.values
-      removeAndDeleteSegments(segments.values, asyncDelete = false, LogDeletion(this))
+      val deletableSegments = new util.ArrayList(segments.values).asScala
+      removeAndDeleteSegments(segments.values.asScala, asyncDelete = false, LogDeletion(this))
       isMemoryMappedBufferClosed = true
       deletableSegments
-    }
-  }
-
-  /**
-   * Find segments starting from the oldest until the user-supplied predicate is false.
-   * A final segment that is empty will never be returned.
-   *
-   * @param predicate A function that takes in a candidate log segment, the next higher segment
-   *                  (if there is one). It returns true iff the segment is deletable.
-   * @return the segments ready to be deleted
-   */
-  private[log] def deletableSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean): Iterable[LogSegment] = {
-    if (segments.isEmpty) {
-      Seq.empty
-    } else {
-      val deletable = ArrayBuffer.empty[LogSegment]
-      val segmentsIterator = segments.values.iterator
-      var segmentOpt = nextOption(segmentsIterator)
-      while (segmentOpt.isDefined) {
-        val segment = segmentOpt.get
-        val nextSegmentOpt = nextOption(segmentsIterator)
-        val isLastSegmentAndEmpty = nextSegmentOpt.isEmpty && segment.size == 0
-        if (predicate(segment, nextSegmentOpt) && !isLastSegmentAndEmpty) {
-          deletable += segment
-          segmentOpt = nextSegmentOpt
-        } else {
-          segmentOpt = Option.empty
-        }
-      }
-      deletable
     }
   }
 
@@ -341,11 +313,11 @@ class LocalLog(@volatile private var _dir: File,
       segmentToDelete.changeFileSuffixes("", LogFileUtils.DELETED_FILE_SUFFIX)
 
     val newSegment = LogSegment.open(dir,
-      baseOffset = newOffset,
+      newOffset,
       config,
-      time = time,
-      initFileSize = config.initFileSize,
-      preallocate = config.preallocate)
+      time,
+      config.initFileSize,
+      config.preallocate)
     segments.add(newSegment)
 
     reason.logReason(List(segmentToDelete))
@@ -394,7 +366,7 @@ class LocalLog(@volatile private var _dir: File,
       var segmentOpt = segments.floorSegment(startOffset)
 
       // return error on attempt to read beyond the log end offset
-      if (startOffset > endOffset || segmentOpt.isEmpty)
+      if (startOffset > endOffset || !segmentOpt.isPresent)
         throw new OffsetOutOfRangeException(s"Received request for offset $startOffset for partition $topicPartition, " +
           s"but we only have log segments upto $endOffset.")
 
@@ -407,16 +379,23 @@ class LocalLog(@volatile private var _dir: File,
         // but if that segment doesn't contain any messages with an offset greater than that
         // continue to read from successive segments until we get some messages or we reach the end of the log
         var fetchDataInfo: FetchDataInfo = null
-        while (fetchDataInfo == null && segmentOpt.isDefined) {
+        while (fetchDataInfo == null && segmentOpt.isPresent) {
           val segment = segmentOpt.get
           val baseOffset = segment.baseOffset
 
-          val maxPosition =
-          // Use the max offset position if it is on this segment; otherwise, the segment size is the limit.
-            if (maxOffsetMetadata.segmentBaseOffset == segment.baseOffset) maxOffsetMetadata.relativePositionInSegment
-            else segment.size
+          // 1. If `maxOffsetMetadata#segmentBaseOffset < segment#baseOffset`, then return maxPosition as empty.
+          // 2. Use the max-offset position if it is on this segment; otherwise, the segment size is the limit.
+          // 3. When maxOffsetMetadata is message-offset-only, then we don't know the relativePositionInSegment so
+          //    return maxPosition as empty to avoid reading beyond the max-offset
+          val maxPositionOpt: Optional[java.lang.Long] =
+            if (segment.baseOffset < maxOffsetMetadata.segmentBaseOffset)
+              Optional.of(segment.size)
+            else if (segment.baseOffset == maxOffsetMetadata.segmentBaseOffset && !maxOffsetMetadata.messageOffsetOnly())
+              Optional.of(maxOffsetMetadata.relativePositionInSegment)
+            else
+              Optional.empty()
 
-          fetchDataInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
+          fetchDataInfo = segment.read(startOffset, maxLength, maxPositionOpt, minOneMessage)
           if (fetchDataInfo != null) {
             if (includeAbortedTxns)
               fetchDataInfo = addAbortedTransactions(startOffset, segment, fetchDataInfo)
@@ -435,8 +414,7 @@ class LocalLog(@volatile private var _dir: File,
   }
 
   private[log] def append(lastOffset: Long, largestTimestamp: Long, shallowOffsetOfMaxTimestamp: Long, records: MemoryRecords): Unit = {
-    segments.activeSegment.append(largestOffset = lastOffset, largestTimestamp = largestTimestamp,
-      shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp, records = records)
+    segments.activeSegment.append(lastOffset, largestTimestamp, shallowOffsetOfMaxTimestamp, records)
     updateLogEndOffset(lastOffset + 1)
   }
 
@@ -445,9 +423,8 @@ class LocalLog(@volatile private var _dir: File,
     val fetchSize = fetchInfo.records.sizeInBytes
     val startOffsetPosition = new OffsetPosition(fetchInfo.fetchOffsetMetadata.messageOffset,
       fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
-    val upperBoundOffset = segment.fetchUpperBoundOffset(startOffsetPosition, fetchSize).orElse {
-      segments.higherSegment(segment.baseOffset).map(_.baseOffset).getOrElse(logEndOffset)
-    }
+    val upperBoundOffset = segment.fetchUpperBoundOffset(startOffsetPosition, fetchSize).orElse(
+      segments.higherSegment(segment.baseOffset).asScala.map(s => s.baseOffset).getOrElse(logEndOffset))
 
     val abortedTransactions = ListBuffer.empty[FetchResponseData.AbortedTransaction]
     def accumulator(abortedTxns: Seq[AbortedTxn]): Unit = abortedTransactions ++= abortedTxns.map(_.asAbortedTransaction)
@@ -478,7 +455,7 @@ class LocalLog(@volatile private var _dir: File,
     val segmentEntry = segments.floorSegment(baseOffset)
     val allAbortedTxns = ListBuffer.empty[AbortedTxn]
     def accumulator(abortedTxns: Seq[AbortedTxn]): Unit = allAbortedTxns ++= abortedTxns
-    segmentEntry.foreach(segment => collectAbortedTransactions(logStartOffset, upperBoundOffset, segment, accumulator))
+    segmentEntry.ifPresent(segment => collectAbortedTransactions(logStartOffset, upperBoundOffset, segment, accumulator))
     allAbortedTxns.toList
   }
 
@@ -515,7 +492,7 @@ class LocalLog(@volatile private var _dir: File,
             s" =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already exists. Existing " +
             s"segment is ${segments.get(newOffset)}.")
         }
-      } else if (!segments.isEmpty && newOffset < activeSegment.baseOffset) {
+      } else if (segments.nonEmpty && newOffset < activeSegment.baseOffset) {
         throw new KafkaException(
           s"Trying to roll a new log segment for topic partition $topicPartition with " +
             s"start offset $newOffset =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) lower than start offset of the active segment $activeSegment")
@@ -529,15 +506,15 @@ class LocalLog(@volatile private var _dir: File,
           Files.delete(file.toPath)
         }
 
-        segments.lastSegment.foreach(_.onBecomeInactiveSegment())
+        segments.lastSegment.ifPresent(_.onBecomeInactiveSegment())
       }
 
       val newSegment = LogSegment.open(dir,
-        baseOffset = newOffset,
+        newOffset,
         config,
-        time = time,
-        initFileSize = config.initFileSize,
-        preallocate = config.preallocate)
+        time,
+        config.initFileSize,
+        config.preallocate)
       segments.add(newSegment)
 
       // We need to update the segment base offset and append position data of the metadata when log rolls.
@@ -560,7 +537,7 @@ class LocalLog(@volatile private var _dir: File,
     maybeHandleIOException(s"Error while truncating the entire log for $topicPartition in dir ${dir.getParent}") {
       debug(s"Truncate and start at offset $newOffset")
       checkIfMemoryMappedBufferClosed()
-      val segmentsToDelete = List[LogSegment]() ++ segments.values
+      val segmentsToDelete = new util.ArrayList(segments.values).asScala
 
       if (segmentsToDelete.nonEmpty) {
         removeAndDeleteSegments(segmentsToDelete.dropRight(1), asyncDelete = true, LogTruncation(this))
@@ -582,7 +559,7 @@ class LocalLog(@volatile private var _dir: File,
    * @return the list of segments that were scheduled for deletion
    */
   private[log] def truncateTo(targetOffset: Long): Iterable[LogSegment] = {
-    val deletableSegments = List[LogSegment]() ++ segments.filter(segment => segment.baseOffset > targetOffset)
+    val deletableSegments = segments.filter(segment => segment.baseOffset > targetOffset).asScala
     removeAndDeleteSegments(deletableSegments, asyncDelete = true, LogTruncation(this))
     segments.activeSegment.truncateTo(targetOffset)
     updateLogEndOffset(targetOffset)
@@ -610,8 +587,12 @@ object LocalLog extends Logging {
   /** a directory that is used for future partition */
   private[log] val FutureDirSuffix = "-future"
 
+  /** a directory that is used for stray partition */
+  private[log] val StrayDirSuffix = "-stray"
+
   private[log] val DeleteDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$DeleteDirSuffix")
   private[log] val FutureDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$FutureDirSuffix")
+  private[log] val StrayDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$StrayDirSuffix")
 
   private[log] val UnknownOffset = -1L
 
@@ -622,10 +603,17 @@ object LocalLog extends Logging {
    * from exceeding 255 characters.
    */
   private[log] def logDeleteDirName(topicPartition: TopicPartition): String = {
-    val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
-    val suffix = s"-${topicPartition.partition()}.$uniqueId$DeleteDirSuffix"
-    val prefixLength = Math.min(topicPartition.topic().size, 255 - suffix.size)
-    s"${topicPartition.topic().substring(0, prefixLength)}$suffix"
+    logDirNameWithSuffixCappedLength(topicPartition, DeleteDirSuffix)
+  }
+
+  /**
+   * Return a directory name to rename the log directory to for stray partition deletion.
+   * The name will be in the following format: "topic-partitionId.uniqueId-stray".
+   * If the topic name is too long, it will be truncated to prevent the total name
+   * from exceeding 255 characters.
+   */
+  private[log] def logStrayDirName(topicPartition: TopicPartition): String = {
+    logDirNameWithSuffixCappedLength(topicPartition, StrayDirSuffix)
   }
 
   /**
@@ -634,6 +622,18 @@ object LocalLog extends Logging {
    */
   private[log] def logFutureDirName(topicPartition: TopicPartition): String = {
     logDirNameWithSuffix(topicPartition, FutureDirSuffix)
+  }
+
+  /**
+   * Return a new directory name in the following format: "${topic}-${partitionId}.${uniqueId}${suffix}".
+   * If the topic name is too long, it will be truncated to prevent the total name
+   * from exceeding 255 characters.
+   */
+  private[log] def logDirNameWithSuffixCappedLength(topicPartition: TopicPartition, suffix: String): String = {
+    val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
+    val fullSuffix = s"-${topicPartition.partition()}.$uniqueId$suffix"
+    val prefixLength = Math.min(topicPartition.topic().length, 255 - fullSuffix.length)
+    s"${topicPartition.topic().substring(0, prefixLength)}$fullSuffix"
   }
 
   private[log] def logDirNameWithSuffix(topicPartition: TopicPartition, suffix: String): String = {
@@ -666,11 +666,13 @@ object LocalLog extends Logging {
     if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
       throw exception(dir)
     if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches ||
-      dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches)
+      dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches ||
+      dirName.endsWith(StrayDirSuffix) && !StrayDirPattern.matcher(dirName).matches)
       throw exception(dir)
 
     val name: String =
-      if (dirName.endsWith(DeleteDirSuffix) || dirName.endsWith(FutureDirSuffix)) dirName.substring(0, dirName.lastIndexOf('.'))
+      if (dirName.endsWith(DeleteDirSuffix) || dirName.endsWith(FutureDirSuffix) || dirName.endsWith(StrayDirSuffix))
+        dirName.substring(0, dirName.lastIndexOf('.'))
       else dirName
 
     val index = name.lastIndexOf('-')
@@ -777,7 +779,7 @@ object LocalLog extends Logging {
       newSegments.foreach { splitSegment =>
         splitSegment.onBecomeInactiveSegment()
         splitSegment.flush()
-        splitSegment.lastModified = segment.lastModified
+        splitSegment.setLastModified(segment.lastModified)
         totalSizeOfNewSegments += splitSegment.log.sizeInBytes
       }
       // size of all the new segments combined must equal size of the original segment
@@ -945,9 +947,8 @@ object LocalLog extends Logging {
   }
 
   private[log] def createNewCleanedSegment(dir: File, logConfig: LogConfig, baseOffset: Long): LogSegment = {
-    LogSegment.deleteIfExists(dir, baseOffset, fileSuffix = CleanedFileSuffix)
-    LogSegment.open(dir, baseOffset, logConfig, Time.SYSTEM,
-      fileSuffix = CleanedFileSuffix, initFileSize = logConfig.initFileSize, preallocate = logConfig.preallocate)
+    LogSegment.deleteIfExists(dir, baseOffset, CleanedFileSuffix)
+    LogSegment.open(dir, baseOffset, logConfig, Time.SYSTEM, false, logConfig.initFileSize, logConfig.preallocate, CleanedFileSuffix)
   }
 
   /**
@@ -958,7 +959,7 @@ object LocalLog extends Logging {
    * @tparam T the type of object held within the iterator
    * @return Some(iterator.next) if a next element exists, None otherwise.
    */
-  private def nextOption[T](iterator: Iterator[T]): Option[T] = {
+  private[log] def nextOption[T](iterator: util.Iterator[T]): Option[T] = {
     if (iterator.hasNext)
       Some(iterator.next())
     else

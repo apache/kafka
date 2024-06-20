@@ -50,11 +50,15 @@ import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.metadata.BrokerState;
+import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.config.ZkConfigs;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,6 +93,10 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
 
 /**
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
@@ -103,7 +111,7 @@ public class EmbeddedKafkaCluster {
     // Kafka Config
     private final KafkaServer[] brokers;
     private final Properties brokerConfig;
-    private final Time time = new MockTime();
+    private final Time time = Time.SYSTEM;
     private final int[] currentBrokerPorts;
     private final String[] currentBrokerLogDirs;
     private final boolean hasListenerConfig;
@@ -129,7 +137,7 @@ public class EmbeddedKafkaCluster {
         // Since we support `stop` followed by `startOnlyKafkaOnSamePorts`, we track whether
         // a listener config is defined during initialization in order to know if it's
         // safe to override it
-        hasListenerConfig = brokerConfig.get(KafkaConfig.ListenersProp()) != null;
+        hasListenerConfig = brokerConfig.get(SocketServerConfigs.LISTENERS_CONFIG) != null;
 
         this.clientConfigs = clientConfigs;
     }
@@ -153,28 +161,28 @@ public class EmbeddedKafkaCluster {
     }
 
     private void doStart() {
-        brokerConfig.put(KafkaConfig.ZkConnectProp(), zKConnectString());
+        brokerConfig.put(ZkConfigs.ZK_CONNECT_CONFIG, zKConnectString());
 
-        putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
-        putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);
-        putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) brokers.length);
-        putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), false);
+        putIfAbsent(brokerConfig, ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, true);
+        putIfAbsent(brokerConfig, GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0);
+        putIfAbsent(brokerConfig, GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, (short) brokers.length);
+        putIfAbsent(brokerConfig, AUTO_CREATE_TOPICS_ENABLE_CONFIG, false);
         // reduce the size of the log cleaner map to reduce test memory usage
-        putIfAbsent(brokerConfig, KafkaConfig.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
+        putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
 
-        Object listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerListenerNameProp());
+        Object listenerConfig = brokerConfig.get(INTER_BROKER_LISTENER_NAME_CONFIG);
         if (listenerConfig == null)
-            listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerSecurityProtocolProp());
+            listenerConfig = brokerConfig.get(INTER_BROKER_SECURITY_PROTOCOL_CONFIG);
         if (listenerConfig == null)
             listenerConfig = "PLAINTEXT";
         listenerName = new ListenerName(listenerConfig.toString());
 
         for (int i = 0; i < brokers.length; i++) {
-            brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
+            brokerConfig.put(ServerConfigs.BROKER_ID_CONFIG, i);
             currentBrokerLogDirs[i] = currentBrokerLogDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
-            brokerConfig.put(KafkaConfig.LogDirProp(), currentBrokerLogDirs[i]);
+            brokerConfig.put(LOG_DIR_CONFIG, currentBrokerLogDirs[i]);
             if (!hasListenerConfig)
-                brokerConfig.put(KafkaConfig.ListenersProp(), listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
+                brokerConfig.put(SocketServerConfigs.LISTENERS_CONFIG, listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
             brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time);
             currentBrokerPorts[i] = brokers[i].boundPort(listenerName);
         }
@@ -304,7 +312,7 @@ public class EmbeddedKafkaCluster {
     }
     
     public boolean sslEnabled() {
-        final String listeners = brokerConfig.getProperty(KafkaConfig.ListenersProp());
+        final String listeners = brokerConfig.getProperty(SocketServerConfigs.LISTENERS_CONFIG);
         return listeners != null && listeners.contains("SSL");
     }
 
@@ -462,7 +470,7 @@ public class EmbeddedKafkaCluster {
         Properties props = Utils.mkProperties(clientConfigs);
         props.putAll(adminClientConfig);
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        final Object listeners = brokerConfig.get(KafkaConfig.ListenersProp());
+        final Object listeners = brokerConfig.get(SocketServerConfigs.LISTENERS_CONFIG);
         if (listeners != null && listeners.toString().contains("SSL")) {
             props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
@@ -554,47 +562,65 @@ public class EmbeddedKafkaCluster {
     ) throws TimeoutException, InterruptedException, ExecutionException {
         long endTimeMs = System.currentTimeMillis() + maxDurationMs;
 
-        Consumer<byte[], byte[]> consumer = createConsumer(consumerProps != null ? consumerProps : Collections.emptyMap());
-        Admin admin = createAdminClient(adminProps != null ? adminProps : Collections.emptyMap());
+        long remainingTimeMs;
+        Set<TopicPartition> topicPartitions;
+        Map<TopicPartition, Long> endOffsets;
+        try (Admin admin = createAdminClient(adminProps != null ? adminProps : Collections.emptyMap())) {
 
-        long remainingTimeMs = endTimeMs - System.currentTimeMillis();
-        Set<TopicPartition> topicPartitions = listPartitions(remainingTimeMs, admin, Arrays.asList(topics));
+            remainingTimeMs = endTimeMs - System.currentTimeMillis();
+            topicPartitions = listPartitions(remainingTimeMs, admin, Arrays.asList(topics));
 
-        remainingTimeMs = endTimeMs - System.currentTimeMillis();
-        Map<TopicPartition, Long> endOffsets = readEndOffsets(remainingTimeMs, admin, topicPartitions);
+            remainingTimeMs = endTimeMs - System.currentTimeMillis();
+            endOffsets = readEndOffsets(remainingTimeMs, admin, topicPartitions);
+        }
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = topicPartitions.stream()
                 .collect(Collectors.toMap(
                         Function.identity(),
                         tp -> new ArrayList<>()
                 ));
-        consumer.assign(topicPartitions);
+        try (Consumer<byte[], byte[]> consumer = createConsumer(consumerProps != null ? consumerProps : Collections.emptyMap())) {
+            consumer.assign(topicPartitions);
 
-        while (!endOffsets.isEmpty()) {
-            Iterator<Map.Entry<TopicPartition, Long>> it = endOffsets.entrySet().iterator();
-            while (it.hasNext()) {
-                Map.Entry<TopicPartition, Long> entry = it.next();
-                TopicPartition topicPartition = entry.getKey();
-                long endOffset = entry.getValue();
-                long lastConsumedOffset = consumer.position(topicPartition);
-                if (lastConsumedOffset >= endOffset) {
-                    // We've reached the end offset for the topic partition; can stop polling it now
-                    it.remove();
-                } else {
-                    remainingTimeMs = endTimeMs - System.currentTimeMillis();
-                    if (remainingTimeMs <= 0) {
-                        throw new AssertionError("failed to read to end of topic(s) " + Arrays.asList(topics) + " within " + maxDurationMs + "ms");
+            while (!endOffsets.isEmpty()) {
+                Iterator<Map.Entry<TopicPartition, Long>> it = endOffsets.entrySet().iterator();
+                while (it.hasNext()) {
+                    Map.Entry<TopicPartition, Long> entry = it.next();
+                    TopicPartition topicPartition = entry.getKey();
+                    long endOffset = entry.getValue();
+                    long lastConsumedOffset = consumer.position(topicPartition);
+                    if (lastConsumedOffset >= endOffset) {
+                        // We've reached the end offset for the topic partition; can stop polling it now
+                        it.remove();
+                    } else {
+                        remainingTimeMs = endTimeMs - System.currentTimeMillis();
+                        if (remainingTimeMs <= 0) {
+                            throw new AssertionError("failed to read to end of topic(s) " + Arrays.asList(topics) + " within " + maxDurationMs + "ms");
+                        }
+                        // We haven't reached the end offset yet; need to keep polling
+                        ConsumerRecords<byte[], byte[]> recordBatch = consumer.poll(Duration.ofMillis(remainingTimeMs));
+                        recordBatch.partitions().forEach(tp -> records.get(tp)
+                                .addAll(recordBatch.records(tp))
+                        );
                     }
-                    // We haven't reached the end offset yet; need to keep polling
-                    ConsumerRecords<byte[], byte[]> recordBatch = consumer.poll(Duration.ofMillis(remainingTimeMs));
-                    recordBatch.partitions().forEach(tp -> records.get(tp)
-                            .addAll(recordBatch.records(tp))
-                    );
                 }
             }
         }
 
         return new ConsumerRecords<>(records);
+    }
+
+    public long endOffset(TopicPartition topicPartition) throws TimeoutException, InterruptedException, ExecutionException {
+        try (Admin admin = createAdminClient()) {
+            Map<TopicPartition, OffsetSpec> offsets = Collections.singletonMap(
+                    topicPartition, OffsetSpec.latest()
+            );
+            return admin.listOffsets(offsets)
+                    .partitionResult(topicPartition)
+                    // Hardcode duration for now; if necessary, we can add a parameter for it later
+                    .get(10, TimeUnit.SECONDS)
+                    .offset();
+        }
     }
 
     /**

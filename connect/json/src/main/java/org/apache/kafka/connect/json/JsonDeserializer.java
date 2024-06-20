@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.connect.json;
 
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.serialization.Deserializer;
+
 import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Collections;
 import java.util.Set;
@@ -38,7 +39,7 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
      * Default constructor needed by Kafka
      */
     public JsonDeserializer() {
-        this(Collections.emptySet(), JsonNodeFactory.withExactBigDecimals(true));
+        this(Collections.emptySet(), new JsonNodeFactory(true), true);
     }
 
     /**
@@ -50,11 +51,15 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
      */
     JsonDeserializer(
         final Set<DeserializationFeature> deserializationFeatures,
-        final JsonNodeFactory jsonNodeFactory
+        final JsonNodeFactory jsonNodeFactory,
+        final boolean enableModules
     ) {
         objectMapper.enable(JsonReadFeature.ALLOW_LEADING_ZEROS_FOR_NUMBERS.mappedFeature());
         deserializationFeatures.forEach(objectMapper::enable);
         objectMapper.setNodeFactory(jsonNodeFactory);
+        if (enableModules) {
+            objectMapper.findAndRegisterModules();
+        }
     }
 
     @Override

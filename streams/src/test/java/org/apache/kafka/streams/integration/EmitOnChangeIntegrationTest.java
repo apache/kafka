@@ -31,6 +31,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,7 +73,7 @@ public class EmitOnChangeIntegrationTest {
 
     @BeforeEach
     public void setup(final TestInfo testInfo) {
-        final String testId = safeUniqueTestName(getClass(), testInfo);
+        final String testId = safeUniqueTestName(testInfo);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;
         inputTopic2 = "input2" + testId;

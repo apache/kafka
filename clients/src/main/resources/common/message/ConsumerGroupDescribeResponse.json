@@ -50,7 +50,7 @@
         { "name": "Members", "type": "[]Member", "versions": "0+",
           "about": "The members.",
           "fields": [
-            { "name": "MemberId", "type": "uuid", "versions": "0+",
+            { "name": "MemberId", "type": "string", "versions": "0+",
               "about": "The member ID." },
             { "name": "InstanceId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
               "about": "The member instance ID." },
@@ -62,7 +62,7 @@
               "about": "The client ID." },
             { "name": "ClientHost", "type": "string", "versions": "0+",
               "about": "The client host." },
-            { "name": "SubscribedTopicNames", "type": "[]string", "versions": "0+",
+            { "name": "SubscribedTopicNames", "type": "[]string", "versions": "0+", "entityType": "topicName",
               "about": "The subscribed topic names." },
             { "name": "SubscribedTopicRegex", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
               "about": "the subscribed topic regex otherwise or null of not provided." },
@@ -71,7 +71,7 @@
             { "name": "TargetAssignment", "type": "Assignment", "versions": "0+",
               "about": "The target assignment." }
           ]},
-        { "name": "AuthorizedOperations", "type": "int32", "versions": "3+", "default": "-2147483648",
+        { "name": "AuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
           "about": "32-bit bitfield to represent authorized operations for this group." }
       ]
     }
@@ -80,20 +80,14 @@
     { "name": "TopicPartitions", "versions": "0+", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+",
         "about": "The topic ID." },
-      { "name": "TopicName", "type": "string", "versions": "0+",
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partitions." }
     ]},
     { "name": "Assignment", "versions": "0+", "fields": [
       { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+",
-        "about": "The assigned topic-partitions to the member." },
-      { "name": "Error", "type": "int8", "versions": "0+",
-        "about": "The assigned error." },
-      { "name": "MetadataVersion", "type": "int32", "versions": "0+",
-        "about": "The assignor metadata version." },
-      { "name": "MetadataBytes", "type": "bytes", "versions": "0+",
-        "about": "The assignor metadata bytes." }
+        "about": "The assigned topic-partitions to the member." }
     ]}
   ]
 }

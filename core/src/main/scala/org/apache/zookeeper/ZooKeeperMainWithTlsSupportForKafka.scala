@@ -26,7 +26,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 import scala.jdk.CollectionConverters._
 
 object ZooKeeperMainWithTlsSupportForKafka {
-  val zkTlsConfigFileOption = "-zk-tls-config-file"
+  private val zkTlsConfigFileOption = "-zk-tls-config-file"
   def main(args: Array[String]): Unit = {
     val zkTlsConfigFileIndex = args.indexOf(zkTlsConfigFileOption)
     val zooKeeperMain: ZooKeeperMain =
@@ -42,7 +42,7 @@ object ZooKeeperMainWithTlsSupportForKafka {
           Some(ZkSecurityMigrator.createZkClientConfigFromFile(args(zkTlsConfigFileIndex + 1))))
     // The run method of ZooKeeperMain is package-private,
     // therefore this code unfortunately must reside in the same org.apache.zookeeper package.
-    zooKeeperMain.run
+    zooKeeperMain.run()
   }
 }
 
@@ -68,13 +68,13 @@ class ZooKeeperMainWithTlsSupportForKafka(args: Array[String], val zkClientConfi
     super.processZKCmd(co)
   }
 
-  def kafkaTlsUsage(): Unit = {
+  private def kafkaTlsUsage(): Unit = {
     System.err.println("ZooKeeper -server host:port [-zk-tls-config-file <file>] cmd args")
     ZooKeeperMain.commandMap.keySet.asScala.toList.sorted.foreach(cmd =>
       System.err.println(s"\t$cmd ${ZooKeeperMain.commandMap.get(cmd)}"))
   }
 
-  override def connectToZK(newHost: String) = {
+  override def connectToZK(newHost: String): Unit = {
     // ZooKeeperAdmin has no constructor that supports passing in both readOnly and ZkClientConfig,
     // and readOnly ends up being set to false when passing in a ZkClientConfig instance;
     // therefore it is currently not possible for us to construct a ZooKeeperAdmin instance with

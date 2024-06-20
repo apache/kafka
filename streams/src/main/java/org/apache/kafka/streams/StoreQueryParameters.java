@@ -105,7 +105,7 @@ public class StoreQueryParameters<T> {
         if (!(obj instanceof StoreQueryParameters)) {
             return false;
         }
-        final StoreQueryParameters storeQueryParameters = (StoreQueryParameters) obj;
+        final StoreQueryParameters<?> storeQueryParameters = (StoreQueryParameters<?>) obj;
         return Objects.equals(storeQueryParameters.partition, partition)
                 && Objects.equals(storeQueryParameters.staleStores, staleStores)
                 && Objects.equals(storeQueryParameters.storeName, storeName)

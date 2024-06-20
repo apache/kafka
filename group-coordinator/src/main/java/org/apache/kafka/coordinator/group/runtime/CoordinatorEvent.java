@@ -35,4 +35,9 @@ public interface CoordinatorEvent extends EventAccumulator.Event<TopicPartition>
      * @param exception An exception if the processing of the event failed or null otherwise.
      */
     void complete(Throwable exception);
+
+    /**
+     * @return The created time in milliseconds.
+     */
+    long createdTimeMs();
 }

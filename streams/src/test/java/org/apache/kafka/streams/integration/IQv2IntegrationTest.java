@@ -54,6 +54,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -159,7 +160,9 @@ public class IQv2IntegrationTest {
             Materialized.as(STORE_NAME)
         );
 
-        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(testInfo));
+
+        final String safeTestName = IntegrationTestUtils.safeUniqueTestName(testInfo);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(safeTestName));
         kafkaStreams.cleanUp();
     }
 
@@ -317,28 +320,36 @@ public class IQv2IntegrationTest {
 
                         @Override
                         public void put(final Bytes key, final byte[] value) {
-                            map.put(key, value);
-                            StoreQueryUtils.updatePosition(position,  context);
+                            synchronized (position) {
+                                map.put(key, value);
+                                StoreQueryUtils.updatePosition(position, context);
+                            }
                         }
 
                         @Override
                         public byte[] putIfAbsent(final Bytes key, final byte[] value) {
-                            StoreQueryUtils.updatePosition(position,  context);
-                            return map.putIfAbsent(key, value);
+                            synchronized (position) {
+                                StoreQueryUtils.updatePosition(position, context);
+                                return map.putIfAbsent(key, value);
+                            }
                         }
 
                         @Override
                         public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
-                            StoreQueryUtils.updatePosition(position,  context);
-                            for (final KeyValue<Bytes, byte[]> entry : entries) {
-                                map.put(entry.key, entry.value);
+                            synchronized (position) {
+                                StoreQueryUtils.updatePosition(position, context);
+                                for (final KeyValue<Bytes, byte[]> entry : entries) {
+                                    map.put(entry.key, entry.value);
+                                }
                             }
                         }
 
                         @Override
                         public byte[] delete(final Bytes key) {
-                            StoreQueryUtils.updatePosition(position,  context);
-                            return map.remove(key);
+                            synchronized (position) {
+                                StoreQueryUtils.updatePosition(position, context);
+                                return map.remove(key);
+                            }
                         }
 
                         @Override
@@ -418,7 +429,10 @@ public class IQv2IntegrationTest {
             })
         );
 
-        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(testInfo));
+        // Discard the basic streams and replace with test-specific topology
+        kafkaStreams.close();
+        final String safeTestName = IntegrationTestUtils.safeUniqueTestName(testInfo);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(safeTestName));
         kafkaStreams.cleanUp();
 
         kafkaStreams.start();
@@ -436,9 +450,7 @@ public class IQv2IntegrationTest {
     }
 
 
-    private Properties streamsConfiguration(final TestInfo testInfo) {
-        final String safeTestName = IntegrationTestUtils.safeUniqueTestName(getClass(), testInfo);
-
+    private Properties streamsConfiguration(final String safeTestName) {
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);

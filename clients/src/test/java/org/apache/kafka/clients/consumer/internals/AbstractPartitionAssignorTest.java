@@ -23,6 +23,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -217,7 +218,7 @@ public class AbstractPartitionAssignorTest {
     }
 
     private static String toSortedString(List<?> partitions) {
-        return Utils.join(partitions.stream().map(Object::toString).sorted().collect(Collectors.toList()), ", ");
+        return partitions.stream().map(Object::toString).sorted().collect(Collectors.joining(", "));
     }
 
     private static List<Subscription> subscriptions(List<List<String>> consumerTopics,

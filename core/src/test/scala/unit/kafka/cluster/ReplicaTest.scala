@@ -17,11 +17,16 @@
 package kafka.cluster
 
 import kafka.log.UnifiedLog
+import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import org.mockito.Mockito.{mock, when}
 
 object ReplicaTest {
   val BrokerId: Int = 0
@@ -37,7 +42,9 @@ class ReplicaTest {
 
   @BeforeEach
   def setup(): Unit = {
-    replica = new Replica(BrokerId, Partition)
+    val metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.getAliveBrokerEpoch(BrokerId)).thenReturn(Option(1L))
+    replica = new Replica(BrokerId, Partition, metadataCache)
   }
 
   private def assertReplicaState(
@@ -85,7 +92,7 @@ class ReplicaTest {
     leaderEndOffset: Long
   ): Long = {
     val currentTimeMs = time.milliseconds()
-    replica.updateFetchState(
+    replica.updateFetchStateOrThrow(
       followerFetchOffsetMetadata = new LogOffsetMetadata(followerFetchOffset),
       followerStartOffset = followerStartOffset,
       followerFetchTimeMs = currentTimeMs,
@@ -311,5 +318,51 @@ class ReplicaTest {
     time.sleep(ReplicaLagTimeMaxMs + 1)
 
     assertFalse(isCaughtUp(leaderEndOffset = 16L))
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testFenceStaleUpdates(isKraft: Boolean): Unit = {
+    val metadataCache = if (isKraft) {
+      val kRaftMetadataCache = mock(classOf[KRaftMetadataCache])
+      when(kRaftMetadataCache.getAliveBrokerEpoch(BrokerId)).thenReturn(Option(2L))
+      kRaftMetadataCache
+    } else {
+      mock(classOf[ZkMetadataCache])
+    }
+
+    val replica = new Replica(BrokerId, Partition, metadataCache)
+    replica.updateFetchStateOrThrow(
+      followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
+      followerStartOffset = 1L,
+      followerFetchTimeMs = 1,
+      leaderEndOffset = 10L,
+      brokerEpoch = 2L
+    )
+    if (isKraft) {
+      assertThrows(classOf[NotLeaderOrFollowerException], () => replica.updateFetchStateOrThrow(
+        followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
+        followerStartOffset = 2L,
+        followerFetchTimeMs = 3,
+        leaderEndOffset = 10L,
+        brokerEpoch = 1L
+      ))
+    } else {
+      // No exception to expect under ZK mode.
+      replica.updateFetchStateOrThrow(
+        followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
+        followerStartOffset = 2L,
+        followerFetchTimeMs = 3,
+        leaderEndOffset = 10L,
+        brokerEpoch = 1L
+      )
+    }
+    replica.updateFetchStateOrThrow(
+      followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
+      followerStartOffset = 2L,
+      followerFetchTimeMs = 4,
+      leaderEndOffset = 10L,
+      brokerEpoch = -1L
+    )
   }
 }

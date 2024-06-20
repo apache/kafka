@@ -70,7 +70,7 @@ public class TasksRequest extends Message {
             @JsonProperty("lastEndMs") long lastEndMs,
             @JsonProperty("state") Optional<TaskStateType> state) {
         this.taskIds = Collections.unmodifiableSet((taskIds == null) ?
-            new HashSet<String>() : new HashSet<>(taskIds));
+            new HashSet<>() : new HashSet<>(taskIds));
         this.firstStartMs = Math.max(0, firstStartMs);
         this.lastStartMs = Math.max(0, lastStartMs);
         this.firstEndMs = Math.max(0, firstEndMs);

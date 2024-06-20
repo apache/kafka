@@ -27,15 +27,17 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.security.auth.Subject;
-import javax.security.auth.login.LoginException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+
+import javax.security.auth.Subject;
+import javax.security.auth.login.LoginException;
 
 public class LoginManager {
 
@@ -76,7 +78,7 @@ public class LoginManager {
      *
      * @param jaasContext Static or dynamic JAAS context. `jaasContext.dynamicJaasConfig()` is non-null for dynamic context.
      *                    For static contexts, this may contain multiple login modules if the context type is SERVER.
-     *                    For CLIENT static contexts and dynamic contexts of CLIENT and SERVER, 'jaasContext` contains
+     *                    For CLIENT static contexts and dynamic contexts of CLIENT and SERVER, `jaasContext` contains
      *                    only one login module.
      * @param saslMechanism SASL mechanism for which login manager is being acquired. For dynamic contexts, the single
      *                      login module in `jaasContext` corresponds to this SASL mechanism. Hence `Login` class is

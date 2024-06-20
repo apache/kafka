@@ -118,43 +118,6 @@ public class ProcessorNodeMetricsTest {
         }
     }
 
-    @Test
-    public void shouldGetForwardSensor() {
-        final String metricNamePrefix = "forward";
-        final String descriptionOfCount = "The total number of calls to forward";
-        final String descriptionOfRate = "The average number of calls to forward per second";
-        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, metricNamePrefix, RecordingLevel.DEBUG))
-            .thenReturn(expectedParentSensor);
-        when(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, StreamsMetricsImpl.ROLLUP_VALUE))
-            .thenReturn(parentTagMap);
-        setUpThroughputSensor(metricNamePrefix, RecordingLevel.DEBUG, expectedParentSensor);
-
-        try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
-            final Sensor sensor = ProcessorNodeMetrics.forwardSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics);
-            streamsMetricsStaticMock.verify(
-                () -> StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-                    expectedSensor,
-                    PROCESSOR_NODE_LEVEL_GROUP,
-                    tagMap,
-                    metricNamePrefix,
-                    descriptionOfRate,
-                    descriptionOfCount
-                )
-            );
-            streamsMetricsStaticMock.verify(
-                () -> StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-                    expectedParentSensor,
-                    PROCESSOR_NODE_LEVEL_GROUP,
-                    parentTagMap,
-                    metricNamePrefix,
-                    descriptionOfRate,
-                    descriptionOfCount
-                )
-            );
-            assertThat(sensor, is(expectedSensor));
-        }
-    }
-
     private void setUpThroughputSensor(final String metricNamePrefix,
                                        final RecordingLevel recordingLevel,
                                        final Sensor... parentSensors) {

@@ -37,6 +37,7 @@ import java.util.Arrays;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
@@ -86,6 +87,7 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
         private Sensor droppedRecordsSensor;
         private String foreignKeySerdeTopic;
         private String valueSerdeTopic;
+        private long[] recordHash;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -109,108 +111,102 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
 
         @Override
         public void process(final Record<K, Change<V>> record) {
+            // clear cashed hash from previous record
+            recordHash = null;
             // drop out-of-order records from versioned tables (cf. KIP-914)
             if (useVersionedSemantics && !record.value().isLatest) {
                 LOG.info("Skipping out-of-order record from versioned table while performing table-table join.");
                 droppedRecordsSensor.record();
                 return;
             }
+            if (leftJoin) {
+                leftJoinInstructions(record);
+            } else {
+                defaultJoinInstructions(record);
+            }
+        }
 
-            final long[] currentHash = record.value().newValue == null ?
-                null :
-                Murmur3.hash128(valueSerializer.serialize(valueSerdeTopic, record.value().newValue));
-
-            final int partition = context().recordMetadata().get().partition();
+        private void leftJoinInstructions(final Record<K, Change<V>> record) {
             if (record.value().oldValue != null) {
                 final KO oldForeignKey = foreignKeyExtractor.apply(record.value().oldValue);
+                final KO newForeignKey = record.value().newValue == null ? null : foreignKeyExtractor.apply(record.value().newValue);
+                if (oldForeignKey != null && !Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey))) {
+                    forward(record, oldForeignKey, DELETE_KEY_AND_PROPAGATE);
+                }
+                forward(record, newForeignKey, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE);
+            } else if (record.value().newValue != null) {
+                final KO newForeignKey = foreignKeyExtractor.apply(record.value().newValue);
+                forward(record, newForeignKey, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE);
+            }
+        }
+
+        private void defaultJoinInstructions(final Record<K, Change<V>> record) {
+            if (record.value().oldValue != null) {
+                final KO oldForeignKey = record.value().oldValue == null ? null : foreignKeyExtractor.apply(record.value().oldValue);
                 if (oldForeignKey == null) {
                     logSkippedRecordDueToNullForeignKey();
                     return;
                 }
                 if (record.value().newValue != null) {
-                    final KO newForeignKey = foreignKeyExtractor.apply(record.value().newValue);
+                    final KO newForeignKey = record.value().newValue == null ? null : foreignKeyExtractor.apply(record.value().newValue);
                     if (newForeignKey == null) {
                         logSkippedRecordDueToNullForeignKey();
                         return;
                     }
-
-                    final byte[] serialOldForeignKey =
-                        foreignKeySerializer.serialize(foreignKeySerdeTopic, oldForeignKey);
-                    final byte[] serialNewForeignKey =
-                        foreignKeySerializer.serialize(foreignKeySerdeTopic, newForeignKey);
-                    if (!Arrays.equals(serialNewForeignKey, serialOldForeignKey)) {
+                    if (!Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey))) {
                         //Different Foreign Key - delete the old key value and propagate the new one.
                         //Delete it from the oldKey's state store
-                        context().forward(
-                            record.withKey(oldForeignKey)
-                                .withValue(new SubscriptionWrapper<>(
-                                    currentHash,
-                                    DELETE_KEY_NO_PROPAGATE,
-                                    record.key(),
-                                    partition
-                                )));
-                        //Add to the newKey's state store. Additionally, propagate null if no FK is found there,
-                        //since we must "unset" any output set by the previous FK-join. This is true for both INNER
-                        //and LEFT join.
+                        forward(record, oldForeignKey, DELETE_KEY_NO_PROPAGATE);
                     }
-                    context().forward(
-                        record.withKey(newForeignKey)
-                            .withValue(new SubscriptionWrapper<>(
-                                currentHash,
-                                PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE,
-                                record.key(),
-                                partition
-                            )));
+                    //Add to the newKey's state store. Additionally, propagate null if no FK is found there,
+                    //since we must "unset" any output set by the previous FK-join. This is true for both INNER
+                    //and LEFT join.
+                    forward(record, newForeignKey, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE);
                 } else {
-                    //A simple propagatable delete. Delete from the state store and propagate the delete onwards.
-                    context().forward(
-                        record.withKey(oldForeignKey)
-                           .withValue(new SubscriptionWrapper<>(
-                               currentHash,
-                               DELETE_KEY_AND_PROPAGATE,
-                               record.key(),
-                               partition
-                           )));
+                    forward(record, oldForeignKey, DELETE_KEY_AND_PROPAGATE);
                 }
             } else if (record.value().newValue != null) {
-                //change.oldValue is null, which means it was deleted at least once before, or it is brand new.
-                //In either case, we only need to propagate if the FK_VAL is available, as the null from the delete would
-                //have been propagated otherwise.
-
-                final SubscriptionWrapper.Instruction instruction;
-                if (leftJoin) {
-                    //Want to send info even if RHS is null.
-                    instruction = PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
-                } else {
-                    instruction = PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
-                }
                 final KO newForeignKey = foreignKeyExtractor.apply(record.value().newValue);
                 if (newForeignKey == null) {
                     logSkippedRecordDueToNullForeignKey();
                 } else {
-                    context().forward(
-                        record.withKey(newForeignKey)
-                            .withValue(new SubscriptionWrapper<>(
-                                currentHash,
-                                instruction,
-                                record.key(),
-                                partition)));
+                    forward(record, newForeignKey, PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE);
                 }
             }
+        }
+
+        private byte[] serialize(final KO key) {
+            return foreignKeySerializer.serialize(foreignKeySerdeTopic, key);
+        }
+
+        private void forward(final Record<K, Change<V>> record, final KO foreignKey, final Instruction deleteKeyNoPropagate) {
+            final SubscriptionWrapper<K> wrapper = new SubscriptionWrapper<>(
+                hash(record),
+                deleteKeyNoPropagate,
+                record.key(),
+                context().recordMetadata().get().partition()
+            );
+            context().forward(record.withKey(foreignKey).withValue(wrapper));
+        }
+
+        private long[] hash(final Record<K, Change<V>> record) {
+            if (recordHash == null) {
+                recordHash = record.value().newValue == null
+                    ? null
+                    : Murmur3.hash128(valueSerializer.serialize(valueSerdeTopic, record.value().newValue));
+            }
+            return recordHash;
         }
 
         private void logSkippedRecordDueToNullForeignKey() {
             if (context().recordMetadata().isPresent()) {
                 final RecordMetadata recordMetadata = context().recordMetadata().get();
                 LOG.warn(
-                    "Skipping record due to null foreign key. "
-                        + "topic=[{}] partition=[{}] offset=[{}]",
+                    "Skipping record due to null foreign key. topic=[{}] partition=[{}] offset=[{}]",
                     recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
                 );
             } else {
-                LOG.warn(
-                    "Skipping record due to null foreign key. Topic, partition, and offset not known."
-                );
+                LOG.warn("Skipping record due to null foreign key. Topic, partition, and offset not known.");
             }
             droppedRecordsSensor.record();
         }

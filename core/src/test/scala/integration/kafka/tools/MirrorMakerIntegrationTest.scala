@@ -22,7 +22,7 @@ import scala.collection.Seq
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.tools.MirrorMaker.{ConsumerWrapper, MirrorMakerProducer, NoRecordsException}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -58,7 +58,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCommitOffsetsThrowTimeoutException(quorum: String): Unit = {
     val consumerProps = new Properties
@@ -70,9 +70,10 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, includeOpt = Some("any"))
     mirrorMakerConsumer.offsets.put(new TopicPartition("test", 0), 0L)
     assertThrows(classOf[TimeoutException], () => mirrorMakerConsumer.commit())
+    mirrorMakerConsumer.close()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCommitOffsetsRemoveNonExistentTopics(quorum: String): Unit = {
     val consumerProps = new Properties
@@ -86,9 +87,10 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     mirrorMakerConsumer.offsets.put(new TopicPartition("nonexistent-topic2", 0), 0L)
     MirrorMaker.commitOffsets(mirrorMakerConsumer)
     assertTrue(mirrorMakerConsumer.offsets.isEmpty, "Offsets for non-existent topics should be removed")
+    mirrorMakerConsumer.close()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCommaSeparatedRegex(quorum: String): Unit = {
     val topic = "new-topic"

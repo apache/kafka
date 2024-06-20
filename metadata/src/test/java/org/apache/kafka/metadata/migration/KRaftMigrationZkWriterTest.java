@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.AclsImageTest;
 import org.apache.kafka.image.ClientQuotasImage;
@@ -33,6 +33,7 @@ import org.apache.kafka.image.ProducerIdsImage;
 import org.apache.kafka.image.ProducerIdsImageTest;
 import org.apache.kafka.image.ScramImage;
 import org.apache.kafka.image.TopicsImageTest;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -80,7 +81,7 @@ public class KRaftMigrationZkWriterTest {
             .setConfigMigrationClient(configClient)
             .build();
 
-        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient, __ -> { });
 
         MetadataImage image = new MetadataImage(
             MetadataProvenance.EMPTY,
@@ -120,7 +121,7 @@ public class KRaftMigrationZkWriterTest {
             .setAclMigrationClient(aclClient)
             .build();
 
-        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient, __ -> { });
 
         MetadataImage image = new MetadataImage(
             MetadataProvenance.EMPTY,
@@ -179,7 +180,7 @@ public class KRaftMigrationZkWriterTest {
             .setAclMigrationClient(aclClient)
             .build();
 
-        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient, __ -> { });
 
         MetadataImage image = new MetadataImage(
             MetadataProvenance.EMPTY,

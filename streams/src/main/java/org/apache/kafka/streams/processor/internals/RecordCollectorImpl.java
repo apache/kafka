@@ -23,6 +23,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
@@ -60,7 +61,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 
 public class RecordCollectorImpl implements RecordCollector {
-    private final static String SEND_EXCEPTION_MESSAGE = "Error encountered sending record to topic %s for task %s due to:%n%s";
+    private static final String SEND_EXCEPTION_MESSAGE = "Error encountered sending record to topic %s for task %s due to:%n%s";
 
     private final Logger log;
     private final TaskId taskId;
@@ -73,7 +74,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private final Sensor droppedRecordsSensor;
     private final Map<String, Sensor> producedSensorByTopic = new HashMap<>();
 
-    private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
+    private final AtomicReference<KafkaException> sendException;
 
     /**
      * @throws StreamsException fatal error that should cause the thread to die (from producer.initTxn)
@@ -87,6 +88,7 @@ public class RecordCollectorImpl implements RecordCollector {
         this.log = logContext.logger(getClass());
         this.taskId = taskId;
         this.streamsProducer = streamsProducer;
+        this.sendException = streamsProducer.sendException();
         this.productionExceptionHandler = productionExceptionHandler;
         this.eosEnabled = streamsProducer.eosEnabled();
         this.streamsMetrics = streamsMetrics;
@@ -296,6 +298,7 @@ public class RecordCollectorImpl implements RecordCollector {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.";
             sendException.set(new StreamsException(errorMessage, exception));
         } else if (exception instanceof ProducerFencedException ||
+                exception instanceof InvalidPidMappingException ||
                 exception instanceof InvalidProducerEpochException ||
                 exception instanceof OutOfOrderSequenceException) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, " +
@@ -361,7 +364,7 @@ public class RecordCollectorImpl implements RecordCollector {
         // transaction during handleRevocation and thus there is no transaction in flight, or else none of the revoked
         // tasks had any data in the current transaction and therefore there is no need to commit or abort it.
 
-        checkForException();
+        close();
     }
 
     /**
@@ -377,6 +380,11 @@ public class RecordCollectorImpl implements RecordCollector {
             streamsProducer.abortTransaction();
         }
 
+        close();
+    }
+
+    private void close() {
+        offsets.clear();
         checkForException();
     }
 

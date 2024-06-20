@@ -32,6 +32,7 @@ import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -94,7 +95,7 @@ public class Selector implements Selectable, AutoCloseable {
         NOTIFY_ONLY(true),         // discard any outstanding receives, notify disconnect
         DISCARD_NO_NOTIFY(false);  // discard any outstanding receives, no disconnect notification
 
-        boolean notifyDisconnect;
+        final boolean notifyDisconnect;
 
         CloseMode(boolean notifyDisconnect) {
             this.notifyDisconnect = notifyDisconnect;
@@ -181,7 +182,7 @@ public class Selector implements Selectable, AutoCloseable {
         this.memoryPool = memoryPool;
         this.lowMemThreshold = (long) (0.1 * this.memoryPool.size());
         this.failedAuthenticationDelayMs = failedAuthenticationDelayMs;
-        this.delayedClosingChannels = (failedAuthenticationDelayMs > NO_FAILED_AUTHENTICATION_DELAY) ? new LinkedHashMap<String, DelayedAuthenticationFailureClose>() : null;
+        this.delayedClosingChannels = (failedAuthenticationDelayMs > NO_FAILED_AUTHENTICATION_DELAY) ? new LinkedHashMap<>() : null;
     }
 
     public Selector(int maxReceiveSize,
@@ -229,7 +230,7 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     public Selector(long connectionMaxIdleMS, int failedAuthenticationDelayMs, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder, logContext);
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, Collections.emptyMap(), true, channelBuilder, logContext);
     }
 
     /**
@@ -334,9 +335,10 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
+        ChannelMetadataRegistry metadataRegistry = null;
         try {
-            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool,
-                new SelectorChannelMetadataRegistry());
+            metadataRegistry = new SelectorChannelMetadataRegistry();
+            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool, metadataRegistry);
             key.attach(channel);
             return channel;
         } catch (Exception e) {
@@ -345,6 +347,9 @@ public class Selector implements Selectable, AutoCloseable {
             } finally {
                 key.cancel();
             }
+            // Ideally, these resources are closed by the KafkaChannel but if the KafkaChannel is not created to an
+            // error, this builder should close the resources it has created instead.
+            Utils.closeQuietly(metadataRegistry, "metadataRegistry");
             throw new IOException("Channel could not be created for socket " + socketChannel, e);
         }
     }
@@ -399,7 +404,7 @@ public class Selector implements Selectable, AutoCloseable {
                 this.failedSends.add(connectionId);
                 close(channel, CloseMode.DISCARD_NO_NOTIFY);
                 if (!(e instanceof CancelledKeyException)) {
-                    log.error("Unexpected exception during send, closing connection {} and rethrowing exception {}",
+                    log.error("Unexpected exception during send, closing connection {} and rethrowing exception.",
                             connectionId, e);
                     throw e;
                 }
@@ -1277,14 +1282,16 @@ public class Selector implements Selectable, AutoCloseable {
 
         /**
          * This method generates `time-total` metrics but has a couple of deficiencies: no `-ns` suffix and no dash between basename
-         * and `time-toal` suffix.
+         * and `time-total` suffix.
          * @deprecated use {{@link #createIOThreadRatioMeter(Metrics, String, Map, String, String)}} for new metrics instead
          */
         @Deprecated
         private Meter createIOThreadRatioMeterLegacy(Metrics metrics, String groupName,  Map<String, String> metricTags,
                 String baseName, String action) {
+            // this name remains relevant, non-deprecated descendant method uses the same 
             MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
-                    String.format("*Deprecated* The fraction of time the I/O thread spent %s", action), metricTags);
+                    String.format("The fraction of time the I/O thread spent %s", action), metricTags);
+            // this name is deprecated
             MetricName totalMetricName = metrics.metricName(baseName + "time-total", groupName,
                     String.format("*Deprecated* The total time the I/O thread spent %s", action), metricTags);
             return new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName);

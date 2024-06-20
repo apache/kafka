@@ -17,21 +17,22 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.apache.kafka.trogdor.rest.TaskDone;
 import org.apache.kafka.trogdor.rest.TaskPending;
 import org.apache.kafka.trogdor.rest.TaskRunning;
 import org.apache.kafka.trogdor.rest.TaskStopping;
 import org.apache.kafka.trogdor.task.NoOpTaskSpec;
 
-import java.time.ZoneOffset;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import java.time.ZoneOffset;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 120)
 public class CoordinatorClientTest {
 
     @Test

@@ -21,20 +21,21 @@ import org.apache.kafka.common.errors.WakeupException;
 
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Ensures blocking APIs can be woken up by the consumer.wakeup().
  */
 public class WakeupTrigger {
-    private AtomicReference<Wakeupable> pendingTask = new AtomicReference<>(null);
+    private final AtomicReference<Wakeupable> pendingTask = new AtomicReference<>(null);
 
-    /*
-      Wakeup a pending task.  If there isn't any pending task, return a WakeupFuture, so that the subsequent call
-      would know wakeup was previously called.
-
-      If there are active tasks, complete it with WakeupException, then unset pending task (return null here.
-      If the current task has already been woken-up, do nothing.
+    /**
+     * Wakeup a pending task.  If there isn't any pending task, return a WakeupFuture, so that the subsequent call
+     * would know wakeup was previously called.
+     * <p>
+     * If there are active tasks, complete it with WakeupException, then unset pending task (return null here.
+     * If the current task has already been woken-up, do nothing.
      */
     public void wakeup() {
         pendingTask.getAndUpdate(task -> {
@@ -42,20 +43,31 @@ public class WakeupTrigger {
                 return new WakeupFuture();
             } else if (task instanceof ActiveFuture) {
                 ActiveFuture active = (ActiveFuture) task;
-                active.future().completeExceptionally(new WakeupException());
-                return null;
+                boolean wasTriggered = active.future().completeExceptionally(new WakeupException());
+
+                // If the Future was *already* completed when we invoke completeExceptionally, the WakeupException
+                // will be ignored. If it was already completed, we then need to return a new WakeupFuture so that the
+                // next call to setActiveTask will throw the WakeupException.
+                return wasTriggered ? null : new WakeupFuture();
+            } else if (task instanceof FetchAction) {
+                FetchAction fetchAction = (FetchAction) task;
+                fetchAction.fetchBuffer().wakeup();
+                return new WakeupFuture();
             } else {
                 return task;
             }
         });
     }
 
-    /*
-    If there is no pending task, set the pending task active.
-    If wakeup was called before setting an active task, the current task will complete exceptionally with
-    WakeupException right
-    away.
-    if there is an active task, throw exception.
+    /**
+     *     If there is no pending task, set the pending task active.
+     *     If wakeup was called before setting an active task, the current task will complete exceptionally with
+     *     WakeupException right
+     *     away.
+     *     if there is an active task, throw exception.
+     * @param currentTask
+     * @param <T>
+     * @return
      */
     public <T> CompletableFuture<T> setActiveTask(final CompletableFuture<T> currentTask) {
         Objects.requireNonNull(currentTask, "currentTask cannot be null");
@@ -65,6 +77,8 @@ public class WakeupTrigger {
             } else if (task instanceof WakeupFuture) {
                 currentTask.completeExceptionally(new WakeupException());
                 return null;
+            } else if (task instanceof DisabledWakeups) {
+                return task;
             }
             // last active state is still active
             throw new KafkaException("Last active task is still active");
@@ -72,15 +86,55 @@ public class WakeupTrigger {
         return currentTask;
     }
 
-    public void clearActiveTask() {
+    public void setFetchAction(final FetchBuffer fetchBuffer) {
+        final AtomicBoolean throwWakeupException = new AtomicBoolean(false);
+        pendingTask.getAndUpdate(task -> {
+            if (task == null) {
+                return new FetchAction(fetchBuffer);
+            } else if (task instanceof WakeupFuture) {
+                throwWakeupException.set(true);
+                return null;
+            } else if (task instanceof DisabledWakeups) {
+                return task;
+            }
+            // last active state is still active
+            throw new IllegalStateException("Last active task is still active");
+        });
+        if (throwWakeupException.get()) {
+            throw new WakeupException();
+        }
+    }
+
+    public void disableWakeups() {
+        pendingTask.set(new DisabledWakeups());
+    }
+
+    public void clearTask() {
         pendingTask.getAndUpdate(task -> {
             if (task == null) {
                 return null;
-            } else if (task instanceof ActiveFuture) {
+            } else if (task instanceof ActiveFuture || task instanceof FetchAction) {
                 return null;
             }
             return task;
         });
+    }
+
+    public void maybeTriggerWakeup() {
+        final AtomicBoolean throwWakeupException = new AtomicBoolean(false);
+        pendingTask.getAndUpdate(task -> {
+            if (task == null) {
+                return null;
+            } else if (task instanceof WakeupFuture) {
+                throwWakeupException.set(true);
+                return null;
+            } else {
+                return task;
+            }
+        });
+        if (throwWakeupException.get()) {
+            throw new WakeupException();
+        }
     }
 
     Wakeupable getPendingTask() {
@@ -88,6 +142,9 @@ public class WakeupTrigger {
     }
 
     interface Wakeupable { }
+
+    // Set to block wakeups from happening and pending actions to be registered.
+    static class DisabledWakeups implements Wakeupable { }
 
     static class ActiveFuture implements Wakeupable {
         private final CompletableFuture<?> future;
@@ -102,4 +159,17 @@ public class WakeupTrigger {
     }
 
     static class WakeupFuture implements Wakeupable { }
+
+    static class FetchAction implements Wakeupable {
+
+        private final FetchBuffer fetchBuffer;
+
+        public FetchAction(FetchBuffer fetchBuffer) {
+            this.fetchBuffer = fetchBuffer;
+        }
+
+        public FetchBuffer fetchBuffer() {
+            return fetchBuffer;
+        }
+    }
 }

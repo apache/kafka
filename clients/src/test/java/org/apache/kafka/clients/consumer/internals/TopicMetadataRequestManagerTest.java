@@ -35,7 +35,9 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -47,7 +49,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
@@ -56,8 +57,8 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.spy;
 
 public class TopicMetadataRequestManagerTest {
@@ -74,13 +75,22 @@ public class TopicMetadataRequestManagerTest {
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(
             new LogContext(),
+            time,
             new ConsumerConfig(props)));
     }
 
-    @ParameterizedTest
-    @MethodSource("topicsProvider")
-    public void testPoll_SuccessfulRequestTopicMetadata(Optional<String> topic) {
-        this.topicMetadataRequestManager.requestTopicMetadata(topic);
+    @Test
+    public void testPoll_SuccessfulRequestTopicMetadata() {
+        String topic = "hello";
+        this.topicMetadataRequestManager.requestTopicMetadata(topic, Long.MAX_VALUE);
+        this.time.sleep(100);
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+    }
+
+    @Test
+    public void testPoll_SuccessfulRequestAllTopicsMetadata() {
+        this.topicMetadataRequestManager.requestAllTopicsMetadata(Long.MAX_VALUE);
         this.time.sleep(100);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
@@ -88,57 +98,86 @@ public class TopicMetadataRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("exceptionProvider")
-    public void testExceptionAndInflightRequests(final Errors error, final boolean shouldRetry) {
+    public void testTopicExceptionAndInflightRequests(final Errors error, final boolean shouldRetry) {
         String topic = "hello";
-        this.topicMetadataRequestManager.requestTopicMetadata(Optional.of("hello"));
+        this.topicMetadataRequestManager.requestTopicMetadata(topic, Long.MAX_VALUE);
         this.time.sleep(100);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
             res.unsentRequests.get(0),
-            Optional.of(topic),
+            topic,
             error));
         List<TopicMetadataRequestManager.TopicMetadataRequestState> inflights = this.topicMetadataRequestManager.inflightRequests();
 
         if (shouldRetry) {
             assertEquals(1, inflights.size());
-            assertEquals(topic, inflights.get(0).topic().orElse(null));
+            assertEquals(topic, inflights.get(0).topic());
         } else {
             assertEquals(0, inflights.size());
         }
     }
 
     @ParameterizedTest
-    @MethodSource("topicsProvider")
-    public void testSendingTheSameRequest(Optional<String> topic) {
-        CompletableFuture<Map<String, List<PartitionInfo>>> future = this.topicMetadataRequestManager.requestTopicMetadata(topic);
-        CompletableFuture<Map<String, List<PartitionInfo>>> future2 =
-            this.topicMetadataRequestManager.requestTopicMetadata(topic);
+    @MethodSource("exceptionProvider")
+    public void testAllTopicsExceptionAndInflightRequests(final Errors error, final boolean shouldRetry) {
+        this.topicMetadataRequestManager.requestAllTopicsMetadata(Long.MAX_VALUE);
         this.time.sleep(100);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
-        assertEquals(1, res.unsentRequests.size());
+        res.unsentRequests.get(0).future().complete(buildAllTopicsMetadataClientResponse(
+                res.unsentRequests.get(0),
+                error));
+        List<TopicMetadataRequestManager.TopicMetadataRequestState> inflights = this.topicMetadataRequestManager.inflightRequests();
 
+        if (shouldRetry) {
+            assertEquals(1, inflights.size());
+        } else {
+            assertEquals(0, inflights.size());
+        }
+    }
+
+    @Test
+    public void testExpiringRequest() {
+        String topic = "hello";
+
+        // Request topic metadata with 1000ms expiration
+        long now = this.time.milliseconds();
+        CompletableFuture<Map<String, List<PartitionInfo>>> future =
+            this.topicMetadataRequestManager.requestTopicMetadata(topic, now + 1000L);
+        assertEquals(1, this.topicMetadataRequestManager.inflightRequests().size());
+
+        // Poll the request manager to get the list of requests to send
+        // - fail the request with a RetriableException
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
         res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
             res.unsentRequests.get(0),
             topic,
-            Errors.NONE));
+            Errors.REQUEST_TIMED_OUT));
 
-        assertTrue(future.isDone());
-        assertFalse(future.isCompletedExceptionally());
-        try {
-            future.get();
-        } catch (Throwable e) {
-            fail("Expecting to succeed, but got: {}", e);
-        }
-        assertTrue(future2.isDone());
-        assertFalse(future2.isCompletedExceptionally());
+        // Sleep for long enough to exceed the backoff delay but still within the expiration
+        // - fail the request again with a RetriableException
+        this.time.sleep(500);
+        res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
+            res.unsentRequests.get(0),
+            topic,
+            Errors.REQUEST_TIMED_OUT));
+
+        // Sleep for long enough to expire the request which should fail
+        this.time.sleep(1000);
+        res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
+        assertEquals(0, this.topicMetadataRequestManager.inflightRequests().size());
+        assertTrue(future.isCompletedExceptionally());
     }
 
     @ParameterizedTest
     @MethodSource("hardFailureExceptionProvider")
-    void testHardFailures(Exception exception) {
-        Optional<String> topic = Optional.of("hello");
+    public void testHardFailures(Exception exception) {
+        String topic = "hello";
 
-        this.topicMetadataRequestManager.requestTopicMetadata(topic);
+        this.topicMetadataRequestManager.requestTopicMetadata(topic, Long.MAX_VALUE);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
 
@@ -151,32 +190,82 @@ public class TopicMetadataRequestManagerTest {
         }
     }
 
+    @Test
+    public void testNetworkTimeout() {
+        String topic = "hello";
+
+        topicMetadataRequestManager.requestTopicMetadata(topic, Long.MAX_VALUE);
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        NetworkClientDelegate.PollResult res2 = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(0, res2.unsentRequests.size());
+
+        // Mimic a network timeout
+        res.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new TimeoutException());
+
+        long backoffMs = topicMetadataRequestManager.inflightRequests().get(0).remainingBackoffMs(time.milliseconds());
+        // Sleep for exponential backoff - 1ms
+        time.sleep(backoffMs - 1);
+        res2 = topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(0, res2.unsentRequests.size());
+
+        time.sleep(1);
+        res2 = topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(1, res2.unsentRequests.size());
+
+        res2.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
+            res2.unsentRequests.get(0),
+            topic,
+            Errors.NONE));
+        assertTrue(topicMetadataRequestManager.inflightRequests().isEmpty());
+    }
+
     private ClientResponse buildTopicMetadataClientResponse(
-        final NetworkClientDelegate.UnsentRequest request,
-        final Optional<String> topic,
-        final Errors error) {
+            final NetworkClientDelegate.UnsentRequest request,
+            final String topic,
+            final Errors error) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof MetadataRequest);
+        assertInstanceOf(MetadataRequest.class, abstractRequest);
         MetadataRequest metadataRequest = (MetadataRequest) abstractRequest;
         Cluster cluster = mockCluster(3, 0);
         List<MetadataResponse.TopicMetadata> topics = new ArrayList<>();
-        if (topic.isPresent()) {
-            topics.add(new MetadataResponse.TopicMetadata(error, topic.get(), false,
+        topics.add(new MetadataResponse.TopicMetadata(error, topic, false,
                 Collections.emptyList()));
-        } else {
-            // null topic means request for all topics
-            topics.add(new MetadataResponse.TopicMetadata(error, "topic1", false,
-                Collections.emptyList()));
-            topics.add(new MetadataResponse.TopicMetadata(error, "topic2", false,
-                Collections.emptyList()));
-        }
+        final MetadataResponse metadataResponse = RequestTestUtils.metadataResponse(cluster.nodes(),
+                cluster.clusterResource().clusterId(),
+                cluster.controller().id(),
+                topics);
+        return new ClientResponse(
+                new RequestHeader(ApiKeys.METADATA, metadataRequest.version(), "mockClientId", 1),
+                request.handler(),
+                "-1",
+                time.milliseconds(),
+                time.milliseconds(),
+                false,
+                null,
+                null,
+                metadataResponse);
+    }
+
+    private ClientResponse buildAllTopicsMetadataClientResponse(
+        final NetworkClientDelegate.UnsentRequest request,
+        final Errors error) {
+        AbstractRequest abstractRequest = request.requestBuilder().build();
+        assertInstanceOf(MetadataRequest.class, abstractRequest);
+        MetadataRequest metadataRequest = (MetadataRequest) abstractRequest;
+        Cluster cluster = mockCluster(3, 0);
+        List<MetadataResponse.TopicMetadata> topics = new ArrayList<>();
+        topics.add(new MetadataResponse.TopicMetadata(error, "topic1", false,
+            Collections.emptyList()));
+        topics.add(new MetadataResponse.TopicMetadata(error, "topic2", false,
+            Collections.emptyList()));
         final MetadataResponse metadataResponse = RequestTestUtils.metadataResponse(cluster.nodes(),
             cluster.clusterResource().clusterId(),
             cluster.controller().id(),
             topics);
         return new ClientResponse(
             new RequestHeader(ApiKeys.METADATA, metadataRequest.version(), "mockClientId", 1),
-            request.callback(),
+            request.handler(),
             "-1",
             time.milliseconds(),
             time.milliseconds(),
@@ -195,12 +284,6 @@ public class TopicMetadataRequestManagerTest {
             Collections.emptySet(), nodes.get(controllerIndex));
     }
 
-
-    private static Collection<Arguments> topicsProvider() {
-        return Arrays.asList(
-            Arguments.of(Optional.of("topic1")),
-            Arguments.of(Optional.empty()));
-    }
 
     private static Collection<Arguments> exceptionProvider() {
         return Arrays.asList(

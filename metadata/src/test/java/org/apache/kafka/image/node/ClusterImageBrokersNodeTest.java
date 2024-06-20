@@ -22,6 +22,7 @@ import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -37,21 +38,23 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 @Timeout(value = 40)
 public class ClusterImageBrokersNodeTest {
     private static final ClusterImage TEST_IMAGE = new ClusterImage(
-            Collections.singletonMap(1, new BrokerRegistration(1,
-                    1001,
-                    Uuid.fromString("MJkaH0j0RwuC3W2GHQHtWA"),
-                    Collections.emptyList(),
-                    Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 4)),
-                    Optional.empty(),
-                    false,
-                    false)),
+            Collections.singletonMap(1, new BrokerRegistration.Builder().
+                    setId(1).
+                    setEpoch(1001).
+                    setIncarnationId(Uuid.fromString("MJkaH0j0RwuC3W2GHQHtWA")).
+                    setListeners(Collections.emptyList()).
+                    setSupportedFeatures(Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 4))).
+                    setRack(Optional.empty()).
+                    setFenced(false).
+                    setDirectories(Arrays.asList(Uuid.fromString("anCdBWcFTlu8gE1wP6bh3g"), Uuid.fromString("JsnDDNVyTL289kYk6sPzig"))).
+                    setInControlledShutdown(false).build()),
             Collections.emptyMap());
 
-    private final static ClusterImageBrokersNode NODE = new ClusterImageBrokersNode(TEST_IMAGE);
+    private static final ClusterImageBrokersNode NODE = new ClusterImageBrokersNode(TEST_IMAGE);
 
     @Test
     public void testChildNames() {
-        assertEquals(Arrays.asList("1"), NODE.childNames());
+        assertEquals(Collections.singletonList("1"), NODE.childNames());
     }
 
     @Test
@@ -65,7 +68,9 @@ public class ClusterImageBrokersNodeTest {
             "rack=Optional.empty, " +
             "fenced=false, " +
             "inControlledShutdown=false, " +
-            "isMigratingZkBroker=false)", child.stringify());
+            "isMigratingZkBroker=false, " +
+            "directories=[JsnDDNVyTL289kYk6sPzig, anCdBWcFTlu8gE1wP6bh3g])",
+            child.stringify());
     }
 
     @Test

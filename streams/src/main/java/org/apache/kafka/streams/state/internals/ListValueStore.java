@@ -42,7 +42,7 @@ public class ListValueStore
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, Bytes, byte[]>
     implements KeyValueStore<Bytes, byte[]> {
 
-    static private final Serde<List<byte[]>> LIST_SERDE = Serdes.ListSerde(ArrayList.class, Serdes.ByteArray());
+    private static final Serde<List<byte[]>> LIST_SERDE = Serdes.ListSerde(ArrayList.class, Serdes.ByteArray());
 
     ListValueStore(final KeyValueStore<Bytes, byte[]> bytesStore) {
         super(bytesStore);
@@ -143,7 +143,7 @@ public class ListValueStore
         }
 
         @Override
-        public KeyValue<Bytes, byte[]> makeNext() {
+        protected KeyValue<Bytes, byte[]> makeNext() {
             while (currList.isEmpty() && bytesIterator.hasNext()) {
                 final KeyValue<Bytes, byte[]> next = bytesIterator.next();
                 nextKey = next.key;

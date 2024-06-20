@@ -16,14 +16,17 @@
  */
 package kafka.api
 
+import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, PartitionInfo}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
+import java.util
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
@@ -34,8 +37,9 @@ import scala.collection.Seq
  */
 abstract class BaseConsumerTest extends AbstractConsumerTest {
 
-  @Test
-  def testSimpleConsumption(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSimpleConsumption(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
@@ -53,8 +57,9 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     sendAndAwaitAsyncCommit(consumer)
   }
 
-  @Test
-  def testClusterResourceListener(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testClusterResourceListener(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 100
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerSerializer])
@@ -74,8 +79,9 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
   }
 
-  @Test
-  def testCoordinatorFailover(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testCoordinatorFailover(quorum: String, groupProtocol: String): Unit = {
     val listener = new TestConsumerReassignmentListener()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
@@ -98,7 +104,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 
     // shutdown the coordinator
     val coordinator = parts.head.leader().id()
-    this.servers(coordinator).shutdown()
+    this.brokers(coordinator).shutdown()
 
     // the failover should not cause a rebalance
     ensureNoRebalance(consumer, listener)
@@ -106,19 +112,62 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 }
 
 object BaseConsumerTest {
+  // We want to test the following combinations:
+  // * ZooKeeper and the classic group protocol
+  // * KRaft and the classic group protocol
+  // * KRaft with the new group coordinator enabled and the classic group protocol
+  // * KRaft with the new group coordinator enabled and the consumer group protocol
+  def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
+    util.Arrays.stream(Array(
+        Arguments.of("zk", "classic"),
+        Arguments.of("kraft", "classic"),
+        Arguments.of("kraft+kip848", "classic"),
+        Arguments.of("kraft+kip848", "consumer")
+    ))
+  }
+
+  // In Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method call
+  // in the case where there's only a single Arguments in the list. The following commented-out
+  // method works in Scala 2.13, but not 2.12. For this reason, tests which run against just a
+  // single combination are written using @CsvSource rather than the more elegant @MethodSource. 
+  // def getTestQuorumAndGroupProtocolParametersZkOnly() : java.util.stream.Stream[Arguments] = {
+  //   java.util.stream.Stream.of(
+  //       Arguments.of("zk", "classic"))
+  // }
+
+  // For tests that only work with the classic group protocol, we want to test the following combinations:
+  // * ZooKeeper and the classic group protocol
+  // * KRaft and the classic group protocol
+  // * KRaft with the new group coordinator enabled and the classic group protocol
+  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
+    util.Arrays.stream(Array(
+        Arguments.of("zk", "classic"),
+        Arguments.of("kraft", "classic"),
+        Arguments.of("kraft+kip848", "classic")
+    ))
+  }
+
+  // For tests that only work with the consumer group protocol, we want to test the following combination:
+  // * KRaft with the new group coordinator enabled and the consumer group protocol
+  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly(): java.util.stream.Stream[Arguments] = {
+    util.Arrays.stream(Array(
+        Arguments.of("kraft+kip848", "consumer")
+    ))
+  }
+
   val updateProducerCount = new AtomicInteger()
   val updateConsumerCount = new AtomicInteger()
 
   class TestClusterResourceListenerSerializer extends Serializer[Array[Byte]] with ClusterResourceListener {
 
-    override def onUpdate(clusterResource: ClusterResource): Unit = updateProducerCount.incrementAndGet();
+    override def onUpdate(clusterResource: ClusterResource): Unit = updateProducerCount.incrementAndGet()
 
     override def serialize(topic: String, data: Array[Byte]): Array[Byte] = data
   }
 
   class TestClusterResourceListenerDeserializer extends Deserializer[Array[Byte]] with ClusterResourceListener {
 
-    override def onUpdate(clusterResource: ClusterResource): Unit = updateConsumerCount.incrementAndGet();
+    override def onUpdate(clusterResource: ClusterResource): Unit = updateConsumerCount.incrementAndGet()
     override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = data
   }
 }

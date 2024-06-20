@@ -57,7 +57,7 @@ import java.util.stream.Collectors;
  * defs.define(&quot;config_with_default&quot;, Type.STRING, &quot;default string value&quot;, Importance.High, &quot;Configuration with default value.&quot;);
  * // check {@link #define(String, Type, Object, Validator, Importance, String)} for more details.
  * defs.define(&quot;config_with_validator&quot;, Type.INT, 42, Range.atLeast(0), Importance.High, &quot;Configuration with user provided validator.&quot;);
- * // check {@link #define(String, Type, Importance, String, String, int, Width, String, List<String>)} for more details.
+ * // check {@link #define(String, Type, Importance, String, String, int, Width, String, List) define(String, Type, Importance, String, String, int, Width, String, List&lt;String&gt;)} for more details.
  * defs.define(&quot;config_with_dependents&quot;, Type.INT, Importance.LOW, &quot;Configuration with dependents.&quot;, &quot;group&quot;, 1, Width.SHORT, &quot;Config With Dependents&quot;, Arrays.asList(&quot;config_with_default&quot;,&quot;config_with_validator&quot;));
  *
  * Map&lt;String, String&gt; props = new HashMap&lt;&gt;();
@@ -152,7 +152,30 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
-        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false));
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false, null));
+    }
+
+    /**
+     * Define a new configuration
+     * @param name               the name of the config parameter
+     * @param type               the type of the config
+     * @param defaultValue       the default value to use if this config isn't present
+     * @param validator          the validator to use in checking the correctness of the config
+     * @param importance         the importance of this config
+     * @param documentation      the documentation string for the config
+     * @param group              the group this config belongs to
+     * @param orderInGroup       the order of this config in the group
+     * @param width              the width of the config
+     * @param displayName        the name suitable for display
+     * @param dependents         the configurations that are dependents of this configuration
+     * @param recommender        the recommender provides valid values given the parent configuration values
+     * @param alternativeString  the string which will be used to override the string of defaultValue
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
+                            String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender,
+                            String alternativeString) {
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false, alternativeString));
     }
 
     /**
@@ -390,6 +413,21 @@ public class ConfigDef {
     }
 
     /**
+     * Define a new configuration with no special validation logic
+     * @param name              The name of the config parameter
+     * @param type              The type of the config
+     * @param defaultValue      The default value to use if this config isn't present
+     * @param importance        The importance of this config: is this something you will likely need to change.
+     * @param documentation     The documentation string for the config
+     * @param alternativeString The string which will be used to override the string of defaultValue
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation, String alternativeString) {
+        return define(name, type, defaultValue, null, importance, documentation, null, -1, Width.NONE,
+                name, Collections.emptyList(), null, alternativeString);
+    }
+
+    /**
      * Define a new configuration with no default value and no special validation logic
      * @param name          The name of the config parameter
      * @param type          The type of the config
@@ -411,7 +449,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Importance importance) {
-        return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.emptyList(), null, true));
+        return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.emptyList(), null, true, null));
     }
 
     /**
@@ -426,7 +464,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Validator validator, final Importance importance, final String documentation) {
-        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, Collections.emptyList(), null, true));
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, Collections.emptyList(), null, true, null));
     }
 
     /**
@@ -477,7 +515,7 @@ public class ConfigDef {
         // Check all configurations are defined
         List<String> undefinedConfigKeys = undefinedDependentConfigs();
         if (!undefinedConfigKeys.isEmpty()) {
-            String joined = Utils.join(undefinedConfigKeys, ",");
+            String joined = undefinedConfigKeys.stream().map(String::toString).collect(Collectors.joining(","));
             throw new ConfigException("Some configurations in are referred in the dependents, but not defined: " + joined);
         }
         // parse all known keys
@@ -768,7 +806,7 @@ public class ConfigDef {
                 return parsedValue.toString();
             case LIST:
                 List<?> valueList = (List<?>) parsedValue;
-                return Utils.join(valueList, ",");
+                return valueList.stream().map(Object::toString).collect(Collectors.joining(","));
             case CLASS:
                 Class<?> clazz = (Class<?>) parsedValue;
                 return clazz.getName();
@@ -802,11 +840,63 @@ public class ConfigDef {
     }
 
     /**
-     * The config types
+     * The type for a configuration value
      */
     public enum Type {
-        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD;
+        /**
+         * Used for boolean values. Values can be provided as a Boolean object or as a String with values
+         * <code>true</code> or <code>false</code> (this is not case-sensitive), otherwise a {@link ConfigException} is
+         * thrown.
+         */
+        BOOLEAN,
+        /**
+         * Used for string values. Values must be provided as a String object, otherwise a {@link ConfigException} is
+         * thrown.
+         */
+        STRING,
+        /**
+         * Used for numerical values within the Java Integer range. Values must be provided as a Integer object or as
+         * a String being a valid Integer value, otherwise a {@link ConfigException} is thrown.
+         */
+        INT,
+        /**
+         * Used for numerical values within the Java Short range. Values must be provided as a Short object or as
+         * a String being a valid Short value, otherwise a {@link ConfigException} is thrown.
+         */
+        SHORT,
+        /**
+         * Used for numerical values within the Java Long range. Values must be provided as a Long object, as an Integer
+         * object or as a String being a valid Long value, otherwise a {@link ConfigException} is thrown.
+         */
+        LONG,
+        /**
+         * Used for numerical values within the Java Double range. Values must be provided as a Number object, as a
+         * Double object or as a String being a valid Double value, otherwise a {@link ConfigException} is thrown.
+         */
+        DOUBLE,
+        /**
+         * Used for list values. Values must be provided as a List object, as a String object, otherwise a
+         * {@link ConfigException} is thrown. When the value is provided as a String it must use commas to separate the
+         * different entries (for example: <code>first-entry, second-entry</code>) and an empty String maps to an empty List.
+         */
+        LIST,
+        /**
+         * Used for values that implement a Kafka interface. Values must be provided as a Class object or as a
+         * String object, otherwise a {@link ConfigException} is thrown. When the value is provided as a String it must
+         * be the binary name of the Class.
+         */
+        CLASS,
+        /**
+         * Used for string values containing sensitive data such as a password or key. The values of configurations with
+         * of this type are not included in logs and instead replaced with "[hidden]". Values must be provided as a
+         * String object, otherwise a {@link ConfigException} is thrown.
+         */
+        PASSWORD;
 
+        /**
+         * Whether this type contains sensitive data such as a password or key.
+         * @return true if the type is {@link #PASSWORD}
+         */
         public boolean isSensitive() {
             return this == PASSWORD;
         }
@@ -961,13 +1051,13 @@ public class ConfigDef {
         public void ensureValid(String name, Object o) {
             String s = (String) o;
             if (!validStrings.contains(s)) {
-                throw new ConfigException(name, o, "String must be one of: " + Utils.join(validStrings, ", "));
+                throw new ConfigException(name, o, "String must be one of: " + String.join(", ", validStrings));
             }
 
         }
 
         public String toString() {
-            return "[" + Utils.join(validStrings, ", ") + "]";
+            return "[" + String.join(", ", validStrings) + "]";
         }
     }
 
@@ -989,12 +1079,12 @@ public class ConfigDef {
         public void ensureValid(String name, Object o) {
             String s = (String) o;
             if (s == null || !validStrings.contains(s.toUpperCase(Locale.ROOT))) {
-                throw new ConfigException(name, o, "String must be one of (case insensitive): " + Utils.join(validStrings, ", "));
+                throw new ConfigException(name, o, "String must be one of (case insensitive): " + String.join(", ", validStrings));
             }
         }
 
         public String toString() {
-            return "(case insensitive) [" + Utils.join(validStrings, ", ") + "]";
+            return "(case insensitive) [" + String.join(", ", validStrings) + "]";
         }
     }
 
@@ -1115,7 +1205,8 @@ public class ConfigDef {
             }
 
             if (!foundIllegalCharacters.isEmpty()) {
-                throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " + Utils.join(foundIllegalCharacters, ", "));
+                throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " +
+                        foundIllegalCharacters.stream().map(Object::toString).collect(Collectors.joining(", ")));
             }
         }
 
@@ -1164,12 +1255,23 @@ public class ConfigDef {
         public final List<String> dependents;
         public final Recommender recommender;
         public final boolean internalConfig;
+        public final String alternativeString;
 
+        // This constructor is present for backward compatibility reasons.
         public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
                          Importance importance, String documentation, String group,
                          int orderInGroup, Width width, String displayName,
                          List<String> dependents, Recommender recommender,
                          boolean internalConfig) {
+            this(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName,
+                dependents, recommender, internalConfig, null);
+        }
+
+        private ConfigKey(String name, Type type, Object defaultValue, Validator validator,
+                         Importance importance, String documentation, String group,
+                         int orderInGroup, Width width, String displayName,
+                         List<String> dependents, Recommender recommender,
+                         boolean internalConfig, String alternativeString) {
             this.name = name;
             this.type = type;
             boolean hasDefault = !NO_DEFAULT_VALUE.equals(defaultValue);
@@ -1186,6 +1288,7 @@ public class ConfigDef {
             this.displayName = displayName;
             this.recommender = recommender;
             this.internalConfig = internalConfig;
+            this.alternativeString = alternativeString;
         }
 
         public boolean hasDefault() {
@@ -1478,7 +1581,8 @@ public class ConfigDef {
                     key.displayName,
                     embeddedDependents(keyPrefix, key.dependents),
                     embeddedRecommender(keyPrefix, key.recommender),
-                    key.internalConfig));
+                    key.internalConfig,
+                    key.alternativeString));
         }
     }
 
@@ -1600,6 +1704,10 @@ public class ConfigDef {
                     "<tbody>\n");
             for (String detail : headers()) {
                 if (detail.equals("Name") || detail.equals("Description")) continue;
+                if (detail.equals("Default") && key.alternativeString != null) {
+                    addConfigDetail(b, detail, key.alternativeString);
+                    continue;
+                }
                 addConfigDetail(b, detail, getConfigValue(key, detail));
             }
             if (hasUpdateModes) {

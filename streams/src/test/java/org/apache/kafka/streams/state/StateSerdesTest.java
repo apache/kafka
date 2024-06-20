@@ -20,14 +20,14 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings("unchecked")
 public class StateSerdesTest {
@@ -63,7 +63,7 @@ public class StateSerdesTest {
 
         for (final Class keyClass : supportedBuildInTypes) {
             for (final Class valueClass : supportedBuildInTypes) {
-                Assert.assertNotNull(StateSerdes.withBuiltinTypes("anyName", keyClass, valueClass));
+                assertNotNull(StateSerdes.withBuiltinTypes("anyName", keyClass, valueClass));
             }
         }
     }

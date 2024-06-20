@@ -20,7 +20,7 @@ from ducktape.mark import matrix, parametrize
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService, config_property, quorum
+from kafkatest.services.kafka import KafkaService, config_property, quorum, consumer_group
 from kafkatest.services.connect import ConnectDistributedService, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
@@ -81,7 +81,13 @@ class ConnectDistributedTest(Test):
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.schemas = True
 
-    def setup_services(self, security_protocol=SecurityConfig.PLAINTEXT, timestamp_type=None, broker_version=DEV_BRANCH, auto_create_topics=False, include_filestream_connectors=False):
+    def setup_services(self,
+                       security_protocol=SecurityConfig.PLAINTEXT,
+                       timestamp_type=None,
+                       broker_version=DEV_BRANCH,
+                       auto_create_topics=False,
+                       include_filestream_connectors=False,
+                       num_workers=3):
         self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
                                   security_protocol=security_protocol, interbroker_security_protocol=security_protocol,
                                   topics=self.topics, version=broker_version,
@@ -94,7 +100,7 @@ class ConnectDistributedTest(Test):
             for node in self.kafka.nodes:
                 node.config[config_property.MESSAGE_TIMESTAMP_TYPE] = timestamp_type
 
-        self.cc = ConnectDistributedService(self.test_context, 3, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE],
+        self.cc = ConnectDistributedService(self.test_context, num_workers, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE],
                                             include_filestream_connectors=include_filestream_connectors)
         self.cc.log_level = "DEBUG"
 
@@ -102,9 +108,10 @@ class ConnectDistributedTest(Test):
             self.zk.start()
         self.kafka.start()
 
-    def _start_connector(self, config_file):
+    def _start_connector(self, config_file, extra_config={}):
         connector_props = self.render(config_file)
         connector_config = dict([line.strip().split('=', 1) for line in connector_props.split('\n') if line.strip() and not line.strip().startswith('#')])
+        connector_config.update(extra_config)
         self.cc.create_connector(connector_config)
             
     def _connector_status(self, connector, node=None):
@@ -165,8 +172,20 @@ class ConnectDistributedTest(Test):
         return self._task_has_state(task_id, status, 'RUNNING')
 
     @cluster(num_nodes=5)
-    @matrix(exactly_once_source=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_restart_failed_connector(self, exactly_once_source, connect_protocol, metadata_quorum):
+    @matrix(
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_restart_failed_connector(self, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         self.EXACTLY_ONCE_SOURCE_SUPPORT = 'enabled' if exactly_once_source else 'disabled'
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
@@ -176,7 +195,7 @@ class ConnectDistributedTest(Test):
         if exactly_once_source:
             self.connector = MockSource(self.cc, mode='connector-failure', delay_sec=5)
         else:
-            self.connector = MockSink(self.cc, self.topics.keys(), mode='connector-failure', delay_sec=5)
+            self.connector = MockSink(self.cc, self.topics.keys(), mode='connector-failure', delay_sec=5, consumer_group_protocol=group_protocol)
         self.connector.start()
 
         wait_until(lambda: self.connector_is_failed(self.connector), timeout_sec=15,
@@ -188,8 +207,20 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see connector transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(connector_type=['source', 'exactly-once source', 'sink'], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_restart_failed_task(self, connector_type, connect_protocol, metadata_quorum):
+    @matrix(
+        connector_type=['source', 'exactly-once source', 'sink'],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        connector_type=['source', 'exactly-once source', 'sink'],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_restart_failed_task(self, connector_type, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         self.EXACTLY_ONCE_SOURCE_SUPPORT = 'enabled' if connector_type == 'exactly-once source' else 'disabled'
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
@@ -198,7 +229,7 @@ class ConnectDistributedTest(Test):
 
         connector = None
         if connector_type == "sink":
-            connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5)
+            connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5, consumer_group_protocol=group_protocol)
         else:
             connector = MockSource(self.cc, mode='task-failure', delay_sec=5)
             
@@ -214,14 +245,24 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see task transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_restart_connector_and_tasks_failed_connector(self, connect_protocol, metadata_quorum):
+    @matrix(
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_restart_connector_and_tasks_failed_connector(self, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
         self.cc.start()
 
-        self.sink = MockSink(self.cc, self.topics.keys(), mode='connector-failure', delay_sec=5)
+        self.sink = MockSink(self.cc, self.topics.keys(), mode='connector-failure', delay_sec=5, consumer_group_protocol=group_protocol)
         self.sink.start()
 
         wait_until(lambda: self.connector_is_failed(self.sink), timeout_sec=15,
@@ -233,8 +274,20 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see connector transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(connector_type=['source', 'sink'], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_restart_connector_and_tasks_failed_task(self, connector_type, connect_protocol, metadata_quorum):
+    @matrix(
+        connector_type=['source', 'sink'],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        connector_type=['source', 'sink'],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_restart_connector_and_tasks_failed_task(self, connector_type, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -242,7 +295,7 @@ class ConnectDistributedTest(Test):
 
         connector = None
         if connector_type == "sink":
-            connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5)
+            connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5, consumer_group_protocol=group_protocol)
         else:
             connector = MockSource(self.cc, mode='task-failure', delay_sec=5)
 
@@ -258,8 +311,19 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see task transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(exactly_once_source=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_pause_and_resume_source(self, exactly_once_source, connect_protocol, metadata_quorum):
+    @matrix(
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_pause_and_resume_source(self, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False):
         """
         Verify that source connectors stop producing records when paused and begin again after
         being resumed.
@@ -300,8 +364,18 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to produce messages after resuming source connector")
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_pause_and_resume_sink(self, connect_protocol, metadata_quorum):
+    @matrix(
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_pause_and_resume_sink(self, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Verify that sink connectors stop consuming records when paused and begin again after
         being resumed.
@@ -319,7 +393,7 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: len(self.source.committed_messages()) > 0, timeout_sec=30,
                    err_msg="Timeout expired waiting for source task to produce a message")
 
-        self.sink = VerifiableSink(self.cc, topics=[self.TOPIC])
+        self.sink = VerifiableSink(self.cc, topics=[self.TOPIC], consumer_group_protocol=group_protocol)
         self.sink.start()
 
         wait_until(lambda: self.is_running(self.sink), timeout_sec=30,
@@ -348,8 +422,19 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to consume messages after resuming sink connector")
 
     @cluster(num_nodes=5)
-    @matrix(exactly_once_source=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_pause_state_persistent(self, exactly_once_source, connect_protocol, metadata_quorum):
+    @matrix(
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_pause_state_persistent(self, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False):
         """
         Verify that paused state is preserved after a cluster restart.
         """
@@ -375,9 +460,201 @@ class ConnectDistributedTest(Test):
             wait_until(lambda: self.is_paused(self.source, node), timeout_sec=120,
                        err_msg="Failed to see connector startup in PAUSED state")
 
+    @cluster(num_nodes=5)
+    def test_dynamic_logging(self):
+        """
+        Test out the REST API for dynamically adjusting logging levels, on both a single-worker and cluster-wide basis.
+        """
+
+        self.setup_services(num_workers=3)
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
+
+        worker = self.cc.nodes[0]
+        initial_loggers = self.cc.get_all_loggers(worker)
+        self.logger.debug("Listed all loggers via REST API: %s", str(initial_loggers))
+        assert initial_loggers is not None
+        assert 'root' in initial_loggers
+        # We need root and at least one other namespace (the other namespace is checked
+        # later on to make sure that it hasn't changed)
+        assert len(initial_loggers) >= 2
+        # We haven't made any modifications yet; ensure that the last-modified timestamps
+        # for all namespaces are null
+        for logger in initial_loggers.values():
+            assert logger['last_modified'] is None
+
+        # Find a non-root namespace to adjust
+        namespace = None
+        for logger in initial_loggers.keys():
+            if logger != 'root':
+                namespace = logger
+                break
+        assert namespace is not None
+
+        initial_level = self.cc.get_logger(worker, namespace)['level']
+        # Make sure we pick a different one than what's already set for that namespace
+        new_level = self._different_level(initial_level)
+        request_time = self._set_logger(worker, namespace, new_level)
+
+        # Verify that our adjustment was applied on the worker we issued the request to...
+        assert self._loggers_are_set(new_level, request_time, namespace, workers=[worker])
+        # ... and that no adjustments have been applied to the other workers in the cluster
+        assert self._loggers_are_set(initial_level, None, namespace, workers=self.cc.nodes[1:])
+
+        # Force all loggers to get updated by setting the root namespace to
+        # two different levels
+        # This guarantees that their last-modified times will be updated
+        self._set_logger(worker, 'root', 'DEBUG', 'cluster')
+        new_root = 'INFO'
+        request_time = self._set_logger(worker, 'root', new_root, 'cluster')
+        self._wait_for_loggers(new_root, request_time, 'root')
+
+        new_level = 'DEBUG'
+        request_time = self._set_logger(worker, namespace, new_level, 'cluster')
+        self._wait_for_loggers(new_level, request_time, namespace)
+
+        prior_all_loggers = [self.cc.get_all_loggers(node) for node in self.cc.nodes]
+        # Set the same level twice for a namespace
+        self._set_logger(worker, namespace, new_level, 'cluster')
+
+        prior_namespace = namespace
+        new_namespace = None
+        for logger, level in prior_all_loggers[0].items():
+            if logger != 'root' and not logger.startswith(namespace):
+                new_namespace = logger
+                new_level = self._different_level(level['level'])
+        assert new_namespace is not None
+
+        request_time = self._set_logger(worker, new_namespace, new_level, 'cluster')
+        self._wait_for_loggers(new_level, request_time, new_namespace)
+
+        # Verify that the last-modified timestamp and logging level of the prior namespace
+        # has not changed since the second-most-recent adjustment for it (the most-recent
+        # adjustment used the same level and should not have had any impact on level or
+        # timestamp)
+        new_all_loggers = [self.cc.get_all_loggers(node) for node in self.cc.nodes]
+        assert len(prior_all_loggers) == len(new_all_loggers)
+        for i in range(len(prior_all_loggers)):
+            prior_loggers, new_loggers = prior_all_loggers[i], new_all_loggers[i]
+            for logger, prior_level in prior_loggers.items():
+                if logger.startswith(prior_namespace):
+                    new_level = new_loggers[logger]
+                    assert prior_level == new_level
+
+        # Forcibly update all loggers in the cluster to a new level, bumping their
+        # last-modified timestamps
+        new_root = 'INFO'
+        self._set_logger(worker, 'root', 'DEBUG', 'cluster')
+        root_request_time = self._set_logger(worker, 'root', new_root, 'cluster')
+        self._wait_for_loggers(new_root, root_request_time, 'root')
+        # Track the loggers reported on every node
+        prior_all_loggers = [self.cc.get_all_loggers(node) for node in self.cc.nodes]
+
+        # Make a final worker-scoped logging adjustment
+        namespace = new_namespace
+        new_level = self._different_level(new_root)
+        request_time = self._set_logger(worker, namespace, new_level, 'worker')
+        assert self._loggers_are_set(new_level, request_time, namespace, workers=[worker])
+
+        # Make sure no changes to loggers outside the affected namespace have taken place
+        all_loggers = self.cc.get_all_loggers(worker)
+        for logger, level in all_loggers.items():
+            if not logger.startswith(namespace):
+                assert level['level'] == new_root
+                assert root_request_time <= level['last_modified'] < request_time
+
+        # Verify that the last worker-scoped request we issued had no effect on other
+        # workers in the cluster
+        new_all_loggers = [self.cc.get_all_loggers(node) for node in self.cc.nodes]
+        # Exclude the first node, which we've made worker-scope modifications to
+        # since we last adjusted the cluster-scope root level
+        assert prior_all_loggers[1:] == new_all_loggers[1:]
+
+        # Restart a worker and ensure that all logging level adjustments (regardless of scope)
+        # have been discarded
+        self._restart_worker(worker)
+        restarted_loggers = self.cc.get_all_loggers(worker)
+        assert initial_loggers == restarted_loggers
+
+    def _different_level(self, current_level):
+        return 'INFO' if current_level is None or current_level.upper() != 'INFO' else 'WARN'
+
+    def _set_logger(self, worker, namespace, new_level, scope=None):
+        """
+        Set a log level via the PUT /admin/loggers/{logger} endpoint, verify that the response
+        has the expected format, and then return the time at which the request was issued.
+        :param worker: the worker to issue the REST request to
+        :param namespace: the logging namespace to adjust
+        :param new_level: the new level for the namespace
+        :param scope: the scope of the logging adjustment; if None, then no scope will be specified
+        in the REST request
+        :return: the time at or directly before which the REST request was made
+        """
+        request_time = int(time.time() * 1000)
+        affected_loggers = self.cc.set_logger(worker, namespace, new_level, scope)
+        if scope is not None and scope.lower() == 'cluster':
+            assert affected_loggers is None
+        else:
+            assert len(affected_loggers) >= 1
+            for logger in affected_loggers:
+                assert logger.startswith(namespace)
+        return request_time
+
+    def _loggers_are_set(self, expected_level, last_modified, namespace, workers=None):
+        """
+        Verify that all loggers for a namespace (as returned from the GET /admin/loggers endpoint) have
+        an expected level and last-modified timestamp.
+        :param expected_level: the expected level for all loggers in the namespace
+        :param last_modified: the expected last modified timestamp; if None, then all loggers
+        are expected to have null timestamps; otherwise, all loggers are expected to have timestamps
+        greater than or equal to this value
+        :param namespace: the logging namespace to examine
+        :param workers: the workers to query
+        :return: whether the expected logging levels and last-modified timestamps are set
+        """
+        if workers is None:
+            workers = self.cc.nodes
+        for worker in workers:
+            all_loggers = self.cc.get_all_loggers(worker)
+            self.logger.debug("Read loggers on %s from Connect REST API: %s", str(worker), str(all_loggers))
+            namespaced_loggers = {k: v for k, v in all_loggers.items() if k.startswith(namespace)}
+            if len(namespaced_loggers) < 1:
+                return False
+            for logger in namespaced_loggers.values():
+                if logger['level'] != expected_level:
+                    return False
+                if last_modified is None:
+                    # Fail fast if there's a non-null timestamp; it'll never be reset to null
+                    assert logger['last_modified'] is None
+                elif logger['last_modified'] is None or logger['last_modified'] < last_modified:
+                    return False
+        return True
+
+    def _wait_for_loggers(self, level, request_time, namespace, workers=None):
+        wait_until(
+            lambda: self._loggers_are_set(level, request_time, namespace, workers),
+            # This should be super quick--just a write+read of the config topic, which workers are constantly polling
+            timeout_sec=10,
+            err_msg="Log level for namespace '" + namespace + "'  was not adjusted in a reasonable amount of time."
+        )
+
     @cluster(num_nodes=6)
-    @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL], exactly_once_source=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_file_source_and_sink(self, security_protocol, exactly_once_source, connect_protocol, metadata_quorum):
+    @matrix(
+        security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL],
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL],
+        exactly_once_source=[True, False], 
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_file_source_and_sink(self, security_protocol, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Tests that a basic file connector works across clean rolling bounces. This validates that the connector is
         correctly created, tasks instantiated, and as nodes restart the work is rebalanced across nodes.
@@ -392,7 +669,10 @@ class ConnectDistributedTest(Test):
 
         self.logger.info("Creating connectors")
         self._start_connector("connect-file-source.properties")
-        self._start_connector("connect-file-sink.properties")
+        if group_protocol is not None:
+            self._start_connector("connect-file-sink.properties", {"consumer.override.group.protocol" : group_protocol})
+        else:
+            self._start_connector("connect-file-sink.properties")
         
         # Generating data on the source node should generate new records and create new output on the sink node. Timeouts
         # here need to be more generous than they are for standalone mode because a) it takes longer to write configs,
@@ -410,8 +690,20 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=150, err_msg="Sink output file never converged to the same state as the input file")
 
     @cluster(num_nodes=6)
-    @matrix(clean=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_bounce(self, clean, connect_protocol, metadata_quorum):
+    @matrix(
+        clean=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        clean=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_bounce(self, clean, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Validates that source and sink tasks that run continuously and produce a predictable sequence of messages
         run correctly and deliver messages exactly once when Kafka Connect workers undergo clean rolling bounces,
@@ -426,7 +718,7 @@ class ConnectDistributedTest(Test):
 
         self.source = VerifiableSource(self.cc, topic=self.TOPIC, tasks=num_tasks, throughput=100)
         self.source.start()
-        self.sink = VerifiableSink(self.cc, tasks=num_tasks, topics=[self.TOPIC])
+        self.sink = VerifiableSink(self.cc, tasks=num_tasks, topics=[self.TOPIC], consumer_group_protocol=group_protocol)
         self.sink.start()
 
         for i in range(3):
@@ -434,15 +726,7 @@ class ConnectDistributedTest(Test):
             # Don't want to restart worker nodes in the same order every time
             shuffled_nodes = self.cc.nodes[start:] + self.cc.nodes[:start]
             for node in shuffled_nodes:
-                started = time.time()
-                self.logger.info("%s bouncing Kafka Connect on %s", clean and "Clean" or "Hard", str(node.account))
-                self.cc.stop_node(node, clean_shutdown=clean, await_shutdown=True)
-                with node.account.monitor_log(self.cc.LOG_FILE) as monitor:
-                    self.cc.start_node(node)
-                    monitor.wait_until("Starting connectors and tasks using config offset", timeout_sec=90,
-                                       err_msg="Kafka Connect worker didn't successfully join group and start work")
-                self.logger.info("Bounced Kafka Connect on %s and rejoined in %f seconds", node.account, time.time() - started)
-
+                self._restart_worker(node, clean=clean)
                 # Give additional time for the consumer groups to recover. Even if it is not a hard bounce, there are
                 # some cases where a restart can cause a rebalance to take the full length of the session timeout
                 # (e.g. if the client shuts down before it has received the memberId from its initial JoinGroup).
@@ -531,15 +815,27 @@ class ConnectDistributedTest(Test):
         if not success:
             self.mark_for_collect(self.cc)
             # Also collect the data in the topic to aid in debugging
-            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=1000, print_key=True)
+            consumer_properties = consumer_group.maybe_set_group_protocol(group_protocol)
+            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=1000, print_key=True, consumer_properties=consumer_properties)
             consumer_validator.run()
             self.mark_for_collect(consumer_validator, "consumer_stdout")
 
         assert success, "Found validation errors:\n" + "\n  ".join(errors)
 
-    @cluster(num_nodes=6)
-    @matrix(clean=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_exactly_once_source(self, clean, connect_protocol, metadata_quorum):
+    @cluster(num_nodes=7)
+    @matrix(
+        clean=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        clean=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_exactly_once_source(self, clean, connect_protocol, metadata_quorum, use_new_coordinator=False):
         """
         Validates that source tasks run correctly and deliver messages exactly once
         when Kafka Connect workers undergo bounces, both clean and unclean.
@@ -560,14 +856,7 @@ class ConnectDistributedTest(Test):
             # Don't want to restart worker nodes in the same order every time
             shuffled_nodes = self.cc.nodes[start:] + self.cc.nodes[:start]
             for node in shuffled_nodes:
-                started = time.time()
-                self.logger.info("%s bouncing Kafka Connect on %s", clean and "Clean" or "Hard", str(node.account))
-                self.cc.stop_node(node, clean_shutdown=clean, await_shutdown=True)
-                with node.account.monitor_log(self.cc.LOG_FILE) as monitor:
-                    self.cc.start_node(node)
-                    monitor.wait_until("Starting connectors and tasks using config offset", timeout_sec=90,
-                                       err_msg="Kafka Connect worker didn't successfully join group and start work")
-                self.logger.info("Bounced Kafka Connect on %s and rejoined in %f seconds", node.account, time.time() - started)
+                self._restart_worker(node, clean=clean)
 
                 if i < 2:
                     # Give additional time for the worker group to recover. Even if it is not a hard bounce, there are
@@ -642,8 +931,18 @@ class ConnectDistributedTest(Test):
         assert success, "Found validation errors:\n" + "\n  ".join(errors)
 
     @cluster(num_nodes=6)
-    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_transformations(self, connect_protocol, metadata_quorum):
+    @matrix(
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_transformations(self, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services(timestamp_type='CreateTime', include_filestream_connectors=True)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -673,7 +972,8 @@ class ConnectDistributedTest(Test):
         for node in self.cc.nodes:
             node.account.ssh("echo -e -n " + repr(self.FIRST_INPUTS) + " >> " + self.INPUT_FILE)
 
-        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=15000, print_timestamp=True)
+        consumer_properties = consumer_group.maybe_set_group_protocol(group_protocol)
+        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=15000, print_timestamp=True, consumer_properties=consumer_properties)
         consumer.run()
 
         assert len(consumer.messages_consumed[1]) == len(self.FIRST_INPUT_LIST)
@@ -775,3 +1075,13 @@ class ConnectDistributedTest(Test):
             return list(node.account.ssh_capture("cat " + file))
         except RemoteCommandError:
             return []
+
+    def _restart_worker(self, node, clean=True):
+        started = time.time()
+        self.logger.info("%s bouncing Kafka Connect on %s", clean and "Clean" or "Hard", str(node.account))
+        self.cc.stop_node(node, clean_shutdown=clean, await_shutdown=True)
+        with node.account.monitor_log(self.cc.LOG_FILE) as monitor:
+            self.cc.start_node(node)
+            monitor.wait_until("Starting connectors and tasks using config offset", timeout_sec=90,
+                               err_msg="Kafka Connect worker didn't successfully join group and start work")
+        self.logger.info("Bounced Kafka Connect on %s and rejoined in %f seconds", node.account, time.time() - started)

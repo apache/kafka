@@ -17,17 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.Map;
-import java.util.Optional;
-import java.util.TreeMap;
-import java.util.function.Consumer;
-
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
@@ -43,7 +32,19 @@ import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineObject;
+
 import org.slf4j.Logger;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.TreeMap;
+import java.util.function.Consumer;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
@@ -54,17 +55,17 @@ public class FeatureControlManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
-        private MetadataVersion metadataVersion = MetadataVersion.latest();
+        private MetadataVersion metadataVersion = MetadataVersion.latestProduction();
         private MetadataVersion minimumBootstrapVersion = MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
             public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
-                return Collections.<Integer, Map<String, VersionRange>>emptyMap().entrySet().iterator();
+                return Collections.emptyIterator();
             }
 
             @Override
             public Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported() {
-                return Collections.<Integer, Map<String, VersionRange>>emptyMap().entrySet().iterator();
+                return Collections.emptyIterator();
             }
         };
 
@@ -105,7 +106,7 @@ public class FeatureControlManager {
                 Map<String, VersionRange> localSupportedFeatures = new HashMap<>();
                 localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                         MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
-                        MetadataVersion.latest().featureLevel()));
+                        MetadataVersion.latestProduction().featureLevel()));
                 quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, Collections.singletonList(0));
             }
             return new FeatureControlManager(
@@ -346,9 +347,10 @@ public class FeatureControlManager {
                 return invalidMetadataVersion(newVersionLevel, "Unsafe metadata downgrade is not supported " +
                         "in this version.");
             } else {
+                // The phrase "Retry using UNSAFE_DOWNGRADE if you want to force the downgrade to proceed." has been removed
+                // because unsafe metadata downgrades are not yet supported. We can add it back when implemented (KAFKA-13896).
                 return invalidMetadataVersion(newVersionLevel, "Refusing to perform the requested " +
-                        "downgrade because it might delete metadata information. Retry using " +
-                        "UNSAFE_DOWNGRADE if you want to force the downgrade to proceed.");
+                        "downgrade because it might delete metadata information.");
             }
         } else {
             log.warn("Upgrading metadata.version from {} to {}.", currentVersion, newVersion);
@@ -396,7 +398,7 @@ public class FeatureControlManager {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             MetadataVersion mv = MetadataVersion.fromFeatureLevel(record.featureLevel());
             metadataVersion.set(mv);
-            log.info("Replayed a FeatureLevelRecord setting metadata version to {}", mv);
+            log.info("Replayed a FeatureLevelRecord setting metadata.version to {}", mv);
         } else {
             if (record.featureLevel() == 0) {
                 finalizedVersions.remove(record.name());

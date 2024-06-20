@@ -48,6 +48,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.LeaderState;
 import static org.apache.kafka.connect.util.ConnectUtils.combineCollections;
@@ -337,10 +338,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         // The complete set of connectors and tasks that should be newly-assigned during this round
         ConnectorsAndTasks toAssign = new ConnectorsAndTasks.Builder()
-                .addConnectors(created.connectors())
-                .addTasks(created.tasks())
-                .addConnectors(lostAssignmentsToReassign.connectors())
-                .addTasks(lostAssignmentsToReassign.tasks())
+                .addAll(created)
+                .addAll(lostAssignmentsToReassign)
                 .build();
 
         assignConnectors(nextWorkerAssignment, toAssign.connectors());
@@ -460,8 +459,14 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     + "missing assignments that the leader is detecting are probably due to some "
                     + "workers failing to receive the new assignments in the previous rebalance. "
                     + "Will reassign missing tasks as new tasks");
-            lostAssignmentsToReassign.addConnectors(lostAssignments.connectors());
-            lostAssignmentsToReassign.addTasks(lostAssignments.tasks());
+            lostAssignmentsToReassign.addAll(lostAssignments);
+            return;
+        } else if (maxDelay == 0) {
+            log.debug("Scheduled rebalance delays are disabled ({} = 0); "
+                    + "reassigning all lost connectors and tasks immediately",
+                    SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG
+            );
+            lostAssignmentsToReassign.addAll(lostAssignments);
             return;
         }
 
@@ -498,8 +503,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 }
             } else {
                 log.debug("No single candidate worker was found to assign lost tasks. Treating lost tasks as new tasks");
-                lostAssignmentsToReassign.addConnectors(lostAssignments.connectors());
-                lostAssignmentsToReassign.addTasks(lostAssignments.tasks());
+                lostAssignmentsToReassign.addAll(lostAssignments);
             }
             resetDelay();
             // Resetting the flag as now we can permit successive revoking rebalances.
@@ -840,8 +844,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private static void addAll(Map<String, ConnectorsAndTasks.Builder> base, Map<String, ConnectorsAndTasks> toAdd) {
         toAdd.forEach((worker, assignment) -> base
                 .computeIfAbsent(worker, w -> new ConnectorsAndTasks.Builder())
-                .addConnectors(assignment.connectors())
-                .addTasks(assignment.tasks())
+                .addAll(assignment)
         );
     }
 

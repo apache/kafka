@@ -33,6 +33,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -50,8 +53,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -61,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  *
  */
 public class NioEchoServer extends Thread {
-    private final static Logger LOG = LoggerFactory.getLogger(NioEchoServer.class);
+    private static final Logger LOG = LoggerFactory.getLogger(NioEchoServer.class);
 
     public enum MetricType {
         TOTAL, RATE, AVG, MAX;
@@ -107,30 +108,39 @@ public class NioEchoServer extends Thread {
             int failedAuthenticationDelayMs, Time time, DelegationTokenCache tokenCache) throws Exception {
         super("echoserver");
         setDaemon(true);
-        serverSocketChannel = ServerSocketChannel.open();
-        serverSocketChannel.configureBlocking(false);
-        serverSocketChannel.socket().bind(new InetSocketAddress(serverHost, 0));
-        this.port = serverSocketChannel.socket().getLocalPort();
-        this.socketChannels = Collections.synchronizedList(new ArrayList<>());
-        this.newChannels = Collections.synchronizedList(new ArrayList<>());
-        this.credentialCache = credentialCache;
-        this.tokenCache = tokenCache;
-        if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
-            for (String mechanism : ScramMechanism.mechanismNames()) {
-                if (credentialCache.cache(mechanism, ScramCredential.class) == null)
-                    credentialCache.createCache(mechanism, ScramCredential.class);
+        ServerSocketChannel serverSocketChannel = null;
+        try {
+            serverSocketChannel = ServerSocketChannel.open();
+            this.serverSocketChannel = serverSocketChannel;
+            serverSocketChannel.configureBlocking(false);
+            serverSocketChannel.socket().bind(new InetSocketAddress(serverHost, 0));
+            this.port = serverSocketChannel.socket().getLocalPort();
+            this.socketChannels = Collections.synchronizedList(new ArrayList<>());
+            this.newChannels = Collections.synchronizedList(new ArrayList<>());
+            this.credentialCache = credentialCache;
+            this.tokenCache = tokenCache;
+            if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
+                for (String mechanism : ScramMechanism.mechanismNames()) {
+                    if (credentialCache.cache(mechanism, ScramCredential.class) == null)
+                        credentialCache.createCache(mechanism, ScramCredential.class);
+                }
             }
+            LogContext logContext = new LogContext();
+            if (channelBuilder == null)
+                channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
+                        securityProtocol, config, credentialCache, tokenCache, time, logContext,
+                        () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
+            this.metrics = new Metrics();
+            this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
+                    "MetricGroup", channelBuilder, logContext);
+            acceptorThread = new AcceptorThread();
+            this.time = time;
+        } catch (Exception e) {
+            if (serverSocketChannel != null) {
+                serverSocketChannel.close();
+            }
+            throw e;
         }
-        LogContext logContext = new LogContext();
-        if (channelBuilder == null)
-            channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
-                securityProtocol, config, credentialCache, tokenCache, time, logContext,
-                () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
-        this.metrics = new Metrics();
-        this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
-                "MetricGroup", channelBuilder, logContext);
-        acceptorThread = new AcceptorThread();
-        this.time = time;
     }
 
     public int port() {

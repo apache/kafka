@@ -37,7 +37,7 @@ public class NamedTopologyBuilder extends StreamsBuilder {
     }
 
     @Override
-    protected NamedTopology getNewTopology(final TopologyConfig topologyConfigs) {
+    protected NamedTopology newTopology(final TopologyConfig topologyConfigs) {
         return new NamedTopology(new InternalTopologyBuilder(topologyConfigs));
     }
 }

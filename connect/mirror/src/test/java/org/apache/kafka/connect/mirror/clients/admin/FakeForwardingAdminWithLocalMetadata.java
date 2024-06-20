@@ -32,6 +32,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TopicExistsException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

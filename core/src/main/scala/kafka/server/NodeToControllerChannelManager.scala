@@ -31,10 +31,12 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
 import java.util
+import java.util.Optional
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -53,22 +55,15 @@ trait ControllerNodeProvider {
 
 class MetadataCacheControllerNodeProvider(
   val metadataCache: ZkMetadataCache,
-  val config: KafkaConfig
+  val config: KafkaConfig,
+  val quorumControllerNodeProvider: () => Option[ControllerInformation]
 ) extends ControllerNodeProvider {
 
   private val zkControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
   private val zkControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
   private val zkControllerSaslMechanism = config.saslMechanismInterBrokerProtocol
 
-  private val kraftControllerListenerName = if (config.controllerListenerNames.nonEmpty)
-    new ListenerName(config.controllerListenerNames.head) else null
-  private val kraftControllerSecurityProtocol = Option(kraftControllerListenerName)
-    .map( listener => config.effectiveListenerSecurityProtocolMap.getOrElse(
-      listener, SecurityProtocol.forName(kraftControllerListenerName.value())))
-    .orNull
-  private val kraftControllerSaslMechanism = config.saslMechanismControllerProtocol
-
-  private val emptyZkControllerInfo =  ControllerInformation(
+  val emptyZkControllerInfo =  ControllerInformation(
     None,
     zkControllerListenerName,
     zkControllerSecurityProtocol,
@@ -83,12 +78,8 @@ class MetadataCacheControllerNodeProvider(
         zkControllerSecurityProtocol,
         zkControllerSaslMechanism,
         isZkController = true)
-      case KRaftCachedControllerId(id) => ControllerInformation(
-        metadataCache.getAliveBrokerNode(id, kraftControllerListenerName),
-        kraftControllerListenerName,
-        kraftControllerSecurityProtocol,
-        kraftControllerSaslMechanism,
-        isZkController = false)
+      case KRaftCachedControllerId(_) =>
+        quorumControllerNodeProvider.apply().getOrElse(emptyZkControllerInfo)
     }.getOrElse(emptyZkControllerInfo)
   }
 }
@@ -97,14 +88,12 @@ object RaftControllerNodeProvider {
   def apply(
     raftManager: RaftManager[ApiMessageAndVersion],
     config: KafkaConfig,
-    controllerQuorumVoterNodes: Seq[Node]
   ): RaftControllerNodeProvider = {
     val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
     val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
     val controllerSaslMechanism = config.saslMechanismControllerProtocol
     new RaftControllerNodeProvider(
       raftManager,
-      controllerQuorumVoterNodes,
       controllerListenerName,
       controllerSecurityProtocol,
       controllerSaslMechanism
@@ -118,48 +107,16 @@ object RaftControllerNodeProvider {
  */
 class RaftControllerNodeProvider(
   val raftManager: RaftManager[ApiMessageAndVersion],
-  controllerQuorumVoterNodes: Seq[Node],
   val listenerName: ListenerName,
   val securityProtocol: SecurityProtocol,
   val saslMechanism: String
 ) extends ControllerNodeProvider with Logging {
-  val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
+
+  private def idToNode(id: Int): Option[Node] = raftManager.voterNode(id, listenerName)
 
   override def getControllerInfo(): ControllerInformation =
-    ControllerInformation(raftManager.leaderAndEpoch.leaderId.asScala.map(idToNode),
+    ControllerInformation(raftManager.leaderAndEpoch.leaderId.asScala.flatMap(idToNode),
       listenerName, securityProtocol, saslMechanism, isZkController = false)
-}
-
-object NodeToControllerChannelManager {
-  def apply(
-    controllerNodeProvider: ControllerNodeProvider,
-    time: Time,
-    metrics: Metrics,
-    config: KafkaConfig,
-    channelName: String,
-    threadNamePrefix: String,
-    retryTimeoutMs: Long
-  ): NodeToControllerChannelManager = {
-    new NodeToControllerChannelManagerImpl(
-      controllerNodeProvider,
-      time,
-      metrics,
-      config,
-      channelName,
-      threadNamePrefix,
-      retryTimeoutMs
-    )
-  }
-}
-
-trait NodeToControllerChannelManager {
-  def start(): Unit
-  def shutdown(): Unit
-  def controllerApiVersions(): Option[NodeApiVersions]
-  def sendRequest(
-    request: AbstractRequest.Builder[_ <: AbstractRequest],
-    callback: ControllerRequestCompletionHandler
-  ): Unit
 }
 
 /**
@@ -234,7 +191,8 @@ class NodeToControllerChannelManagerImpl(
         time,
         true,
         apiVersions,
-        logContext
+        logContext,
+        MetadataRecoveryStrategy.NONE
       )
     }
     val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"
@@ -270,20 +228,11 @@ class NodeToControllerChannelManagerImpl(
     ))
   }
 
-  def controllerApiVersions(): Option[NodeApiVersions] = {
+  def controllerApiVersions(): Optional[NodeApiVersions] = {
     requestThread.activeControllerAddress().flatMap { activeController =>
       Option(apiVersions.get(activeController.idString))
-    }
+    }.asJava
   }
-}
-
-abstract class ControllerRequestCompletionHandler extends RequestCompletionHandler {
-
-  /**
-   * Fire when the request transmission time passes the caller defined deadline on the channel queue.
-   * It covers the total waiting time including retries which might be the result of individual request timeout.
-   */
-  def onTimeout(): Unit
 }
 
 case class NodeToControllerQueueItem(
@@ -384,8 +333,10 @@ class NodeToControllerRequestThread(
   private[server] def handleResponse(queueItem: NodeToControllerQueueItem)(response: ClientResponse): Unit = {
     debug(s"Request ${queueItem.request} received $response")
     if (response.authenticationException != null) {
-      error(s"Request ${queueItem.request} failed due to authentication error with controller",
+      error(s"Request ${queueItem.request} failed due to authentication error with controller. Disconnecting the " +
+        s"connection to the stale controller ${activeControllerAddress().map(_.idString).getOrElse("null")}",
         response.authenticationException)
+      maybeDisconnectAndUpdateController()
       queueItem.callback.onComplete(response)
     } else if (response.versionMismatch != null) {
       error(s"Request ${queueItem.request} failed due to unsupported version error",
@@ -397,20 +348,23 @@ class NodeToControllerRequestThread(
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       debug(s"Request ${queueItem.request} received NOT_CONTROLLER exception. Disconnecting the " +
         s"connection to the stale controller ${activeControllerAddress().map(_.idString).getOrElse("null")}")
-      // just close the controller connection and wait for metadata cache update in doWork
-      activeControllerAddress().foreach { controllerAddress =>
-        try {
-          // We don't care if disconnect has an error, just log it and get a new network client
-          networkClient.disconnect(controllerAddress.idString)
-        } catch {
-          case t: Throwable => error("Had an error while disconnecting from NetworkClient.", t)
-        }
-        updateControllerAddress(null)
-      }
-
+      maybeDisconnectAndUpdateController()
       requestQueue.putFirst(queueItem)
     } else {
       queueItem.callback.onComplete(response)
+    }
+  }
+
+  private def maybeDisconnectAndUpdateController(): Unit = {
+    // just close the controller connection and wait for metadata cache update in doWork
+    activeControllerAddress().foreach { controllerAddress =>
+      try {
+        // We don't care if disconnect has an error, just log it and get a new network client
+        networkClient.disconnect(controllerAddress.idString)
+      } catch {
+        case t: Throwable => error("Had an error while disconnecting from NetworkClient.", t)
+      }
+      updateControllerAddress(null)
     }
   }
 
@@ -423,7 +377,12 @@ class NodeToControllerRequestThread(
       debug("Controller isn't cached, looking for local metadata changes")
       controllerInformation.node match {
         case Some(controllerNode) =>
-          info(s"Recorded new controller, from now on will use node $controllerNode")
+          val controllerType = if (controllerInformation.isZkController) {
+            "ZK"
+          } else {
+            "KRaft"
+          }
+          info(s"Recorded new $controllerType controller, from now on will use node $controllerNode")
           updateControllerAddress(controllerNode)
           metadataUpdater.setNodes(Seq(controllerNode).asJava)
         case None =>

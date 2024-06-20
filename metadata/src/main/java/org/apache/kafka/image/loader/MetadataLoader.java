@@ -37,6 +37,7 @@ import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
+
 import org.slf4j.Logger;
 
 import java.util.Iterator;
@@ -347,7 +348,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         }
         metrics.updateLastAppliedImageProvenance(image.provenance());
         metrics.setCurrentMetadataVersion(image.features().metadataVersion());
-        if (uninitializedPublishers.isEmpty()) {
+        if (!uninitializedPublishers.isEmpty()) {
             scheduleInitializeNewPublishers(0);
         }
     }
@@ -451,6 +452,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                         publisher.name(), e);
                 }
             }
+            metrics.setCurrentControllerId(leaderAndEpoch.leaderId().orElse(-1));
         });
     }
 

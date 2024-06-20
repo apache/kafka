@@ -101,10 +101,10 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         @Override
         public Iterator<ConsumerRecord<K, V>> iterator() {
             return new AbstractIterator<ConsumerRecord<K, V>>() {
-                Iterator<? extends Iterable<ConsumerRecord<K, V>>> iters = iterables.iterator();
+                final Iterator<? extends Iterable<ConsumerRecord<K, V>>> iters = iterables.iterator();
                 Iterator<ConsumerRecord<K, V>> current;
 
-                public ConsumerRecord<K, V> makeNext() {
+                protected ConsumerRecord<K, V> makeNext() {
                     while (current == null || !current.hasNext()) {
                         if (iters.hasNext())
                             current = iters.next().iterator();

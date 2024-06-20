@@ -39,6 +39,7 @@ import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -405,7 +406,12 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
                 throw new ConfigException(ReplaceField.ConfigName.RENAME, mappings, "Invalid rename mapping: " + mapping);
             }
             if (parts.length == 1) {
-                Schema.Type targetType = Schema.Type.valueOf(parts[0].trim().toUpperCase(Locale.ROOT));
+                Schema.Type targetType;
+                try {
+                    targetType = Schema.Type.valueOf(parts[0].trim().toUpperCase(Locale.ROOT));
+                } catch (IllegalArgumentException e) {
+                    throw new ConfigException("Invalid type found in casting spec: " + parts[0].trim(), e);
+                }
                 m.put(WHOLE_VALUE_CAST, validCastType(targetType, FieldType.OUTPUT));
                 isWholeValueCast = true;
             } else {
@@ -420,7 +426,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         }
         if (isWholeValueCast && mappings.size() > 1) {
             throw new ConfigException("Cast transformations that specify a type to cast the entire value to "
-                    + "may ony specify a single cast in their spec");
+                    + "may only specify a single cast in their spec");
         }
         return m;
     }

@@ -16,20 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-
-import java.io.IOException;
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -67,25 +53,38 @@ import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueToBytesStoreAdapter;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
 
-@Category({IntegrationTest.class})
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+
+import java.io.IOException;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Properties;
+
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+
+@Tag("integration")
 public class VersionedKeyValueStoreIntegrationTest {
 
     private static final String STORE_NAME = "versioned-store";
     private static final long HISTORY_RETENTION = 3600_000L;
 
     private String inputStream;
-    private String globalTableTopic;
     private String outputStream;
     private long baseTimestamp;
 
@@ -93,24 +92,23 @@ public class VersionedKeyValueStoreIntegrationTest {
 
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @Rule
-    public TestName testName = new TestName();
+    public TestInfo testInfo;
 
-    @BeforeClass
+    @BeforeAll
     public static void before() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void after() {
         CLUSTER.stop();
     }
 
-    @Before
-    public void beforeTest() throws InterruptedException {
-        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+    @BeforeEach
+    public void beforeTest(final TestInfo testInfo) throws InterruptedException {
+        this.testInfo = testInfo;
+        final String uniqueTestName = safeUniqueTestName(testInfo);
         inputStream = "input-stream-" + uniqueTestName;
-        globalTableTopic = "global-table-" + uniqueTestName;
         outputStream = "output-stream-" + uniqueTestName;
         CLUSTER.createTopic(inputStream);
         CLUSTER.createTopic(outputStream);
@@ -118,7 +116,7 @@ public class VersionedKeyValueStoreIntegrationTest {
         baseTimestamp = CLUSTER.time.milliseconds();
     }
 
-    @After
+    @AfterEach
     public void afterTest() {
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30L));
@@ -203,7 +201,7 @@ public class VersionedKeyValueStoreIntegrationTest {
             1);
 
         // verify changelog topic properties
-        final String changelogTopic = "app-VersionedKeyValueStoreIntegrationTestshouldSetChangelogTopicProperties-versioned-store-changelog";
+        final String changelogTopic = props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG) + "-versioned-store-changelog";
         final Properties changelogTopicConfig = CLUSTER.getLogConfig(changelogTopic);
         assertThat(changelogTopicConfig.getProperty("cleanup.policy"), equalTo("compact"));
         assertThat(changelogTopicConfig.getProperty("min.compaction.lag.ms"), equalTo(Long.toString(HISTORY_RETENTION + 24 * 60 * 60 * 1000L)));
@@ -361,7 +359,7 @@ public class VersionedKeyValueStoreIntegrationTest {
 
     private void shouldManualUpgradeFromNonVersionedToVersioned(final Topology originalTopology) throws Exception {
         // build original (non-versioned) topology and start app
-        Properties props = props();
+        final Properties props = props();
         // additional property to prevent premature compaction of older record versions while using timestamped store
         props.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, 60_000L);
         kafkaStreams = new KafkaStreams(originalTopology, props);
@@ -407,7 +405,6 @@ public class VersionedKeyValueStoreIntegrationTest {
             .process(() -> new VersionedStoreContentCheckerProcessor(true, data), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
-        props = props();
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
         kafkaStreams.start();
 
@@ -430,8 +427,8 @@ public class VersionedKeyValueStoreIntegrationTest {
     }
 
     private Properties props() {
+        final String safeTestName = safeUniqueTestName(testInfo);
         final Properties streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());

@@ -34,7 +34,7 @@ case class DeleteRecordsPartitionStatus(requiredOffset: Long,
                                         responseStatus: DeleteRecordsResponseData.DeleteRecordsPartitionResult) {
   @volatile var acksPending = false
 
-  override def toString = "[acksPending: %b, error: %s, lowWatermark: %d, requiredOffset: %d]"
+  override def toString: String = "[acksPending: %b, error: %s, lowWatermark: %d, requiredOffset: %d]"
     .format(acksPending, Errors.forCode(responseStatus.errorCode).toString, responseStatus.lowWatermark, requiredOffset)
 }
 
@@ -84,7 +84,7 @@ class DelayedDeleteRecords(delayMs: Long,
                 (false, Errors.NOT_LEADER_OR_FOLLOWER, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
             }
 
-          case HostedPartition.Offline =>
+          case HostedPartition.Offline(_) =>
             (false, Errors.KAFKA_STORAGE_ERROR, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
 
           case HostedPartition.None =>

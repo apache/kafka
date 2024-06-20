@@ -17,15 +17,17 @@
 
 package org.apache.kafka.image.loader.metrics;
 
-import com.yammer.metrics.core.Gauge;
-import com.yammer.metrics.core.MetricName;
-import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
+import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.MetricsRegistry;
+
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -34,14 +36,17 @@ import java.util.function.Consumer;
  * These are the metrics which are managed by the MetadataLoader class.
  */
 public final class MetadataLoaderMetrics implements AutoCloseable {
-    private final static MetricName CURRENT_METADATA_VERSION = getMetricName(
+    private static final MetricName CURRENT_METADATA_VERSION = getMetricName(
         "MetadataLoader", "CurrentMetadataVersion");
-    private final static MetricName HANDLE_LOAD_SNAPSHOT_COUNT = getMetricName(
+    private static final MetricName HANDLE_LOAD_SNAPSHOT_COUNT = getMetricName(
         "MetadataLoader", "HandleLoadSnapshotCount");
+    public static final MetricName CURRENT_CONTROLLER_ID = getMetricName(
+        "MetadataLoader", "CurrentControllerId");
 
     private final Optional<MetricsRegistry> registry;
     private final AtomicReference<MetadataVersion> currentMetadataVersion =
             new AtomicReference<>(MetadataVersion.MINIMUM_KRAFT_VERSION);
+    private final AtomicInteger currentControllerId = new AtomicInteger(-1);
     private final AtomicLong handleLoadSnapshotCount = new AtomicLong(0);
     private final Consumer<Long> batchProcessingTimeNsUpdater;
     private final Consumer<Integer> batchSizesUpdater;
@@ -69,6 +74,12 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
             @Override
             public Integer value() {
                 return Integer.valueOf(currentMetadataVersion().featureLevel());
+            }
+        }));
+        registry.ifPresent(r -> r.newGauge(CURRENT_CONTROLLER_ID, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return currentControllerId();
             }
         }));
         registry.ifPresent(r -> r.newGauge(HANDLE_LOAD_SNAPSHOT_COUNT, new Gauge<Long>() {
@@ -115,6 +126,14 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         return this.currentMetadataVersion.get();
     }
 
+    public int currentControllerId() {
+        return this.currentControllerId.get();
+    }
+
+    public void setCurrentControllerId(int newCurrentControllerId) {
+        this.currentControllerId.set(newCurrentControllerId);
+    }
+
     public long incrementHandleLoadSnapshotCount() {
         return this.handleLoadSnapshotCount.incrementAndGet();
     }
@@ -127,6 +146,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
     public void close() {
         registry.ifPresent(r -> Arrays.asList(
             CURRENT_METADATA_VERSION,
+            CURRENT_CONTROLLER_ID,
             HANDLE_LOAD_SNAPSHOT_COUNT
         ).forEach(r::removeMetric));
     }

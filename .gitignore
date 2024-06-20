@@ -34,7 +34,6 @@ Vagrantfile.local
 
 config/server-*
 config/zookeeper-*
-core/data/*
 gradle/wrapper/*.jar
 gradlew.bat
 
@@ -59,3 +58,7 @@ jmh-benchmarks/src/main/generated
 **/src/generated-test
 
 storage/kafka-tiered-storage/
+
+docker/test/report_*.html
+kafka.Kafka
+__pycache__

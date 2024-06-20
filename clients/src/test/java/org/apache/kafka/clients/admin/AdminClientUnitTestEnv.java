@@ -73,7 +73,7 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
 
         AdminMetadataManager metadataManager = new AdminMetadataManager(new LogContext(),
                 adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
+                adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), false);
         this.mockClient = new MockClient(time, new MockClient.MockMetadataUpdater() {
             @Override
             public List<Node> fetchNodes() {

@@ -18,9 +18,13 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
+
 import org.slf4j.Logger;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -31,6 +35,11 @@ import java.util.stream.IntStream;
  * which guarantees that events sharing a partition key are not processed concurrently.
  */
 public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
+
+    /**
+     * The poll timeout to wait for an event by the EventProcessorThread.
+     */
+    private static final long POLL_TIMEOUT_MS = 300L;
 
     /**
      * The logger.
@@ -53,20 +62,49 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
     private volatile boolean shuttingDown;
 
     /**
+     * The coordinator runtime metrics.
+     */
+    private final CoordinatorRuntimeMetrics metrics;
+
+    /**
+     * The time.
+     */
+    private final Time time;
+
+    public MultiThreadedEventProcessor(
+        LogContext logContext,
+        String threadPrefix,
+        int numThreads,
+        Time time,
+        CoordinatorRuntimeMetrics metrics
+    ) {
+        this(logContext, threadPrefix, numThreads, time, metrics, new EventAccumulator<>());
+    }
+
+    /**
      * Constructor.
      *
-     * @param logContext    The log context.
-     * @param threadPrefix  The thread prefix.
-     * @param numThreads    The number of threads.
+     * @param logContext        The log context.
+     * @param threadPrefix      The thread prefix.
+     * @param numThreads        The number of threads.
+     * @param metrics           The coordinator runtime metrics.
+     * @param time              The time.
+     * @param eventAccumulator  The event accumulator.
      */
     public MultiThreadedEventProcessor(
         LogContext logContext,
         String threadPrefix,
-        int numThreads
+        int numThreads,
+        Time time,
+        CoordinatorRuntimeMetrics metrics,
+        EventAccumulator<TopicPartition, CoordinatorEvent> eventAccumulator
     ) {
         this.log = logContext.logger(MultiThreadedEventProcessor.class);
         this.shuttingDown = false;
-        this.accumulator = new EventAccumulator<>();
+        this.accumulator = eventAccumulator;
+        this.time = Objects.requireNonNull(time);
+        this.metrics = Objects.requireNonNull(metrics);
+        this.metrics.registerEventQueueSizeGauge(accumulator::size);
         this.threads = IntStream.range(0, numThreads).mapToObj(threadId ->
             new EventProcessorThread(
                 threadPrefix + threadId
@@ -92,11 +130,23 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
 
         private void handleEvents() {
             while (!shuttingDown) {
-                CoordinatorEvent event = accumulator.poll();
+                // We use a single meter for aggregate idle percentage for the thread pool.
+                // Since meter is calculated as total_recorded_value / time_window and
+                // time_window is independent of the number of threads, each recorded idle
+                // time should be discounted by # threads.
+
+                long idleStartTimeMs = time.milliseconds();
+                CoordinatorEvent event = accumulator.poll(POLL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                long idleEndTimeMs = time.milliseconds();
+                long idleTimeMs = idleEndTimeMs - idleStartTimeMs;
+                metrics.recordThreadIdleTime(idleTimeMs / threads.size());
                 if (event != null) {
                     try {
                         log.debug("Executing event: {}.", event);
+                        long dequeuedTimeMs = time.milliseconds();
+                        metrics.recordEventQueueTime(dequeuedTimeMs - event.createdTimeMs());
                         event.run();
+                        metrics.recordEventQueueProcessingTime(time.milliseconds() - dequeuedTimeMs);
                     } catch (Throwable t) {
                         log.error("Failed to run event {} due to: {}.", event, t.getMessage(), t);
                         event.complete(t);
@@ -108,18 +158,17 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
         }
 
         private void drainEvents() {
-            CoordinatorEvent event = accumulator.poll(0, TimeUnit.MILLISECONDS);
-            while (event != null) {
+            CoordinatorEvent event;
+            while ((event = accumulator.poll()) != null) {
                 try {
                     log.debug("Draining event: {}.", event);
+                    metrics.recordEventQueueTime(time.milliseconds() - event.createdTimeMs());
                     event.complete(new RejectedExecutionException("EventProcessor is closed."));
                 } catch (Throwable t) {
                     log.error("Failed to reject event {} due to: {}.", event, t.getMessage(), t);
                 } finally {
                     accumulator.done(event);
                 }
-
-                event = accumulator.poll(0, TimeUnit.MILLISECONDS);
             }
         }
 
@@ -148,14 +197,25 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
     }
 
     /**
-     * Enqueues a new {{@link CoordinatorEvent}}.
+     * Enqueues a new {{@link CoordinatorEvent}} at the end of the processor.
      *
      * @param event The event.
      * @throws RejectedExecutionException If the event processor is closed.
      */
     @Override
-    public void enqueue(CoordinatorEvent event) throws RejectedExecutionException {
-        accumulator.add(event);
+    public void enqueueLast(CoordinatorEvent event) throws RejectedExecutionException {
+        accumulator.addLast(event);
+    }
+
+    /**
+     * Enqueues a new {{@link CoordinatorEvent}} at the front of the processor.
+     *
+     * @param event The event.
+     * @throws RejectedExecutionException If the event processor is closed.
+     */
+    @Override
+    public void enqueueFirst(CoordinatorEvent event) throws RejectedExecutionException {
+        accumulator.addFirst(event);
     }
 
     /**

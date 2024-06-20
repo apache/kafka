@@ -45,7 +45,9 @@
   // Version 14 is the same as version 13 but it also receives a new error called OffsetMovedToTieredStorageException (KIP-405)
   //
   // Version 15 is the same as version 14 (KIP-903).
-  "validVersions": "0-15",
+  //
+  // Version 16 adds the 'NodeEndpoints' field (KIP-951).
+  "validVersions": "0-16",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
@@ -102,6 +104,15 @@
           "about": "The preferred read replica for the consumer to use on its next fetch request"},
         { "name": "Records", "type": "records", "versions": "0+", "nullableVersions": "0+", "about": "The record data."}
       ]}
+    ]},
+    { "name": "NodeEndpoints", "type": "[]NodeEndpoint", "versions": "16+", "taggedVersions": "16+", "tag": 0,
+      "about": "Endpoints for all current-leaders enumerated in PartitionData, with errors NOT_LEADER_OR_FOLLOWER & FENCED_LEADER_EPOCH.", "fields": [
+      { "name": "NodeId", "type": "int32", "versions": "16+",
+        "mapKey": true, "entityType": "brokerId", "about": "The ID of the associated node."},
+      { "name": "Host", "type": "string", "versions": "16+", "about": "The node's hostname." },
+      { "name": "Port", "type": "int32", "versions": "16+", "about": "The node's port." },
+      { "name": "Rack", "type": "string", "versions": "16+", "nullableVersions": "16+", "default": "null",
+        "about": "The rack of the node, or null if it has not been assigned to a rack." }
     ]}
   ]
 }

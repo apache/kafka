@@ -29,6 +29,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
@@ -54,20 +55,23 @@ public class FetchCollector<K, V> {
     private final Logger log;
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
-    private final FetchConfig<K, V> fetchConfig;
+    private final FetchConfig fetchConfig;
+    private final Deserializers<K, V> deserializers;
     private final FetchMetricsManager metricsManager;
     private final Time time;
 
     public FetchCollector(final LogContext logContext,
                           final ConsumerMetadata metadata,
                           final SubscriptionState subscriptions,
-                          final FetchConfig<K, V> fetchConfig,
+                          final FetchConfig fetchConfig,
+                          final Deserializers<K, V> deserializers,
                           final FetchMetricsManager metricsManager,
                           final Time time) {
         this.log = logContext.logger(FetchCollector.class);
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.fetchConfig = fetchConfig;
+        this.deserializers = deserializers;
         this.metricsManager = metricsManager;
         this.time = time;
     }
@@ -128,7 +132,7 @@ public class FetchCollector<K, V> {
                     pausedCompletedFetches.add(nextInLineFetch);
                     fetchBuffer.setNextInLineFetch(null);
                 } else {
-                    final Fetch<K, V> nextFetch = fetchRecords(nextInLineFetch);
+                    final Fetch<K, V> nextFetch = fetchRecords(nextInLineFetch, recordsRemaining);
                     recordsRemaining -= nextFetch.numRecords();
                     fetch.add(nextFetch);
                 }
@@ -145,7 +149,7 @@ public class FetchCollector<K, V> {
         return fetch;
     }
 
-    private Fetch<K, V> fetchRecords(final CompletedFetch nextInLineFetch) {
+    private Fetch<K, V> fetchRecords(final CompletedFetch nextInLineFetch, int maxRecords) {
         final TopicPartition tp = nextInLineFetch.partition;
 
         if (!subscriptions.isAssigned(tp)) {
@@ -162,7 +166,9 @@ public class FetchCollector<K, V> {
                 throw new IllegalStateException("Missing position for fetchable partition " + tp);
 
             if (nextInLineFetch.nextFetchOffset() == position.offset) {
-                List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(fetchConfig, fetchConfig.maxPollRecords);
+                List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(fetchConfig,
+                        deserializers,
+                        maxRecords);
 
                 log.trace("Returning {} fetched records at offset {} for assigned partition {}",
                         partRecords.size(), position, tp);
@@ -243,10 +249,10 @@ public class FetchCollector<K, V> {
 
         // we are interested in this fetch only if the beginning offset matches the
         // current consumed position
-        SubscriptionState.FetchPosition position = subscriptions.position(tp);
+        SubscriptionState.FetchPosition position = subscriptions.positionOrNull(tp);
         if (position == null || position.offset != fetchOffset) {
             log.debug("Discarding stale fetch response for partition {} since its offset {} does not match " +
-                    "the expected offset {}", tp, fetchOffset, position);
+                "the expected offset {} or the partition has been unassigned", tp, fetchOffset, position);
             return null;
         }
 
@@ -273,32 +279,48 @@ public class FetchCollector<K, V> {
             }
         }
 
-        if (partition.highWatermark() >= 0) {
-            log.trace("Updating high watermark for partition {} to {}", tp, partition.highWatermark());
-            subscriptions.updateHighWatermark(tp, partition.highWatermark());
-        }
-
-        if (partition.logStartOffset() >= 0) {
-            log.trace("Updating log start offset for partition {} to {}", tp, partition.logStartOffset());
-            subscriptions.updateLogStartOffset(tp, partition.logStartOffset());
-        }
-
-        if (partition.lastStableOffset() >= 0) {
-            log.trace("Updating last stable offset for partition {} to {}", tp, partition.lastStableOffset());
-            subscriptions.updateLastStableOffset(tp, partition.lastStableOffset());
-        }
-
-        if (FetchResponse.isPreferredReplica(partition)) {
-            subscriptions.updatePreferredReadReplica(completedFetch.partition, partition.preferredReadReplica(), () -> {
-                long expireTimeMs = time.milliseconds() + metadata.metadataExpireMs();
-                log.debug("Updating preferred read replica for partition {} to {}, set to expire at {}",
-                        tp, partition.preferredReadReplica(), expireTimeMs);
-                return expireTimeMs;
-            });
+        if (!updatePartitionState(partition, tp)) {
+            return null;
         }
 
         completedFetch.setInitialized();
         return completedFetch;
+    }
+
+    private boolean updatePartitionState(final FetchResponseData.PartitionData partitionData,
+                                         final TopicPartition tp) {
+        if (partitionData.highWatermark() >= 0) {
+            log.trace("Updating high watermark for partition {} to {}", tp, partitionData.highWatermark());
+            if (!subscriptions.tryUpdatingHighWatermark(tp, partitionData.highWatermark())) {
+                return false;
+            }
+        }
+
+        if (partitionData.logStartOffset() >= 0) {
+            log.trace("Updating log start offset for partition {} to {}", tp, partitionData.logStartOffset());
+            if (!subscriptions.tryUpdatingLogStartOffset(tp, partitionData.logStartOffset())) {
+                return false;
+            }
+        }
+
+        if (partitionData.lastStableOffset() >= 0) {
+            log.trace("Updating last stable offset for partition {} to {}", tp, partitionData.lastStableOffset());
+            if (!subscriptions.tryUpdatingLastStableOffset(tp, partitionData.lastStableOffset())) {
+                return false;
+            }
+        }
+
+        if (FetchResponse.isPreferredReplica(partitionData)) {
+            return subscriptions.tryUpdatingPreferredReadReplica(
+                tp, partitionData.preferredReadReplica(), () -> {
+                    long expireTimeMs = time.milliseconds() + metadata.metadataExpireMs();
+                    log.debug("Updating preferred read replica for partition {} to {}, set to expire at {}",
+                        tp, partitionData.preferredReadReplica(), expireTimeMs);
+                    return expireTimeMs;
+                });
+        }
+
+        return true;
     }
 
     private void handleInitializeErrors(final CompletedFetch completedFetch, final Errors error) {
@@ -326,17 +348,17 @@ public class FetchCollector<K, V> {
 
             if (!clearedReplicaId.isPresent()) {
                 // If there's no preferred replica to clear, we're fetching from the leader so handle this error normally
-                SubscriptionState.FetchPosition position = subscriptions.position(tp);
+                SubscriptionState.FetchPosition position = subscriptions.positionOrNull(tp);
 
                 if (position == null || fetchOffset != position.offset) {
                     log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
-                            "does not match the current offset {}", tp, fetchOffset, position);
+                            "does not match the current offset {} or the partition has been unassigned", tp, fetchOffset, position);
                 } else {
                     String errorMessage = "Fetch position " + position + " is out of range for partition " + tp;
 
                     if (subscriptions.hasDefaultOffsetResetPolicy()) {
                         log.info("{}, resetting offset", errorMessage);
-                        subscriptions.requestOffsetReset(tp);
+                        subscriptions.requestOffsetResetIfPartitionAssigned(tp);
                     } else {
                         log.info("{}, raising error to the application since no reset policy is configured", errorMessage);
                         throw new OffsetOutOfRangeException(errorMessage,

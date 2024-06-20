@@ -30,9 +30,9 @@ public abstract class BaseRepartitionNode<K, V> extends GraphNode {
     protected final String sinkName;
     protected final String sourceName;
     protected final String repartitionTopic;
-    protected final ProcessorParameters<K, V, ?, ?> processorParameters;
     protected final StreamPartitioner<K, V> partitioner;
     protected final InternalTopicProperties internalTopicProperties;
+    protected ProcessorParameters<K, V, ?, ?> processorParameters;
 
     BaseRepartitionNode(final String nodeName,
                         final String sourceName,
@@ -70,6 +70,14 @@ public abstract class BaseRepartitionNode<K, V> extends GraphNode {
 
     Deserializer<K> keyDeserializer() {
         return keySerde != null ? keySerde.deserializer() : null;
+    }
+
+    public void setProcessorParameters(final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        this.processorParameters = processorParameters;
+    }
+
+    public ProcessorParameters<K, V, ?, ?> getProcessorParameters() {
+        return processorParameters;
     }
 
     @Override

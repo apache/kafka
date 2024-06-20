@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -34,8 +35,10 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreSegment;
+import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDBException;
-import org.rocksdb.WriteBatch;
+import org.rocksdb.Snapshot;
+import org.rocksdb.WriteBatchInterface;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -170,7 +173,30 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
 
     @Override
     public synchronized byte[] get(final Bytes key) {
-        return physicalStore.get(prefixKeyFormatter.addPrefix(key));
+        return get(key, Optional.empty());
+    }
+
+    public synchronized byte[] get(final Bytes key, final Snapshot snapshot) {
+        return get(key, Optional.of(snapshot));
+    }
+
+    private synchronized byte[] get(final Bytes key, final Optional<Snapshot> snapshot) {
+        if (snapshot.isPresent()) {
+            try (ReadOptions readOptions = new ReadOptions()) {
+                readOptions.setSnapshot(snapshot.get());
+                return physicalStore.get(prefixKeyFormatter.addPrefix(key), readOptions);
+            }
+        } else {
+            return physicalStore.get(prefixKeyFormatter.addPrefix(key));
+        }
+    }
+
+    public Snapshot getSnapshot() {
+        return physicalStore.getSnapshot();
+    }
+
+    public void releaseSnapshot(final Snapshot snapshot) {
+        physicalStore.releaseSnapshot(snapshot);
     }
 
     @Override
@@ -213,7 +239,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
-    public void addToBatch(final KeyValue<byte[], byte[]> record, final WriteBatch batch) throws RocksDBException {
+    public void addToBatch(final KeyValue<byte[], byte[]> record, final WriteBatchInterface batch) throws RocksDBException {
         physicalStore.addToBatch(
             new KeyValue<>(
                 prefixKeyFormatter.addPrefix(record.key),
@@ -222,7 +248,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
-    public void write(final WriteBatch batch) throws RocksDBException {
+    public void write(final WriteBatchInterface batch) throws RocksDBException {
         // no key transformations here since they should've already been done as part
         // of adding to the write batch
         physicalStore.write(batch);

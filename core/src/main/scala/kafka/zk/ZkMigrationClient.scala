@@ -16,7 +16,7 @@
  */
 package kafka.zk
 
-import kafka.utils.{Logging, PasswordEncoder}
+import kafka.utils.Logging
 import kafka.zk.ZkMigrationClient.wrapZkException
 import kafka.zk.migration.{ZkAclMigrationClient, ZkConfigMigrationClient, ZkDelegationTokenMigrationClient, ZkTopicMigrationClient}
 import kafka.zookeeper._
@@ -33,6 +33,7 @@ import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.TopicMigrationClient.{TopicVisitor, TopicVisitorInterest}
 import org.apache.kafka.metadata.migration._
+import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.{AuthFailedException, NoAuthException, SessionClosedRequireAuthException}
@@ -45,7 +46,7 @@ import scala.jdk.CollectionConverters._
 
 object ZkMigrationClient {
 
-  val MaxBatchSize = 100
+  private val MaxBatchSize = 100
 
   def apply(
     zkClient: KafkaZkClient,
@@ -263,7 +264,7 @@ class ZkMigrationClient(
         recordConsumer.accept(List(new ApiMessageAndVersion(new ProducerIdsRecord()
           .setBrokerEpoch(-1)
           .setBrokerId(producerIdBlock.assignedBrokerId)
-          .setNextProducerId(producerIdBlock.firstProducerId()), 0.toShort)).asJava)
+          .setNextProducerId(producerIdBlock.nextBlockFirstId()), 0.toShort)).asJava)
       case None => // Nothing to migrate
     }
   }
@@ -294,17 +295,16 @@ class ZkMigrationClient(
     })
   }
 
-  def migrateDelegationTokens(
+  private def migrateDelegationTokens(
     recordConsumer: Consumer[util.List[ApiMessageAndVersion]]
   ): Unit = wrapZkException {
     val batch = new util.ArrayList[ApiMessageAndVersion]()
     val tokens = zkClient.getChildren(DelegationTokensZNode.path)
     for (tokenId <- tokens) {
       zkClient.getDelegationTokenInfo(tokenId) match {
-        case Some(tokenInformation) => {
+        case Some(tokenInformation) =>
           val newDelegationTokenData = new DelegationTokenData(tokenInformation)
-          batch.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), 0.toShort))
-        }
+          batch.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord, 0.toShort))
         case None =>
       }
     }

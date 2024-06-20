@@ -35,6 +35,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -54,7 +55,7 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
       TestUtils.createBrokerConfig(brokerId2, zkConnect))
 
     configs.foreach { config =>
-        config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)}
+        config.setProperty(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)}
 
     // start both servers
     servers = configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))

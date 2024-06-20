@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.Iterator;
+import java.util.Optional;
 
 
 /**
@@ -58,7 +59,7 @@ public interface Records extends TransferableRecords {
      * Get the record batches. Note that the signature allows subclasses
      * to return a more specific batch type. This enables optimizations such as in-place offset
      * assignment (see for example {@link DefaultRecordBatch}), and partial reading of
-     * record data (see {@link FileLogInputStream.FileChannelRecordBatch#magic()}.
+     * record data, see {@link FileLogInputStream.FileChannelRecordBatch#magic()}.
      * @return An iterator over the record batches of the log
      */
     Iterable<? extends RecordBatch> batches();
@@ -69,6 +70,13 @@ public interface Records extends TransferableRecords {
      * @return An iterator over the record batches of the log
      */
     AbstractIterator<? extends RecordBatch> batchIterator();
+
+    /**
+     * Return the last record batch if non-empty or an empty `Optional` otherwise.
+     *
+     * Note that this requires iterating over all the record batches and hence it's expensive.
+     */
+    Optional<RecordBatch> lastBatch();
 
     /**
      * Check whether all batches in this buffer have a certain magic value.

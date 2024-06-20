@@ -17,20 +17,21 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_CACHE_IN_FLIGHT_MS;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_MAX_KEY_LENGTH;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.MockTime;
 
-import java.util.Collections;
-import java.util.Collection;
-import java.util.List;
+import org.jose4j.http.SimpleResponse;
+import org.jose4j.jwk.HttpsJwks;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.AbstractMap;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
@@ -38,14 +39,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
-import org.jose4j.http.SimpleResponse;
-import org.jose4j.jwk.HttpsJwks;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_CACHE_IN_FLIGHT_MS;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_MAX_KEY_LENGTH;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class RefreshingHttpsJwksTest extends OAuthBearerTest {
 
@@ -62,14 +62,16 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
     @Test
     public void testBasicScheduleRefresh() throws Exception {
         String keyId = "abc123";
-        Time time = new MockTime();
+        MockTime time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
 
+       // we use mocktime here to ensure that scheduled refresh _doesn't_ run and update the invocation count
+       // we expect httpsJwks.refresh() to be invoked twice, once from init() and maybeExpediteRefresh() each
         try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
             refreshingHttpsJwks.init();
             verify(httpsJwks, times(1)).refresh();
             assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
-            verify(httpsJwks, times(1)).refresh();
+            verify(httpsJwks, times(2)).refresh();
         }
     }
 
@@ -81,7 +83,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
     @Test
     public void testMaybeExpediteRefreshNoDelay() throws Exception {
         String keyId = "abc123";
-        Time time = new MockTime();
+        MockTime time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
 
         try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
@@ -113,7 +115,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         Arrays.fill(keyIdChars, '0');
         String keyId = new String(keyIdChars);
 
-        Time time = new MockTime();
+        MockTime time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
 
         try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
@@ -134,6 +136,20 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         String keyId = "abc123";
         MockTime time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
+
+        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
+            refreshingHttpsJwks.init();
+            // We refresh once at the initialization time from getJsonWebKeys.
+            verify(httpsJwks, times(1)).refresh();
+            assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
+            verify(httpsJwks, times(2)).refresh();
+            time.sleep(REFRESH_MS + 1);
+            verify(httpsJwks, times(3)).refresh();
+            assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
+        }
+    }
+
+    private ScheduledExecutorService mockExecutorService(MockTime time) {
         MockExecutorService mockExecutorService = new MockExecutorService(time);
         ScheduledExecutorService executorService = Mockito.mock(ScheduledExecutorService.class);
         Mockito.doAnswer(invocation -> {
@@ -155,22 +171,12 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
                 return null;
             }, unit.toMillis(initialDelay), period);
         }).when(executorService).scheduleAtFixedRate(Mockito.any(Runnable.class), Mockito.anyLong(), Mockito.anyLong(), Mockito.any(TimeUnit.class));
-
-        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks, executorService)) {
-            refreshingHttpsJwks.init();
-            // We refresh once at the initialization time from getJsonWebKeys.
-            verify(httpsJwks, times(1)).refresh();
-            assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
-            verify(httpsJwks, times(2)).refresh();
-            time.sleep(REFRESH_MS + 1);
-            verify(httpsJwks, times(3)).refresh();
-            assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
-        }
+        return executorService;
     }
 
     private void assertMaybeExpediteRefreshWithDelay(long sleepDelay, boolean shouldBeScheduled) throws Exception {
         String keyId = "abc123";
-        Time time = new MockTime();
+        MockTime time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
 
         try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
@@ -181,12 +187,8 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         }
     }
 
-    private RefreshingHttpsJwks getRefreshingHttpsJwks(final Time time, final HttpsJwks httpsJwks) {
-        return new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS, RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS);
-    }
-
-    private RefreshingHttpsJwks getRefreshingHttpsJwks(final Time time, final HttpsJwks httpsJwks, final ScheduledExecutorService executorService) {
-        return new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS, RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, executorService);
+    private RefreshingHttpsJwks getRefreshingHttpsJwks(final MockTime time, final HttpsJwks httpsJwks) {
+        return new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS, RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, mockExecutorService(time));
     }
 
     /**
@@ -235,7 +237,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
      * A mock ScheduledExecutorService just for the test. Note that this is not a generally reusable mock as it does not
      * implement some interfaces like scheduleWithFixedDelay, etc. And it does not return ScheduledFuture correctly.
      */
-    private class MockExecutorService implements MockTime.Listener {
+    private static class MockExecutorService implements MockTime.Listener {
         private final MockTime time;
 
         private final TreeMap<Long, List<AbstractMap.SimpleEntry<Long, KafkaFutureImpl<Long>>>> waiters = new TreeMap<>();

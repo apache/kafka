@@ -27,16 +27,11 @@
     <allow pkg="javax.management" />
     <allow pkg="org.slf4j" />
     <allow pkg="org.junit" />
-    <allow pkg="org.opentest4j" />
-    <allow pkg="org.hamcrest" />
     <allow pkg="org.mockito" />
-    <allow pkg="org.easymock" />
-    <allow pkg="org.powermock" />
     <allow pkg="java.security" />
     <allow pkg="javax.net.ssl" />
     <allow pkg="javax.security" />
     <allow pkg="javax.crypto" />
-    <allow pkg="org.ietf.jgss" />
     <allow pkg="net.jqwik.api" />
 
     <!-- no one depends on the server -->
@@ -59,6 +54,9 @@
             <allow pkg="org.apache.kafka.common.protocol" />
             <allow pkg="org.apache.kafka.common.protocol.types" />
             <allow pkg="org.apache.kafka.common.message" />
+            <allow pkg="org.apache.kafka.common.metadata" />
+        </subpackage>
+        <subpackage name="errors">
             <allow pkg="org.apache.kafka.common.metadata" />
         </subpackage>
     </subpackage>
@@ -121,6 +119,7 @@
         <allow pkg="org.apache.kafka.clients.admin" />
         <allow pkg="org.apache.kafka.raft" />
         <allow pkg="org.apache.kafka.server.common" />
+        <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="org.apache.kafka.server.fault" />
         <allow pkg="org.apache.kafka.server.util" />
         <allow pkg="org.apache.kafka.snapshot" />
@@ -174,18 +173,22 @@
             <allow pkg="org.apache.kafka.metadata" />
             <allow pkg="org.apache.kafka.common.internals" />
         </subpackage>
-        <subpackage name="migration">
-            <allow pkg="org.apache.kafka.controller" />
-        </subpackage>
         <subpackage name="bootstrap">
             <allow pkg="org.apache.kafka.snapshot" />
         </subpackage>
         <subpackage name="fault">
             <allow pkg="org.apache.kafka.server.fault" />
         </subpackage>
+        <subpackage name="migration">
+            <allow pkg="org.apache.kafka.controller" />
+        </subpackage>
+        <subpackage name="util">
+            <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
+        </subpackage>
     </subpackage>
 
     <subpackage name="metalog">
+        <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
         <allow pkg="org.apache.kafka.common.metadata" />
         <allow pkg="org.apache.kafka.common.protocol" />
         <allow pkg="org.apache.kafka.common.record" />

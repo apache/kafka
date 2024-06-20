@@ -29,8 +29,10 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -41,10 +43,12 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
@@ -72,13 +76,15 @@ public class Metadata implements Closeable {
     private KafkaException fatalException;
     private Set<String> invalidTopics;
     private Set<String> unauthorizedTopics;
-    private MetadataCache cache = MetadataCache.empty();
+    private volatile MetadataSnapshot metadataSnapshot = MetadataSnapshot.empty();
     private boolean needFullUpdate;
     private boolean needPartialUpdate;
     private long equivalentResponseCount;
     private final ClusterResourceListeners clusterResourceListeners;
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
+    /** Addresses with which the metadata was originally bootstrapped. */
+    private List<InetSocketAddress> bootstrapAddresses;
 
     /**
      * Create a new Metadata instance
@@ -120,8 +126,15 @@ public class Metadata implements Closeable {
     /**
      * Get the current cluster info without blocking
      */
-    public synchronized Cluster fetch() {
-        return cache.cluster();
+    public Cluster fetch() {
+        return metadataSnapshot.cluster();
+    }
+
+    /**
+     * Get the current metadata cache.
+     */
+    public MetadataSnapshot fetchMetadataSnapshot() {
+        return metadataSnapshot;
     }
 
     /**
@@ -208,7 +221,7 @@ public class Metadata implements Closeable {
 
     /**
      * Request an update for the partition metadata iff we have seen a newer leader epoch. This is called by the client
-     * any time it handles a response from the broker that includes leader epoch, except for UpdateMetadata which
+     * any time it handles a response from the broker that includes leader epoch, except for update via Metadata RPC which
      * follows a different code path ({@link #update}).
      *
      * @param topicPartition
@@ -262,7 +275,7 @@ public class Metadata implements Closeable {
      */
     synchronized Optional<MetadataResponse.PartitionMetadata> partitionMetadataIfCurrent(TopicPartition topicPartition) {
         Integer epoch = lastSeenLeaderEpochs.get(topicPartition);
-        Optional<MetadataResponse.PartitionMetadata> partitionMetadata = cache.partitionMetadata(topicPartition);
+        Optional<MetadataResponse.PartitionMetadata> partitionMetadata = metadataSnapshot.partitionMetadata(topicPartition);
         if (epoch == null) {
             // old cluster format (no epochs)
             return partitionMetadata;
@@ -275,8 +288,8 @@ public class Metadata implements Closeable {
     /**
      * @return a mapping from topic names to topic IDs for all topics with valid IDs in the cache
      */
-    public synchronized Map<String, Uuid> topicIds() {
-        return cache.topicIds();
+    public Map<String, Uuid> topicIds() {
+        return metadataSnapshot.topicIds();
     }
 
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {
@@ -286,14 +299,20 @@ public class Metadata implements Closeable {
 
         MetadataResponse.PartitionMetadata partitionMetadata = maybeMetadata.get();
         Optional<Integer> leaderEpochOpt = partitionMetadata.leaderEpoch;
-        Optional<Node> leaderNodeOpt = partitionMetadata.leaderId.flatMap(cache::nodeById);
+        Optional<Node> leaderNodeOpt = partitionMetadata.leaderId.flatMap(metadataSnapshot::nodeById);
         return new LeaderAndEpoch(leaderNodeOpt, leaderEpochOpt);
     }
 
     public synchronized void bootstrap(List<InetSocketAddress> addresses) {
         this.needFullUpdate = true;
         this.updateVersion += 1;
-        this.cache = MetadataCache.bootstrap(addresses);
+        this.metadataSnapshot = MetadataSnapshot.bootstrap(addresses);
+        this.bootstrapAddresses = addresses;
+    }
+
+    public synchronized void rebootstrap() {
+        log.info("Rebootstrapping with {}", this.bootstrapAddresses);
+        this.bootstrap(this.bootstrapAddresses);
     }
 
     /**
@@ -332,22 +351,113 @@ public class Metadata implements Closeable {
         // this count is reset to 0 in updateLatestMetadata()
         this.equivalentResponseCount++;
 
-        String previousClusterId = cache.clusterResource().clusterId();
+        String previousClusterId = metadataSnapshot.clusterResource().clusterId();
 
-        this.cache = handleMetadataResponse(response, isPartialUpdate, nowMs);
+        this.metadataSnapshot = handleMetadataResponse(response, isPartialUpdate, nowMs);
 
-        Cluster cluster = cache.cluster();
+        Cluster cluster = metadataSnapshot.cluster();
         maybeSetMetadataError(cluster);
 
         this.lastSeenLeaderEpochs.keySet().removeIf(tp -> !retainTopic(tp.topic(), false, nowMs));
 
-        String newClusterId = cache.clusterResource().clusterId();
+        String newClusterId = metadataSnapshot.clusterResource().clusterId();
         if (!Objects.equals(previousClusterId, newClusterId)) {
             log.info("Cluster ID: {}", newClusterId);
         }
-        clusterResourceListeners.onUpdate(cache.clusterResource());
+        clusterResourceListeners.onUpdate(metadataSnapshot.clusterResource());
 
-        log.debug("Updated cluster metadata updateVersion {} to {}", this.updateVersion, this.cache);
+        log.debug("Updated cluster metadata updateVersion {} to {}", this.updateVersion, this.metadataSnapshot);
+    }
+
+    /**
+     * Updates the partition-leadership info in the metadata. Update is done by merging existing metadata with the input leader information and nodes.
+     * This is called whenever partition-leadership updates are returned in a response from broker(ex - ProduceResponse & FetchResponse).
+     * Note that the updates via Metadata RPC are handled separately in ({@link #update}).
+     * Both partitionLeader and leaderNodes override the existing metadata. Non-overlapping metadata is kept as it is.
+     * @param partitionLeaders map of new leadership information for partitions.
+     * @param leaderNodes a list of nodes for leaders in the above map.
+     * @return a set of partitions, for which leaders were updated.
+     */
+    public synchronized Set<TopicPartition> updatePartitionLeadership(Map<TopicPartition, LeaderIdAndEpoch> partitionLeaders, List<Node> leaderNodes) {
+        Map<Integer, Node> newNodes = leaderNodes.stream().collect(Collectors.toMap(Node::id, node -> node));
+        // Insert non-overlapping nodes from existing-nodes into new-nodes.
+        this.metadataSnapshot.cluster().nodes().stream().forEach(node -> newNodes.putIfAbsent(node.id(), node));
+
+        // Create partition-metadata for all updated partitions. Exclude updates for partitions -
+        // 1. for which the corresponding partition has newer leader in existing metadata.
+        // 2. for which corresponding leader's node is missing in the new-nodes.
+        // 3. for which the existing metadata doesn't know about the partition.
+        List<PartitionMetadata> updatePartitionMetadata = new ArrayList<>();
+        for (Entry<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeader: partitionLeaders.entrySet()) {
+            TopicPartition partition = partitionLeader.getKey();
+            Metadata.LeaderAndEpoch currentLeader = currentLeader(partition);
+            Metadata.LeaderIdAndEpoch newLeader = partitionLeader.getValue();
+            if (!newLeader.epoch.isPresent() || !newLeader.leaderId.isPresent()) {
+                log.debug("For {}, incoming leader information is incomplete {}", partition, newLeader);
+                continue;
+            }
+            if (currentLeader.epoch.isPresent() && newLeader.epoch.get() <= currentLeader.epoch.get()) {
+                log.debug("For {}, incoming leader({}) is not-newer than the one in the existing metadata {}, so ignoring.", partition, newLeader, currentLeader);
+                continue;
+            }
+            if (!newNodes.containsKey(newLeader.leaderId.get())) {
+                log.debug("For {}, incoming leader({}), the corresponding node information for node-id {} is missing, so ignoring.", partition, newLeader, newLeader.leaderId.get());
+                continue;
+            }
+            if (!this.metadataSnapshot.partitionMetadata(partition).isPresent()) {
+                log.debug("For {}, incoming leader({}), partition metadata is no longer cached, ignoring.", partition, newLeader);
+                continue;
+            }
+
+            MetadataResponse.PartitionMetadata existingMetadata = this.metadataSnapshot.partitionMetadata(partition).get();
+            MetadataResponse.PartitionMetadata updatedMetadata = new MetadataResponse.PartitionMetadata(
+                existingMetadata.error,
+                partition,
+                newLeader.leaderId,
+                newLeader.epoch,
+                existingMetadata.replicaIds,
+                existingMetadata.inSyncReplicaIds,
+                existingMetadata.offlineReplicaIds
+            );
+            updatePartitionMetadata.add(updatedMetadata);
+
+            lastSeenLeaderEpochs.put(partition, newLeader.epoch.get());
+        }
+
+        if (updatePartitionMetadata.isEmpty()) {
+            log.debug("No relevant metadata updates.");
+            return new HashSet<>();
+        }
+
+        Set<String> updatedTopics = updatePartitionMetadata.stream().map(MetadataResponse.PartitionMetadata::topic).collect(Collectors.toSet());
+
+        // Get topic-ids for updated topics from existing topic-ids.
+        Map<String, Uuid> existingTopicIds = this.metadataSnapshot.topicIds();
+        Map<String, Uuid> topicIdsForUpdatedTopics = updatedTopics.stream()
+            .filter(existingTopicIds::containsKey)
+            .collect(Collectors.toMap(e -> e, existingTopicIds::get));
+
+        if (log.isDebugEnabled()) {
+            updatePartitionMetadata.forEach(
+                partMetadata -> log.debug("For {} updating leader information, updated metadata is {}.", partMetadata.topicPartition, partMetadata)
+            );
+        }
+
+        // Fetch responses can include partition level leader changes, when this happens, we perform a partial
+        // metadata update, by keeping the unchanged partition and update the changed partitions.
+        this.metadataSnapshot = metadataSnapshot.mergeWith(
+            metadataSnapshot.clusterResource().clusterId(),
+            newNodes,
+            updatePartitionMetadata,
+            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
+            metadataSnapshot.cluster().controller(),
+            topicIdsForUpdatedTopics,
+            (topic, isInternal) -> true);
+        clusterResourceListeners.onUpdate(metadataSnapshot.clusterResource());
+
+        return updatePartitionMetadata.stream()
+            .map(metadata -> metadata.topicPartition)
+            .collect(Collectors.toSet());
     }
 
     private void maybeSetMetadataError(Cluster cluster) {
@@ -373,7 +483,7 @@ public class Metadata implements Closeable {
     /**
      * Transform a MetadataResponse into a new MetadataCache instance.
      */
-    private MetadataCache handleMetadataResponse(MetadataResponse metadataResponse, boolean isPartialUpdate, long nowMs) {
+    private MetadataSnapshot handleMetadataResponse(MetadataResponse metadataResponse, boolean isPartialUpdate, long nowMs) {
         // All encountered topics.
         Set<String> topics = new HashSet<>();
 
@@ -384,7 +494,7 @@ public class Metadata implements Closeable {
 
         List<MetadataResponse.PartitionMetadata> partitions = new ArrayList<>();
         Map<String, Uuid> topicIds = new HashMap<>();
-        Map<String, Uuid> oldTopicIds = cache.topicIds();
+        Map<String, Uuid> oldTopicIds = metadataSnapshot.topicIds();
         for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
             String topicName = metadata.topic();
             Uuid topicId = metadata.topicId();
@@ -432,11 +542,11 @@ public class Metadata implements Closeable {
 
         Map<Integer, Node> nodes = metadataResponse.brokersById();
         if (isPartialUpdate)
-            return this.cache.mergeWith(metadataResponse.clusterId(), nodes, partitions,
+            return this.metadataSnapshot.mergeWith(metadataResponse.clusterId(), nodes, partitions,
                 unauthorizedTopics, invalidTopics, internalTopics, metadataResponse.controller(), topicIds,
                 (topic, isInternal) -> !topics.contains(topic) && retainTopic(topic, isInternal, nowMs));
         else
-            return new MetadataCache(metadataResponse.clusterId(), nodes, partitions,
+            return new MetadataSnapshot(metadataResponse.clusterId(), nodes, partitions,
                 unauthorizedTopics, invalidTopics, internalTopics, metadataResponse.controller(), topicIds);
     }
 
@@ -481,7 +591,7 @@ public class Metadata implements Closeable {
             } else {
                 // Otherwise ignore the new metadata and use the previously cached info
                 log.debug("Got metadata for an older epoch {} (current is {}) for partition {}, not updating", newEpoch, currentEpoch, tp);
-                return cache.partitionMetadata(tp);
+                return metadataSnapshot.partitionMetadata(tp);
             }
         } else {
             // Handle old cluster formats as well as error responses where leader and epoch are missing
@@ -641,6 +751,13 @@ public class Metadata implements Closeable {
         return null;
     }
 
+    /**
+     * @return Mapping from topic IDs to topic names for all topics in the cache.
+     */
+    public Map<Uuid, String> topicNames() {
+        return metadataSnapshot.topicNames();
+    }
+
     protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
         return true;
     }
@@ -704,6 +821,24 @@ public class Metadata implements Closeable {
                     "leader=" + leader +
                     ", epoch=" + epoch.map(Number::toString).orElse("absent") +
                     '}';
+        }
+    }
+
+    public static class LeaderIdAndEpoch {
+        public final Optional<Integer> leaderId;
+        public final Optional<Integer> epoch;
+
+        public LeaderIdAndEpoch(Optional<Integer> leaderId, Optional<Integer> epoch) {
+            this.leaderId = Objects.requireNonNull(leaderId);
+            this.epoch = Objects.requireNonNull(epoch);
+        }
+
+        @Override
+        public String toString() {
+            return "LeaderIdAndEpoch{" +
+                "leaderId=" + leaderId.map(Number::toString).orElse("absent") +
+                ", epoch=" + epoch.map(Number::toString).orElse("absent") +
+                '}';
         }
     }
 }

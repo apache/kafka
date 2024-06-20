@@ -73,8 +73,8 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     assertEquals(log1.size, replicaInfo1.partitionSize)
     val logEndOffset = servers.head.logManager.getLog(tp0).get.logEndOffset
     assertTrue(logEndOffset > 0, s"LogEndOffset '$logEndOffset' should be > 0")
-    assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp0, log0.logEndOffset, false), replicaInfo0.offsetLag)
-    assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp1, log1.logEndOffset, false), replicaInfo1.offsetLag)
+    assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp0, log0.logEndOffset, isFuture = false), replicaInfo0.offsetLag)
+    assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp1, log1.logEndOffset, isFuture = false), replicaInfo1.offsetLag)
   }
 
 }

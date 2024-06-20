@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.tools.ConsoleConsumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -29,9 +28,9 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -62,6 +61,9 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tools.consumer.ConsoleConsumer;
+import org.apache.kafka.tools.consumer.ConsoleConsumerOptions;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -132,9 +134,9 @@ public class KStreamAggregationIntegrationTest {
     @BeforeEach
     public void before(final TestInfo testInfo) throws InterruptedException {
         builder = new StreamsBuilder();
-        createTopics(testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
+        createTopics(safeTestName);
         streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -1041,8 +1043,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
 
-    private void createTopics(final TestInfo testInfo) throws InterruptedException {
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+    private void createTopics(final String safeTestName) throws InterruptedException {
         streamOneInput = "stream-one-" + safeTestName;
         outputTopic = "output-" + safeTestName;
         userSessionsStream = "user-sessions-" + safeTestName;
@@ -1071,7 +1072,7 @@ public class KStreamAggregationIntegrationTest {
                                                                  final TestInfo testInfo)
             throws Exception {
 
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
@@ -1095,7 +1096,7 @@ public class KStreamAggregationIntegrationTest {
                                                                               final Class innerClass,
                                                                               final int numMessages,
                                                                               final TestInfo testInfo) throws Exception {
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
@@ -1118,7 +1119,7 @@ public class KStreamAggregationIntegrationTest {
                                                                       final Deserializer<V> valueDeserializer,
                                                                       final Class innerClass,
                                                                       final int numMessages,
-                                                                      final boolean printTimestamp) {
+                                                                      final boolean printTimestamp) throws Exception {
         final ByteArrayOutputStream newConsole = new ByteArrayOutputStream();
         final PrintStream originalStream = System.out;
         try (final PrintStream newStream = new PrintStream(newConsole)) {
@@ -1140,8 +1141,7 @@ public class KStreamAggregationIntegrationTest {
                 "--property", "key.deserializer.window.size.ms=500",
             };
 
-            ConsoleConsumer.messageCount_$eq(0); //reset the message count
-            ConsoleConsumer.run(new ConsoleConsumer.ConsumerConfig(args));
+            ConsoleConsumer.run(new ConsoleConsumerOptions(args));
             newStream.flush();
             System.setOut(originalStream);
             return newConsole.toString();

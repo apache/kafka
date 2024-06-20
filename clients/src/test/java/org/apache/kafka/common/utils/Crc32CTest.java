@@ -34,8 +34,8 @@ public class Crc32CTest {
         Checksum crc3 = Crc32C.create();
 
         crc1.update(bytes, 0, len);
-        for (int i = 0; i < len; i++)
-            crc2.update(bytes[i]);
+        for (byte b : bytes)
+            crc2.update(b);
         crc3.update(bytes, 0, len / 2);
         crc3.update(bytes, len / 2, len - len / 2);
 

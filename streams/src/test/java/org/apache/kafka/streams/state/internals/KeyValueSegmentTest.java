@@ -22,12 +22,15 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.io.File;
 import java.util.HashSet;
@@ -39,18 +42,19 @@ import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CON
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KeyValueSegmentTest {
 
     private final RocksDBMetricsRecorder metricsRecorder =
         new RocksDBMetricsRecorder("metrics-scope", "store-name");
 
-    @Before
+    @BeforeEach
     public void setUp() {
         metricsRecorder.init(
             new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime()),
@@ -60,7 +64,7 @@ public class KeyValueSegmentTest {
 
     @Test
     public void shouldDeleteStateDirectoryOnDestroy() throws Exception {
-        final KeyValueSegment segment = new KeyValueSegment("segment", "window", 0L, metricsRecorder);
+        final KeyValueSegment segment = new KeyValueSegment("segment", "window", 0L, Position.emptyPosition(),  metricsRecorder);
         final String directoryPath = TestUtils.tempDirectory().getAbsolutePath();
         final File directory = new File(directoryPath);
 
@@ -82,10 +86,10 @@ public class KeyValueSegmentTest {
 
     @Test
     public void shouldBeEqualIfIdIsEqual() {
-        final KeyValueSegment segment = new KeyValueSegment("anyName", "anyName", 0L, metricsRecorder);
+        final KeyValueSegment segment = new KeyValueSegment("anyName", "anyName", 0L, Position.emptyPosition(), metricsRecorder);
         final KeyValueSegment segmentSameId =
-            new KeyValueSegment("someOtherName", "someOtherName", 0L, metricsRecorder);
-        final KeyValueSegment segmentDifferentId = new KeyValueSegment("anyName", "anyName", 1L, metricsRecorder);
+            new KeyValueSegment("someOtherName", "someOtherName", 0L, Position.emptyPosition(), metricsRecorder);
+        final KeyValueSegment segmentDifferentId = new KeyValueSegment("anyName", "anyName", 1L, Position.emptyPosition(), metricsRecorder);
 
         assertThat(segment, equalTo(segment));
         assertThat(segment, equalTo(segmentSameId));
@@ -98,10 +102,10 @@ public class KeyValueSegmentTest {
 
     @Test
     public void shouldHashOnSegmentIdOnly() {
-        final KeyValueSegment segment = new KeyValueSegment("anyName", "anyName", 0L, metricsRecorder);
+        final KeyValueSegment segment = new KeyValueSegment("anyName", "anyName", 0L, Position.emptyPosition(), metricsRecorder);
         final KeyValueSegment segmentSameId =
-            new KeyValueSegment("someOtherName", "someOtherName", 0L, metricsRecorder);
-        final KeyValueSegment segmentDifferentId = new KeyValueSegment("anyName", "anyName", 1L, metricsRecorder);
+            new KeyValueSegment("someOtherName", "someOtherName", 0L, Position.emptyPosition(), metricsRecorder);
+        final KeyValueSegment segmentDifferentId = new KeyValueSegment("anyName", "anyName", 1L, Position.emptyPosition(), metricsRecorder);
 
         final Set<KeyValueSegment> set = new HashSet<>();
         assertTrue(set.add(segment));
@@ -113,9 +117,9 @@ public class KeyValueSegmentTest {
 
     @Test
     public void shouldCompareSegmentIdOnly() {
-        final KeyValueSegment segment1 = new KeyValueSegment("a", "C", 50L, metricsRecorder);
-        final KeyValueSegment segment2 = new KeyValueSegment("b", "B", 100L, metricsRecorder);
-        final KeyValueSegment segment3 = new KeyValueSegment("c", "A", 0L, metricsRecorder);
+        final KeyValueSegment segment1 = new KeyValueSegment("a", "C", 50L, Position.emptyPosition(), metricsRecorder);
+        final KeyValueSegment segment2 = new KeyValueSegment("b", "B", 100L, Position.emptyPosition(), metricsRecorder);
+        final KeyValueSegment segment3 = new KeyValueSegment("c", "A", 0L, Position.emptyPosition(), metricsRecorder);
 
         assertThat(segment1.compareTo(segment1), equalTo(0));
         assertThat(segment1.compareTo(segment2), equalTo(-1));

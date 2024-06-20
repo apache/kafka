@@ -19,6 +19,7 @@ package org.apache.kafka.common.replica;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
@@ -50,9 +51,9 @@ public class ReplicaSelectorTest {
         });
 
         selected = selector.select(tp, metadata("not-a-rack"), partitionView);
-        assertOptional(selected, replicaInfo -> {
-            assertEquals(replicaInfo, leader, "Expect leader when we can't find any nodes in given rack");
-        });
+        assertOptional(selected, replicaInfo ->
+            assertEquals(replicaInfo, leader, "Expect leader when we can't find any nodes in given rack")
+        );
 
         selected = selector.select(tp, metadata("rack-a"), partitionView);
         assertOptional(selected, replicaInfo -> {

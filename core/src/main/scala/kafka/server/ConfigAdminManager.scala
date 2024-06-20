@@ -16,28 +16,27 @@
   */
 package kafka.server
 
+import kafka.server.logger.RuntimeLoggerManager
+
 import java.util
 import java.util.Properties
-
 import kafka.server.metadata.ConfigRepository
-import kafka.utils.Log4jController
 import kafka.utils._
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC}
-import org.apache.kafka.common.config.{ConfigDef, ConfigResource, LogLevelConfig}
-import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidConfigurationException, InvalidRequestException}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, TOPIC}
+import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
+import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.message.{AlterConfigsRequestData, AlterConfigsResponseData, IncrementalAlterConfigsRequestData, IncrementalAlterConfigsResponseData}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => LAlterConfigsResourceResponse}
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource, AlterableConfig => IAlterableConfig}
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -75,10 +74,10 @@ import scala.jdk.CollectionConverters._
  * forwarding is not active, then both steps are done on the same broker.)
  *
  * In KRaft mode, the active controller performs its own configuration validation step in
- * {@link kafka.server.ControllerConfigurationValidator}. This is mainly important for
+ * [[kafka.server.ControllerConfigurationValidator]]. This is mainly important for
  * TOPIC resources, since we already validated changes to BROKER resources on the
  * forwarding broker. The KRaft controller is also responsible for enforcing the configured
- * {@link org.apache.kafka.server.policy.AlterConfigPolicy}.
+ * [[org.apache.kafka.server.policy.AlterConfigPolicy]].
  */
 class ConfigAdminManager(nodeId: Int,
                          conf: KafkaConfig,
@@ -86,6 +85,8 @@ class ConfigAdminManager(nodeId: Int,
   import ConfigAdminManager._
 
   this.logIdent = "[ConfigAdminManager[nodeId=" + nodeId + "]: "
+
+  val runtimeLoggerManager = new RuntimeLoggerManager(nodeId, logger.underlying)
 
   /**
    * Preprocess an incremental configuration operation on the broker. This step handles
@@ -129,54 +130,49 @@ class ConfigAdminManager(nodeId: Int,
               nullUpdates.add(config.name())
             }
           }
-          if (!nullUpdates.isEmpty()) {
+          if (!nullUpdates.isEmpty) {
             throw new InvalidRequestException("Null value not supported for : " +
               String.join(", ", nullUpdates))
           }
           resourceType match {
             case BROKER_LOGGER =>
-              if (!authorize(ResourceType.CLUSTER, Resource.CLUSTER_NAME)) {
-                throw new ClusterAuthorizationException(Errors.CLUSTER_AUTHORIZATION_FAILED.message())
-              }
-              validateResourceNameIsCurrentNodeId(resource.resourceName())
-              validateLogLevelConfigs(resource.configs())
-              if (!request.validateOnly()) {
-                alterLogLevelConfigs(resource.configs())
-              }
+              runtimeLoggerManager.applyChangesForResource(
+                  authorize(ResourceType.CLUSTER, Resource.CLUSTER_NAME),
+                  request.validateOnly(),
+                  resource)
               results.put(resource, ApiError.NONE)
             case BROKER =>
               // The resource name must be either blank (if setting a cluster config) or
               // the ID of this specific broker.
-              if (!configResource.name().isEmpty) {
+              if (configResource.name().nonEmpty) {
                 validateResourceNameIsCurrentNodeId(resource.resourceName())
               }
               validateBrokerConfigChange(resource, configResource)
-            case TOPIC =>
+            case TOPIC | CLIENT_METRICS =>
             // Nothing to do.
             case _ =>
               throw new InvalidRequestException(s"Unknown resource type ${resource.resourceType().toInt}")
           }
         } catch {
-          case t: Throwable => {
+          case t: Throwable =>
             val err = ApiError.fromThrowable(t)
-            info(s"Error preprocessing incrementalAlterConfigs request on ${configResource}", t)
+            info(s"Error preprocessing incrementalAlterConfigs request on $configResource", t)
             results.put(resource, err)
-          }
         }
       }
     })
     results
   }
 
-  def validateBrokerConfigChange(
+  private def validateBrokerConfigChange(
     resource: IAlterConfigsResource,
     configResource: ConfigResource
   ): Unit = {
-    val perBrokerConfig = !configResource.name().isEmpty
+    val perBrokerConfig = configResource.name().nonEmpty
     val persistentProps = configRepository.config(configResource)
     val configProps = conf.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
     val alterConfigOps = resource.configs().asScala.map {
-      case config =>
+      config =>
         val opType = AlterConfigOp.OpType.forId(config.configOperation())
         if (opType == null) {
           throw new InvalidRequestException(s"Unknown operations type ${config.configOperation}")
@@ -187,17 +183,17 @@ class ConfigAdminManager(nodeId: Int,
     try {
       validateBrokerConfigChange(configProps, configResource)
     } catch {
-      case t: Throwable => error(s"validation of configProps ${configProps} for ${configResource} failed with exception", t)
+      case t: Throwable => error(s"validation of configProps $configProps for $configResource failed with exception", t)
         throw t
     }
   }
 
-  def validateBrokerConfigChange(
+  private def validateBrokerConfigChange(
     props: Properties,
     configResource: ConfigResource
   ): Unit = {
     try {
-      conf.dynamicConfig.validate(props, !configResource.name().isEmpty)
+      conf.dynamicConfig.validate(props, configResource.name().nonEmpty)
     } catch {
       case e: ApiException => throw e
       //KAFKA-13609: InvalidRequestException is not really the right exception here if the
@@ -241,17 +237,17 @@ class ConfigAdminManager(nodeId: Int,
               nullUpdates.add(config.name())
             }
           }
-          if (!nullUpdates.isEmpty()) {
+          if (!nullUpdates.isEmpty) {
             throw new InvalidRequestException("Null value not supported for : " +
               String.join(", ", nullUpdates))
           }
           resourceType match {
             case BROKER =>
-              if (!configResource.name().isEmpty) {
+              if (configResource.name().nonEmpty) {
                 validateResourceNameIsCurrentNodeId(resource.resourceName())
               }
               validateBrokerConfigChange(resource, configResource)
-            case TOPIC =>
+            case TOPIC | CLIENT_METRICS =>
             // Nothing to do.
             case _ =>
               // Since legacy AlterConfigs does not support BROKER_LOGGER, any attempt to use it
@@ -259,18 +255,17 @@ class ConfigAdminManager(nodeId: Int,
               throw new InvalidRequestException(s"Unknown resource type ${resource.resourceType().toInt}")
           }
         } catch {
-          case t: Throwable => {
+          case t: Throwable =>
             val err = ApiError.fromThrowable(t)
-            info(s"Error preprocessing alterConfigs request on ${configResource}: ${err}")
+            info(s"Error preprocessing alterConfigs request on $configResource: $err")
             results.put(resource, err)
-          }
         }
       }
     })
     results
   }
 
-  def validateBrokerConfigChange(
+  private def validateBrokerConfigChange(
     resource: LAlterConfigsResource,
     configResource: ConfigResource
   ): Unit = {
@@ -287,63 +282,13 @@ class ConfigAdminManager(nodeId: Int,
         throw new InvalidRequestException(s"Node id must be an integer, but it is: $name")
     }
     if (id != nodeId) {
-      throw new InvalidRequestException(s"Unexpected broker id, expected ${nodeId}, but received ${name}")
-    }
-  }
-
-  def validateLogLevelConfigs(ops: util.Collection[IAlterableConfig]): Unit = {
-    def validateLoggerNameExists(loggerName: String): Unit = {
-      if (!Log4jController.loggerExists(loggerName)) {
-        throw new InvalidConfigurationException(s"Logger $loggerName does not exist!")
-      }
-    }
-    ops.forEach { op =>
-      val loggerName = op.name
-      OpType.forId(op.configOperation()) match {
-        case OpType.SET =>
-          validateLoggerNameExists(loggerName)
-          val logLevel = op.value()
-          if (!LogLevelConfig.VALID_LOG_LEVELS.contains(logLevel)) {
-            val validLevelsStr = LogLevelConfig.VALID_LOG_LEVELS.asScala.mkString(", ")
-            throw new InvalidConfigurationException(
-              s"Cannot set the log level of $loggerName to $logLevel as it is not a supported log level. " +
-                s"Valid log levels are $validLevelsStr"
-            )
-          }
-        case OpType.DELETE =>
-          validateLoggerNameExists(loggerName)
-          if (loggerName == Log4jController.ROOT_LOGGER)
-            throw new InvalidRequestException(s"Removing the log level of the ${Log4jController.ROOT_LOGGER} logger is not allowed")
-        case OpType.APPEND => throw new InvalidRequestException(s"${OpType.APPEND} " +
-          s"operation is not allowed for the ${BROKER_LOGGER} resource")
-        case OpType.SUBTRACT => throw new InvalidRequestException(s"${OpType.SUBTRACT} " +
-          s"operation is not allowed for the ${BROKER_LOGGER} resource")
-        case _ => throw new InvalidRequestException(s"Unknown operation type ${op.configOperation()} " +
-          s"is not allowed for the ${BROKER_LOGGER} resource")
-      }
-    }
-  }
-
-  def alterLogLevelConfigs(ops: util.Collection[IAlterableConfig]): Unit = {
-    ops.forEach { op =>
-      val loggerName = op.name()
-      val logLevel = op.value()
-      OpType.forId(op.configOperation()) match {
-        case OpType.SET =>
-          info(s"Updating the log level of $loggerName to $logLevel")
-          Log4jController.logLevel(loggerName, logLevel)
-        case OpType.DELETE =>
-          info(s"Unset the log level of $loggerName")
-          Log4jController.unsetLogLevel(loggerName)
-        case _ => throw new IllegalArgumentException(
-          s"Invalid log4j configOperation: ${op.configOperation()}")
-      }
+      throw new InvalidRequestException(s"Unexpected broker id, expected $nodeId, but received $name")
     }
   }
 }
 
 object ConfigAdminManager {
-  val log = LoggerFactory.getLogger(classOf[ConfigAdminManager])
+  val log: Logger = LoggerFactory.getLogger(classOf[ConfigAdminManager])
 
   /**
    * Copy the incremental configs request data without any already-processed elements.
@@ -393,15 +338,13 @@ object ConfigAdminManager {
     persistentResponses: IncrementalAlterConfigsResponseData
   ): IncrementalAlterConfigsResponseData = {
     val response = new IncrementalAlterConfigsResponseData()
-    val responsesByResource = persistentResponses.responses().iterator().asScala.map {
-      case r => (r.resourceName(), r.resourceType()) -> new ApiError(r.errorCode(), r.errorMessage())
-    }.toMap
+    val responsesByResource = persistentResponses.responses().iterator().asScala.map(r => (r.resourceName(), r.resourceType()) -> new ApiError(r.errorCode(), r.errorMessage())).toMap
     original.resources().forEach(r => {
       val err = Option(preprocessingResponses.get(r)) match {
         case None =>
           responsesByResource.get((r.resourceName(), r.resourceType())) match {
             case None => log.error("The controller returned fewer results than we " +
-              s"expected. No response found for ${r}.")
+              s"expected. No response found for $r.")
               new ApiError(UNKNOWN_SERVER_ERROR)
             case Some(err) => err
           }
@@ -422,15 +365,13 @@ object ConfigAdminManager {
     persistentResponses: AlterConfigsResponseData
   ): AlterConfigsResponseData = {
     val response = new AlterConfigsResponseData()
-    val responsesByResource = persistentResponses.responses().iterator().asScala.map {
-      case r => (r.resourceName(), r.resourceType()) -> new ApiError(r.errorCode(), r.errorMessage())
-    }.toMap
+    val responsesByResource = persistentResponses.responses().iterator().asScala.map(r => (r.resourceName(), r.resourceType()) -> new ApiError(r.errorCode(), r.errorMessage())).toMap
     original.resources().forEach(r => {
       val err = Option(preprocessingResponses.get(r)) match {
         case None =>
           responsesByResource.get((r.resourceName(), r.resourceType())) match {
             case None => log.error("The controller returned fewer results than we " +
-              s"expected. No response found for ${r}.")
+              s"expected. No response found for $r.")
               new ApiError(UNKNOWN_SERVER_ERROR)
             case Some(err) => err
           }
@@ -449,7 +390,7 @@ object ConfigAdminManager {
     iterable: Iterable[T]
   ): Boolean = {
     val previous = new util.HashSet[T]()
-    !iterable.forall(previous.add(_))
+    !iterable.forall(previous.add)
   }
 
   /**
@@ -492,7 +433,7 @@ object ConfigAdminManager {
       alterConfigOp.opType() match {
         case OpType.SET => configProps.setProperty(alterConfigOp.configEntry.name, alterConfigOp.configEntry.value)
         case OpType.DELETE => configProps.remove(alterConfigOp.configEntry.name)
-        case OpType.APPEND => {
+        case OpType.APPEND =>
           if (!listType(alterConfigOp.configEntry.name, configKeys))
             throw new InvalidConfigurationException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry.name}")
           val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
@@ -503,8 +444,7 @@ object ConfigAdminManager {
           val appendingValueList = alterConfigOp.configEntry.value.split(",").toList.filter(value => !oldValueList.contains(value))
           val newValueList = oldValueList ::: appendingValueList
           configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
-        }
-        case OpType.SUBTRACT => {
+        case OpType.SUBTRACT =>
           if (!listType(alterConfigOp.configEntry.name, configKeys))
             throw new InvalidConfigurationException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry.name}")
           val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
@@ -513,7 +453,6 @@ object ConfigAdminManager {
             .split(",").toList
           val newValueList = oldValueList.diff(alterConfigOp.configEntry.value.split(",").toList)
           configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
-        }
       }
     }
   }

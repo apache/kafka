@@ -111,14 +111,11 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     public TopicBasedRemoteLogMetadataManagerConfig(Map<String, ?> props) {
         Objects.requireNonNull(props, "props can not be null");
-
         Map<String, Object> parsedConfigs = CONFIG.parse(props);
-
         logDir = (String) props.get(LOG_DIR);
         if (logDir == null || logDir.isEmpty()) {
             throw new IllegalArgumentException(LOG_DIR + " config must not be null or empty.");
         }
-
         metadataTopicPartitionsCount = (int) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP);
         metadataTopicReplicationFactor = (short) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP);
         metadataTopicRetentionMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP);
@@ -128,9 +125,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         consumeWaitMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP);
         initializationRetryIntervalMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP);
         initializationRetryMaxTimeoutMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS_PROP);
-
         clientIdPrefix = REMOTE_LOG_METADATA_CLIENT_PREFIX + "_" + props.get(BROKER_ID);
-
         initializeProducerConsumerProperties(props);
     }
 
@@ -138,7 +133,6 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         Map<String, Object> commonClientConfigs = new HashMap<>();
         Map<String, Object> producerOnlyConfigs = new HashMap<>();
         Map<String, Object> consumerOnlyConfigs = new HashMap<>();
-
         for (Map.Entry<String, ?> entry : configs.entrySet()) {
             String key = entry.getKey();
             if (key.startsWith(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX)) {
@@ -149,14 +143,11 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                 consumerOnlyConfigs.put(key.substring(REMOTE_LOG_METADATA_CONSUMER_PREFIX.length()), entry.getValue());
             }
         }
-
         commonProps = new HashMap<>(commonClientConfigs);
-
-        HashMap<String, Object> allProducerConfigs = new HashMap<>(commonClientConfigs);
+        Map<String, Object> allProducerConfigs = new HashMap<>(commonClientConfigs);
         allProducerConfigs.putAll(producerOnlyConfigs);
         producerProps = createProducerProps(allProducerConfigs);
-
-        HashMap<String, Object> allConsumerConfigs = new HashMap<>(commonClientConfigs);
+        Map<String, Object> allConsumerConfigs = new HashMap<>(commonClientConfigs);
         allConsumerConfigs.putAll(consumerOnlyConfigs);
         consumerProps = createConsumerProps(allConsumerConfigs);
     }
@@ -205,9 +196,8 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         return producerProps;
     }
 
-    private Map<String, Object> createConsumerProps(HashMap<String, Object> allConsumerConfigs) {
+    private Map<String, Object> createConsumerProps(Map<String, Object> allConsumerConfigs) {
         Map<String, Object> props = new HashMap<>(allConsumerConfigs);
-
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientIdPrefix + "_consumer");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -217,15 +207,13 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         return props;
     }
 
-    private Map<String, Object> createProducerProps(HashMap<String, Object> allProducerConfigs) {
+    private Map<String, Object> createProducerProps(Map<String, Object> allProducerConfigs) {
         Map<String, Object> props = new HashMap<>(allProducerConfigs);
-
         props.put(ProducerConfig.CLIENT_ID_CONFIG, clientIdPrefix + "_producer");
         props.put(ProducerConfig.ACKS_CONFIG, "all");
-        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1);
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-
         return Collections.unmodifiableMap(props);
     }
 

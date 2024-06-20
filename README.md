@@ -4,10 +4,12 @@ See our [web site](https://kafka.apache.org) for details on the project.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with Java 8, 11, 17 and 20. We set the `release` parameter in javac and scalac
+We build and test Apache Kafka with Java 8, 11, 17 and 21. We set the `release` parameter in javac and scalac
 to `8` to ensure the generated binaries are compatible with Java 8 or higher (independently of the Java version
-used for compilation). Java 8 support has been deprecated since Apache Kafka 3.0 and will be removed in Apache
-Kafka 4.0 (see [KIP-750](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223) for more details).
+used for compilation). Java 8 support project-wide has been deprecated since Apache Kafka 3.0, Java 11 support for
+the broker and tools has been deprecated since Apache Kafka 3.7 and removal of both is planned for Apache Kafka 4.0 (
+see [KIP-750](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223) and
+[KIP-1013](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510) for more details).
 
 Scala 2.12 and 2.13 are supported and 2.13 is used by default. Scala 2.12 support has been deprecated since
 Apache Kafka 3.0 and will be removed in Apache Kafka 4.0 (see [KIP-751](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218)
@@ -52,9 +54,14 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testTimeToNextUpdate
 
 ### Running a particular unit/integration test with log4j output ###
-Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
+By default, there will be only small number of logs output while testing. You can adjust it by changing the `log4j.properties` file in the module's `src/test/resources` directory.
 
-    ./gradlew clients:test --tests RequestResponseTest
+For example, if you want to see more logs for clients project tests, you can modify [the line](https://github.com/apache/kafka/blob/trunk/clients/src/test/resources/log4j.properties#L21) in `clients/src/test/resources/log4j.properties` 
+to `log4j.logger.org.apache.kafka=INFO` and then run:
+    
+    ./gradlew cleanTest clients:test --tests NetworkClientTest   
+
+And you should see `INFO` level logs in the file under the `clients/build/test-results/test` directory.
 
 ### Specifying test retries ###
 By default, each failed test is retried once up to a maximum of five retries per test run. Tests are retried at the end of the test task. Adjust these parameters in the following way:
@@ -85,14 +92,24 @@ fail due to code changes. You can just run:
 
 ### Running a Kafka broker in KRaft mode
 
+Using compiled files:
+
     KAFKA_CLUSTER_ID="$(./bin/kafka-storage.sh random-uuid)"
     ./bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties
     ./bin/kafka-server-start.sh config/kraft/server.properties
 
+Using docker image:
+
+    docker run -p 9092:9092 apache/kafka:3.7.0
+
 ### Running a Kafka broker in ZooKeeper mode
+
+Using compiled files:
 
     ./bin/zookeeper-server-start.sh config/zookeeper.properties
     ./bin/kafka-server-start.sh config/server.properties
+
+>Since ZooKeeper mode is already deprecated and planned to be removed in Apache Kafka 4.0, the docker image only supports running in KRaft mode
 
 ### Cleaning the build ###
     ./gradlew clean
@@ -210,10 +227,15 @@ There are two code quality analysis tools that we regularly run, spotbugs and ch
 Checkstyle enforces a consistent coding style in Kafka.
 You can run checkstyle using:
 
-    ./gradlew checkstyleMain checkstyleTest
+    ./gradlew checkstyleMain checkstyleTest spotlessCheck
 
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
+
+#### Spotless ####
+The import order is a part of static check. please call `spotlessApply` (require JDK 11+) to optimize the imports of Java codes before filing pull request.
+
+    ./gradlew spotlessApply
 
 #### Spotbugs ####
 Spotbugs uses static analysis to look for bugs in the code.

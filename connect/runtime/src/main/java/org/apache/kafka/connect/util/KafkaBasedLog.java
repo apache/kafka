@@ -46,7 +46,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -54,6 +53,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 
@@ -107,6 +107,8 @@ public class KafkaBasedLog<K, V> {
     private boolean stopRequested;
     private final Queue<Callback<Void>> readLogEndOffsetCallbacks;
     private final java.util.function.Consumer<TopicAdmin> initializer;
+    // initialized as false for backward compatibility
+    private volatile boolean reportErrorsToCallback = false;
 
     /**
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
@@ -178,7 +180,7 @@ public class KafkaBasedLog<K, V> {
         // as it will not take records from currently-open transactions into account. We want to err on the side of caution in that
         // case: when users request a read to the end of the log, we will read up to the point where the latest offsets visible to the
         // consumer are at least as high as the (possibly-part-of-a-transaction) end offsets of the topic.
-        this.requireAdminForOffsets = IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
+        this.requireAdminForOffsets = IsolationLevel.READ_COMMITTED.toString()
                 .equals(consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG));
     }
 
@@ -195,6 +197,7 @@ public class KafkaBasedLog<K, V> {
      * @param consumedCallback   callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
      * @param time               Time interface
      * @param initializer        the function that should be run when this log is {@link #start() started}; may be null
+     * @param readTopicPartition A predicate which returns true for each {@link TopicPartition} that should be read
      * @return a {@link KafkaBasedLog} using the given clients
      */
     public static <K, V> KafkaBasedLog<K, V> withExistingClients(String topic,
@@ -203,8 +206,11 @@ public class KafkaBasedLog<K, V> {
                                                                  TopicAdmin topicAdmin,
                                                                  Callback<ConsumerRecord<K, V>> consumedCallback,
                                                                  Time time,
-                                                                 java.util.function.Consumer<TopicAdmin> initializer) {
+                                                                 java.util.function.Consumer<TopicAdmin> initializer,
+                                                                 Predicate<TopicPartition> readTopicPartition
+    ) {
         Objects.requireNonNull(topicAdmin);
+        Objects.requireNonNull(readTopicPartition);
         return new KafkaBasedLog<K, V>(topic,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
@@ -222,11 +228,29 @@ public class KafkaBasedLog<K, V> {
             protected Consumer<K, V> createConsumer() {
                 return consumer;
             }
+
+            @Override
+            protected boolean readPartition(TopicPartition topicPartition) {
+                return readTopicPartition.test(topicPartition);
+            }
+
+            @Override
+            public void stop() {
+                super.stop();
+                // Close the clients here, if the thread that was responsible for closing them was never started.
+                Utils.closeQuietly(producer, "producer");
+                Utils.closeQuietly(consumer, "consumer");
+            }
         };
     }
 
     public void start() {
-        log.info("Starting KafkaBasedLog with topic " + topic);
+        start(false);
+    }
+
+    public void start(boolean reportErrorsToCallback) {
+        this.reportErrorsToCallback = reportErrorsToCallback;
+        log.info("Starting KafkaBasedLog with topic {} reportErrorsToCallback={}", topic, reportErrorsToCallback);
 
         // Create the topic admin client and initialize the topic ...
         admin = topicAdminSupplier.get();   // may be null
@@ -234,7 +258,7 @@ public class KafkaBasedLog<K, V> {
             throw new ConnectException(
                     "Must provide a TopicAdmin to KafkaBasedLog when consumer is configured with "
                             + ConsumerConfig.ISOLATION_LEVEL_CONFIG + " set to "
-                            + IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
+                            + IsolationLevel.READ_COMMITTED
             );
         }
         initializer.accept(admin);
@@ -451,6 +475,9 @@ public class KafkaBasedLog<K, V> {
             throw e;
         } catch (KafkaException e) {
             log.error("Error polling: " + e);
+            if (reportErrorsToCallback) {
+                consumedCallback.onCompletion(e, null);
+            }
         }
     }
 

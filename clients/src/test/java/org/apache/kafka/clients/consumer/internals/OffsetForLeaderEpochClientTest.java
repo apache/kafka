@@ -31,6 +31,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -44,13 +45,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetForLeaderEpochClientTest {
 
+    private final TopicPartition tp0 = new TopicPartition("topic", 0);
     private ConsumerNetworkClient consumerClient;
-    private SubscriptionState subscriptions;
-    private Metadata metadata;
     private MockClient client;
-    private Time time;
-
-    private TopicPartition tp0 = new TopicPartition("topic", 0);
 
     @Test
     public void testEmptyResponse() {
@@ -156,9 +153,9 @@ public class OffsetForLeaderEpochClientTest {
 
     private void buildDependencies(OffsetResetStrategy offsetResetStrategy) {
         LogContext logContext = new LogContext();
-        time = new MockTime(1);
-        subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
-        metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
+        Time time = new MockTime(1);
+        SubscriptionState subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
+        Metadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,

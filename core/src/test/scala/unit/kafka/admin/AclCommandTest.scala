@@ -16,27 +16,29 @@
  */
 package kafka.admin
 
-import java.io.File
-import java.util.Properties
-import javax.management.InstanceAlreadyExistsException
 import kafka.admin.AclCommand.AclCommandOptions
-import kafka.security.authorizer.{AclAuthorizer, AclEntry}
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.security.authorizer.AclAuthorizer
+import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.{Exit, LogCaptureAppender, Logging, TestUtils}
-import kafka.server.QuorumTestHarness
-import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
-import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern}
-import org.apache.kafka.common.resource.ResourceType._
+import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
+import org.apache.kafka.common.resource.ResourceType._
+import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{AppInfoParser, SecurityUtils}
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.config.ServerConfigs
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+
+import java.io.{ByteArrayOutputStream, File}
+import java.util.Properties
+import javax.management.InstanceAlreadyExistsException
 
 class AclCommandTest extends QuorumTestHarness with Logging {
 
@@ -109,7 +111,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
     super.setUp(testInfo)
 
     brokerProps = TestUtils.createBrokerConfig(0, zkConnect)
-    brokerProps.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
+    brokerProps.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AclAuthorizer].getName)
     brokerProps.put(AclAuthorizer.SuperUsersProp, "User:ANONYMOUS")
 
     zkArgs = Array("--authorizer-properties", "zookeeper.connect=" + zkConnect)
@@ -144,7 +146,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   }
 
   private def callMain(args: Array[String]): (String, String) = {
-    TestUtils.grabConsoleOutputAndError(AclCommand.main(args))
+    grabConsoleOutputAndError(AclCommand.main(args))
   }
 
   private def testAclCli(cmdArgs: Array[String]): Unit = {
@@ -246,9 +248,9 @@ class AclCommandTest extends QuorumTestHarness with Logging {
     callMain(cmdArgs ++ cmd :+ "--add")
 
     withAuthorizer() { authorizer =>
-      val writeAcl = new AccessControlEntry(principal.toString, AclEntry.WildcardHost, WRITE, ALLOW)
-      val describeAcl = new AccessControlEntry(principal.toString, AclEntry.WildcardHost, DESCRIBE, ALLOW)
-      val createAcl = new AccessControlEntry(principal.toString, AclEntry.WildcardHost, CREATE, ALLOW)
+      val writeAcl = new AccessControlEntry(principal.toString, AclEntry.WILDCARD_HOST, WRITE, ALLOW)
+      val describeAcl = new AccessControlEntry(principal.toString, AclEntry.WILDCARD_HOST, DESCRIBE, ALLOW)
+      val createAcl = new AccessControlEntry(principal.toString, AclEntry.WILDCARD_HOST, CREATE, ALLOW)
       TestUtils.waitAndVerifyAcls(Set(writeAcl, describeAcl, createAcl), authorizer,
         new ResourcePattern(TOPIC, "Test-", PREFIXED))
     }
@@ -328,5 +330,19 @@ class AclCommandTest extends QuorumTestHarness with Logging {
       authZ.configure(kafkaConfig.originals)
       f(authZ)
     } finally authZ.close()
+  }
+
+  /**
+   * Capture both the console output and console error during the execution of the provided function.
+   */
+  private def grabConsoleOutputAndError(f: => Unit) : (String, String) = {
+    val out = new ByteArrayOutputStream
+    val err = new ByteArrayOutputStream
+    try scala.Console.withOut(out)(scala.Console.withErr(err)(f))
+    finally {
+      scala.Console.out.flush()
+      scala.Console.err.flush()
+    }
+    (out.toString, err.toString)
   }
 }

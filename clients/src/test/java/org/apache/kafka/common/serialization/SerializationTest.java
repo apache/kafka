@@ -18,33 +18,34 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Bytes;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.Stack;
+import java.util.UUID;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SerializationTest {
 
-    final private String topic = "testTopic";
-    final private Map<Class<?>, List<Object>> testData = new HashMap<Class<?>, List<Object>>() {
+    private final String topic = "testTopic";
+    private final Map<Class<?>, List<Object>> testData = new HashMap<Class<?>, List<Object>>() {
         {
             put(String.class, Arrays.asList(null, "my string"));
             put(Short.class, Arrays.asList(null, (short) 32767, (short) -32768));
@@ -63,7 +64,7 @@ public class SerializationTest {
         }
     };
 
-    private class DummyClass {
+    private static class DummyClass {
     }
 
     @SuppressWarnings("unchecked")
@@ -130,10 +131,25 @@ public class SerializationTest {
         }
     }
 
+
+    @Test
+    public void stringSerdeConfigureThrowsOnUnknownEncoding() {
+        String encoding = "encoding-does-not-exist";
+        try (Serde<String> serDeser = Serdes.String()) {
+            Map<String, Object> serializerConfigs = new HashMap<>();
+            serializerConfigs.put("key.serializer.encoding", encoding);
+            assertThrows(SerializationException.class, () -> serDeser.serializer().configure(serializerConfigs, true));
+
+            Map<String, Object> deserializerConfigs = new HashMap<>();
+            deserializerConfigs.put("key.deserializer.encoding", encoding);
+            assertThrows(SerializationException.class, () -> serDeser.deserializer().configure(deserializerConfigs, true));
+        }
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldReturnEmptyCollection() {
-        List<Integer> testData = Arrays.asList();
+        List<Integer> testData = Collections.emptyList();
         Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
         assertEquals(testData,
             listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)),
@@ -301,8 +317,7 @@ public class SerializationTest {
     public void listSerdeShouldReturnLinkedList() {
         List<Integer> testData = new LinkedList<>();
         Serde<List<Integer>> listSerde = Serdes.ListSerde(LinkedList.class, Serdes.Integer());
-        assertTrue(listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData))
-            instanceof LinkedList, "Should return List instance of type LinkedList");
+        assertInstanceOf(LinkedList.class, listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)), "Should return List instance of type LinkedList");
     }
 
     @SuppressWarnings("unchecked")
@@ -310,8 +325,7 @@ public class SerializationTest {
     public void listSerdeShouldReturnStack() {
         List<Integer> testData = new Stack<>();
         Serde<List<Integer>> listSerde = Serdes.ListSerde(Stack.class, Serdes.Integer());
-        assertTrue(listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData))
-            instanceof Stack, "Should return List instance of type Stack");
+        assertInstanceOf(Stack.class, listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)), "Should return List instance of type Stack");
     }
 
     @Test
@@ -404,23 +418,6 @@ public class SerializationTest {
         deserializer.configure(deserializerConfigs, true);
 
         return Serdes.serdeFrom(serializer, deserializer);
-    }
-
-    @Test
-    public void testByteBufferSerializer() {
-        final byte[] bytes = "Hello".getBytes(UTF_8);
-        final ByteBuffer heapBuffer0 = ByteBuffer.allocate(bytes.length + 1).put(bytes);
-        final ByteBuffer heapBuffer1 = ByteBuffer.allocate(bytes.length).put(bytes);
-        final ByteBuffer heapBuffer2 = ByteBuffer.wrap(bytes);
-        final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(bytes.length + 1).put(bytes);
-        final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(bytes.length).put(bytes);
-        try (final ByteBufferSerializer serializer = new ByteBufferSerializer()) {
-            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer0));
-            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer1));
-            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer2));
-            assertArrayEquals(bytes, serializer.serialize(topic, directBuffer0));
-            assertArrayEquals(bytes, serializer.serialize(topic, directBuffer1));
-        }
     }
 
     @ParameterizedTest

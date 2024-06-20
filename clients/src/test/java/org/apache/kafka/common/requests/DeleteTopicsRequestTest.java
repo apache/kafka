@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -77,7 +78,7 @@ public class DeleteTopicsRequestTest {
 
             } else {
                 // We should fail if version is less than 6.
-                assertThrows(UnsupportedVersionException.class, () -> requestWithNames.serialize());
+                assertThrows(UnsupportedVersionException.class, requestWithNames::serialize);
             }
         }
     }
@@ -105,7 +106,7 @@ public class DeleteTopicsRequestTest {
                 requestWithIdsSerialized.data().topics().forEach(topic -> assertNull(topic.name()));
             } else {
                 // We should fail if version is less than 6.
-                assertThrows(UnsupportedVersionException.class, () -> requestWithIds.serialize());
+                assertThrows(UnsupportedVersionException.class, requestWithIds::serialize);
             }
         }
     }

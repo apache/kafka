@@ -45,8 +45,8 @@ import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 
 object ControllerChannelManager {
-  val QueueSizeMetricName = "QueueSize"
-  val RequestRateAndQueueTimeMetricName = "RequestRateAndQueueTimeMs"
+  private val QueueSizeMetricName = "QueueSize"
+  private val RequestRateAndQueueTimeMetricName = "RequestRateAndQueueTimeMs"
 }
 
 class ControllerChannelManager(controllerEpoch: () => Int,
@@ -164,7 +164,8 @@ class ControllerChannelManager(controllerEpoch: () => Int,
         time,
         false,
         new ApiVersions,
-        logContext
+        logContext,
+        MetadataRecoveryStrategy.NONE
       )
       (networkClient, reconfigurableChannelBuilder)
     }
@@ -207,7 +208,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
     }
   }
 
-  protected def startRequestSendThread(brokerId: Int): Unit = {
+  private def startRequestSendThread(brokerId: Int): Unit = {
     val requestThread = brokerStateInfo(brokerId).requestSendThread
     if (requestThread.getState == Thread.State.NEW)
       requestThread.start()
@@ -332,7 +333,7 @@ class ControllerBrokerRequestBatch(
   stateChangeLogger
 ) {
 
-  def sendEvent(event: ControllerEvent): Unit = {
+  private def sendEvent(event: ControllerEvent): Unit = {
     controllerEventManager.put(event)
   }
   def sendRequest(brokerId: Int,
@@ -373,10 +374,11 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                                     stateChangeLogger: StateChangeLogger,
                                                     kraftController: Boolean = false) extends Logging {
   val controllerId: Int = config.brokerId
-  val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrPartitionState]]
-  val stopReplicaRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, StopReplicaPartitionState]]
-  val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
-  val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataPartitionState]
+  private val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrPartitionState]]
+  private val stopReplicaRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, StopReplicaPartitionState]]
+  private val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
+  private val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataPartitionState]
+  private var updateType: AbstractControlRequest.Type = AbstractControlRequest.Type.UNKNOWN
   private var metadataInstance: ControllerChannelContext = _
 
   def sendRequest(brokerId: Int,
@@ -398,12 +400,17 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     metadataInstance = metadataProvider()
   }
 
+  def setUpdateType(updateType: AbstractControlRequest.Type): Unit = {
+    this.updateType = updateType
+  }
+
   def clear(): Unit = {
     leaderAndIsrRequestMap.clear()
     stopReplicaRequestMap.clear()
     updateMetadataRequestBrokerSet.clear()
     updateMetadataRequestPartitionInfoMap.clear()
     metadataInstance = null
+    updateType = AbstractControlRequest.Type.UNKNOWN
   }
 
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int],
@@ -543,8 +550,17 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
           .toSet[String]
           .map(topic => (topic, metadataInstance.topicIds.getOrElse(topic, Uuid.ZERO_UUID)))
           .toMap
-        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
-          controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, topicIds.asJava, leaders.asJava, kraftController)
+        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(
+          leaderAndIsrRequestVersion,
+          controllerId,
+          controllerEpoch,
+          brokerEpoch,
+          leaderAndIsrPartitionStates.values.toBuffer.asJava,
+          topicIds.asJava,
+          leaders.asJava,
+          kraftController,
+          updateType
+        )
         sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => {
           val leaderAndIsrResponse = r.asInstanceOf[LeaderAndIsrResponse]
           handleLeaderAndIsrResponse(leaderAndIsrResponse, broker)
@@ -605,8 +621,17 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         .distinct
         .filter(metadataInstance.topicIds.contains)
         .map(topic => (topic, metadataInstance.topicIds(topic))).toMap
-      val updateMetadataRequestBuilder = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion,
-        controllerId, controllerEpoch, brokerEpoch, partitionStates.asJava, liveBrokers.asJava, topicIds.asJava, kraftController)
+      val updateMetadataRequestBuilder = new UpdateMetadataRequest.Builder(
+        updateMetadataRequestVersion,
+        controllerId,
+        controllerEpoch,
+        brokerEpoch,
+        partitionStates.asJava,
+        liveBrokers.asJava,
+        topicIds.asJava,
+        kraftController,
+        updateType
+      )
       sendRequest(broker, updateMetadataRequestBuilder, (r: AbstractResponse) => {
         val updateMetadataResponse = r.asInstanceOf[UpdateMetadataResponse]
         handleUpdateMetadataResponse(updateMetadataResponse, broker)
@@ -720,6 +745,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       sendLeaderAndIsrRequest(controllerEpoch, stateChangeLog)
       sendUpdateMetadataRequests(controllerEpoch, stateChangeLog)
       sendStopReplicaRequests(controllerEpoch, stateChangeLog)
+      this.updateType = AbstractControlRequest.Type.UNKNOWN
     } catch {
       case e: Throwable =>
         if (leaderAndIsrRequestMap.nonEmpty) {

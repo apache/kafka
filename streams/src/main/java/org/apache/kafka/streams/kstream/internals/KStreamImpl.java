@@ -65,6 +65,7 @@ import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.lang.reflect.Array;
@@ -950,7 +951,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         KStreamImpl<K, V> joinThis = this;
         KStreamImpl<K, VO> joinOther = (KStreamImpl<K, VO>) otherStream;
 
-        final StreamJoinedInternal<K, V, VO> streamJoinedInternal = new StreamJoinedInternal<>(streamJoined);
+        final StreamJoinedInternal<K, V, VO> streamJoinedInternal = new StreamJoinedInternal<>(streamJoined, builder);
         final NamedInternal name = new NamedInternal(streamJoinedInternal.name());
         if (joinThis.repartitionRequired) {
             final String joinThisName = joinThis.name;
@@ -1041,9 +1042,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             nullKeyFilterProcessorName = repartitionTopicName + "-filter";
         }
 
-        final Predicate<K1, V1> notNullKeyPredicate = (k, v) -> k != null;
         final ProcessorParameters<K1, V1, ?, ?> processorParameters = new ProcessorParameters<>(
-            new KStreamFilter<>(notNullKeyPredicate, false),
+            new KStreamFilter<>((k, v) -> true, false),
             nullKeyFilterProcessorName
         );
 
@@ -1231,6 +1231,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final StreamTableJoinNode<K, V> streamTableJoinNode =
             new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null, null, Optional.empty());
 
+        if (leftJoin) {
+            streamTableJoinNode.labels().add(GraphNode.Label.NULL_KEY_RELAXED_JOIN);
+        }
         builder.addGraphNode(graphNode, streamTableJoinNode);
 
         // do not have serde for joined result
@@ -1266,7 +1269,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
             bufferStoreName = Optional.of(name + "-Buffer");
-            builder.addStateStore(new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName.get(), joined.gracePeriod(), name));
+            final RocksDBTimeOrderedKeyValueBuffer.Builder<Object, Object> storeBuilder =
+                    new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName.get(), joined.gracePeriod(), name);
+            builder.addStateStore(new StoreBuilderWrapper(storeBuilder));
         }
 
         final ProcessorSupplier<K, V, K, ? extends VR> processorSupplier = new KStreamKTableJoin<>(
@@ -1287,6 +1292,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         );
 
         builder.addGraphNode(graphNode, streamTableJoinNode);
+        if (leftJoin) {
+            streamTableJoinNode.labels().add(GraphNode.Label.NULL_KEY_RELAXED_JOIN);
+        }
 
         // do not have serde for joined result
         return new KStreamImpl<>(

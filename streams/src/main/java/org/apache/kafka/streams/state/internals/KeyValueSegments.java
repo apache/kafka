@@ -42,7 +42,7 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
             return segments.get(segmentId);
         } else {
             final KeyValueSegment newSegment =
-                new KeyValueSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
+                new KeyValueSegment(segmentName(segmentId), name, segmentId, position, metricsRecorder);
 
             if (segments.put(segmentId, newSegment) != null) {
                 throw new IllegalStateException("KeyValueSegment already exists. Possible concurrent access.");

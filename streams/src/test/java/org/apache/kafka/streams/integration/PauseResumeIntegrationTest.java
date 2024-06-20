@@ -36,6 +36,7 @@ import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyB
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
+
 import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -44,7 +45,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -52,7 +53,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -65,9 +65,9 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilStreamsHasPolled;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 public class PauseResumeIntegrationTest {
@@ -101,13 +101,6 @@ public class PauseResumeIntegrationTest {
     private KafkaStreams kafkaStreams, kafkaStreams2;
     private KafkaStreamsNamedTopologyWrapper streamsNamedTopologyWrapper;
 
-
-    private static Stream<Boolean> parameters() {
-        return Stream.of(
-            Boolean.TRUE,
-            Boolean.FALSE);
-    }
-
     @BeforeAll
     public static void startCluster() throws Exception {
         CLUSTER.start();
@@ -125,7 +118,7 @@ public class PauseResumeIntegrationTest {
     @BeforeEach
     public void createTopics(final TestInfo testInfo) throws InterruptedException {
         cleanStateBeforeTest(CLUSTER, 1, INPUT_STREAM_1, INPUT_STREAM_2, OUTPUT_STREAM_1, OUTPUT_STREAM_2);
-        appId = safeUniqueTestName(PauseResumeIntegrationTest.class, testInfo);
+        appId = safeUniqueTestName(testInfo);
     }
 
     private Properties props(final boolean stateUpdaterEnabled) {
@@ -158,7 +151,7 @@ public class PauseResumeIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void shouldPauseAndResumeKafkaStreams(final boolean stateUpdaterEnabled) throws Exception {
         kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1, stateUpdaterEnabled);
         kafkaStreams.start();
@@ -183,7 +176,7 @@ public class PauseResumeIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void shouldAllowForTopologiesToStartPaused(final boolean stateUpdaterEnabled) throws Exception {
         kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1, stateUpdaterEnabled);
         kafkaStreams.pause();
@@ -204,7 +197,7 @@ public class PauseResumeIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void shouldPauseAndResumeKafkaStreamsWithNamedTopologies(final boolean stateUpdaterEnabled) throws Exception {
         streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props(stateUpdaterEnabled));
         final NamedTopologyBuilder builder1 = getNamedTopologyBuilder1();
@@ -239,7 +232,7 @@ public class PauseResumeIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void shouldPauseAndResumeAllKafkaStreamsWithNamedTopologies(final boolean stateUpdaterEnabled) throws Exception {
         streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props(stateUpdaterEnabled));
         final NamedTopologyBuilder builder1 = getNamedTopologyBuilder1();
@@ -275,7 +268,7 @@ public class PauseResumeIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void shouldAllowForNamedTopologiesToStartPaused(final boolean stateUpdaterEnabled) throws Exception {
         streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props(stateUpdaterEnabled));
         final NamedTopologyBuilder builder1 = getNamedTopologyBuilder1();
@@ -305,7 +298,7 @@ public class PauseResumeIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void pauseResumeShouldWorkAcrossInstances(final boolean stateUpdaterEnabled) throws Exception {
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
 
@@ -335,7 +328,7 @@ public class PauseResumeIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void pausedTopologyShouldNotRestoreStateStores(final boolean stateUpdaterEnabled) throws Exception {
         final Properties properties1 = props(stateUpdaterEnabled);
         properties1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
@@ -373,8 +366,8 @@ public class PauseResumeIntegrationTest {
 
     private void assertStreamsLocalStoreLagStaysConstant(final KafkaStreams streams) throws InterruptedException {
         waitForCondition(
-            () -> !streams.allLocalStorePartitionLags().isEmpty(),
-            "Lags for local store partitions were not found within the timeout!");
+            () -> streams.allLocalStorePartitionLags().containsKey("test-store"),
+            "Lags for test-store partitions were not found within the timeout!");
         waitUntilStreamsHasPolled(streams, 2);
         final long stateStoreLag1 = streams.allLocalStorePartitionLags().get("test-store").get(0).offsetLag();
         waitUntilStreamsHasPolled(streams, 2);

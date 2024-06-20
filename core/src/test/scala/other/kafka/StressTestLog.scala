@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 
@@ -51,8 +52,8 @@ object StressTestLog {
       scheduler = time.scheduler,
       time = time,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
-      producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+      producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+      producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       brokerTopicStats = new BrokerTopicStats,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
@@ -69,7 +70,7 @@ object StressTestLog {
         Utils.delete(dir)
     })
 
-    while(running.get) {
+    while (running.get) {
       Thread.sleep(1000)
       println("Reader offset = %d, writer offset = %d".format(reader.currentOffset, writer.currentOffset))
       writer.checkProgress()
@@ -82,7 +83,7 @@ object StressTestLog {
 
     override def run(): Unit = {
       try {
-        while(running.get)
+        while (running.get)
           work()
       } catch {
         case e: Exception => {
@@ -124,7 +125,7 @@ object StressTestLog {
   class WriterThread(val log: UnifiedLog) extends WorkerThread with LogProgress {
     override def work(): Unit = {
       val logAppendInfo = log.appendAsLeader(TestUtils.singletonRecords(currentOffset.toString.getBytes), 0)
-      require((!logAppendInfo.firstOffset.isPresent || logAppendInfo.firstOffset.get().messageOffset == currentOffset)
+      require((logAppendInfo.firstOffset == -1 || logAppendInfo.firstOffset == currentOffset)
         && logAppendInfo.lastOffset == currentOffset)
       currentOffset += 1
       if (currentOffset % 1000 == 0)

@@ -41,12 +41,6 @@ public class TaskMetrics {
     private static final String RATE_DESCRIPTION_SUFFIX = " per second";
     private static final String ACTIVE_TASK_PREFIX = "active-";
 
-    private static final String COMMIT = "commit";
-    private static final String COMMIT_DESCRIPTION = "calls to commit";
-    private static final String COMMIT_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + COMMIT_DESCRIPTION;
-    private static final String COMMIT_RATE_DESCRIPTION =
-        RATE_DESCRIPTION_PREFIX + COMMIT_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
-
     private static final String PUNCTUATE = "punctuate";
     private static final String PUNCTUATE_DESCRIPTION = "calls to punctuate";
     private static final String PUNCTUATE_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + PUNCTUATE_DESCRIPTION;
@@ -188,22 +182,6 @@ public class TaskMetrics {
             PUNCTUATE_MAX_LATENCY_DESCRIPTION,
             Sensor.RecordingLevel.DEBUG,
             streamsMetrics
-        );
-    }
-
-    public static Sensor commitSensor(final String threadId,
-                                      final String taskId,
-                                      final StreamsMetricsImpl streamsMetrics,
-                                      final Sensor... parentSensor) {
-        return invocationRateAndCountSensor(
-            threadId,
-            taskId,
-            COMMIT,
-            COMMIT_RATE_DESCRIPTION,
-            COMMIT_TOTAL_DESCRIPTION,
-            Sensor.RecordingLevel.DEBUG,
-            streamsMetrics,
-            parentSensor
         );
     }
 

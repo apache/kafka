@@ -37,8 +37,8 @@ public class StartAndStopLatch {
 
     StartAndStopLatch(int expectedStarts, int expectedStops, Consumer<StartAndStopLatch> uponCompletion,
                  List<StartAndStopLatch> dependents, Time clock) {
-        this.startLatch = new CountDownLatch(expectedStarts < 0 ? 0 : expectedStarts);
-        this.stopLatch = new CountDownLatch(expectedStops < 0 ? 0 : expectedStops);
+        this.startLatch = new CountDownLatch(Math.max(expectedStarts, 0));
+        this.stopLatch = new CountDownLatch(Math.max(expectedStops, 0));
         this.dependents = dependents;
         this.uponCompletion = uponCompletion;
         this.clock = clock;

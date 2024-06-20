@@ -35,6 +35,7 @@
   //
   // Version 8 enables listing offsets by local log start offset (KIP-405).
   "validVersions": "0-8",
+  "deprecatedVersions": "0",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId",

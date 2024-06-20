@@ -23,6 +23,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -38,7 +39,7 @@ public class MigrationManifestTest {
         MigrationManifest manifest = manifestBuilder.build();
         assertEquals(0L, manifest.durationMs());
         assertEquals(
-            "0 records were generated in 0 ms across 0 batches. The record types were {}",
+            "0 records were generated in 0 ms across 0 batches. The average time spent waiting on a batch was -1.00 ms. The record types were {}",
             manifest.toString());
     }
 
@@ -60,11 +61,12 @@ public class MigrationManifestTest {
             new ApiMessageAndVersion(new PartitionRecord(), (short) 0),
             new ApiMessageAndVersion(new ConfigRecord(), (short) 0),
             new ApiMessageAndVersion(new ConfigRecord(), (short) 0)
-        ));
+        ), 20);
+        time.sleep(10);
         MigrationManifest manifest = manifestBuilder.build();
-        assertEquals(0L, manifest.durationMs());
+        assertEquals(10L, manifest.durationMs());
         assertEquals(
-            "13 records were generated in 0 ms across 1 batches. The record types were {TOPIC_RECORD=2, PARTITION_RECORD=9, CONFIG_RECORD=2}",
+            "13 records were generated in 10 ms across 1 batches. The average time spent waiting on a batch was 0.00 ms. The record types were {TOPIC_RECORD=2, PARTITION_RECORD=9, CONFIG_RECORD=2}",
             manifest.toString()
         );
     }
@@ -79,7 +81,7 @@ public class MigrationManifestTest {
             new ApiMessageAndVersion(new PartitionRecord(), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord(), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord(), (short) 0)
-        ));
+        ), 20_000_000);
         manifestBuilder.acceptBatch(Arrays.asList(
             new ApiMessageAndVersion(new TopicRecord(), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord(), (short) 0),
@@ -88,14 +90,16 @@ public class MigrationManifestTest {
             new ApiMessageAndVersion(new PartitionRecord(), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord(), (short) 0),
             new ApiMessageAndVersion(new ConfigRecord(), (short) 0)
-        ));
+        ), 20_000_000);
         manifestBuilder.acceptBatch(Collections.singletonList(
             new ApiMessageAndVersion(new ConfigRecord(), (short) 0)
-        ));
+        ), 5_000_000);
+        time.sleep(60);
         MigrationManifest manifest = manifestBuilder.build();
-        assertEquals(0L, manifest.durationMs());
+        assertEquals(60L, manifest.durationMs());
         assertEquals(
-            "13 records were generated in 0 ms across 3 batches. The record types were {TOPIC_RECORD=2, PARTITION_RECORD=9, CONFIG_RECORD=2}",
+            "13 records were generated in 60 ms across 3 batches. The average time spent waiting on a " +
+            "batch was 15.00 ms. The record types were {TOPIC_RECORD=2, PARTITION_RECORD=9, CONFIG_RECORD=2}",
             manifest.toString()
         );
     }

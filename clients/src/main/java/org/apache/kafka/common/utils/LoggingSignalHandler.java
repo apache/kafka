@@ -37,7 +37,6 @@ public class LoggingSignalHandler {
 
     private final Constructor<?> signalConstructor;
     private final Class<?> signalHandlerClass;
-    private final Class<?> signalClass;
     private final Method signalHandleMethod;
     private final Method signalGetNameMethod;
     private final Method signalHandlerHandleMethod;
@@ -48,7 +47,7 @@ public class LoggingSignalHandler {
      * @throws ReflectiveOperationException if the underlying API has changed in an incompatible manner.
      */
     public LoggingSignalHandler() throws ReflectiveOperationException {
-        signalClass = Class.forName("sun.misc.Signal");
+        Class<?> signalClass = Class.forName("sun.misc.Signal");
         signalConstructor = signalClass.getConstructor(String.class);
         signalHandlerClass = Class.forName("sun.misc.SignalHandler");
         signalHandlerHandleMethod = signalHandlerClass.getMethod("handle", signalClass);

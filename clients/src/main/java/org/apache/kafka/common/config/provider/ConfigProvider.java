@@ -55,7 +55,7 @@ public interface ConfigProvider extends Configurable, Closeable {
      * @param path the path where the data resides
      * @param keys the keys whose values will be retrieved
      * @param callback the callback to invoke upon change
-     * @throws {@link UnsupportedOperationException} if the subscribe operation is not supported
+     * @throws UnsupportedOperationException if the subscribe operation is not supported
      */
     default void subscribe(String path, Set<String> keys, ConfigChangeCallback callback) {
         throw new UnsupportedOperationException();
@@ -67,7 +67,7 @@ public interface ConfigProvider extends Configurable, Closeable {
      * @param path the path where the data resides
      * @param keys the keys whose values will be retrieved
      * @param callback the callback to be unsubscribed from changes
-     * @throws {@link UnsupportedOperationException} if the unsubscribe operation is not supported
+     * @throws UnsupportedOperationException if the unsubscribe operation is not supported
      */
     default void unsubscribe(String path, Set<String> keys, ConfigChangeCallback callback) {
         throw new UnsupportedOperationException();
@@ -76,7 +76,7 @@ public interface ConfigProvider extends Configurable, Closeable {
     /**
      * Clears all subscribers (optional operation).
      *
-     * @throws {@link UnsupportedOperationException} if the unsubscribeAll operation is not supported
+     * @throws UnsupportedOperationException if the unsubscribeAll operation is not supported
      */
     default void unsubscribeAll() {
         throw new UnsupportedOperationException();

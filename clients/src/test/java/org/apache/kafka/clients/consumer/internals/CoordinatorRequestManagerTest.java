@@ -17,8 +17,11 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -27,6 +30,7 @@ import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +38,7 @@ import java.util.Collections;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -45,14 +50,14 @@ public class CoordinatorRequestManagerTest {
     private static final int RETRY_BACKOFF_MS = 500;
     private static final String GROUP_ID = "group-1";
     private MockTime time;
-    private ErrorEventHandler errorEventHandler;
+    private BackgroundEventHandler backgroundEventHandler;
     private Node node;
 
     @BeforeEach
     public void setup() {
         this.time = new MockTime(0);
         this.node = new Node(1, "localhost", 9092);
-        this.errorEventHandler = mock(ErrorEventHandler.class);
+        this.backgroundEventHandler = mock(BackgroundEventHandler.class);
     }
 
     @Test
@@ -96,7 +101,7 @@ public class CoordinatorRequestManagerTest {
     public void testBackoffAfterRetriableFailure() {
         CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
         expectFindCoordinatorRequest(coordinatorManager, Errors.COORDINATOR_LOAD_IN_PROGRESS);
-        verifyNoInteractions(errorEventHandler);
+        verifyNoInteractions(backgroundEventHandler);
 
         time.sleep(RETRY_BACKOFF_MS - 1);
         assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
@@ -110,10 +115,15 @@ public class CoordinatorRequestManagerTest {
         CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
         expectFindCoordinatorRequest(coordinatorManager, Errors.GROUP_AUTHORIZATION_FAILED);
 
-        verify(errorEventHandler).handle(argThat(exception -> {
-            if (!(exception instanceof GroupAuthorizationException)) {
+        verify(backgroundEventHandler).add(argThat(backgroundEvent -> {
+            if (!(backgroundEvent instanceof ErrorEvent))
                 return false;
-            }
+
+            RuntimeException exception = ((ErrorEvent) backgroundEvent).error();
+
+            if (!(exception instanceof GroupAuthorizationException))
+                return false;
+
             GroupAuthorizationException groupAuthException = (GroupAuthorizationException) exception;
             return groupAuthException.groupId().equals(GROUP_ID);
         }));
@@ -145,6 +155,25 @@ public class CoordinatorRequestManagerTest {
         assertEquals(this.node.id(), respNew.coordinatorByKey(GROUP_ID).get().nodeId());
     }
 
+    @Test
+    public void testNetworkTimeout() {
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
+        NetworkClientDelegate.PollResult res = coordinatorManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+
+        // Mimic a network timeout
+        res.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new TimeoutException());
+
+        // Sleep for exponential backoff - 1ms
+        time.sleep(RETRY_BACKOFF_MS - 1);
+        NetworkClientDelegate.PollResult res2 = coordinatorManager.poll(this.time.milliseconds());
+        assertEquals(0, res2.unsentRequests.size());
+
+        time.sleep(1);
+        res2 = coordinatorManager.poll(time.milliseconds());
+        assertEquals(1, res2.unsentRequests.size());
+    }
+
     private void expectFindCoordinatorRequest(
         CoordinatorRequestManager  coordinatorManager,
         Errors error
@@ -153,7 +182,7 @@ public class CoordinatorRequestManagerTest {
         assertEquals(1, res.unsentRequests.size());
 
         NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
-        unsentRequest.future().complete(buildResponse(unsentRequest, error));
+        unsentRequest.handler().onComplete(buildResponse(unsentRequest, error));
 
         boolean expectCoordinatorFound = error == Errors.NONE;
         assertEquals(expectCoordinatorFound, coordinatorManager.coordinator().isPresent());
@@ -161,11 +190,10 @@ public class CoordinatorRequestManagerTest {
 
     private CoordinatorRequestManager setupCoordinatorManager(String groupId) {
         return new CoordinatorRequestManager(
-            time,
             new LogContext(),
             RETRY_BACKOFF_MS,
             RETRY_BACKOFF_MS,
-            this.errorEventHandler,
+            this.backgroundEventHandler,
             groupId
         );
     }
@@ -175,14 +203,14 @@ public class CoordinatorRequestManagerTest {
         Errors error
     ) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof FindCoordinatorRequest);
+        assertInstanceOf(FindCoordinatorRequest.class, abstractRequest);
         FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) abstractRequest;
 
         FindCoordinatorResponse findCoordinatorResponse =
             FindCoordinatorResponse.prepareResponse(error, GROUP_ID, node);
         return new ClientResponse(
             new RequestHeader(ApiKeys.FIND_COORDINATOR, findCoordinatorRequest.version(), "", 1),
-            request.callback(),
+            request.handler(),
             node.idString(),
             time.milliseconds(),
             time.milliseconds(),

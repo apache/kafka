@@ -19,25 +19,27 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UniformStickyPartitionerTest {
-    private final static Node[] NODES = new Node[] {
+    private static final Node[] NODES = new Node[] {
         new Node(0, "localhost", 99),
         new Node(1, "localhost", 100),
         new Node(2, "localhost", 101)
     };
 
-    private final static String TOPIC_A = "TOPIC_A";
-    private final static String TOPIC_B = "TOPIC_B";
+    private static final String TOPIC_A = "TOPIC_A";
+    private static final String TOPIC_B = "TOPIC_B";
 
     @SuppressWarnings("deprecation")
     @Test
@@ -207,4 +209,3 @@ public class UniformStickyPartitionerTest {
         assertEquals(60, partitionCount.get(newPart).intValue());
     }
 }
-

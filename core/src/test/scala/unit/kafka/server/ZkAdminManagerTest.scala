@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.DescribeConfigsRequestData
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.server.config.ConfigType
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertThrows}
 import org.mockito.Mockito.{mock, when}
@@ -74,7 +75,7 @@ class ZkAdminManagerTest {
 
   @Test
   def testDescribeConfigsWithNullConfigurationKeys(): Unit = {
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    when(zkClient.getEntityConfigs(ConfigType.TOPIC, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
     when(metadataCache.contains(topic)).thenReturn(true)
 
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
@@ -82,28 +83,28 @@ class ZkAdminManagerTest {
       .setResourceType(ConfigResource.Type.TOPIC.id)
       .setConfigurationKeys(null))
     val configHelper = createConfigHelper(metadataCache, zkClient)
-    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, includeSynonyms = true, includeDocumentation = true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
     assertFalse(results.head.configs().isEmpty, "Should return configs")
   }
 
   @Test
   def testDescribeConfigsWithEmptyConfigurationKeys(): Unit = {
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    when(zkClient.getEntityConfigs(ConfigType.TOPIC, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
     when(metadataCache.contains(topic)).thenReturn(true)
 
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
       .setResourceName(topic)
       .setResourceType(ConfigResource.Type.TOPIC.id))
     val configHelper = createConfigHelper(metadataCache, zkClient)
-    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, includeSynonyms = true, includeDocumentation = true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
     assertFalse(results.head.configs().isEmpty, "Should return configs")
   }
 
   @Test
   def testDescribeConfigsWithConfigurationKeys(): Unit = {
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    when(zkClient.getEntityConfigs(ConfigType.TOPIC, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
     when(metadataCache.contains(topic)).thenReturn(true)
 
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
@@ -112,7 +113,7 @@ class ZkAdminManagerTest {
       .setConfigurationKeys(List("retention.ms", "retention.bytes", "segment.bytes").asJava)
     )
     val configHelper = createConfigHelper(metadataCache, zkClient)
-    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, includeSynonyms = true, includeDocumentation = true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
     val resultConfigKeys = results.head.configs().asScala.map(r => r.name()).toSet
     assertEquals(Set("retention.ms", "retention.bytes", "segment.bytes"), resultConfigKeys)
@@ -120,8 +121,8 @@ class ZkAdminManagerTest {
 
   @Test
   def testDescribeConfigsWithDocumentation(): Unit = {
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(new Properties)
-    when(zkClient.getEntityConfigs(ConfigType.Broker, brokerId.toString)).thenReturn(new Properties)
+    when(zkClient.getEntityConfigs(ConfigType.TOPIC, topic)).thenReturn(new Properties)
+    when(zkClient.getEntityConfigs(ConfigType.BROKER, brokerId.toString)).thenReturn(new Properties)
     when(metadataCache.contains(topic)).thenReturn(true)
 
     val configHelper = createConfigHelper(metadataCache, zkClient)
@@ -134,7 +135,7 @@ class ZkAdminManagerTest {
         .setResourceName(brokerId.toString)
         .setResourceType(ConfigResource.Type.BROKER.id))
 
-    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, includeSynonyms = true, includeDocumentation = true)
     assertEquals(2, results.size)
     results.foreach(r => {
       assertEquals(Errors.NONE.code, r.errorCode)

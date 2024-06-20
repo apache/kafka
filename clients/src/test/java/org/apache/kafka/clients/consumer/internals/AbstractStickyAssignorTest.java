@@ -16,6 +16,22 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
+import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
+import org.apache.kafka.clients.consumer.StickyAssignor;
+import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.RackConfig;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.CollectionUtils;
+import org.apache.kafka.common.utils.Utils;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,24 +45,10 @@ import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
-import org.apache.kafka.clients.consumer.StickyAssignor;
-import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.RackConfig;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.CollectionUtils;
-import org.apache.kafka.common.utils.Utils;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
-
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
-import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_RACK_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_CONSUMER_RACK;
+import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_RACK_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.nullRacks;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.racks;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.verifyRackAssignment;
@@ -416,6 +418,59 @@ public abstract class AbstractStickyAssignorTest {
 
     @ParameterizedTest(name = TEST_NAME_WITH_RACK_CONFIG)
     @EnumSource(RackConfig.class)
+    public void testTopicBalanceAfterReassignment(RackConfig rackConfig) {
+        initializeRacks(rackConfig);
+        List<String> allTopics = topics(topic1, topic2);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, partitionInfos(topic1, 12));
+        partitionsPerTopic.put(topic2, partitionInfos(topic2, 12));
+        subscriptions.put(consumer1, subscription(allTopics, 0));
+        Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assignment.forEach((consumer, tps) -> assertEquals(12, tps.stream().filter(tp -> tp.topic().equals(topic1)).count()));
+        assignment.forEach((consumer, tps) -> assertEquals(12, tps.stream().filter(tp -> tp.topic().equals(topic2)).count()));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
+        assertTrue(isFullyBalanced(assignment));
+
+        // Add another consumer
+        subscriptions.put(consumer1, buildSubscriptionV2Above(allTopics, assignment.get(consumer1), generationId, 0));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(allTopics, Collections.emptyList(), generationId, 1));
+        assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assignment.forEach((consumer, tps) -> assertEquals(6, tps.stream().filter(tp -> tp.topic().equals(topic1)).count()));
+        assignment.forEach((consumer, tps) -> assertEquals(6, tps.stream().filter(tp -> tp.topic().equals(topic2)).count()));
+        assertTrue(isFullyBalanced(assignment));
+
+        // Add two more consumers
+        subscriptions.put(consumer1, buildSubscriptionV2Above(allTopics, assignment.get(consumer1), generationId, 0));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(allTopics, assignment.get(consumer2), generationId, 1));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(allTopics, Collections.emptyList(), generationId, 2));
+        subscriptions.put(consumer4, buildSubscriptionV2Above(allTopics, Collections.emptyList(), generationId, 3));
+        assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assignment.forEach((consumer, tps) -> assertEquals(3, tps.stream().filter(tp -> tp.topic().equals(topic1)).count()));
+        assignment.forEach((consumer, tps) -> assertEquals(3, tps.stream().filter(tp -> tp.topic().equals(topic2)).count()));
+        assertTrue(isFullyBalanced(assignment));
+
+        // remove 2 consumers
+        subscriptions.remove(consumer1);
+        subscriptions.remove(consumer2);
+        subscriptions.put(consumer3, buildSubscriptionV2Above(allTopics, assignment.get(consumer3), generationId, 2));
+        subscriptions.put(consumer4, buildSubscriptionV2Above(allTopics, assignment.get(consumer4), generationId, 3));
+        assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assignment.forEach((consumer, tps) -> assertEquals(6, tps.stream().filter(tp -> tp.topic().equals(topic1)).count()));
+        assignment.forEach((consumer, tps) -> assertEquals(6, tps.stream().filter(tp -> tp.topic().equals(topic2)).count()));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    @ParameterizedTest(name = TEST_NAME_WITH_RACK_CONFIG)
+    @EnumSource(RackConfig.class)
     public void testAddRemoveTwoConsumersTwoTopics(RackConfig rackConfig) {
         initializeRacks(rackConfig);
         List<String> allTopics = topics(topic1, topic2);
@@ -442,15 +497,15 @@ public abstract class AbstractStickyAssignorTest {
         assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
 
         Map<TopicPartition, String> expectedPartitionsTransferringOwnership = new HashMap<>();
-        expectedPartitionsTransferringOwnership.put(tp(topic2, 1), consumer3);
+        expectedPartitionsTransferringOwnership.put(tp(topic1, 2), consumer3);
         expectedPartitionsTransferringOwnership.put(tp(topic2, 3), consumer3);
         expectedPartitionsTransferringOwnership.put(tp(topic2, 2), consumer4);
         assertEquals(expectedPartitionsTransferringOwnership, assignor.partitionsTransferringOwnership);
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
-        assertEquals(partitions(tp(topic1, 0), tp(topic1, 2)), assignment.get(consumer1));
-        assertEquals(partitions(tp(topic1, 1), tp(topic2, 0)), assignment.get(consumer2));
-        assertEquals(partitions(tp(topic2, 1), tp(topic2, 3)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic1, 0), tp(topic2, 1)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic2, 0), tp(topic1, 1)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic1, 2), tp(topic2, 3)), assignment.get(consumer3));
         assertEquals(partitions(tp(topic2, 2)), assignment.get(consumer4));
         assertTrue(isFullyBalanced(assignment));
 
@@ -460,8 +515,8 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer3, buildSubscriptionV2Above(allTopics, assignment.get(consumer3), generationId, 2));
         subscriptions.put(consumer4, buildSubscriptionV2Above(allTopics, assignment.get(consumer4), generationId, 3));
         assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp(topic2, 1), tp(topic2, 3), tp(topic1, 0), tp(topic2, 0)), assignment.get(consumer3));
-        assertEquals(partitions(tp(topic2, 2), tp(topic1, 1), tp(topic1, 2)), assignment.get(consumer4));
+        assertEquals(partitions(tp(topic1, 2), tp(topic2, 3), tp(topic1, 0), tp(topic2, 1)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic2, 2), tp(topic1, 1), tp(topic2, 0)), assignment.get(consumer4));
 
         assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
@@ -1244,14 +1299,26 @@ public abstract class AbstractStickyAssignorTest {
         assignment = asList("t1-0, t1-3, t2-0, t2-3, t2-6", "t1-1, t1-4, t2-1, t2-4, t3-0", "t1-2, t1-5, t2-2, t2-5, t3-1");
         verifyUniformSubscription(assignor, topics, 3, racks(2), racks(3), consumerTopics, assignment, 5);
 
-        // Verify that rack-awareness is improved if already owned partitions are misaligned
-        assignment = asList("t1-0, t1-3, t2-0, t2-3, t2-6", "t1-1, t1-4, t2-1, t2-4, t3-0", "t1-2, t1-5, t2-2, t2-5, t3-1");
-        List<String> owned = asList("t1-0, t1-1, t1-2, t1-3, t1-4", "t1-5, t2-0, t2-1, t2-2, t2-3", "t2-4, t2-5, t2-6, t3-0, t3-1");
-        verifyRackAssignment(assignor, topics, 1, racks(3), racks(3), consumerTopics, owned, assignment, 0);
+        if (assignor instanceof CooperativeStickyAssignor) {
+            // Verify that rack-awareness is improved if already owned partitions are misaligned
+            assignment = asList("t1-0, t1-3", "t2-1", "t2-5, t3-1");
+            List<String> owned = asList("t1-0, t1-1, t1-2, t1-3, t1-4", "t1-5, t2-0, t2-1, t2-2, t2-3", "t2-4, t2-5, t2-6, t3-0, t3-1");
+            verifyRackAssignment(assignor, topics, 1, racks(3), racks(3), consumerTopics, owned, assignment, 0);
 
-        // Verify that stickiness is retained when racks match
-        AbstractPartitionAssignorTest.preferRackAwareLogic(assignor, true);
-        verifyRackAssignment(assignor, topics, 3, racks(3), racks(3), consumerTopics, assignment, assignment, 0);
+            // Verify that stickiness is retained when racks match
+            assignment = asList("t1-0, t1-3, t2-0, t2-3, t2-6", "t1-1, t1-4, t2-1, t2-4, t3-0", "t1-2, t1-5, t2-2, t2-5, t3-1");
+            AbstractPartitionAssignorTest.preferRackAwareLogic(assignor, true);
+            verifyRackAssignment(assignor, topics, 3, racks(3), racks(3), consumerTopics, assignment, assignment, 0);
+        } else {
+            // Verify that rack-awareness is improved if already owned partitions are misaligned
+            assignment = asList("t1-0, t1-3, t2-0, t2-3, t2-6", "t1-1, t1-4, t2-1, t2-4, t3-0", "t1-2, t1-5, t2-2, t2-5, t3-1");
+            List<String> owned = asList("t1-0, t1-1, t1-2, t1-3, t1-4", "t1-5, t2-0, t2-1, t2-2, t2-3", "t2-4, t2-5, t2-6, t3-0, t3-1");
+            verifyRackAssignment(assignor, topics, 1, racks(3), racks(3), consumerTopics, owned, assignment, 0);
+
+            // Verify that stickiness is retained when racks match
+            AbstractPartitionAssignorTest.preferRackAwareLogic(assignor, true);
+            verifyRackAssignment(assignor, topics, 3, racks(3), racks(3), consumerTopics, assignment, assignment, 0);
+        }
     }
 
     private void verifyUniformSubscription(AbstractStickyAssignor assignor,

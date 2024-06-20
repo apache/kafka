@@ -31,12 +31,14 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -55,17 +57,20 @@ import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ER
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_ORIG_TOPIC;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_STAGE;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_TASK_ID;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class ErrorReporterTest {
 
     private static final String TOPIC = "test-topic";
@@ -84,13 +89,13 @@ public class ErrorReporterTest {
     private ErrorHandlingMetrics errorHandlingMetrics;
     private MockConnectMetrics metrics;
 
-    @Before
+    @BeforeEach
     public void setup() {
         metrics = new MockConnectMetrics();
         errorHandlingMetrics = new ErrorHandlingMetrics(new ConnectorTaskId("connector-", 1), metrics);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         if (metrics != null) {
             metrics.stop();
@@ -107,7 +112,7 @@ public class ErrorReporterTest {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
                 producer, config(emptyMap()), TASK_ID, errorHandlingMetrics);
 
-        ProcessingContext context = processingContext();
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 
         // since topic name is empty, this method should be a NOOP and producer.send() should
         // not be called.
@@ -120,7 +125,7 @@ public class ErrorReporterTest {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
                 producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
 
-        ProcessingContext context = processingContext();
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 
         when(producer.send(any(), any())).thenReturn(metadata);
 
@@ -134,7 +139,7 @@ public class ErrorReporterTest {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
                 producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
 
-        ProcessingContext context = processingContext();
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 
         when(producer.send(any(), any())).thenReturn(metadata);
 
@@ -155,9 +160,9 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogOnDisabledLogReporter() {
-        LogReporter logReporter = new LogReporter(TASK_ID, config(emptyMap()), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(emptyMap()), errorHandlingMetrics);
 
-        ProcessingContext context = processingContext();
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
         context.error(new RuntimeException());
 
         // reporting a context without an error should not cause any errors.
@@ -167,9 +172,9 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogOnEnabledLogReporter() {
-        LogReporter logReporter = new LogReporter(TASK_ID, config(singletonMap(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(singletonMap(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")), errorHandlingMetrics);
 
-        ProcessingContext context = processingContext();
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
         context.error(new RuntimeException());
 
         // reporting a context without an error should not cause any errors.
@@ -179,9 +184,9 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogMessageWithNoRecords() {
-        LogReporter logReporter = new LogReporter(TASK_ID, config(singletonMap(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(singletonMap(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")), errorHandlingMetrics);
 
-        ProcessingContext context = processingContext();
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 
         String msg = logReporter.message(context);
         assertEquals("Error encountered in task job-0. Executing stage 'KEY_CONVERTER' with class " +
@@ -194,9 +199,9 @@ public class ErrorReporterTest {
         props.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         props.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
 
-        LogReporter logReporter = new LogReporter(TASK_ID, config(props), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(props), errorHandlingMetrics);
 
-        ProcessingContext context = processingContext();
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 
         String msg = logReporter.message(context);
         assertEquals("Error encountered in task job-0. Executing stage 'KEY_CONVERTER' with class " +
@@ -210,9 +215,9 @@ public class ErrorReporterTest {
         props.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         props.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
 
-        LogReporter logReporter = new LogReporter(TASK_ID, config(props), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(props), errorHandlingMetrics);
 
-        ProcessingContext context = processingContext();
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 
         String msg = logReporter.message(context);
         assertEquals("Error encountered in task job-0. Executing stage 'KEY_CONVERTER' with class " +
@@ -220,7 +225,7 @@ public class ErrorReporterTest {
             "partition=5, offset=100}.", msg);
 
         Future<RecordMetadata> future = logReporter.report(context);
-        assertTrue(future instanceof CompletableFuture);
+        assertInstanceOf(CompletableFuture.class, future);
     }
 
     @Test
@@ -239,8 +244,8 @@ public class ErrorReporterTest {
         props.put(SinkConnectorConfig.DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, config(props), TASK_ID, errorHandlingMetrics);
 
-        ProcessingContext context = new ProcessingContext();
-        context.consumerRecord(new ConsumerRecord<>("source-topic", 7, 10, "source-key".getBytes(), "source-value".getBytes()));
+        ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("source-topic", 7, 10, "source-key".getBytes(), "source-value".getBytes());
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         context.currentContext(Stage.TRANSFORMATION, Transformation.class);
         context.error(new ConnectException("Test Exception"));
 
@@ -256,7 +261,7 @@ public class ErrorReporterTest {
         assertEquals(Transformation.class.getName(), headerValue(producerRecord, ERROR_HEADER_EXECUTING_CLASS));
         assertEquals(ConnectException.class.getName(), headerValue(producerRecord, ERROR_HEADER_EXCEPTION));
         assertEquals("Test Exception", headerValue(producerRecord, ERROR_HEADER_EXCEPTION_MESSAGE));
-        assertTrue(headerValue(producerRecord, ERROR_HEADER_EXCEPTION_STACK_TRACE).length() > 0);
+        assertFalse(headerValue(producerRecord, ERROR_HEADER_EXCEPTION_STACK_TRACE).isEmpty());
         assertTrue(headerValue(producerRecord, ERROR_HEADER_EXCEPTION_STACK_TRACE).startsWith("org.apache.kafka.connect.errors.ConnectException: Test Exception"));
     }
 
@@ -267,8 +272,8 @@ public class ErrorReporterTest {
         props.put(SinkConnectorConfig.DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, config(props), TASK_ID, errorHandlingMetrics);
 
-        ProcessingContext context = new ProcessingContext();
-        context.consumerRecord(new ConsumerRecord<>("source-topic", 7, 10, "source-key".getBytes(), "source-value".getBytes()));
+        ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("source-topic", 7, 10, "source-key".getBytes(), "source-value".getBytes());
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         context.currentContext(Stage.TRANSFORMATION, Transformation.class);
         context.error(new NullPointerException());
 
@@ -284,7 +289,7 @@ public class ErrorReporterTest {
         assertEquals(Transformation.class.getName(), headerValue(producerRecord, ERROR_HEADER_EXECUTING_CLASS));
         assertEquals(NullPointerException.class.getName(), headerValue(producerRecord, ERROR_HEADER_EXCEPTION));
         assertNull(producerRecord.headers().lastHeader(ERROR_HEADER_EXCEPTION_MESSAGE).value());
-        assertTrue(headerValue(producerRecord, ERROR_HEADER_EXCEPTION_STACK_TRACE).length() > 0);
+        assertFalse(headerValue(producerRecord, ERROR_HEADER_EXCEPTION_STACK_TRACE).isEmpty());
         assertTrue(headerValue(producerRecord, ERROR_HEADER_EXCEPTION_STACK_TRACE).startsWith("java.lang.NullPointerException"));
     }
 
@@ -295,8 +300,8 @@ public class ErrorReporterTest {
         props.put(SinkConnectorConfig.DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, config(props), TASK_ID, errorHandlingMetrics);
 
-        ProcessingContext context = new ProcessingContext();
-        context.consumerRecord(new ConsumerRecord<>("source-topic", 7, 10, "source-key".getBytes(), "source-value".getBytes()));
+        ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("source-topic", 7, 10, "source-key".getBytes(), "source-value".getBytes());
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         context.currentContext(Stage.TRANSFORMATION, Transformation.class);
         context.error(new ConnectException("Test Exception"));
 
@@ -319,9 +324,9 @@ public class ErrorReporterTest {
         return new String(producerRecord.headers().lastHeader(headerSuffix).value());
     }
 
-    private ProcessingContext processingContext() {
-        ProcessingContext context = new ProcessingContext();
-        context.consumerRecord(new ConsumerRecord<>(TOPIC, 5, 100, new byte[]{'a', 'b'}, new byte[]{'x'}));
+    private ProcessingContext<ConsumerRecord<byte[], byte[]>> processingContext() {
+        ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(TOPIC, 5, 100, new byte[]{'a', 'b'}, new byte[]{'x'});
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         context.currentContext(Stage.KEY_CONVERTER, JsonConverter.class);
         return context;
     }

@@ -639,7 +639,7 @@ public class StateDirectoryTest {
         }
     }
 
-    /************* Named Topology Tests *************/
+    /* Named Topology Tests */
 
     @Test
     public void shouldCreateTaskDirectoriesUnderNamedTopologyDirs() throws IOException {
@@ -766,8 +766,6 @@ public class StateDirectoryTest {
             );
         }
     }
-
-    /************************************************/
 
     @Test
     public void shouldPersistProcessIdAcrossRestart() {

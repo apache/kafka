@@ -17,16 +17,13 @@
 
 package org.apache.kafka.metadata;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class BrokerStateTest {
-    private static final Logger log = LoggerFactory.getLogger(BrokerStateTest.class);
 
     @Test
     public void testFromValue() {

@@ -35,33 +35,13 @@ public interface TasksRegistry {
 
     void clearPendingTasksToCreate();
 
-    Set<TopicPartition> removePendingTaskToRecycle(final TaskId taskId);
-
-    boolean hasPendingTasksToRecycle();
-
-    void addPendingTaskToRecycle(final TaskId taskId, final Set<TopicPartition> inputPartitions);
-
-    Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId);
-
-    void addPendingTaskToUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions);
-
-    boolean removePendingTaskToCloseDirty(final TaskId taskId);
-
-    void addPendingTaskToCloseDirty(final TaskId taskId);
-
-    boolean removePendingTaskToCloseClean(final TaskId taskId);
-
-    void addPendingTaskToCloseClean(final TaskId taskId);
-
     Set<Task> drainPendingTasksToInit();
+
+    Set<Task> pendingTasksToInit();
 
     void addPendingTasksToInit(final Collection<Task> tasks);
 
     boolean hasPendingTasksToInit();
-
-    boolean removePendingActiveTaskToSuspend(final TaskId taskId);
-
-    void addPendingActiveTaskToSuspend(final TaskId taskId);
 
     void addActiveTasks(final Collection<Task> tasks);
 
@@ -84,6 +64,8 @@ public interface TasksRegistry {
     Task task(final TaskId taskId);
 
     Collection<Task> tasks(final Collection<TaskId> taskIds);
+
+    Collection<TaskId> activeTaskIds();
 
     Collection<Task> activeTasks();
 

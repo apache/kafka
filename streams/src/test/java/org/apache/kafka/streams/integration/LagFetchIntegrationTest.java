@@ -38,14 +38,15 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,7 +101,7 @@ public class LagFetchIntegrationTest {
 
     @BeforeEach
     public void before(final TestInfo testInfo) {
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
         inputTopicName = "input-topic-" + safeTestName;
         outputTopicName = "output-topic-" + safeTestName;
         stateStoreName = "lagfetch-test-store" + safeTestName;
@@ -274,8 +275,9 @@ public class LagFetchIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Long> t1 = builder.table(inputTopicName, Materialized.as(stateStoreName));
         t1.toStream().to(outputTopicName);
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final AtomicReference<LagInfo> zeroLagRef = new AtomicReference<>();
         try {
             // First start up the active.
             TestUtils.waitForCondition(() -> streams.allLocalStorePartitionLags().size() == 0,
@@ -291,7 +293,6 @@ public class LagFetchIntegrationTest {
                 WAIT_TIMEOUT_MS);
 
             // check for proper lag values.
-            final AtomicReference<LagInfo> zeroLagRef = new AtomicReference<>();
             TestUtils.waitForCondition(() -> {
                 final Map<String, Map<Integer, LagInfo>> offsetLagInfoMap = streams.allLocalStorePartitionLags();
                 assertThat(offsetLagInfoMap.size(), equalTo(1));
@@ -312,9 +313,14 @@ public class LagFetchIntegrationTest {
             Files.walk(stateDir.toPath()).sorted(Comparator.reverseOrder())
                 .map(Path::toFile)
                 .forEach(f -> assertTrue(f.delete(), "Some state " + f + " could not be deleted"));
+        } finally {
+            streams.close();
+            streams.cleanUp();
+        }
 
-            // wait till the lag goes down to 0
-            final KafkaStreams restartedStreams = new KafkaStreams(builder.build(), props);
+        // wait till the lag goes down to 0
+        final KafkaStreams restartedStreams = new KafkaStreams(builder.build(), props);
+        try {
             // set a state restoration listener to track progress of restoration
             final CountDownLatch restorationEndLatch = new CountDownLatch(1);
             final Map<String, Map<Integer, LagInfo>> restoreStartLagInfo = new HashMap<>();
@@ -356,8 +362,8 @@ public class LagFetchIntegrationTest {
 
             assertThat(restoreEndLagInfo.get(stateStoreName).get(0), equalTo(zeroLagRef.get()));
         } finally {
-            streams.close();
-            streams.cleanUp();
+            restartedStreams.close();
+            restartedStreams.cleanUp();
         }
     }
 }

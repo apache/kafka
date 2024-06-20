@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.network.RequestChannel
-import kafka.security.authorizer.AuthorizerUtils
 import kafka.utils.Logging
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclBinding
@@ -30,6 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType
+import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.authorizer._
 
 import java.util
@@ -68,12 +68,10 @@ class AclApis(authHelper: AuthHelper,
           describeAclsRequest.version))
       case Some(auth) =>
         val filter = describeAclsRequest.filter
-        val returnedAcls = new util.HashSet[AclBinding]()
-        auth.acls(filter).forEach(returnedAcls.add)
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           new DescribeAclsResponse(new DescribeAclsResponseData()
             .setThrottleTimeMs(requestThrottleMs)
-            .setResources(DescribeAclsResponse.aclsResources(returnedAcls)),
+            .setResources(DescribeAclsResponse.aclsResources(auth.acls(filter))),
           describeAclsRequest.version))
     }
     CompletableFuture.completedFuture[Unit](())

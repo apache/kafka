@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.Map.Entry;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
@@ -36,8 +34,10 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
@@ -54,6 +54,8 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPO
  *   - {@link Errors#COORDINATOR_NOT_AVAILABLE}
  *   - {@link Errors#NOT_COORDINATOR}
  *   - {@link Errors#GROUP_AUTHORIZATION_FAILED}
+ *   - {@link Errors#UNKNOWN_MEMBER_ID}
+ *   - {@link Errors#STALE_MEMBER_EPOCH}
  */
 public class OffsetFetchResponse extends AbstractResponse {
     public static final long INVALID_OFFSET = -1L;

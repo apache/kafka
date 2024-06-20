@@ -27,9 +27,11 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
-import org.apache.kafka.clients.consumer.internals.PrototypeAsyncConsumer
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
@@ -60,14 +62,22 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   override def generateConfigs: Seq[KafkaConfig] = {
-
     val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     configureListeners(cfgs)
     modifyConfigs(cfgs)
     if (isZkMigrationTest()) {
-      cfgs.foreach(_.setProperty(KafkaConfig.MigrationEnabledProp, "true"))
+      cfgs.foreach(_.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true"))
     }
+    if (isNewGroupCoordinatorEnabled()) {
+      cfgs.foreach(_.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true"))
+      cfgs.foreach(_.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer"))
+    }
+
+    if(isKRaftTest()) {
+      cfgs.foreach(_.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, TestUtils.tempDir().getAbsolutePath))
+    }
+
     insertControllerListenersIfNeeded(cfgs)
     cfgs.map(KafkaConfig.fromProps)
   }
@@ -78,16 +88,16 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   protected def configureListeners(props: Seq[Properties]): Unit = {
     props.foreach { config =>
-      config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
-      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, interBrokerListenerName.value)
+      config.remove(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG)
+      config.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, interBrokerListenerName.value)
 
       val listenerNames = Set(listenerName, interBrokerListenerName)
       val listeners = listenerNames.map(listenerName => s"${listenerName.value}://localhost:${TestUtils.RandomPort}").mkString(",")
       val listenerSecurityMap = listenerNames.map(listenerName => s"${listenerName.value}:${securityProtocol.name}").mkString(",")
 
-      config.setProperty(KafkaConfig.ListenersProp, listeners)
-      config.setProperty(KafkaConfig.AdvertisedListenersProp, listeners)
-      config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityMap)
+      config.setProperty(SocketServerConfigs.LISTENERS_CONFIG, listeners)
+      config.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, listeners)
+      config.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, listenerSecurityMap)
     }
   }
 
@@ -95,13 +105,12 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     if (isKRaftTest()) {
       props.foreach { config =>
         // Add a security protocol for the controller endpoints, if one is not already set.
-        val securityPairs = config.getProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "").split(",")
-        val toAdd = config.getProperty(KafkaConfig.ControllerListenerNamesProp, "").split(",").filter{
-          case e => !securityPairs.exists(_.startsWith(s"${e}:"))
-        }
+        val securityPairs = config.getProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "").split(",")
+        val toAdd = config.getProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "").split(",").filter(
+          e => !securityPairs.exists(_.startsWith(s"$e:")))
         if (toAdd.nonEmpty) {
-          config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, (securityPairs ++
-            toAdd.map(e => s"${e}:${controllerListenerSecurityProtocol.toString}")).mkString(","))
+          config.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, (securityPairs ++
+            toAdd.map(e => s"$e:${controllerListenerSecurityProtocol.toString}")).mkString(","))
         }
       }
     }
@@ -141,6 +150,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group")
     consumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     consumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+    maybeGroupProtocolSpecified(testInfo).map(groupProtocol => consumerConfig.putIfAbsent(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name))
 
     adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
 
@@ -169,19 +179,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     val producer = new KafkaProducer[K, V](props, keySerializer, valueSerializer)
     producers += producer
     producer
-  }
-
-  def createAsyncConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                                valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
-                                configOverrides: Properties = new Properties,
-                                configsToRemove: List[String] = List()): PrototypeAsyncConsumer[K, V] = {
-    val props = new Properties
-    props ++= consumerConfig
-    props ++= configOverrides
-    configsToRemove.foreach(props.remove(_))
-    val consumer = new PrototypeAsyncConsumer[K, V](props, keyDeserializer, valueDeserializer)
-    consumers += consumer
-    consumer
   }
 
   def createConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
@@ -223,16 +220,18 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   @AfterEach
   override def tearDown(): Unit = {
-    producers.foreach(_.close(Duration.ZERO))
-    consumers.foreach(_.wakeup())
-    consumers.foreach(_.close(Duration.ZERO))
-    adminClients.foreach(_.close(Duration.ZERO))
+    try {
+      producers.foreach(_.close(Duration.ZERO))
+      consumers.foreach(_.wakeup())
+      consumers.foreach(_.close(Duration.ZERO))
+      adminClients.foreach(_.close(Duration.ZERO))
 
-    producers.clear()
-    consumers.clear()
-    adminClients.clear()
-
-    super.tearDown()
+      producers.clear()
+      consumers.clear()
+      adminClients.clear()
+    } finally {
+      super.tearDown()
+    }
   }
 
 }

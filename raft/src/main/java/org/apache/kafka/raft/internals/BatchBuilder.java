@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.DataOutputStreamWritable;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -48,7 +48,7 @@ import java.util.OptionalInt;
  */
 public class BatchBuilder<T> {
     private final ByteBuffer initialBuffer;
-    private final CompressionType compressionType;
+    private final Compression compression;
     private final ByteBufferOutputStream batchOutput;
     private final DataOutputStreamWritable recordOutput;
     private final long baseOffset;
@@ -67,7 +67,7 @@ public class BatchBuilder<T> {
     public BatchBuilder(
         ByteBuffer buffer,
         RecordSerde<T> serde,
-        CompressionType compressionType,
+        Compression compression,
         long baseOffset,
         long appendTime,
         boolean isControlBatch,
@@ -77,7 +77,7 @@ public class BatchBuilder<T> {
         this.initialBuffer = buffer;
         this.batchOutput = new ByteBufferOutputStream(buffer);
         this.serde = serde;
-        this.compressionType = compressionType;
+        this.compression = compression;
         this.baseOffset = baseOffset;
         this.nextOffset = baseOffset;
         this.appendTime = appendTime;
@@ -92,7 +92,7 @@ public class BatchBuilder<T> {
         batchOutput.position(initialPosition + batchHeaderSizeInBytes);
 
         this.recordOutput = new DataOutputStreamWritable(new DataOutputStream(
-            compressionType.wrapForOutput(this.batchOutput, RecordBatch.MAGIC_VALUE_V2)));
+            compression.wrapForOutput(this.batchOutput, RecordBatch.MAGIC_VALUE_V2)));
     }
 
     /**
@@ -128,7 +128,7 @@ public class BatchBuilder<T> {
      * Check whether the batch has enough room for all the record values.
      *
      * Returns an empty {@link OptionalInt} if the batch builder has room for this list of records.
-     * Otherwise it returns the expected number of bytes needed for a batch to contain these records.
+     * Otherwise, it returns the expected number of bytes needed for a batch to contain these records.
      *
      * @param records the records to use when checking for room
      * @param serializationCache serialization cache for computing sizes
@@ -217,7 +217,7 @@ public class BatchBuilder<T> {
     /**
      * Return the reference to the initial buffer passed through the constructor.
      * This is used in case the buffer needs to be returned to a pool (e.g.
-     * in {@link org.apache.kafka.common.memory.MemoryPool#release(ByteBuffer)}.
+     * in {@link org.apache.kafka.common.memory.MemoryPool#release(ByteBuffer)}).
      *
      * @return the initial buffer passed to the constructor
      */
@@ -247,7 +247,7 @@ public class BatchBuilder<T> {
             lastOffsetDelta,
             size,
             RecordBatch.MAGIC_VALUE_V2,
-            compressionType,
+            compression.type(),
             TimestampType.CREATE_TIME,
             appendTime,
             appendTime,
@@ -314,7 +314,7 @@ public class BatchBuilder<T> {
     private int batchHeaderSizeInBytes() {
         return AbstractRecords.recordBatchHeaderSizeInBytes(
             RecordBatch.MAGIC_VALUE_V2,
-            compressionType
+            compression.type()
         );
     }
 

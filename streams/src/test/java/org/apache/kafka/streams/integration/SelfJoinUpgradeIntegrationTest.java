@@ -17,17 +17,6 @@
 
 package org.apache.kafka.streams.integration;
 
-import static java.time.Duration.ofMinutes;
-import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
-
-import java.io.IOException;
-import java.time.Duration;
-import java.util.List;
-import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -44,18 +33,29 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
 
-@Category({IntegrationTest.class})
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+
+import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
+import java.util.Properties;
+
+import static java.time.Duration.ofMinutes;
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
+
+@Tag("integration")
 public class SelfJoinUpgradeIntegrationTest {
     public static final String INPUT_TOPIC = "selfjoin-input";
     public static final String OUTPUT_TOPIC = "selfjoin-output";
@@ -66,30 +66,29 @@ public class SelfJoinUpgradeIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-    @Rule
-    public TestName testName = new TestName();
+    private String safeTestName;
 
-    @Before
-    public void createTopics() throws Exception {
-        inputTopic = INPUT_TOPIC + safeUniqueTestName(getClass(), testName);
-        outputTopic = OUTPUT_TOPIC + safeUniqueTestName(getClass(), testName);
+    @BeforeEach
+    public void createTopics(final TestInfo testInfo) throws Exception {
+        safeTestName = safeUniqueTestName(testInfo);
+        inputTopic = INPUT_TOPIC + safeTestName;
+        outputTopic = OUTPUT_TOPIC + safeTestName;
         CLUSTER.createTopic(inputTopic);
         CLUSTER.createTopic(outputTopic);
     }
 
     private Properties props() {
         final Properties streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
@@ -103,7 +102,7 @@ public class SelfJoinUpgradeIntegrationTest {
         return streamsConfiguration;
     }
 
-    @After
+    @AfterEach
     public void shutdown() {
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30L));
@@ -113,7 +112,6 @@ public class SelfJoinUpgradeIntegrationTest {
 
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldUpgradeWithTopologyOptimizationOff() throws Exception {
 
         final StreamsBuilder streamsBuilderOld = new StreamsBuilder();
@@ -127,20 +125,29 @@ public class SelfJoinUpgradeIntegrationTest {
         );
         joinedOld.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
-
         final Properties props = props();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
         kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);
         kafkaStreams.start();
 
         final long currentTime = CLUSTER.time.milliseconds();
-        processKeyValueAndVerifyCount("1", "A", currentTime + 42L, asList(
-            new KeyValueTimestamp<String, String>("1", "AA", currentTime + 42L)));
+        processKeyValueAndVerifyCount(
+            "1",
+            "A",
+            currentTime + 42L,
+            asList(new KeyValueTimestamp<>("1", "AA", currentTime + 42L))
+        );
 
-        processKeyValueAndVerifyCount("1", "B", currentTime + 43L, asList(
-            new KeyValueTimestamp("1", "BA", currentTime + 43L),
-            new KeyValueTimestamp("1", "AB", currentTime + 43L),
-            new KeyValueTimestamp("1", "BB", currentTime + 43L)));
+        processKeyValueAndVerifyCount(
+            "1",
+            "B",
+            currentTime + 43L,
+            asList(
+                new KeyValueTimestamp<>("1", "BA", currentTime + 43L),
+                new KeyValueTimestamp<>("1", "AB", currentTime + 43L),
+                new KeyValueTimestamp<>("1", "BB", currentTime + 43L)
+            )
+        );
 
 
         kafkaStreams.close();
@@ -152,19 +159,23 @@ public class SelfJoinUpgradeIntegrationTest {
 
         final long currentTimeNew = CLUSTER.time.milliseconds();
 
-        processKeyValueAndVerifyCount("1", "C", currentTimeNew + 44L, asList(
-            new KeyValueTimestamp("1", "CA", currentTimeNew + 44L),
-            new KeyValueTimestamp("1", "CB", currentTimeNew + 44L),
-            new KeyValueTimestamp("1", "AC", currentTimeNew + 44L),
-            new KeyValueTimestamp("1", "BC", currentTimeNew + 44L),
-            new KeyValueTimestamp("1", "CC", currentTimeNew + 44L)));
-
+        processKeyValueAndVerifyCount(
+            "1",
+            "C",
+            currentTimeNew + 44L,
+            asList(
+                new KeyValueTimestamp<>("1", "CA", currentTimeNew + 44L),
+                new KeyValueTimestamp<>("1", "CB", currentTimeNew + 44L),
+                new KeyValueTimestamp<>("1", "AC", currentTimeNew + 44L),
+                new KeyValueTimestamp<>("1", "BC", currentTimeNew + 44L),
+                new KeyValueTimestamp<>("1", "CC", currentTimeNew + 44L)
+            )
+        );
 
         kafkaStreams.close();
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldRestartWithTopologyOptimizationOn() throws Exception {
 
         final StreamsBuilder streamsBuilderOld = new StreamsBuilder();
@@ -185,14 +196,23 @@ public class SelfJoinUpgradeIntegrationTest {
         kafkaStreams.start();
 
         final long currentTime = CLUSTER.time.milliseconds();
-        processKeyValueAndVerifyCount("1", "A", currentTime + 42L, asList(
-            new KeyValueTimestamp("1", "AA", currentTime + 42L)));
+        processKeyValueAndVerifyCount(
+            "1",
+            "A",
+            currentTime + 42L,
+            asList(new KeyValueTimestamp<>("1", "AA", currentTime + 42L))
+        );
 
-        processKeyValueAndVerifyCount("1", "B", currentTime + 43L, asList(
-            new KeyValueTimestamp("1", "BA", currentTime + 43L),
-            new KeyValueTimestamp("1", "AB", currentTime + 43L),
-            new KeyValueTimestamp("1", "BB", currentTime + 43L)));
-
+        processKeyValueAndVerifyCount(
+            "1",
+            "B",
+            currentTime + 43L,
+            asList(
+                new KeyValueTimestamp<>("1", "BA", currentTime + 43L),
+                new KeyValueTimestamp<>("1", "AB", currentTime + 43L),
+                new KeyValueTimestamp<>("1", "BB", currentTime + 43L)
+            )
+        );
 
         kafkaStreams.close();
         kafkaStreams = null;
@@ -203,12 +223,18 @@ public class SelfJoinUpgradeIntegrationTest {
 
         final long currentTimeNew = CLUSTER.time.milliseconds();
 
-        processKeyValueAndVerifyCount("1", "C", currentTimeNew + 44L, asList(
-            new KeyValueTimestamp("1", "CA", currentTimeNew + 44L),
-            new KeyValueTimestamp("1", "CB", currentTimeNew + 44L),
-            new KeyValueTimestamp("1", "AC", currentTimeNew + 44L),
-            new KeyValueTimestamp("1", "BC", currentTimeNew + 44L),
-            new KeyValueTimestamp("1", "CC", currentTimeNew + 44L)));
+        processKeyValueAndVerifyCount(
+            "1",
+            "C",
+            currentTimeNew + 44L,
+            asList(
+                new KeyValueTimestamp<>("1", "CA", currentTimeNew + 44L),
+                new KeyValueTimestamp<>("1", "CB", currentTimeNew + 44L),
+                new KeyValueTimestamp<>("1", "AC", currentTimeNew + 44L),
+                new KeyValueTimestamp<>("1", "BC", currentTimeNew + 44L),
+                new KeyValueTimestamp<>("1", "CC", currentTimeNew + 44L)
+            )
+        );
 
         kafkaStreams.close();
     }
@@ -230,7 +256,6 @@ public class SelfJoinUpgradeIntegrationTest {
             timestamp);
 
 
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
@@ -251,6 +276,4 @@ public class SelfJoinUpgradeIntegrationTest {
 
         return actual.equals(expected);
     }
-
-
 }

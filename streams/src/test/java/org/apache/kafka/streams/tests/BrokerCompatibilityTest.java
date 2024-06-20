@@ -40,7 +40,6 @@ import org.apache.kafka.streams.kstream.Grouped;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.Locale;
 import java.util.Properties;
 
 public class BrokerCompatibilityTest {
@@ -146,7 +145,7 @@ public class BrokerCompatibilityTest {
         consumerProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerProperties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         if (eosEnabled) {
-            consumerProperties.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+            consumerProperties.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString());
         }
 
         try (final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProperties)) {

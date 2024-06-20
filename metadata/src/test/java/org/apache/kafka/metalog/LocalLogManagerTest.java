@@ -21,6 +21,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -108,7 +109,7 @@ public class LocalLogManagerTest {
             long highestOffset = -1;
             for (String event : listener.serializedEvents()) {
                 if (event.startsWith(LAST_COMMITTED_OFFSET)) {
-                    long offset = Long.valueOf(
+                    long offset = Long.parseLong(
                         event.substring(LAST_COMMITTED_OFFSET.length() + 1));
                     if (offset < highestOffset) {
                         throw new RuntimeException("Invalid offset: " + offset +

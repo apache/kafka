@@ -110,6 +110,13 @@ public class RepartitionTopics {
             .collect(Collectors.toSet());
     }
 
+    public Set<String> missingSourceTopics() {
+        return missingInputTopicsBySubtopology.entrySet().stream()
+                .map(entry -> entry.getValue())
+                .flatMap(missingTopicSet -> missingTopicSet.stream())
+                .collect(Collectors.toSet());
+    }
+
     public Queue<StreamsException> missingSourceTopicExceptions() {
         return missingInputTopicsBySubtopology.entrySet().stream().map(entry -> {
             final Set<String> missingSourceTopics = entry.getValue();
@@ -156,7 +163,7 @@ public class RepartitionTopics {
                 if (!missingSourceTopicsForSubtopology.isEmpty()) {
                     final Subtopology subtopology = subtopologyEntry.getKey();
                     missingInputTopicsBySubtopology.put(subtopology, missingSourceTopicsForSubtopology);
-                    log.error("Subtopology {} was missing source topics {} and will be excluded from the current assignment, "
+                    log.error("Subtopology {} has missing source topics {} and will be excluded from the current assignment, "
                         + "this can be due to the consumer client's metadata being stale or because they have "
                         + "not been created yet. Please verify that you have created all input topics; if they "
                         + "do exist, you just need to wait for the metadata to be updated, at which time a new "

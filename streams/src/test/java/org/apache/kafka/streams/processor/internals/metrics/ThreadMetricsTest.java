@@ -35,7 +35,6 @@ import org.mockito.MockedStatic;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -43,7 +42,6 @@ public class ThreadMetricsTest {
 
     private static final String THREAD_ID = "thread-id";
     private static final String THREAD_LEVEL_GROUP = "stream-thread-metrics";
-    private static final String TASK_LEVEL_GROUP = "stream-task-metrics";
 
     private final Sensor expectedSensor = mock(Sensor.class);
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
@@ -288,32 +286,6 @@ public class ThreadMetricsTest {
     }
 
     @Test
-    public void shouldGetCommitOverTasksSensor() {
-        final String operation = "commit";
-        final String totalDescription =
-            "The total number of calls to commit over all tasks assigned to one stream thread";
-        final String rateDescription =
-            "The average per-second number of calls to commit over all tasks assigned to one stream thread";
-        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
-        when(streamsMetrics.taskLevelTagMap(THREAD_ID, ROLLUP_VALUE)).thenReturn(tagMap);
-
-        try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
-            final Sensor sensor = ThreadMetrics.commitOverTasksSensor(THREAD_ID, streamsMetrics);
-            streamsMetricsStaticMock.verify(
-                () -> StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-                    expectedSensor,
-                    TASK_LEVEL_GROUP,
-                    tagMap,
-                    operation,
-                    rateDescription,
-                    totalDescription
-                )
-            );
-            assertThat(sensor, is(expectedSensor));
-        }
-    }
-
-    @Test
     public void shouldGetPunctuateSensor() {
         final String operation = "punctuate";
         final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
@@ -371,6 +343,8 @@ public class ThreadMetricsTest {
             assertThat(sensor, is(expectedSensor));
         }
     }
+
+    @Test
     public void shouldGetCreateTaskSensor() {
         final String operation = "task-created";
         final String totalDescription = "The total number of newly created tasks";

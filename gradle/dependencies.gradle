@@ -27,8 +27,8 @@ ext {
 }
 
 // Add Scala version
-def defaultScala212Version = '2.12.18'
-def defaultScala213Version = '2.13.12'
+def defaultScala212Version = '2.12.19'
+def defaultScala213Version = '2.13.14'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
@@ -53,7 +53,7 @@ if ( !versions.scala.contains('-') ) {
   versions["baseScala"] = versions.scala
 }
 
-// mockito 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
+// mockito >= 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
 // mockito 4.9 is required for Scala 2.12 as a workaround for compiler errors due to ambiguous reference to `Mockito.spy`
 // since Scala 2.12 support is going away soon, this is simpler than adjusting the code.
 // mockito 4.11 is used with Java 8 and Scala 2.13
@@ -61,7 +61,7 @@ String mockitoVersion
 if (scalaVersion == "2.12")
   mockitoVersion = "4.9.0"
 else if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
-  mockitoVersion = "5.5.0"
+  mockitoVersion = "5.10.0"
 else
   mockitoVersion = "4.11.0"
 
@@ -76,14 +76,6 @@ if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
 else
   mockitoArtifactName = "mockito-inline"
 
-// easymock 5.2 is required for Java 21 support, but it breaks tests using powermock
-// powermock doesn't work with Java 16 or newer and hence it's safe to use the newer version in this case only
-String easymockVersion
-if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
-  easymockVersion = "5.2.0"
-else
-  easymockVersion = "4.3"
-
 // When adding, removing or updating dependencies, please also update the LICENSE-binary file accordingly.
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
 versions += [
@@ -93,31 +85,33 @@ versions += [
   argparse4j: "0.7.0",
   bcpkix: "1.75",
   caffeine: "2.9.3", // 3.x supports JDK 11 and above
+  // when updating checkstyle, check whether the exclusion of
+  // CVE-2023-2976 and CVE-2020-8908 can be dropped from
+  // gradle/resources/dependencycheck-suppressions.xml
   checkstyle: "8.36.2",
   commonsCli: "1.4",
   commonsValidator: "1.7",
   dropwizardMetrics: "4.1.12.1",
-  gradle: "8.3",
+  gradle: "8.8",
   grgit: "4.1.1",
   httpclient: "4.5.14",
-  jackson: "2.13.5",
-  jacksonDatabind: "2.13.5",
+  jackson: "2.16.2",
   jacoco: "0.8.10",
   javassist: "3.29.2-GA",
-  jetty: "9.4.52.v20230823",
+  jetty: "9.4.54.v20240208",
   jersey: "2.39.1",
-  jline: "3.22.0",
+  jline: "3.25.1",
   jmh: "1.37",
   hamcrest: "2.2",
-  scalaLogging: "3.9.4",
+  scalaLogging: "3.9.5",
   jaxAnnotation: "1.3.2",
   jaxb: "2.3.1",
   jaxrs: "2.1.1",
   jfreechart: "1.0.0",
   jopt: "5.0.4",
-  jose4j: "0.9.3",
-  junit: "5.10.0",
-  jqwik: "1.7.4",
+  jose4j: "0.9.4",
+  junit: "5.10.2",
+  jqwik: "1.8.3",
   kafka_0100: "0.10.0.1",
   kafka_0101: "0.10.1.1",
   kafka_0102: "0.10.2.2",
@@ -130,21 +124,23 @@ versions += [
   kafka_23: "2.3.1",
   kafka_24: "2.4.1",
   kafka_25: "2.5.1",
-  kafka_26: "2.6.2",
-  kafka_27: "2.7.1",
+  kafka_26: "2.6.3",
+  kafka_27: "2.7.2",
   kafka_28: "2.8.2",
   kafka_30: "3.0.2",
   kafka_31: "3.1.2",
   kafka_32: "3.2.3",
-  kafka_33: "3.3.1",
+  kafka_33: "3.3.2",
   kafka_34: "3.4.1",
-  kafka_35: "3.5.1",
+  kafka_35: "3.5.2",
+  kafka_36: "3.6.2",
+  kafka_37: "3.7.0",
   lz4: "1.8.0",
-  mavenArtifact: "3.8.8",
+  mavenArtifact: "3.9.6",
   metrics: "2.2.0",
-  netty: "4.1.94.Final",
+  netty: "4.1.110.Final",
+  opentelemetryProto: "1.0.0-alpha",
   pcollections: "4.0.1",
-  powermock: "2.0.9",
   reflections: "0.10.2",
   reload4j: "1.2.25",
   rocksDB: "7.9.2",
@@ -154,16 +150,13 @@ versions += [
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
   scalafmt: "3.7.14",
   scalaJava8Compat : "1.0.2",
-  scoverage: "1.9.3",
+  scoverage: "2.0.11",
   slf4j: "1.7.36",
-  snappy: "1.1.10.3",
-  spotbugs: "4.7.3",
-  // New version of Swagger 2.2.14 requires minimum JDK 11.
-  swaggerAnnotations: "2.2.8",
-  swaggerJaxrs2: "2.2.8",
+  snappy: "1.1.10.5",
+  spotbugs: "4.8.0",
   zinc: "1.9.2",
-  zookeeper: "3.8.2",
-  zstd: "1.5.5-1"
+  zookeeper: "3.8.4",
+  zstd: "1.5.6-3"
 ]
 
 libs += [
@@ -182,12 +175,12 @@ libs += [
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
-  easymock: "org.easymock:easymock:$easymockVersion",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
-  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jacksonDatabind",
+  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
   jacksonModuleScala: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScala:$versions.jackson",
   jacksonJDK8Datatypes: "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$versions.jackson",
+  jacksonAfterburner: "com.fasterxml.jackson.module:jackson-module-afterburner:$versions.jackson",
   jacksonJaxrsJsonProvider: "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$versions.jackson",
   jaxAnnotationApi: "javax.annotation:javax.annotation-api:$versions.jaxAnnotation",
   jaxbApi: "javax.xml.bind:jaxb-api:$versions.jaxb",
@@ -231,6 +224,8 @@ libs += [
   kafkaStreams_33: "org.apache.kafka:kafka-streams:$versions.kafka_33",
   kafkaStreams_34: "org.apache.kafka:kafka-streams:$versions.kafka_34",
   kafkaStreams_35: "org.apache.kafka:kafka-streams:$versions.kafka_35",
+  kafkaStreams_36: "org.apache.kafka:kafka-streams:$versions.kafka_36",
+  kafkaStreams_37: "org.apache.kafka:kafka-streams:$versions.kafka_37",
   log4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
@@ -240,8 +235,7 @@ libs += [
   nettyHandler: "io.netty:netty-handler:$versions.netty",
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
   pcollections: "org.pcollections:pcollections:$versions.pcollections",
-  powermockJunit4: "org.powermock:powermock-module-junit4:$versions.powermock",
-  powermockEasymock: "org.powermock:powermock-api-easymock:$versions.powermock",
+  opentelemetryProto: "io.opentelemetry.proto:opentelemetry-proto:$versions.opentelemetryProto",
   reflections: "org.reflections:reflections:$versions.reflections",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
   scalaCollectionCompat: "org.scala-lang.modules:scala-collection-compat_$versions.baseScala:$versions.scalaCollectionCompat",
@@ -252,8 +246,8 @@ libs += [
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
   slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
-  swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$versions.swaggerAnnotations",
-  swaggerJaxrs2: "io.swagger.core.v3:swagger-jaxrs2:$versions.swaggerJaxrs2",
+  swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
+  swaggerJaxrs2: "io.swagger.core.v3:swagger-jaxrs2:$swaggerVersion",
   zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",

@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -48,6 +49,8 @@ public class RaftUtil {
                 return new EndQuorumEpochResponseData().setErrorCode(error.code());
             case FETCH:
                 return new FetchResponseData().setErrorCode(error.code());
+            case FETCH_SNAPSHOT:
+                return new FetchSnapshotResponseData().setErrorCode(error.code());
             default:
                 throw new IllegalArgumentException("Received response for unexpected request type: " + apiKey);
         }

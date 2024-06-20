@@ -33,6 +33,7 @@ import org.apache.kafka.connect.mirror.MirrorMakerConfig;
 import org.apache.kafka.connect.mirror.clients.admin.FakeForwardingAdminWithLocalMetadata;
 import org.apache.kafka.connect.mirror.clients.admin.FakeLocalMetadataStore;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -163,18 +164,22 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
 
         startClusters(additionalConfig);
 
-        primary.kafka().createAdminClient().createAcls(Arrays.asList(
-                new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
-                        new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
-                )
-        )).all().get();
-        backup.kafka().createAdminClient().createAcls(Arrays.asList(
-                new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
-                        new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
-                )
-        )).all().get();
+        try (Admin adminClient = primary.kafka().createAdminClient()) {
+            adminClient.createAcls(Collections.singletonList(
+                    new AclBinding(
+                            new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
+                            new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
+                    )
+            )).all().get();
+        }
+        try (Admin adminClient = backup.kafka().createAdminClient()) {
+            adminClient.createAcls(Collections.singletonList(
+                    new AclBinding(
+                            new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
+                            new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
+                    )
+            )).all().get();
+        }
     }
 
     @AfterEach
@@ -244,7 +249,9 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
 
         // increase number of partitions
         Map<String, NewPartitions> newPartitions = Collections.singletonMap("test-topic-1", NewPartitions.increaseTo(NUM_PARTITIONS + 1));
-        primary.kafka().createAdminClient().createPartitions(newPartitions).all().get();
+        try (Admin adminClient = primary.kafka().createAdminClient()) {
+            adminClient.createPartitions(newPartitions).all().get();
+        }
 
         // make sure partition is created in the other cluster
         waitForTopicPartitionCreated(backup, "primary.test-topic-1", NUM_PARTITIONS + 1);
@@ -287,14 +294,18 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
     public void testSyncTopicACLsUseProvidedForwardingAdmin() throws Exception {
         mm2Props.put("sync.topic.acls.enabled", "true");
         mm2Config = new MirrorMakerConfig(mm2Props);
-        List<AclBinding> aclBindings = Arrays.asList(
+        List<AclBinding> aclBindings = Collections.singletonList(
                 new AclBinding(
                         new ResourcePattern(ResourceType.TOPIC, "test-topic-1", PatternType.LITERAL),
                         new AccessControlEntry("User:dummy", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW)
                 )
         );
-        primary.kafka().createAdminClient().createAcls(aclBindings).all().get();
-        backup.kafka().createAdminClient().createAcls(aclBindings).all().get();
+        try (Admin adminClient = primary.kafka().createAdminClient()) {
+            adminClient.createAcls(aclBindings).all().get();
+        }
+        try (Admin adminClient = backup.kafka().createAdminClient()) {
+            adminClient.createAcls(aclBindings).all().get();
+        }
 
         waitUntilMirrorMakerIsRunning(primary, CONNECTOR_LIST, mm2Config, BACKUP_CLUSTER_ALIAS, PRIMARY_CLUSTER_ALIAS);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
@@ -321,17 +332,13 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
     }
 
     void waitForTopicToPersistInFakeLocalMetadataStore(String topicName) throws InterruptedException {
-        waitForCondition(() -> {
-                return FakeLocalMetadataStore.containsTopic(topicName);
-            }, FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
+        waitForCondition(() -> FakeLocalMetadataStore.containsTopic(topicName), FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
             "Topic: " + topicName + " didn't get created in the FakeLocalMetadataStore"
         );
     }
 
     void waitForTopicConfigPersistInFakeLocalMetaDataStore(String topicName, String configName, String expectedConfigValue) throws InterruptedException {
-        waitForCondition(() -> {
-            return FakeLocalMetadataStore.topicConfig(topicName).getOrDefault(configName, "").equals(expectedConfigValue);
-            }, FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
+        waitForCondition(() -> FakeLocalMetadataStore.topicConfig(topicName).getOrDefault(configName, "").equals(expectedConfigValue), FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
             "Topic: " + topicName + "'s configs don't have " + configName + ":" + expectedConfigValue
         );
     }

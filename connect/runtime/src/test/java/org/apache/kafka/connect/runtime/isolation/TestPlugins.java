@@ -19,14 +19,13 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -340,7 +339,7 @@ public class TestPlugins {
         Path binDir = Files.createTempDirectory(resourceDir + ".bin.");
         compileJavaSources(inputDir, binDir);
         Path jarFile = Files.createTempFile(resourceDir + ".", ".jar");
-        try (JarOutputStream jar = openJarFile(jarFile.toFile())) {
+        try (JarOutputStream jar = openJarFile(jarFile)) {
             writeJar(jar, inputDir, removeRuntimeClasses);
             writeJar(jar, binDir, removeRuntimeClasses);
         }
@@ -356,29 +355,28 @@ public class TestPlugins {
         if (resource == null) {
             throw new IOException("Could not find test plugin resource: " + resourceDir);
         }
-        File file = new File(resource.getFile());
-        if (!file.isDirectory()) {
+        Path file = Paths.get(resource.getFile());
+        if (!Files.isDirectory(file)) {
             throw new IOException("Resource is not a directory: " + resourceDir);
         }
-        if (!file.canRead()) {
+        if (!Files.isReadable(file)) {
             throw new IOException("Resource directory is not readable: " + resourceDir);
         }
-        return file.toPath();
+        return file;
     }
 
-    private static JarOutputStream openJarFile(File jarFile) throws IOException {
+    private static JarOutputStream openJarFile(Path jarFile) throws IOException {
         Manifest manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
-        return new JarOutputStream(new FileOutputStream(jarFile), manifest);
+        return new JarOutputStream(Files.newOutputStream(jarFile), manifest);
     }
 
     private static void removeDirectory(Path binDir) throws IOException {
-        List<File> classFiles = Files.walk(binDir)
+        List<Path> classFiles = Files.walk(binDir)
             .sorted(Comparator.reverseOrder())
-            .map(Path::toFile)
             .collect(Collectors.toList());
-        for (File classFile : classFiles) {
-            if (!classFile.delete()) {
+        for (Path classFile : classFiles) {
+            if (!Files.deleteIfExists(classFile)) {
                 throw new IOException("Could not delete: " + classFile);
             }
         }
@@ -429,7 +427,7 @@ public class TestPlugins {
             .filter(path -> !removeRuntimeClasses.test(path.toFile().getName()))
             .collect(Collectors.toList());
         for (Path path : paths) {
-            try (InputStream in = new BufferedInputStream(new FileInputStream(path.toFile()))) {
+            try (InputStream in = new BufferedInputStream(Files.newInputStream(path))) {
                 jar.putNextEntry(new JarEntry(
                     inputDir.relativize(path)
                         .toFile()

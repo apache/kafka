@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -173,11 +174,6 @@ public class ProducerStateManager {
 
     private void addProducerId(long producerId, ProducerStateEntry entry) {
         producers.put(producerId, entry);
-        producerIdCount = producers.size();
-    }
-
-    private void removeProducerIds(List<Long> keys) {
-        producers.keySet().removeAll(keys);
         producerIdCount = producers.size();
     }
 
@@ -369,17 +365,12 @@ public class ProducerStateManager {
      * Also expire any verification state entries that are lingering as unverified.
      */
     public void removeExpiredProducers(long currentTimeMs) {
-        List<Long> keys = producers.entrySet().stream()
-                .filter(entry -> isProducerExpired(currentTimeMs, entry.getValue()))
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
-        removeProducerIds(keys);
+        producers.entrySet().removeIf(entry -> isProducerExpired(currentTimeMs, entry.getValue()));
+        producerIdCount = producers.size();
 
-        List<Long> verificationKeys = verificationStates.entrySet().stream()
-                .filter(entry -> currentTimeMs - entry.getValue().timestamp() >= producerStateManagerConfig.producerIdExpirationMs())
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
-        verificationKeys.forEach(verificationStates::remove);
+        verificationStates.entrySet().removeIf(entry ->
+            (currentTimeMs - entry.getValue().timestamp()) >= producerStateManagerConfig.producerIdExpirationMs()
+        );
     }
 
     /**
@@ -462,14 +453,21 @@ public class ProducerStateManager {
     }
 
     /**
-     * Take a snapshot at the current end offset if one does not already exist.
+     * Take a snapshot at the current end offset if one does not already exist with syncing the change to the device
      */
     public void takeSnapshot() throws IOException {
+        takeSnapshot(true);
+    }
+
+    /**
+     * Take a snapshot at the current end offset if one does not already exist, then return the snapshot file if taken.
+     */
+    public Optional<File> takeSnapshot(boolean sync) throws IOException {
         // If not a new offset, then it is not worth taking another snapshot
         if (lastMapOffset > lastSnapOffset) {
             SnapshotFile snapshotFile = new SnapshotFile(LogFileUtils.producerSnapshotFile(logDir, lastMapOffset));
             long start = time.hiResClockMs();
-            writeSnapshot(snapshotFile.file(), producers);
+            writeSnapshot(snapshotFile.file(), producers, sync);
             log.info("Wrote producer snapshot at offset {} with {} producer ids in {} ms.", lastMapOffset,
                     producers.size(), time.hiResClockMs() - start);
 
@@ -477,7 +475,10 @@ public class ProducerStateManager {
 
             // Update the last snap offset according to the serialized map
             lastSnapOffset = lastMapOffset;
+
+            return Optional.of(snapshotFile.file());
         }
+        return Optional.empty();
     }
 
     /**
@@ -595,7 +596,7 @@ public class ProducerStateManager {
     }
 
     public Optional<File> fetchSnapshot(long offset) {
-        return Optional.of(snapshots.get(offset)).map(x -> x.file());
+        return Optional.ofNullable(snapshots.get(offset)).map(x -> x.file());
     }
 
     private Optional<SnapshotFile> oldestSnapshotFile() {
@@ -635,7 +636,7 @@ public class ProducerStateManager {
             // deletion, so ignoring the exception here just means that the intended operation was
             // already completed.
             try {
-                snapshotFile.renameTo(LogFileUtils.DELETED_FILE_SUFFIX);
+                snapshotFile.renameToDelete();
                 return Optional.of(snapshotFile);
             } catch (NoSuchFileException ex) {
                 log.info("Failed to rename producer state snapshot {} with deletion suffix because it was already deleted", snapshotFile.file().getAbsoluteFile());
@@ -684,7 +685,7 @@ public class ProducerStateManager {
         }
     }
 
-    private static void writeSnapshot(File file, Map<Long, ProducerStateEntry> entries) throws IOException {
+    private static void writeSnapshot(File file, Map<Long, ProducerStateEntry> entries, boolean sync) throws IOException {
         Struct struct = new Struct(PID_SNAPSHOT_MAP_SCHEMA);
         struct.set(VERSION_FIELD, PRODUCER_SNAPSHOT_VERSION);
         struct.set(CRC_FIELD, 0L); // we'll fill this after writing the entries
@@ -716,7 +717,9 @@ public class ProducerStateManager {
 
         try (FileChannel fileChannel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
             fileChannel.write(buffer);
-            fileChannel.force(true);
+            if (sync) {
+                fileChannel.force(true);
+            }
         }
     }
 

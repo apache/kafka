@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -33,15 +33,18 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KStreamFlatTransformValuesTest {
 
     private Integer inputKey;
@@ -55,7 +58,7 @@ public class KStreamFlatTransformValuesTest {
 
     private KStreamFlatTransformValuesProcessor<Integer, Integer, String> processor;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         inputKey = 1;
         inputValue = 10;
@@ -129,6 +132,6 @@ public class KStreamFlatTransformValuesTest {
 
         final Processor<Integer, Integer, Integer, String> processor = processorSupplier.get();
 
-        assertTrue(processor instanceof KStreamFlatTransformValuesProcessor);
+        assertInstanceOf(KStreamFlatTransformValuesProcessor.class, processor);
     }
 }

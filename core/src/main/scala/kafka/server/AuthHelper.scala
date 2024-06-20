@@ -20,7 +20,6 @@ package kafka.server
 import java.lang.{Byte => JByte}
 import java.util.Collections
 import kafka.network.RequestChannel
-import kafka.security.authorizer.AclEntry
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.admin.EndpointType
 import org.apache.kafka.common.acl.AclOperation
@@ -34,9 +33,10 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 
-import scala.collection.{Map, Seq}
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class AuthHelper(authorizer: Option[Authorizer]) {
@@ -60,7 +60,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
   }
 
   def authorizedOperations(request: RequestChannel.Request, resource: Resource): Int = {
-    val supportedOps = AclEntry.supportedOperations(resource.resourceType).toList
+    val supportedOps = AclEntry.supportedOperations(resource.resourceType).asScala.toList
     val authorizedOps = authorizer match {
       case Some(authZ) =>
         val resourcePattern = new ResourcePattern(resource.resourceType, resource.name, PatternType.LITERAL)
@@ -94,21 +94,6 @@ class AuthHelper(authorizer: Option[Authorizer]) {
           resources, logIfAllowed, logIfDenied)(resourceName)
         resources.partition(resource => authorizedResourceNames.contains(resourceName(resource)))
       case None => (resources, Seq.empty)
-    }
-  }
-
-  def partitionMapByAuthorized[K, V](requestContext: RequestContext,
-                                     operation: AclOperation,
-                                     resourceType: ResourceType,
-                                     resources: Map[K, V],
-                                     logIfAllowed: Boolean = true,
-                                     logIfDenied: Boolean = true)(resourceName: K => String): (Map[K, V], Map[K, V]) = {
-    authorizer match {
-      case Some(_) =>
-        val authorizedResourceNames = filterByAuthorized(requestContext, operation, resourceType,
-          resources.keySet, logIfAllowed, logIfDenied)(resourceName)
-        resources.partition { case (k, _) => authorizedResourceNames.contains(resourceName(k)) }
-      case None => (resources, Map.empty)
     }
   }
 
@@ -185,6 +170,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
       setClusterId(clusterId).
       setControllerId(effectiveControllerId).
       setClusterAuthorizedOperations(clusterAuthorizedOperations).
-      setBrokers(nodes)
+      setBrokers(nodes).
+      setEndpointType(expectedEndpointType.id())
   }
 }

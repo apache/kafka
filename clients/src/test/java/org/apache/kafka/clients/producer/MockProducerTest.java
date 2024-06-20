@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockSerializer;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -40,8 +41,10 @@ import java.util.concurrent.Future;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -261,7 +264,7 @@ public class MockProducerTest {
         producer.initTransactions();
         producer.fenceProducer();
         Throwable e = assertThrows(KafkaException.class, () -> producer.send(null));
-        assertTrue(e.getCause() instanceof ProducerFencedException, "The root cause of the exception should be ProducerFenced");
+        assertInstanceOf(ProducerFencedException.class, e.getCause(), "The root cause of the exception should be ProducerFenced");
     }
 
     @Test
@@ -702,7 +705,15 @@ public class MockProducerTest {
         producer.close();
         assertThrows(IllegalStateException.class, producer::flush);
     }
-    
+
+    @Test
+    public void shouldNotThrowOnFlushProducerIfProducerIsFenced() {
+        buildMockProducer(true);
+        producer.initTransactions();
+        producer.fenceProducer();
+        assertDoesNotThrow(producer::flush);
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowClassCastException() {

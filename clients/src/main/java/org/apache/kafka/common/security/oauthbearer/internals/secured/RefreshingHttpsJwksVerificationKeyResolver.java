@@ -17,9 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import java.io.IOException;
-import java.security.Key;
-import java.util.List;
 import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jwk.JsonWebKey;
 import org.jose4j.jwk.VerificationJwkSelector;
@@ -30,6 +27,10 @@ import org.jose4j.lang.JoseException;
 import org.jose4j.lang.UnresolvableKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.security.Key;
+import java.util.List;
 
 /**
  * <code>RefreshingHttpsJwksVerificationKeyResolver</code> is a
@@ -136,17 +137,15 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
             if (refreshingHttpsJwks.maybeExpediteRefresh(keyId))
                 log.debug("Refreshing JWKs from {} as no suitable verification key for JWS w/ header {} was found in {}", refreshingHttpsJwks.getLocation(), jws.getHeaders().getFullHeaderAsJsonString(), jwks);
 
-            StringBuilder sb = new StringBuilder();
-            sb.append("Unable to find a suitable verification key for JWS w/ header ").append(jws.getHeaders().getFullHeaderAsJsonString());
-            sb.append(" from JWKs ").append(jwks).append(" obtained from ").append(
-                refreshingHttpsJwks.getLocation());
-            throw new UnresolvableKeyException(sb.toString());
+            String sb = "Unable to find a suitable verification key for JWS w/ header " + jws.getHeaders().getFullHeaderAsJsonString() +
+                    " from JWKs " + jwks + " obtained from " +
+                    refreshingHttpsJwks.getLocation();
+            throw new UnresolvableKeyException(sb);
         } catch (JoseException | IOException e) {
-            StringBuilder sb = new StringBuilder();
-            sb.append("Unable to find a suitable verification key for JWS w/ header ").append(jws.getHeaders().getFullHeaderAsJsonString());
-            sb.append(" due to an unexpected exception (").append(e).append(") while obtaining or using keys from JWKS endpoint at ").append(
-                refreshingHttpsJwks.getLocation());
-            throw new UnresolvableKeyException(sb.toString(), e);
+            String sb = "Unable to find a suitable verification key for JWS w/ header " + jws.getHeaders().getFullHeaderAsJsonString() +
+                    " due to an unexpected exception (" + e + ") while obtaining or using keys from JWKS endpoint at " +
+                    refreshingHttpsJwks.getLocation();
+            throw new UnresolvableKeyException(sb, e);
         }
     }
 

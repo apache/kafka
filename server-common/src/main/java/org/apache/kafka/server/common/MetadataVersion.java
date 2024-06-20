@@ -16,21 +16,22 @@
  */
 package org.apache.kafka.server.common;
 
+import org.apache.kafka.common.record.RecordVersion;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
-import org.apache.kafka.common.record.RecordVersion;
 
 /**
  * This class contains the different Kafka versions.
  * Right now, we use them for upgrades - users can configure the version of the API brokers will use to communicate between themselves.
  * This is only for inter-broker communications - when communicating with clients, the client decides on the API version.
- *
+ * <br>
  * Note that the ID we initialize for each version is important.
  * We consider a version newer than another if it is lower in the enum list (to avoid depending on lexicographic order)
- *
+ * <br>
  * Since the api protocol may change more than once within the same release and to facilitate people deploying code from
  * trunk, we have the concept of internal versions (first introduced during the 0.10.0 development cycle). For example,
  * the first time we introduce a version change in a release, say 0.10.0, we will add a config value "0.10.0-IV0" and a
@@ -186,7 +187,26 @@ public enum MetadataVersion {
     IBP_3_6_IV2(14, "3.6", "IV2", true),
 
     // Implement KIP-919 controller registration.
-    IBP_3_7_IV0(15, "3.7", "IV0", true);
+    IBP_3_7_IV0(15, "3.7", "IV0", true),
+
+    // Reserved
+    IBP_3_7_IV1(16, "3.7", "IV1", false),
+
+    // Add JBOD support for KRaft.
+    IBP_3_7_IV2(17, "3.7", "IV2", true),
+
+    // IBP_3_7_IV3 was reserved for ELR support (KIP-966) but has been moved forward to
+    // a later release requiring a new MetadataVersion. MVs are not reused.
+    IBP_3_7_IV3(18, "3.7", "IV3", false),
+
+    // Add new fetch request version for KIP-951
+    IBP_3_7_IV4(19, "3.7", "IV4", false),
+
+    // Add ELR related supports (KIP-966).
+    IBP_3_8_IV0(20, "3.8", "IV0", true),
+
+    // Introduce version 1 of the GroupVersion feature (KIP-848).
+    IBP_4_0_IV0(21, "4.0", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -204,6 +224,22 @@ public enum MetadataVersion {
      */
     public static final MetadataVersion MINIMUM_BOOTSTRAP_VERSION = IBP_3_3_IV0;
 
+    /**
+     * The latest production-ready MetadataVersion. This is the latest version that is stable
+     * and cannot be changed. MetadataVersions later than this can be tested via junit, but
+     * not deployed in production.
+     *
+     * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
+     * IT CANNOT BE CHANGED.</strong>
+     */
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_3_7_IV4;
+
+    /**
+     * An array containing all of the MetadataVersion entries.
+     *
+     * This is essentially a cached copy of MetadataVersion.values. Unlike that function, it doesn't
+     * allocate a new array each time.
+     */
     public static final MetadataVersion[] VERSIONS;
 
     private final short featureLevel;
@@ -224,6 +260,10 @@ public enum MetadataVersion {
             this.ibpVersion = String.format("%s-%s", release, subVersion);
         }
         this.didMetadataChange = didMetadataChange;
+    }
+
+    public String featureName() {
+        return FEATURE_NAME;
     }
 
     public short featureLevel() {
@@ -286,6 +326,14 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_6_IV2);
     }
 
+    public boolean isDirectoryAssignmentSupported() {
+        return this.isAtLeast(IBP_3_7_IV2);
+    }
+
+    public boolean isElrSupported() {
+        return this.isAtLeast(IBP_3_8_IV0);
+    }
+
     public boolean isKRaftSupported() {
         return this.featureLevel > 0;
     }
@@ -313,7 +361,10 @@ public enum MetadataVersion {
     }
 
     public short registerBrokerRecordVersion() {
-        if (isMigrationSupported()) {
+        if (isDirectoryAssignmentSupported()) {
+            // new logDirs field
+            return (short) 3;
+        } else if (isMigrationSupported()) {
             // new isMigrationZkBroker field
             return (short) 2;
         } else if (isInControlledShutdownStateSupported()) {
@@ -336,8 +387,30 @@ public enum MetadataVersion {
         return this.isAtLeast(MetadataVersion.IBP_3_7_IV0);
     }
 
+    public short partitionChangeRecordVersion() {
+        if (isElrSupported()) {
+            return (short) 2;
+        } else if (isDirectoryAssignmentSupported()) {
+            return (short) 1;
+        } else {
+            return (short) 0;
+        }
+    }
+
+    public short partitionRecordVersion() {
+        if (isElrSupported()) {
+            return (short) 2;
+        } else if (isDirectoryAssignmentSupported()) {
+            return (short) 1;
+        } else {
+            return (short) 0;
+        }
+    }
+
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_5_IV1)) {
+        if (this.isAtLeast(IBP_3_7_IV4)) {
+            return 16;
+        } else if (this.isAtLeast(IBP_3_5_IV1)) {
             return 15;
         } else if (this.isAtLeast(IBP_3_5_IV0)) {
             return 14;
@@ -431,19 +504,24 @@ public enum MetadataVersion {
     }
 
     private static final Map<String, MetadataVersion> IBP_VERSIONS;
-    static {
-        {
-            MetadataVersion[] enumValues = MetadataVersion.values();
-            VERSIONS = Arrays.copyOf(enumValues, enumValues.length);
 
-            IBP_VERSIONS = new HashMap<>();
-            Map<String, MetadataVersion> maxInterVersion = new HashMap<>();
-            for (MetadataVersion metadataVersion : VERSIONS) {
+    static {
+        MetadataVersion[] enumValues = MetadataVersion.values();
+        VERSIONS = Arrays.copyOf(enumValues, enumValues.length);
+
+        IBP_VERSIONS = new HashMap<>();
+        Map<String, MetadataVersion> maxInterVersion = new HashMap<>();
+        for (MetadataVersion metadataVersion : VERSIONS) {
+            if (metadataVersion.isProduction()) {
                 maxInterVersion.put(metadataVersion.release, metadataVersion);
-                IBP_VERSIONS.put(metadataVersion.ibpVersion, metadataVersion);
             }
-            IBP_VERSIONS.putAll(maxInterVersion);
+            IBP_VERSIONS.put(metadataVersion.ibpVersion, metadataVersion);
         }
+        IBP_VERSIONS.putAll(maxInterVersion);
+    }
+
+    public boolean isProduction() {
+        return this.compareTo(MetadataVersion.LATEST_PRODUCTION) <= 0;
     }
 
     public String shortVersion() {
@@ -493,7 +571,7 @@ public enum MetadataVersion {
                 return metadataVersion;
             }
         }
-        throw new IllegalArgumentException("No MetadataVersion with metadata version " + version);
+        throw new IllegalArgumentException("No MetadataVersion with feature level " + version);
     }
 
     /**
@@ -512,8 +590,13 @@ public enum MetadataVersion {
         }
     }
 
-    public static MetadataVersion latest() {
+    // Testing only
+    public static MetadataVersion latestTesting() {
         return VERSIONS[VERSIONS.length - 1];
+    }
+
+    public static MetadataVersion latestProduction() {
+        return LATEST_PRODUCTION;
     }
 
     public static boolean checkIfMetadataChanged(MetadataVersion sourceVersion, MetadataVersion targetVersion) {

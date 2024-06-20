@@ -16,25 +16,25 @@
   */
 package kafka.api
 
-import java.security.AccessController
-import java.util.Properties
-
-import javax.security.auth.callback._
-import javax.security.auth.Subject
-import javax.security.auth.login.AppConfigurationEntry
-
-import scala.collection.Seq
-import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
 import kafka.utils.JaasTestUtils._
+import kafka.utils.TestUtils
+import kafka.utils.TestUtils.isAclSecure
+import kafka.zk.ZkData
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
+
+import java.security.AccessController
+import java.util.Properties
+import javax.security.auth.Subject
+import javax.security.auth.callback._
+import javax.security.auth.login.AppConfigurationEntry
+import scala.collection.Seq
 
 object SaslPlainSslEndToEndAuthorizationTest {
 
@@ -110,11 +110,11 @@ object SaslPlainSslEndToEndAuthorizationTest {
 class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   import SaslPlainSslEndToEndAuthorizationTest._
 
-  this.serverConfig.setProperty(s"${listenerName.configPrefix}${KafkaConfig.SslClientAuthProp}", "required")
+  this.serverConfig.setProperty(s"${listenerName.configPrefix}${BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG}", "required")
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
-  this.serverConfig.put(KafkaConfig.SaslClientCallbackHandlerClassProp, classOf[TestClientCallbackHandler].getName)
+  this.serverConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   val mechanismPrefix = listenerName.saslMechanismConfigPrefix("PLAIN")
-  this.serverConfig.put(s"$mechanismPrefix${KafkaConfig.SaslServerCallbackHandlerClassProp}", classOf[TestServerCallbackHandler].getName)
+  this.serverConfig.put(s"$mechanismPrefix${BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG}", classOf[TestServerCallbackHandler].getName)
   this.producerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.consumerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.adminClientConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
@@ -149,6 +149,16 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
    */
   @Test
   def testAcls(): Unit = {
-    TestUtils.verifySecureZkAcls(zkClient, 1)
+    TestUtils.secureZkPaths(zkClient).foreach(path => {
+      if (zkClient.pathExists(path)) {
+        val sensitive = ZkData.sensitivePath(path)
+        // usersWithAccess have ALL access to path. For paths that are
+        // not sensitive, world has READ access.
+        val aclCount = if (sensitive) 1 else 1 + 1
+        val acls = zkClient.getAcl(path)
+        assertEquals(aclCount, acls.size, s"Invalid ACLs for $path $acls")
+        acls.foreach(acl => isAclSecure(acl, sensitive))
+      }
+    })
   }
 }

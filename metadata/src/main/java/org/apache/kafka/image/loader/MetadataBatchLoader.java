@@ -27,6 +27,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
+
 import org.slf4j.Logger;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -45,7 +46,7 @@ public class MetadataBatchLoader {
         STARTED_TRANSACTION,
         CONTINUED_TRANSACTION,
         ENDED_TRANSACTION,
-        ABORTED_TRANSACTION;
+        ABORTED_TRANSACTION
     }
 
     @FunctionalInterface
@@ -135,7 +136,7 @@ public class MetadataBatchLoader {
                 replay(record);
             } catch (Throwable e) {
                 faultHandler.handleFault("Error loading metadata log record from offset " +
-                    batch.baseOffset() + indexWithinBatch, e);
+                    (batch.baseOffset() + indexWithinBatch), e);
             }
 
             // Emit the accumulated delta if a new transaction has been started and one of the following is true

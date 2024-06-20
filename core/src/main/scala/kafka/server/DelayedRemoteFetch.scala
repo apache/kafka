@@ -17,12 +17,14 @@
 
 package kafka.server
 
+import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.storage.internals.log.{FetchParams, FetchPartitionData, LogOffsetMetadata, RemoteLogReadResult, RemoteStorageFetchInfo}
 
-import java.util.concurrent.{CompletableFuture, Future}
+import java.util.concurrent.{CompletableFuture, Future, TimeUnit}
 import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.collection._
 
@@ -33,12 +35,17 @@ import scala.collection._
 class DelayedRemoteFetch(remoteFetchTask: Future[Void],
                          remoteFetchResult: CompletableFuture[RemoteLogReadResult],
                          remoteFetchInfo: RemoteStorageFetchInfo,
+                         remoteFetchMaxWaitMs: Long,
                          fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)],
                          fetchParams: FetchParams,
                          localReadResults: Seq[(TopicIdPartition, LogReadResult)],
                          replicaManager: ReplicaManager,
                          responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit)
-  extends DelayedOperation(fetchParams.maxWaitMs) {
+  extends DelayedOperation(remoteFetchMaxWaitMs) {
+
+  if (fetchParams.isFromFollower) {
+    throw new IllegalStateException(s"The follower should not invoke remote fetch. Fetch params are: $fetchParams")
+  }
 
   /**
    * The operation can be completed if:
@@ -79,7 +86,9 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
   override def onExpiration(): Unit = {
     // cancel the remote storage read task, if it has not been executed yet
     val cancelled = remoteFetchTask.cancel(true)
-    if (!cancelled) debug(s"Remote fetch task for for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
+    if (!cancelled) debug(s"Remote fetch task for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
+
+    DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
   }
 
   /**
@@ -113,4 +122,9 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
 
     responseCallback(fetchPartitionData)
   }
+}
+
+object DelayedRemoteFetchMetrics {
+  private val metricsGroup = new KafkaMetricsGroup(DelayedRemoteFetchMetrics.getClass)
+  val expiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 }

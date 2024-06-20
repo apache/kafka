@@ -44,8 +44,8 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
     static final String MERGE_NAME = "COGROUPKSTREAM-MERGE-";
 
-    final private Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns;
-    final private CogroupedStreamAggregateBuilder<K, VOut> aggregateBuilder;
+    private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns;
+    private final CogroupedStreamAggregateBuilder<K, VOut> aggregateBuilder;
 
     CogroupedKStreamImpl(final String name,
                          final Set<String> subTopologySourceNodes,
@@ -141,7 +141,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             groupPatterns,
             initializer,
             named,
-            new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
+            new KeyValueStoreMaterializer<>(materializedInternal),
             materializedInternal.keySerde(),
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),

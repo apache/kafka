@@ -22,6 +22,7 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -30,6 +31,7 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -40,7 +42,7 @@ public class ChannelBuildersTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, ConfigurableKafkaPrincipalBuilder.class);
         KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null);
-        assertTrue(builder instanceof ConfigurableKafkaPrincipalBuilder);
+        assertInstanceOf(ConfigurableKafkaPrincipalBuilder.class, builder);
         assertTrue(((ConfigurableKafkaPrincipalBuilder) builder).configured);
     }
 
