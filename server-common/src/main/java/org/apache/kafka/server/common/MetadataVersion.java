@@ -343,7 +343,7 @@ public enum MetadataVersion {
     }
 
     public boolean isElrSupported() {
-        return this.isAtLeast(IBP_3_9_IV0);
+        return this.isAtLeast(IBP_3_9_IV1);
     }
 
     public boolean isKRaftSupported() {
