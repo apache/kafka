@@ -45,6 +45,8 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKe
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
@@ -63,18 +65,19 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * This class contains helper methods to create records stored in
- * the __consumer_offsets topic.
+ * This class contains helper methods to create records stored in the __consumer_offsets topic.
  */
 @SuppressWarnings("ClassDataAbstractionCoupling")
 public class CoordinatorRecordHelpers {
-    private CoordinatorRecordHelpers() {}
+
+    private CoordinatorRecordHelpers() {
+    }
 
     /**
      * Creates a ConsumerGroupMemberMetadata record.
      *
-     * @param groupId   The consumer group id.
-     * @param member    The consumer group member.
+     * @param groupId The consumer group id.
+     * @param member  The consumer group member.
      * @return The record.
      */
     public static CoordinatorRecord newMemberSubscriptionRecord(
@@ -106,6 +109,28 @@ public class CoordinatorRecordHelpers {
         );
     }
 
+    /**
+     * Creates a ConsumerGroupMemberMetadata tombstone.
+     *
+     * @param groupId  The consumer group id.
+     * @param memberId The consumer group member id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newMemberSubscriptionTombstoneRecord(
+        String groupId,
+        String memberId
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupMemberMetadataKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                (short) 5
+            ),
+            null // Tombstone.
+        );
+    }
+
     public static CoordinatorRecord newStreamsGroupMemberRecord(
         String groupId,
         StreamsGroupMember member
@@ -127,31 +152,39 @@ public class CoordinatorRecordHelpers {
                     .setTopologyHash(member.topologyHash())
                     .setProcessId(member.processId())
                     .setHostInfo(member.hostInfo())
-                    .setClientTags(member.clientTags())
+                    .setClientTags(member.clientTags().entrySet().stream().map(e ->
+                        new StreamsGroupMemberMetadataValue.KeyValue()
+                            .setKey(e.getKey())
+                            .setValue(e.getValue())
+                    ).collect(Collectors.toList()))
                     .setUserData(member.userData())
-                    .setAssignmentConfigs(member.assignmentConfigs()),
-               (short) 0
+                    .setAssignmentConfigs(member.assignmentConfigs().entrySet().stream().map(e ->
+                        new StreamsGroupMemberMetadataValue.KeyValue()
+                            .setKey(e.getKey())
+                            .setValue(e.getValue())
+                    ).collect(Collectors.toList())),
+                (short) 0
             )
         );
     }
 
     /**
-     * Creates a ConsumerGroupMemberMetadata tombstone.
+     * Creates a StreamsGroupMemberMetadata tombstone.
      *
-     * @param groupId   The consumer group id.
-     * @param memberId  The consumer group member id.
+     * @param groupId  The streams group id.
+     * @param memberId The streams group member id.
      * @return The record.
      */
-    public static CoordinatorRecord newMemberSubscriptionTombstoneRecord(
+    public static CoordinatorRecord newStreamsMemberSubscriptionTombstoneRecord(
         String groupId,
         String memberId
     ) {
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
-                new ConsumerGroupMemberMetadataKey()
+                new StreamsGroupMemberMetadataKey()
                     .setGroupId(groupId)
                     .setMemberId(memberId),
-                (short) 5
+                (short) 11
             ),
             null // Tombstone.
         );
@@ -160,8 +193,8 @@ public class CoordinatorRecordHelpers {
     /**
      * Creates a ConsumerGroupPartitionMetadata record.
      *
-     * @param groupId                   The consumer group id.
-     * @param newSubscriptionMetadata   The subscription metadata.
+     * @param groupId                 The consumer group id.
+     * @param newSubscriptionMetadata The subscription metadata.
      * @return The record.
      */
     public static CoordinatorRecord newGroupSubscriptionMetadataRecord(
@@ -204,7 +237,7 @@ public class CoordinatorRecordHelpers {
     /**
      * Creates a ConsumerGroupPartitionMetadata tombstone.
      *
-     * @param groupId   The consumer group id.
+     * @param groupId The consumer group id.
      * @return The record.
      */
     public static CoordinatorRecord newGroupSubscriptionMetadataTombstoneRecord(
@@ -215,6 +248,69 @@ public class CoordinatorRecordHelpers {
                 new ConsumerGroupPartitionMetadataKey()
                     .setGroupId(groupId),
                 (short) 4
+            ),
+            null // Tombstone.
+        );
+    }
+
+    /**
+     * Creates a StreamsGroupPartitionMetadata record.
+     *
+     * @param groupId                 The streams group id.
+     * @param newSubscriptionMetadata The subscription metadata.
+     * @return The record.
+     */
+    public static CoordinatorRecord newStreamsGroupSubscriptionMetadataRecord(
+        String groupId,
+        Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> newSubscriptionMetadata
+    ) {
+        StreamsGroupPartitionMetadataValue value = new StreamsGroupPartitionMetadataValue();
+        newSubscriptionMetadata.forEach((topicName, topicMetadata) -> {
+            List<StreamsGroupPartitionMetadataValue.PartitionMetadata> partitionMetadata = new ArrayList<>();
+            // If the partition rack information map is empty, store an empty list in the record.
+            if (!topicMetadata.partitionRacks().isEmpty()) {
+                topicMetadata.partitionRacks().forEach((partition, racks) ->
+                    partitionMetadata.add(new StreamsGroupPartitionMetadataValue.PartitionMetadata()
+                        .setPartition(partition)
+                        .setRacks(new ArrayList<>(racks))
+                    )
+                );
+            }
+            value.topics().add(new StreamsGroupPartitionMetadataValue.TopicMetadata()
+                .setTopicId(topicMetadata.id())
+                .setTopicName(topicMetadata.name())
+                .setNumPartitions(topicMetadata.numPartitions())
+                .setPartitionMetadata(partitionMetadata)
+            );
+        });
+
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new StreamsGroupPartitionMetadataKey()
+                    .setGroupId(groupId),
+                (short) 10
+            ),
+            new ApiMessageAndVersion(
+                value,
+                (short) 0
+            )
+        );
+    }
+
+    /**
+     * Creates a StreamsGroupPartitionMetadata tombstone.
+     *
+     * @param groupId The streams group id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newStreamsGroupSubscriptionMetadataTombstoneRecord(
+        String groupId
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new StreamsGroupPartitionMetadataKey()
+                    .setGroupId(groupId),
+                (short) 10
             ),
             null // Tombstone.
         );
@@ -245,6 +341,25 @@ public class CoordinatorRecordHelpers {
         );
     }
 
+    /**
+     * Creates a ConsumerGroupMetadata tombstone.
+     *
+     * @param groupId The consumer group id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newGroupEpochTombstoneRecord(
+        String groupId
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupMetadataKey()
+                    .setGroupId(groupId),
+                (short) 3
+            ),
+            null // Tombstone.
+        );
+    }
+
     public static CoordinatorRecord newStreamsGroupEpochRecord(
         String groupId,
         int newGroupEpoch
@@ -264,19 +379,19 @@ public class CoordinatorRecordHelpers {
     }
 
     /**
-     * Creates a ConsumerGroupMetadata tombstone.
+     * Creates a StreamsGroupMetadata tombstone.
      *
-     * @param groupId   The consumer group id.
+     * @param groupId The streams group id.
      * @return The record.
      */
-    public static CoordinatorRecord newGroupEpochTombstoneRecord(
+    public static CoordinatorRecord newStreamsGroupEpochTombstoneRecord(
         String groupId
     ) {
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
-                new ConsumerGroupMetadataKey()
+                new StreamsGroupMetadataKey()
                     .setGroupId(groupId),
-                (short) 3
+                (short) 9
             ),
             null // Tombstone.
         );
@@ -285,9 +400,9 @@ public class CoordinatorRecordHelpers {
     /**
      * Creates a ConsumerGroupTargetAssignmentMember record.
      *
-     * @param groupId       The consumer group id.
-     * @param memberId      The consumer group member id.
-     * @param partitions    The target partitions of the member.
+     * @param groupId    The consumer group id.
+     * @param memberId   The consumer group member id.
+     * @param partitions The target partitions of the member.
      * @return The record.
      */
     public static CoordinatorRecord newTargetAssignmentRecord(
@@ -321,7 +436,29 @@ public class CoordinatorRecordHelpers {
         );
     }
 
-    public static CoordinatorRecord newTargetAssignmentRecord(
+    /**
+     * Creates a ConsumerGroupTargetAssignmentMember tombstone.
+     *
+     * @param groupId  The consumer group id.
+     * @param memberId The consumer group member id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newTargetAssignmentTombstoneRecord(
+        String groupId,
+        String memberId
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupTargetAssignmentMemberKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                (short) 7
+            ),
+            null // Tombstone.
+        );
+    }
+
+    public static CoordinatorRecord newStreamsTargetAssignmentRecord(
         String groupId,
         String memberId,
         Map<String, Set<Integer>> activeTasks,
@@ -371,22 +508,22 @@ public class CoordinatorRecordHelpers {
     }
 
     /**
-     * Creates a ConsumerGroupTargetAssignmentMember tombstone.
+     * Creates a StreamsGroupTargetAssignmentMember tombstone.
      *
-     * @param groupId       The consumer group id.
-     * @param memberId      The consumer group member id.
+     * @param groupId  The streams group id.
+     * @param memberId The streams group member id.
      * @return The record.
      */
-    public static CoordinatorRecord newTargetAssignmentTombstoneRecord(
+    public static CoordinatorRecord newStreamsTargetAssignmentTombstoneRecord(
         String groupId,
         String memberId
     ) {
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
-                new ConsumerGroupTargetAssignmentMemberKey()
+                new StreamsGroupTargetAssignmentMemberKey()
                     .setGroupId(groupId)
                     .setMemberId(memberId),
-                (short) 7
+                (short) 13
             ),
             null // Tombstone.
         );
@@ -395,8 +532,8 @@ public class CoordinatorRecordHelpers {
     /**
      * Creates a ConsumerGroupTargetAssignmentMetadata record.
      *
-     * @param groupId           The consumer group id.
-     * @param assignmentEpoch   The consumer group epoch.
+     * @param groupId         The consumer group id.
+     * @param assignmentEpoch The consumer group epoch.
      * @return The record.
      */
     public static CoordinatorRecord newTargetAssignmentEpochRecord(
@@ -417,6 +554,26 @@ public class CoordinatorRecordHelpers {
         );
     }
 
+    /**
+     * Creates a ConsumerGroupTargetAssignmentMetadata tombstone.
+     *
+     * @param groupId The consumer group id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newTargetAssignmentEpochTombstoneRecord(
+        String groupId
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupTargetAssignmentMetadataKey()
+                    .setGroupId(groupId),
+                (short) 6
+            ),
+            null // Tombstone.
+        );
+    }
+
+
     public static CoordinatorRecord newStreamsTargetAssignmentEpochRecord(
         String groupId,
         int assignmentEpoch
@@ -436,19 +593,19 @@ public class CoordinatorRecordHelpers {
     }
 
     /**
-     * Creates a ConsumerGroupTargetAssignmentMetadata tombstone.
+     * Creates a StreamsGroupTargetAssignmentMetadata tombstone.
      *
-     * @param groupId   The consumer group id.
+     * @param groupId The streams group id.
      * @return The record.
      */
-    public static CoordinatorRecord newTargetAssignmentEpochTombstoneRecord(
+    public static CoordinatorRecord newStreamsTargetAssignmentEpochTombstoneRecord(
         String groupId
     ) {
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
-                new ConsumerGroupTargetAssignmentMetadataKey()
+                new StreamsGroupTargetAssignmentMetadataKey()
                     .setGroupId(groupId),
-                (short) 6
+                (short) 12
             ),
             null // Tombstone.
         );
@@ -457,8 +614,8 @@ public class CoordinatorRecordHelpers {
     /**
      * Creates a ConsumerGroupCurrentMemberAssignment record.
      *
-     * @param groupId   The consumer group id.
-     * @param member    The consumer group member.
+     * @param groupId The consumer group id.
+     * @param member  The consumer group member.
      * @return The record.
      */
     public static CoordinatorRecord newCurrentAssignmentRecord(
@@ -484,7 +641,29 @@ public class CoordinatorRecordHelpers {
         );
     }
 
-    public static CoordinatorRecord newCurrentAssignmentRecord(
+    /**
+     * Creates a ConsumerGroupCurrentMemberAssignment tombstone.
+     *
+     * @param groupId  The consumer group id.
+     * @param memberId The consumer group member id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newCurrentAssignmentTombstoneRecord(
+        String groupId,
+        String memberId
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupCurrentMemberAssignmentKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                (short) 8
+            ),
+            null // Tombstone
+        );
+    }
+
+    public static CoordinatorRecord newStreamsCurrentAssignmentRecord(
         String groupId,
         StreamsGroupMember member
     ) {
@@ -510,33 +689,34 @@ public class CoordinatorRecordHelpers {
     }
 
     /**
-     * Creates a ConsumerGroupCurrentMemberAssignment tombstone.
+     * Creates a StreamsGroupCurrentMemberAssignment tombstone.
      *
-     * @param groupId   The consumer group id.
-     * @param memberId  The consumer group member id.
+     * @param groupId  The streams group id.
+     * @param memberId The streams group member id.
      * @return The record.
      */
-    public static CoordinatorRecord newCurrentAssignmentTombstoneRecord(
+    public static CoordinatorRecord newStreamsCurrentAssignmentTombstoneRecord(
         String groupId,
         String memberId
     ) {
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
-                new ConsumerGroupCurrentMemberAssignmentKey()
+                new StreamsGroupCurrentMemberAssignmentKey()
                     .setGroupId(groupId)
                     .setMemberId(memberId),
-                (short) 8
+                (short) 14
             ),
             null // Tombstone
         );
     }
 
+
     /**
      * Creates a GroupMetadata record.
      *
-     * @param group              The classic group.
-     * @param assignment         The classic group assignment.
-     * @param metadataVersion    The metadata version.
+     * @param group           The classic group.
+     * @param assignment      The classic group assignment.
+     * @param metadataVersion The metadata version.
      * @return The record.
      */
     public static CoordinatorRecord newGroupMetadataRecord(
@@ -592,7 +772,7 @@ public class CoordinatorRecordHelpers {
     /**
      * Creates a GroupMetadata tombstone.
      *
-     * @param groupId  The group id.
+     * @param groupId The group id.
      * @return The record.
      */
     public static CoordinatorRecord newGroupMetadataTombstoneRecord(
@@ -611,8 +791,8 @@ public class CoordinatorRecordHelpers {
     /**
      * Creates an empty GroupMetadata record.
      *
-     * @param group              The classic group.
-     * @param metadataVersion    The metadata version.
+     * @param group           The classic group.
+     * @param metadataVersion The metadata version.
      * @return The record.
      */
     public static CoordinatorRecord newEmptyGroupMetadataRecord(
@@ -681,9 +861,9 @@ public class CoordinatorRecordHelpers {
     /**
      * Creates an OffsetCommit tombstone record.
      *
-     * @param groupId           The group id.
-     * @param topic             The topic name.
-     * @param partitionId       The partition id.
+     * @param groupId     The group id.
+     * @param topic       The topic name.
+     * @param partitionId The partition id.
      * @return The record.
      */
     public static CoordinatorRecord newOffsetCommitTombstoneRecord(
@@ -730,8 +910,8 @@ public class CoordinatorRecordHelpers {
     /**
      * Creates a StreamsTopology record.
      *
-     * @param groupId                   The consumer group id.
-     * @param subtopologies             The subtopologies in the new topology.
+     * @param groupId       The consumer group id.
+     * @param subtopologies The subtopologies in the new topology.
      * @return The record.
      */
     public static CoordinatorRecord newStreamsGroupTopologyRecord(String groupId,
@@ -761,6 +941,25 @@ public class CoordinatorRecordHelpers {
 
         return new CoordinatorRecord(new ApiMessageAndVersion(new StreamsGroupTopologyKey().setGroupId(groupId), (short) 15),
             new ApiMessageAndVersion(value, (short) 0));
+    }
+
+    /**
+     * Creates a StreamsGroupTopology tombstone.
+     *
+     * @param groupId The streams group id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newStreamsGroupTopologyRecordTombstone(
+        String groupId
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new StreamsGroupTopologyKey()
+                    .setGroupId(groupId),
+                (short) 15
+            ),
+            null // Tombstone
+        );
     }
 
 }

@@ -30,6 +30,7 @@ import java.util.Set;
  * Immutable topic metadata.
  */
 public class TopicMetadata {
+
     /**
      * The topic id.
      */
@@ -46,8 +47,8 @@ public class TopicMetadata {
     private final int numPartitions;
 
     /**
-     * Map of every partition Id to a set of its rack Ids, if they exist.
-     * If rack information is unavailable for all partitions, this is an empty map.
+     * Map of every partition Id to a set of its rack Ids, if they exist. If rack information is unavailable for all partitions, this is an
+     * empty map.
      */
     private final Map<Integer, Set<String>> partitionRacks;
 
@@ -94,8 +95,8 @@ public class TopicMetadata {
     }
 
     /**
-     * @return Every partition mapped to the set of corresponding available rack Ids of its replicas.
-     *         An empty map is returned if rack information is unavailable for all partitions.
+     * @return Every partition mapped to the set of corresponding available rack Ids of its replicas. An empty map is returned if rack
+     * information is unavailable for all partitions.
      */
     public Map<Integer, Set<String>> partitionRacks() {
         return this.partitionRacks;
@@ -103,14 +104,24 @@ public class TopicMetadata {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
 
         TopicMetadata that = (TopicMetadata) o;
 
-        if (!id.equals(that.id)) return false;
-        if (!name.equals(that.name)) return false;
-        if (numPartitions != that.numPartitions) return false;
+        if (!id.equals(that.id)) {
+            return false;
+        }
+        if (!name.equals(that.name)) {
+            return false;
+        }
+        if (numPartitions != that.numPartitions) {
+            return false;
+        }
         return partitionRacks.equals(that.partitionRacks);
     }
 

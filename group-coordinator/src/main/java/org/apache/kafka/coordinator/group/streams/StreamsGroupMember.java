@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.image.TopicImage;
@@ -37,20 +36,18 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * StreamsGroupMember contains all the information related to a member
- * within a Streams group. This class is immutable and is fully backed
+ * StreamsGroupMember contains all the information related to a member within a Streams group. This class is immutable and is fully backed
  * by records stored in the __consumer_offsets topic.
  */
 public class StreamsGroupMember {
 
     /**
-     * A builder that facilitates the creation of a new member or the update of
-     * an existing one.
-     *
-     * Please refer to the javadoc of {{@link StreamsGroupMember}} for the
-     * definition of the fields.
+     * A builder that facilitates the creation of a new member or the update of an existing one.
+     * <p>
+     * Please refer to the javadoc of {{@link StreamsGroupMember}} for the definition of the fields.
      */
     public static class Builder {
+
         private final String memberId;
         private int memberEpoch = 0;
         private int previousMemberEpoch = -1;
@@ -64,9 +61,9 @@ public class StreamsGroupMember {
         private String assignor;
         private String processId;
         private StreamsGroupMemberMetadataValue.HostInfo hostInfo;
-        private List<StreamsGroupMemberMetadataValue.KeyValue> clientTags;
+        private Map<String, String> clientTags;
         private byte[] userData;
-        private List<StreamsGroupMemberMetadataValue.KeyValue> assignmentConfigs;
+        private Map<String, String> assignmentConfigs;
         private Map<String, Set<Integer>> assignedActiveTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedStandbyTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedWarmupTasks = Collections.emptyMap();
@@ -188,7 +185,7 @@ public class StreamsGroupMember {
             return this;
         }
 
-        public Builder setClientTags(List<StreamsGroupMemberMetadataValue.KeyValue> clientTags) {
+        public Builder setClientTags(Map<String, String> clientTags) {
             this.clientTags = clientTags;
             return this;
         }
@@ -198,7 +195,7 @@ public class StreamsGroupMember {
             return this;
         }
 
-        public Builder setAssignmentConfigs(List<StreamsGroupMemberMetadataValue.KeyValue> assignmentConfigs) {
+        public Builder setAssignmentConfigs(Map<String, String> assignmentConfigs) {
             this.assignmentConfigs = assignmentConfigs;
             return this;
         }
@@ -233,9 +230,15 @@ public class StreamsGroupMember {
             setAssignor(record.assignor());
             setProcessId(record.processId());
             setHostInfo(record.hostInfo());
-            setClientTags(record.clientTags());
+            setClientTags(record.clientTags().stream().collect(Collectors.toMap(
+                StreamsGroupMemberMetadataValue.KeyValue::key,
+                StreamsGroupMemberMetadataValue.KeyValue::value
+            )));
             setUserData(record.userData());
-            setAssignmentConfigs(record.assignmentConfigs());
+            setAssignmentConfigs(record.assignmentConfigs().stream().collect(Collectors.toMap(
+                StreamsGroupMemberMetadataValue.KeyValue::key,
+                StreamsGroupMemberMetadataValue.KeyValue::value
+            )));
             return this;
         }
 
@@ -332,37 +335,37 @@ public class StreamsGroupMember {
     /**
      * The topology hash
      */
-    private byte[] topologyHash;
+    private final byte[] topologyHash;
 
     /**
      * The assignor
      */
-    private String assignor;
+    private final String assignor;
 
     /**
      * The process ID
      */
-    private String processId;
+    private final String processId;
 
     /**
      * The host info
      */
-    private StreamsGroupMemberMetadataValue.HostInfo hostInfo;
+    private final StreamsGroupMemberMetadataValue.HostInfo hostInfo;
 
     /**
      * The client tags
      */
-    private  List<StreamsGroupMemberMetadataValue.KeyValue> clientTags;
+    private final Map<String, String> clientTags;
 
     /**
      * The user data
      */
-    private byte[] userData;
+    private final byte[] userData;
 
     /**
      * The assignment configs
      */
-    private  List<StreamsGroupMemberMetadataValue.KeyValue> assignmentConfigs;
+    private final Map<String, String> assignmentConfigs;
 
     /**
      * Active tasks assigned to this member.
@@ -384,6 +387,7 @@ public class StreamsGroupMember {
      */
     private final Map<String, Set<Integer>> activeTasksPendingRevocation;
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     private StreamsGroupMember(
         String memberId,
         int memberEpoch,
@@ -397,9 +401,9 @@ public class StreamsGroupMember {
         String assignor,
         String processId,
         StreamsGroupMemberMetadataValue.HostInfo hostInfo,
-        List<StreamsGroupMemberMetadataValue.KeyValue> clientTags,
+        Map<String, String> clientTags,
         byte[] userData,
-        List<StreamsGroupMemberMetadataValue.KeyValue> assignmentConfigs,
+        Map<String, String> assignmentConfigs,
         MemberState state,
         Map<String, Set<Integer>> assignedActiveTasks,
         Map<String, Set<Integer>> assignedStandbyTasks,
@@ -515,7 +519,7 @@ public class StreamsGroupMember {
     /**
      * @return The client tags
      */
-    public List<StreamsGroupMemberMetadataValue.KeyValue> clientTags() {
+    public Map<String, String> clientTags() {
         return clientTags;
     }
 
@@ -526,7 +530,7 @@ public class StreamsGroupMember {
     /**
      * @return The assignment configs
      */
-    public List<StreamsGroupMemberMetadataValue.KeyValue> assignmentConfigs() {
+    public Map<String, String> assignmentConfigs() {
         return assignmentConfigs;
     }
 
@@ -601,10 +605,15 @@ public class StreamsGroupMember {
         }
     }
 
+    @SuppressWarnings("checkstyle:CyclomaticComplexity")
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         StreamsGroupMember that = (StreamsGroupMember) o;
         return memberEpoch == that.memberEpoch
             && previousMemberEpoch == that.previousMemberEpoch

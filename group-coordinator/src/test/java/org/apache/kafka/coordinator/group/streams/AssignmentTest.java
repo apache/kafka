@@ -26,8 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkStreamsAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTaskAssignment;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkAssignment;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTaskAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -42,13 +42,13 @@ public class AssignmentTest {
 
     @Test
     public void testAttributes() {
-        Map<String, Set<Integer>> activeTasks = mkStreamsAssignment(
+        Map<String, Set<Integer>> activeTasks = mkAssignment(
             mkTaskAssignment("subtopology1", 1, 2, 3)
         );
-        Map<String, Set<Integer>> standbyTasks = mkStreamsAssignment(
+        Map<String, Set<Integer>> standbyTasks = mkAssignment(
             mkTaskAssignment("subtopology2", 9, 8, 7)
         );
-        Map<String, Set<Integer>> warmupTasks = mkStreamsAssignment(
+        Map<String, Set<Integer>> warmupTasks = mkAssignment(
             mkTaskAssignment("subtopology3", 4, 5, 6)
         );
         Assignment assignment = new Assignment(activeTasks, standbyTasks, warmupTasks);
@@ -92,21 +92,21 @@ public class AssignmentTest {
         Assignment assignment = Assignment.fromRecord(record);
 
         assertEquals(
-            mkStreamsAssignment(
+            mkAssignment(
                 mkTaskAssignment(subtopology1, 1, 2, 3),
                 mkTaskAssignment(subtopology2, 4, 5, 6)
             ),
             assignment.activeTasks()
         );
         assertEquals(
-            mkStreamsAssignment(
+            mkAssignment(
                 mkTaskAssignment(subtopology1, 7, 8, 9),
                 mkTaskAssignment(subtopology2, 1, 2, 3)
             ),
             assignment.standbyTasks()
         );
         assertEquals(
-            mkStreamsAssignment(
+            mkAssignment(
                 mkTaskAssignment(subtopology1, 4, 5, 6),
                 mkTaskAssignment(subtopology2, 7, 8, 9)
             ),
@@ -116,13 +116,13 @@ public class AssignmentTest {
 
     @Test
     public void testEquals() {
-        Map<String, Set<Integer>> activeTasks = mkStreamsAssignment(
+        Map<String, Set<Integer>> activeTasks = mkAssignment(
             mkTaskAssignment("subtopology1", 1, 2, 3)
         );
-        Map<String, Set<Integer>> standbyTasks = mkStreamsAssignment(
+        Map<String, Set<Integer>> standbyTasks = mkAssignment(
             mkTaskAssignment("subtopology2", 9, 8, 7)
         );
-        Map<String, Set<Integer>> warmupTasks = mkStreamsAssignment(
+        Map<String, Set<Integer>> warmupTasks = mkAssignment(
             mkTaskAssignment("subtopology3", 4, 5, 6)
         );
 

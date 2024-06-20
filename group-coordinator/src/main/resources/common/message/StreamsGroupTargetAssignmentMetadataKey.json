@@ -20,7 +20,7 @@
   "validVersions": "12",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "6",
+    { "name": "GroupId", "type": "string", "versions": "12",
       "about": "The group id." }
   ]
 }
