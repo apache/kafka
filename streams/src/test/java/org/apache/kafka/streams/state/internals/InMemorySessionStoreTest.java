@@ -30,13 +30,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
 
-    StoreType getStoreType() {
-        return StoreType.InMemoryStore;
-    }
-
     @Override
-    String getStoreName() {
-        return "in-memory session store";
+    StoreType storeType() {
+        return StoreType.InMemoryStore;
     }
 
     @Test

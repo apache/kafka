@@ -78,7 +78,9 @@ public abstract class AbstractSessionBytesStoreTest {
 
     static final long SEGMENT_INTERVAL = 60_000L;
     static final long RETENTION_PERIOD = 10_000L;
-
+    private static final String IN_MEMORY_STORE_NAME = "in-memory session store";
+    private static final String ROCK_DB_STORE_NAME = "rocksDB session store";
+    
     enum StoreType {
         RocksDBSessionStore,
         RocksDBTimeOrderedSessionStoreWithIndex,
@@ -95,11 +97,11 @@ public abstract class AbstractSessionBytesStoreTest {
     <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
                                                          final Serde<K> keySerde,
                                                          final Serde<V> valueSerde) {
-        switch (getStoreType()) {
+        switch (storeType()) {
             case RocksDBSessionStore: {
                 return Stores.sessionStoreBuilder(
                         Stores.persistentSessionStore(
-                                getStoreName(),
+                                ROCK_DB_STORE_NAME,
                                 ofMillis(retentionPeriod)),
                         keySerde,
                         valueSerde).build();
@@ -107,7 +109,7 @@ public abstract class AbstractSessionBytesStoreTest {
             case RocksDBTimeOrderedSessionStoreWithIndex: {
                 return Stores.sessionStoreBuilder(
                         new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                                getStoreName(),
+                                ROCK_DB_STORE_NAME,
                                 retentionPeriod,
                                 true
                         ),
@@ -118,7 +120,7 @@ public abstract class AbstractSessionBytesStoreTest {
             case RocksDBTimeOrderedSessionStoreWithoutIndex: {
                 return Stores.sessionStoreBuilder(
                         new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                                getStoreName(),
+                                ROCK_DB_STORE_NAME,
                                 retentionPeriod,
                                 false
                         ),
@@ -129,18 +131,17 @@ public abstract class AbstractSessionBytesStoreTest {
             case InMemoryStore: {
                 return Stores.sessionStoreBuilder(
                         Stores.inMemorySessionStore(
-                                getStoreName(),
+                                IN_MEMORY_STORE_NAME,
                                 ofMillis(retentionPeriod)),
                         keySerde,
                         valueSerde).build();
             }
             default:
-                throw new IllegalStateException("Unknown StoreType: " + getStoreType());
+                throw new IllegalStateException("Unknown StoreType: " + storeType());
         }
     }
 
-    abstract StoreType getStoreType();
-    abstract String getStoreName();
+    abstract StoreType storeType();
 
     @BeforeEach
     public void setUp() {
@@ -242,7 +243,7 @@ public abstract class AbstractSessionBytesStoreTest {
     public void shouldFindSessionsForTimeRange() {
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 5L);
 
-        if (getStoreType() == StoreType.RocksDBSessionStore) {
+        if (storeType() == StoreType.RocksDBSessionStore) {
             assertThrows(
                 UnsupportedOperationException.class,
                 () -> sessionStore.findSessions(0, 0),
@@ -937,7 +938,7 @@ public abstract class AbstractSessionBytesStoreTest {
     @Test
     public void shouldRemoveExpired() {
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
-        if (getStoreType() == StoreType.InMemoryStore) {
+        if (storeType() == StoreType.InMemoryStore) {
             sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
             sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
 
@@ -954,7 +955,7 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
             sessionStore.findSessions("a", "b", 0L, Long.MAX_VALUE)
         ) {
-            if (getStoreType() == StoreType.InMemoryStore) {
+            if (storeType() == StoreType.InMemoryStore) {
                 assertEquals(valuesToSet(iterator), new HashSet<>(Arrays.asList(2L, 3L, 4L)));
             } else {
                 // The 2 records with values 2L and 3L are considered expired as
