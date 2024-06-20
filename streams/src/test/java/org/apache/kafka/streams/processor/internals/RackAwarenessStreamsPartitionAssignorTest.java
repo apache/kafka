@@ -34,10 +34,11 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,7 +55,6 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CHANGELOG_END_OFFSETS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
@@ -69,7 +69,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RackAwarenessStreamsPartitionAssignorTest {
 
     private final List<PartitionInfo> infos = asList(
@@ -162,7 +163,6 @@ public class RackAwarenessStreamsPartitionAssignorTest {
     private void createMockTaskManager() {
         taskManager = mock(TaskManager.class);
         when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
-        when(taskManager.processId()).thenReturn(PID_1);
         topologyMetadata.buildAndRewriteTopology();
     }
 
@@ -174,11 +174,6 @@ public class RackAwarenessStreamsPartitionAssignorTest {
                 false
         );
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
-    }
-
-    @Before
-    public void setUp() {
-        adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS);
     }
 
     @Test
