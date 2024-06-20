@@ -2005,6 +2005,60 @@ public class KafkaRaftClientTest {
         context.assertSentVoteResponse(Errors.INVALID_VOTER_KEY, epoch + 2, OptionalInt.empty(), false);
     }
 
+    @Test
+    public void testInvalidVoterReplicaBeginQuorumEpochRequest() throws Exception {
+        int localId = 0;
+        int voter1 = localId;
+        int voter2 = localId + 1;
+        int voter3 = localId + 2;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(voter1, voter2, voter3);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(epoch - 1)
+            .withKip853Rpc(true)
+            .build();
+        context.assertUnknownLeader(epoch - 1);
+
+        // Leader voter3 sends a begin quorum epoch request with incorrect voter id
+        context.deliverRequest(
+            context.beginEpochRequest(
+                context.clusterId.toString(),
+                epoch,
+                voter3,
+                ReplicaKey.of(10, Uuid.randomUuid())
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentBeginQuorumEpochResponse(Errors.INVALID_VOTER_KEY, epoch, OptionalInt.of(voter3));
+        context.assertElectedLeader(epoch, voter3);
+
+        // Leader voter3 sends a begin quorum epoch request with incorrect voter directory id
+        context.deliverRequest(
+            context.beginEpochRequest(
+                context.clusterId.toString(),
+                epoch,
+                voter3,
+                ReplicaKey.of(localId, Uuid.randomUuid())
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentBeginQuorumEpochResponse(Errors.INVALID_VOTER_KEY, epoch, OptionalInt.of(voter3));
+        context.assertElectedLeader(epoch, voter3);
+
+        // Leader voter3 sends a begin quorum epoch request with incorrect voter directory id
+        context.deliverRequest(
+            context.beginEpochRequest(
+                context.clusterId.toString(),
+                epoch,
+                voter3,
+                context.localReplicaKey()
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentBeginQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(voter3));
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
     public void testBeginQuorumEpochRequestClusterIdValidation(boolean withKip853Rpc) throws Exception {

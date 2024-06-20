@@ -507,7 +507,6 @@ public class LeaderState<T> implements EpochState {
         Map<Integer, ReplicaState> newVoterStates = new HashMap<>();
         Map<Integer, ReplicaState> oldVoterStates = new HashMap<>(voterStates);
 
-
         // Compute the new voter states map
         for (VoterSet.VoterNode voterNode : lastVoterSet.voterNodes()) {
             ReplicaState state = getReplicaState(voterNode.voterKey())

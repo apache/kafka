@@ -700,7 +700,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // Check that the request was intended for this replica
         Optional<ReplicaKey> voterKey = RaftUtil.voteRequestVoterKey(request, partitionRequest);
         if (!isValidVoterKey(voterKey)) {
-            // TODO: log a message at info
+            logger.info(
+                "Candidate sent a voter key ({}) in the VOTE request that doesn't match the " +
+                "local key ({}, {}); rejecting the vote",
+                voterKey,
+                nodeId,
+                nodeDirectoryId
+            );
             // The request is not intended to this replica since the replica keys don't match
             return buildVoteResponse(
                 requestMetadata.listenerName(),
@@ -757,7 +763,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         Optional<Boolean> handled = maybeHandleCommonResponse(
             error, responseLeaderId, responseEpoch, currentTimeMs);
-        // KAFKA-16529 will need to handle INVALID_VOTER_KEY
+        // KAFKA-16529 will need to handle the INVALID_VOTER_KEY error when handling the response
         if (handled.isPresent()) {
             return handled.get();
         } else if (error == Errors.NONE) {
@@ -840,7 +846,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      */
-    // TODO: add test for checking voter key fields
     private BeginQuorumEpochResponseData handleBeginQuorumEpochRequest(
         RaftRequest.Inbound requestMetadata,
         long currentTimeMs
@@ -889,7 +894,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // Check that the request was intended for this replica
         Optional<ReplicaKey> voterKey = RaftUtil.beginQuorumEpochRequestVoterKey(request, partitionRequest);
         if (!isValidVoterKey(voterKey)) {
-            // TODO: log a message at info
+            logger.info(
+                "Leader sent a voter key ({}) in the BEGIN_QUORUM_EPOCH request that doesn't " +
+                "match the local key ({}, {}); returning INVALID_VOTER_KEY",
+                voterKey,
+                nodeId,
+                nodeDirectoryId
+            );
             // The request is not intended to this replica since the replica keys don't match
             return buildBeginQuorumEpochResponse(
                 requestMetadata.listenerName(),
@@ -929,7 +940,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         Optional<Boolean> handled = maybeHandleCommonResponse(
             partitionError, responseLeaderId, responseEpoch, currentTimeMs);
-        // KAFKA-16529 will need to handle INVALID_VOTER_KEY
+        // KAFKA-16529 will need to handle the INVALID_VOTER_KEY error when handling the response
         if (handled.isPresent()) {
             return handled.get();
         } else if (partitionError == Errors.NONE) {
