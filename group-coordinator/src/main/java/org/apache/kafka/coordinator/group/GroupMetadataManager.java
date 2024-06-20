@@ -365,7 +365,7 @@ public class GroupMetadataManager {
     private final int consumerGroupMaxSize;
 
     /**
-     * The heartbeat interval for consumer groups.
+     * The default heartbeat interval for consumer groups.
      */
     private final int consumerGroupHeartbeatIntervalMs;
 
