@@ -33,8 +33,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsTargetAssignmentEpochRecord;
 
 /**
  * Build a new Target Assignment based on the provided parameters. As a result, it yields the records that must be persisted to the log and
@@ -118,11 +119,6 @@ public class TargetAssignmentBuilder {
     private Map<String, org.apache.kafka.coordinator.group.streams.Assignment> targetAssignment = Collections.emptyMap();
 
     /**
-     * Reverse lookup map representing tasks with their current member assignments.
-     */
-    private Map<String, Map<Integer, String>> invertedTargetAssignment = Collections.emptyMap();
-
-    /**
      * The topics image.
      */
     private TopicsImage topicsImage = TopicsImage.EMPTY;
@@ -152,13 +148,11 @@ public class TargetAssignmentBuilder {
     public TargetAssignmentBuilder(
         String groupId,
         int groupEpoch,
-        TaskAssignor assignor,
-        StreamsTopology topology
+        TaskAssignor assignor
     ) {
         this.groupId = Objects.requireNonNull(groupId);
         this.groupEpoch = groupEpoch;
         this.assignor = Objects.requireNonNull(assignor);
-        this.topology = Objects.requireNonNull(topology);
     }
 
     /**
@@ -214,19 +208,6 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the existing topic partition assignments.
-     *
-     * @param invertedTargetAssignment The reverse lookup map of the current target assignment.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder withInvertedTargetAssignment(
-        Map<String, Map<Integer, String>> invertedTargetAssignment
-    ) {
-        this.invertedTargetAssignment = invertedTargetAssignment;
-        return this;
-    }
-
-    /**
      * Adds the topics image.
      *
      * @param topicsImage The topics image.
@@ -238,6 +219,20 @@ public class TargetAssignmentBuilder {
         this.topicsImage = topicsImage;
         return this;
     }
+
+    /**
+     * Adds the topology image.
+     *
+     * @param topology The topology.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withTopology(
+        StreamsTopology topology
+    ) {
+        this.topology = topology;
+        return this;
+    }
+
 
     /**
      * Adds or updates a member. This is useful when the updated member is not yet materialized in memory.
@@ -306,13 +301,18 @@ public class TargetAssignmentBuilder {
         });
 
         // Compute the assignment.
-        GroupAssignment newGroupAssignment = assignor.assign(
-            new GroupSpecImpl(
-                Collections.unmodifiableMap(memberSpecs),
-                new ArrayList<>(topology.subtopologies().keySet())
-            ),
-            new TopologyMetadata(subscriptionMetadata, topology)
-        );
+        GroupAssignment newGroupAssignment;
+        if (topology != null) {
+            newGroupAssignment = assignor.assign(
+                new GroupSpecImpl(
+                    Collections.unmodifiableMap(memberSpecs),
+                    new ArrayList<>(topology.subtopologies().keySet())
+                ),
+                new TopologyMetadata(subscriptionMetadata, topology)
+            );
+        } else {
+            newGroupAssignment = new GroupAssignment(memberSpecs.keySet().stream().collect(Collectors.toMap(x -> x, x -> MemberAssignment.empty())));
+        }
 
         // Compute delta from previous to new target assignment and create the
         // relevant records.
@@ -350,7 +350,7 @@ public class TargetAssignmentBuilder {
         });
 
         // Bump the target assignment epoch.
-        records.add(newTargetAssignmentEpochRecord(groupId, groupEpoch));
+        records.add(newStreamsTargetAssignmentEpochRecord(groupId, groupEpoch));
 
         return new TargetAssignmentResult(records, newTargetAssignment);
     }

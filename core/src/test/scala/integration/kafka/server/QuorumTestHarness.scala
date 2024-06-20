@@ -282,7 +282,7 @@ abstract class QuorumTestHarness extends Logging {
     val name = testInfo.getTestMethod.asScala
       .map(_.toString)
       .getOrElse("[unspecified]")
-    if (TestInfoUtils.isKRaft(testInfo)) {
+    if (isKRaftTest()) {
       info(s"Running KRAFT test $name")
       implementation = newKRaftQuorum(testInfo)
     } else {

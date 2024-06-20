@@ -19,7 +19,9 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.common.message.StreamsInitializeRequestData;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.StreamsInitializeRequest;
+import org.apache.kafka.common.requests.StreamsInitializeResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -50,7 +52,9 @@ public class StreamsInitializeRequestManager implements RequestManager {
 
     @Override
     public PollResult poll(final long currentTimeMs) {
-        return unsentRequest.map(PollResult::new).orElse(PollResult.EMPTY);
+        final PollResult pollResult = unsentRequest.map(PollResult::new).orElse(PollResult.EMPTY);
+        unsentRequest = Optional.empty();
+        return pollResult;
     }
 
     public void initialize() {
@@ -121,8 +125,25 @@ public class StreamsInitializeRequestManager implements RequestManager {
             // todo: handle error
             logger.error("Error during Streams initialization: ", exception);
         } else {
-            // todo: handle success
-            logger.info("Streams initialization successful");
+            onResponse((StreamsInitializeResponse) response.responseBody());
         }
+    }
+
+    private void onResponse(final StreamsInitializeResponse response) {
+        if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
+            onSuccessResponse(response);
+        } else {
+            onErrorResponse(response);
+        }
+    }
+
+    private void onErrorResponse(final StreamsInitializeResponse response) {
+        // todo: handle error
+        logger.error("Error during Streams initialization: {}", response);
+    }
+
+    private void onSuccessResponse(final StreamsInitializeResponse response) {
+        // todo: handle success
+        logger.info("Streams initialization successful {}", response);
     }
 }

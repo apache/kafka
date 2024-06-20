@@ -353,5 +353,11 @@
               files="(ReplicaFetcherThreadBenchmark).java"/>
 
      <!-- Add the new suppression rule for JaasTestUtils.java -->
-    <suppress checks="ImportControl" files="kafka/security/JaasTestUtils.java" />
+    <suppress checks="ImportControl" 
+              files="kafka/security/JaasTestUtils.java" />
+    
+    <!-- group coordinator -->
+    <suppress checks="JavaNCSS"
+              files="GroupMetadataManager.java"/>
+
 </suppressions>
