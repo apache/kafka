@@ -56,13 +56,13 @@ import org.mockito.ArgumentCaptor;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.SortedSet;
-import java.util.HashMap;
 
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -90,8 +90,8 @@ public class HeartbeatRequestManagerTest {
     private static final long DEFAULT_RETRY_BACKOFF_MS = 80;
     private static final long DEFAULT_RETRY_BACKOFF_MAX_MS = 1000;
     private static final double DEFAULT_HEARTBEAT_JITTER_MS = 0.0;
-    private static final String memberId = "member-id";
-    private static final int memberEpoch = 1;
+    private static final String DEFAULT_MEMBER_ID = "member-id";
+    private static final int DEFAULT_MEMBER_EPOCH = 1;
 
     private Time time;
     private Timer pollTimer;
@@ -424,8 +424,8 @@ public class HeartbeatRequestManagerTest {
         // Update membershipManager's memberId and memberEpoch
         ConsumerGroupHeartbeatResponse result =
             new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
-            .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch));
+            .setMemberId(DEFAULT_MEMBER_ID)
+            .setMemberEpoch(DEFAULT_MEMBER_EPOCH));
         membershipManager.onHeartbeatSuccess(result.data());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
@@ -448,8 +448,8 @@ public class HeartbeatRequestManagerTest {
         when(heartbeatRequest.data()).thenReturn(data);
 
         assertEquals(DEFAULT_GROUP_ID, heartbeatRequest.data().groupId());
-        assertEquals(memberId, heartbeatRequest.data().memberId());
-        assertEquals(memberEpoch, heartbeatRequest.data().memberEpoch());
+        assertEquals(DEFAULT_MEMBER_ID, heartbeatRequest.data().memberId());
+        assertEquals(DEFAULT_MEMBER_EPOCH, heartbeatRequest.data().memberEpoch());
         assertEquals(10000, heartbeatRequest.data().rebalanceTimeoutMs());
         assertEquals(subscribedTopics, heartbeatRequest.data().subscribedTopicNames());
         assertEquals(DEFAULT_GROUP_INSTANCE_ID, heartbeatRequest.data().instanceId());
@@ -623,13 +623,13 @@ public class HeartbeatRequestManagerTest {
 
         // Mock a response from the group coordinator, that supplies the member ID and a new epoch
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
-        when(membershipManager.memberId()).thenReturn(memberId);
+        when(membershipManager.memberId()).thenReturn(DEFAULT_MEMBER_ID);
         when(membershipManager.memberEpoch()).thenReturn(1);
         mockStableMember();
         data = heartbeatState.buildRequestData();
         data.setTopicPartitions(Collections.emptyList());
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
-        assertEquals(memberId, data.memberId());
+        assertEquals(DEFAULT_MEMBER_ID, data.memberId());
         assertEquals(1, data.memberEpoch());
         assertNull(data.instanceId());
         assertEquals(-1, data.rebalanceTimeoutMs());
@@ -652,7 +652,7 @@ public class HeartbeatRequestManagerTest {
         data.setTopicPartitions(Collections.emptyList());
         data.setServerAssignor(DEFAULT_REMOTE_ASSIGNOR);
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
-        assertEquals(memberId, data.memberId());
+        assertEquals(DEFAULT_MEMBER_ID, data.memberId());
         assertEquals(0, data.memberEpoch());
         assertNull(data.instanceId());
         assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
@@ -666,7 +666,7 @@ public class HeartbeatRequestManagerTest {
         data = heartbeatState.buildRequestData();
         data.setSubscribedTopicNames(Collections.singletonList(topic));
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
-        assertEquals(memberId, data.memberId());
+        assertEquals(DEFAULT_MEMBER_ID, data.memberId());
         assertEquals(0, data.memberEpoch());
         assertNull(data.instanceId());
         assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
@@ -687,7 +687,7 @@ public class HeartbeatRequestManagerTest {
         assignmentTopic1.setTopicPartitions(Collections.singletonList(tpTopic1));
         ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
                 .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
-                .setMemberId(memberId)
+                .setMemberId(DEFAULT_MEMBER_ID)
                 .setMemberEpoch(1)
                 .setAssignment(assignmentTopic1));
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
@@ -829,8 +829,8 @@ public class HeartbeatRequestManagerTest {
         when(subscriptions.rebalanceListener()).thenReturn(Optional.empty());
         ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
                 .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
-                .setMemberId(memberId)
-                .setMemberEpoch(memberEpoch)
+                .setMemberId(DEFAULT_MEMBER_ID)
+                .setMemberEpoch(DEFAULT_MEMBER_EPOCH)
                 .setAssignment(new Assignment())
         );
         membershipManager.onHeartbeatSuccess(rs1.data());
@@ -883,8 +883,8 @@ public class HeartbeatRequestManagerTest {
         ConsumerGroupHeartbeatResponseData data = new ConsumerGroupHeartbeatResponseData()
             .setErrorCode(error.code())
             .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
-            .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch);
+            .setMemberId(DEFAULT_MEMBER_ID)
+            .setMemberEpoch(DEFAULT_MEMBER_EPOCH);
         if (error != Errors.NONE) {
             data.setErrorMessage("stubbed error message");
         }
