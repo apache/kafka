@@ -51,7 +51,7 @@ public class LeaderStateTest {
     private final MockTime time = new MockTime();
     private final int fetchTimeoutMs = 2000;
     private final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
-    private final int beginQuorumEpochTimeoutMs = fetchTimeoutMs;
+    private final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
 
     private LeaderState<?> newLeaderState(
         Set<Integer> voters,

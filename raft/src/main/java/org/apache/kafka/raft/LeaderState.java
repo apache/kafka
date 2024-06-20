@@ -95,7 +95,7 @@ public class LeaderState<T> implements EpochState {
         // use the 1.5x of fetch timeout to tolerate some network transition time or other IO time.
         this.checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
         this.checkQuorumTimer = time.timer(checkQuorumTimeoutMs);
-        this.beginQuorumEpochTimeoutMs = fetchTimeoutMs;
+        this.beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
         this.beginQuorumEpochTimer = time.timer(beginQuorumEpochTimeoutMs);
     }
 
