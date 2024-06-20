@@ -558,20 +558,10 @@ public class TestUtils {
      * @return The caught exception cause
      */
     public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
-        try {
-            future.get(5, TimeUnit.SECONDS);
-            ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-            assertInstanceOf(exceptionCauseClass, exception.getCause(),
-                    "Unexpected exception cause " + exception.getCause());
-            return exceptionCauseClass.cast(exception.getCause());
-        } catch (TimeoutException e) {
-            assertInstanceOf(exceptionCauseClass, e.getCause(), "Expected a" + exceptionCauseClass.getSimpleName() + "but got" + e.getCause());
-        } catch (ExecutionException e) {
-            assertInstanceOf(exceptionCauseClass, e.getCause(), "Expected a" + exceptionCauseClass.getSimpleName() + "but got" + e.getCause());
-        } catch (InterruptedException e) {
-            assertInstanceOf(exceptionCauseClass, e.getCause(), "Expected a" + exceptionCauseClass.getSimpleName() + "but got" + e.getCause());
-        }
-        return null;
+        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
+        assertInstanceOf(exceptionCauseClass, exception.getCause(),
+                "Unexpected exception cause " + exception.getCause());
+        return exceptionCauseClass.cast(exception.getCause());
     }
 
     public static <T extends Throwable> void assertFutureThrows(
