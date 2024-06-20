@@ -201,9 +201,8 @@ def determineCommitId() {
   }
 }
 
-def excludedSpotlessModules = [':clients',
-                               ':connect:runtime',
-                               ':core',
+
+def excludedSpotlessModules = [':connect:runtime',
                                ':streams']
 
 
@@ -524,7 +523,6 @@ subprojects {
     } else {
       useJUnitPlatform {
         includeTags "integration"
-        includeTags 'org.apache.kafka.test.IntegrationTest'
       }
     }
 
@@ -562,7 +560,6 @@ subprojects {
     } else {
       useJUnitPlatform {
         excludeTags "integration"
-        excludeTags 'org.apache.kafka.test.IntegrationTest'
       }
     }
 
@@ -784,7 +781,7 @@ subprojects {
     apply plugin: 'com.diffplug.spotless'
     spotless {
       java {
-        targetExclude 'src/generated/**/*.java' 
+        targetExclude('src/generated/**/*.java','src/generated-test/**/*.java')
         importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
         removeUnusedImports()
       }
@@ -3194,8 +3191,6 @@ project(':connect:runtime') {
     testImplementation project(':group-coordinator')
 
     testImplementation libs.junitJupiter
-    testImplementation libs.junitVintageEngine
-    testImplementation libs.mockitoJunitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
     testImplementation libs.mockitoJunitJupiter

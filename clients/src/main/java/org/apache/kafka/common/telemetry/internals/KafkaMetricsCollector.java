@@ -34,6 +34,7 @@ import org.apache.kafka.common.metrics.stats.SimpleRate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.telemetry.internals.LastValueTracker.InstantAndValue;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

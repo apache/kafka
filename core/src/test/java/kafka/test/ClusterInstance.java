@@ -23,6 +23,7 @@ import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.network.ListenerName;
@@ -50,6 +51,11 @@ public interface ClusterInstance {
     }
 
     Map<Integer, KafkaBroker> brokers();
+
+    default Map<Integer, KafkaBroker> aliveBrokers() {
+        return brokers().entrySet().stream().filter(entry -> !entry.getValue().isShutdown())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
 
     Map<Integer, ControllerServer> controllers();
 

@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -34,17 +33,12 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -52,31 +46,21 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Properties;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-@RunWith(Parameterized.class)
-@Category({IntegrationTest.class})
+@Tag("integration")
+@Timeout(600)
 public class KTableEfficientRangeQueryTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private enum StoreType { InMemory, RocksDB, Timed }
     private static final String TABLE_NAME = "mytable";
     private static final int DATA_SIZE = 5;
 
-    private StoreType storeType;
-    private boolean enableLogging;
-    private boolean enableCaching;
-    private boolean forward;
-
-    private LinkedList<KeyValue<String, String>> records;
+    private final LinkedList<KeyValue<String, String>> records;
     private String low;
     private String high;
     private String middle;
@@ -85,14 +69,7 @@ public class KTableEfficientRangeQueryTest {
     private String innerLowBetween;
     private String innerHighBetween;
 
-    private Properties streamsConfig;
-
-    public KTableEfficientRangeQueryTest(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward) {
-        this.storeType = storeType;
-        this.enableLogging = enableLogging;
-        this.enableCaching = enableCaching;
-        this.forward = forward;
-
+    public KTableEfficientRangeQueryTest() {
         this.records = new LinkedList<>();
         final int m = DATA_SIZE / 2;
         for (int i = 0; i < DATA_SIZE; i++) {
@@ -117,19 +94,15 @@ public class KTableEfficientRangeQueryTest {
                 innerHighBetween = "key-" + index;
             }
         }
-        Assert.assertNotNull(low);
-        Assert.assertNotNull(high);
-        Assert.assertNotNull(middle);
-        Assert.assertNotNull(innerLow);
-        Assert.assertNotNull(innerHigh);
-        Assert.assertNotNull(innerLowBetween);
-        Assert.assertNotNull(innerHighBetween);
+        assertNotNull(low);
+        assertNotNull(high);
+        assertNotNull(middle);
+        assertNotNull(innerLow);
+        assertNotNull(innerHigh);
+        assertNotNull(innerLowBetween);
+        assertNotNull(innerHighBetween);
     }
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Parameterized.Parameters(name = "storeType={0}, enableLogging={1}, enableCaching={2}, forward={3}")
     public static Collection<Object[]> data() {
         final List<StoreType> types = Arrays.asList(StoreType.InMemory, StoreType.RocksDB, StoreType.Timed);
         final List<Boolean> logging = Arrays.asList(true, false);
@@ -138,15 +111,9 @@ public class KTableEfficientRangeQueryTest {
         return buildParameters(types, logging, caching, forward);
     }
 
-    @Before
-    public void setup() {
-        streamsConfig = mkProperties(mkMap(
-                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
-        ));
-    }
-
-    @Test
-    public void testStoreConfig() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testStoreConfig(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward) {
         final Materialized<String, String, KeyValueStore<Bytes, byte[]>> stateStoreConfig = getStoreConfig(storeType, TABLE_NAME, enableLogging, enableCaching);
         //Create topology: table from input topic
         final StreamsBuilder builder = new StreamsBuilder();

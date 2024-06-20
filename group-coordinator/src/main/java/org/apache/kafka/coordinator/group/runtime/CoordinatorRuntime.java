@@ -60,7 +60,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
@@ -900,9 +899,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 if (currentBatch != null) {
                     currentBatch.deferredEvents.add(event);
                 } else {
-                    OptionalLong pendingOffset = deferredEventQueue.highestPendingOffset();
-                    if (pendingOffset.isPresent()) {
-                        deferredEventQueue.add(pendingOffset.getAsLong(), event);
+                    if (coordinator.lastCommittedOffset() < coordinator.lastWrittenOffset()) {
+                        deferredEventQueue.add(coordinator.lastWrittenOffset(), event);
                     } else {
                         event.complete(null);
                     }

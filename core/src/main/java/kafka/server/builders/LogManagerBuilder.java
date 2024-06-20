@@ -20,19 +20,21 @@ package kafka.server.builders;
 import kafka.log.LogManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.metadata.ConfigRepository;
+
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
-import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
-import scala.collection.JavaConverters;
 
 import java.io.File;
 import java.util.Collections;
 import java.util.List;
+
+import scala.collection.JavaConverters;
 
 
 public class LogManagerBuilder {

@@ -38,15 +38,14 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -64,10 +63,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 
-@Category({IntegrationTest.class})
+@Tag("integration")
+@Timeout(600)
 public class ConsistencyVectorIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
     private static int port = 0;
     private static final String INPUT_TOPIC_NAME = "input-topic";
@@ -77,19 +75,16 @@ public class ConsistencyVectorIntegrationTest {
 
     public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @Rule
-    public TestName testName = new TestName();
-
     private final List<KafkaStreams> streamsToCleanup = new ArrayList<>();
     private final MockTime mockTime = cluster.time;
 
-    @Before
+    @BeforeEach
     public void before() throws InterruptedException, IOException {
         cluster.start();
         cluster.createTopic(INPUT_TOPIC_NAME, 1, 1);
     }
 
-    @After
+    @AfterEach
     public void after() {
         for (final KafkaStreams kafkaStreams : streamsToCleanup) {
             kafkaStreams.close();
@@ -98,7 +93,7 @@ public class ConsistencyVectorIntegrationTest {
     }
 
     @Test
-    public void shouldHaveSamePositionBoundActiveAndStandBy() throws Exception {
+    public void shouldHaveSamePositionBoundActiveAndStandBy(final TestInfo testInfo) throws Exception {
         final Semaphore semaphore = new Semaphore(0);
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -110,7 +105,7 @@ public class ConsistencyVectorIntegrationTest {
                .toStream()
                .peek((k, v) -> semaphore.release());
 
-        final String safeTestName = safeUniqueTestName(testName);
+        final String safeTestName = safeUniqueTestName(testInfo);
         final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration(safeTestName));
         final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration(safeTestName));
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
