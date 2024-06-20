@@ -88,6 +88,7 @@ import org.apache.kafka.coordinator.group.runtime.CoordinatorShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorShardBuilder;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
+import org.apache.kafka.coordinator.group.taskassignor.MockAssignor;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -95,6 +96,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -202,6 +204,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withConsumerGroupMaxSize(config.consumerGroupMaxSize)
                 .withConsumerGroupSessionTimeout(config.consumerGroupSessionTimeoutMs)
                 .withConsumerGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs)
+                // TODO: Do we need separate configs for streams groups?
+                .withStreamsGroupAssignors(Collections.singletonList(new MockAssignor()))
+                .withStreamsGroupMaxSize(config.consumerGroupMaxSize)
+                .withStreamsGroupSessionTimeout(config.consumerGroupSessionTimeoutMs)
+                .withStreamsGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs)
                 .withClassicGroupMaxSize(config.classicGroupMaxSize)
                 .withClassicGroupInitialRebalanceDelayMs(config.classicGroupInitialRebalanceDelayMs)
                 .withClassicGroupNewMemberJoinTimeoutMs(config.classicGroupNewMemberJoinTimeoutMs)

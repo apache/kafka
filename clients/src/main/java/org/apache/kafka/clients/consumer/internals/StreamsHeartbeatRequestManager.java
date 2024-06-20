@@ -213,7 +213,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
                 exception.getMessage());
             logger.debug(message);
         } else {
-            logger.error("StreamsHeartbeatRequest failed due to fatal error: {}", exception.getMessage());
+            logger.error("StreamsHeartbeatRequest failed due to fatal error", exception);
             handleFatalFailure(exception);
         }
     }
@@ -576,7 +576,9 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
                     tag.setValue(entry.getValue());
                     return tag;
                 }).collect(Collectors.toList()));
-                data.setAssignmentConfigs(streamsInterface.assignmentConfiguration().entrySet().stream().map(entry -> {
+                data.setAssignmentConfigs(streamsInterface.assignmentConfiguration().entrySet().stream().filter(
+                    entry -> entry.getValue() != null
+                ).map(entry -> {
                     StreamsHeartbeatRequestData.KeyValue config = new StreamsHeartbeatRequestData.KeyValue();
                     config.setKey(entry.getKey());
                     config.setValue(entry.getValue().toString());

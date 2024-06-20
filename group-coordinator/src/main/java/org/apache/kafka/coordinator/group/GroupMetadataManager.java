@@ -51,6 +51,10 @@ import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsHeartbeatRequestData.HostInfo;
+import org.apache.kafka.common.message.StreamsHeartbeatRequestData.KeyValue;
+import org.apache.kafka.common.message.StreamsHeartbeatRequestData.TaskIds;
+import org.apache.kafka.common.message.StreamsHeartbeatRequestData.TaskOffset;
 import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsInitializeRequestData;
 import org.apache.kafka.common.message.StreamsInitializeResponseData;
@@ -108,6 +112,7 @@ import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
+import org.apache.kafka.coordinator.group.taskassignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -143,6 +148,9 @@ import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsCurrentAssignmentRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupEpochRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
@@ -156,6 +164,7 @@ import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTar
 import static org.apache.kafka.coordinator.group.Group.GroupType.STREAMS;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
+import static org.apache.kafka.coordinator.group.Utils.taskAssignmentToString;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
@@ -165,6 +174,10 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABL
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember.hasAssignedPartitionsChanged;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.STREAMS_GROUP_REBALANCES_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedActiveTasksChanged;
+import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedStandbyTasksChanged;
+import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedWarmupTasksChanged;
 
 /**
  * The GroupMetadataManager manages the metadata of all classic and consumer groups. It holds
@@ -190,6 +203,11 @@ public class GroupMetadataManager {
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
         private MetadataImage metadataImage = null;
         private int consumerGroupSessionTimeoutMs = 45000;
+        private List<TaskAssignor> streamsGroupAssignors = null;
+        private int streamsGroupMaxSize = Integer.MAX_VALUE;
+        private int streamsGroupHeartbeatIntervalMs = 5000;
+        private int streamsGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
+        private int streamsGroupSessionTimeoutMs = 45000;
         private int classicGroupMaxSize = Integer.MAX_VALUE;
         private int classicGroupInitialRebalanceDelayMs = 3000;
         private int classicGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
@@ -240,6 +258,31 @@ public class GroupMetadataManager {
 
         Builder withConsumerGroupMetadataRefreshIntervalMs(int consumerGroupMetadataRefreshIntervalMs) {
             this.consumerGroupMetadataRefreshIntervalMs = consumerGroupMetadataRefreshIntervalMs;
+            return this;
+        }
+
+        Builder withStreamsGroupAssignors(List<TaskAssignor> streamsGroupAssignors) {
+            this.streamsGroupAssignors = streamsGroupAssignors;
+            return this;
+        }
+
+        Builder withStreamsGroupMaxSize(int streamsGroupMaxSize) {
+            this.streamsGroupMaxSize = streamsGroupMaxSize;
+            return this;
+        }
+
+        Builder withStreamsGroupSessionTimeout(int streamsGroupSessionTimeoutMs) {
+            this.streamsGroupSessionTimeoutMs = streamsGroupSessionTimeoutMs;
+            return this;
+        }
+
+        Builder withStreamsGroupHeartbeatInterval(int streamsGroupHeartbeatIntervalMs) {
+            this.streamsGroupHeartbeatIntervalMs = streamsGroupHeartbeatIntervalMs;
+            return this;
+        }
+
+        Builder withStreamsGroupMetadataRefreshIntervalMs(int streamsGroupMetadataRefreshIntervalMs) {
+            this.streamsGroupMetadataRefreshIntervalMs = streamsGroupMetadataRefreshIntervalMs;
             return this;
         }
 
@@ -313,6 +356,11 @@ public class GroupMetadataManager {
                 classicGroupNewMemberJoinTimeoutMs,
                 classicGroupMinSessionTimeoutMs,
                 classicGroupMaxSessionTimeoutMs,
+                streamsGroupAssignors,
+                streamsGroupMaxSize,
+                streamsGroupSessionTimeoutMs,
+                streamsGroupHeartbeatIntervalMs,
+                streamsGroupMetadataRefreshIntervalMs,
                 consumerGroupMigrationPolicy
             );
         }
@@ -389,6 +437,36 @@ public class GroupMetadataManager {
     private final int consumerGroupMetadataRefreshIntervalMs;
 
     /**
+     * The supported task assignors keyed by their name.
+     */
+    private final Map<String, TaskAssignor> taskAssignors;
+
+    /**
+     * The default assignor used.
+     */
+    private final TaskAssignor defaultTaskAssignor;
+
+    /**
+     * The maximum number of members allowed in a single streams group.
+     */
+    private final int streamsGroupMaxSize;
+
+    /**
+     * The heartbeat interval for streams groups.
+     */
+    private final int streamsGroupHeartbeatIntervalMs;
+
+    /**
+     * The session timeout for streams groups.
+     */
+    private final int streamsGroupSessionTimeoutMs;
+
+    /**
+     * The metadata refresh interval.
+     */
+    private final int streamsGroupMetadataRefreshIntervalMs;
+
+    /**
      * The metadata image.
      */
     private MetadataImage metadataImage;
@@ -449,6 +527,11 @@ public class GroupMetadataManager {
         int classicGroupNewMemberJoinTimeoutMs,
         int classicGroupMinSessionTimeoutMs,
         int classicGroupMaxSessionTimeoutMs,
+        List<TaskAssignor> taskAssignors,
+        int streamsGroupMaxSize,
+        int streamsGroupSessionTimeoutMs,
+        int streamsGroupHeartbeatIntervalMs,
+        int streamsGroupMetadataRefreshIntervalMs,
         ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy
     ) {
         this.logContext = logContext;
@@ -471,6 +554,12 @@ public class GroupMetadataManager {
         this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
         this.classicGroupMinSessionTimeoutMs = classicGroupMinSessionTimeoutMs;
         this.classicGroupMaxSessionTimeoutMs = classicGroupMaxSessionTimeoutMs;
+        this.streamsGroupMaxSize = streamsGroupMaxSize;
+        this.streamsGroupSessionTimeoutMs = streamsGroupSessionTimeoutMs;
+        this.streamsGroupHeartbeatIntervalMs = streamsGroupHeartbeatIntervalMs;
+        this.streamsGroupMetadataRefreshIntervalMs = streamsGroupMetadataRefreshIntervalMs;
+        this.taskAssignors = taskAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
+        this.defaultTaskAssignor = taskAssignors.get(0);
         this.consumerGroupMigrationPolicy = consumerGroupMigrationPolicy;
     }
 
@@ -674,6 +763,79 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Gets or maybe creates a streams group without updating the groups map.
+     * The group will be materialized during the replay.
+     *
+     * @param groupId           The group id.
+     * @param createIfNotExists A boolean indicating whether the group should be
+     *                          created if it does not exist or is an empty classic group.
+     * @param records           The record list to which the group tombstones are written
+     *                          if the group is empty and is a classic group.
+     *
+     * @return A StreamsGroup.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
+     *                                  if the group is not a streams group.
+     *
+     * Package private for testing.
+     */
+    StreamsGroup getOrMaybeCreateStreamsGroup(
+        String groupId,
+        boolean createIfNotExists,
+        List<CoordinatorRecord> records
+    ) throws GroupIdNotFoundException {
+        Group group = groups.get(groupId);
+
+        if (group == null && !createIfNotExists) {
+            throw new GroupIdNotFoundException(String.format("Streams group %s not found.", groupId));
+        }
+
+        if (group == null || (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records))) {
+            return new StreamsGroup(snapshotRegistry, groupId, metrics);
+        } else {
+            if (group.type() == STREAMS) {
+                return (StreamsGroup) group;
+            } else {
+                throw new GroupIdNotFoundException(String.format("Group %s is not a streams group.",
+                    groupId));
+            }
+        }
+    }
+
+    /**
+     * Gets a streams group by committed offset.
+     *
+     * @param groupId           The group id.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A StreamsGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a streams group.
+     */
+    public StreamsGroup streamsGroup(
+        String groupId,
+        long committedOffset
+    ) throws GroupIdNotFoundException {
+        Group group = group(groupId, committedOffset);
+
+        if (group.type() == STREAMS) {
+            return (StreamsGroup) group;
+        } else {
+            // We don't support upgrading/downgrading between protocols at the moment so
+            // we throw an exception if a group exists with the wrong type.
+            throw new GroupIdNotFoundException(String.format("Group %s is not a streams group.",
+                groupId));
+        }
+    }
+
+    /**
+     * An overloaded method of {@link GroupMetadataManager#streamsGroup(String, long)}
+     */
+    StreamsGroup streamsGroup(
+        String groupId
+    ) throws GroupIdNotFoundException {
+        return streamsGroup(groupId, Long.MAX_VALUE);
+    }
+
+    /**
      * Gets a consumer group by committed offset.
      *
      * @param groupId           The group id.
@@ -756,7 +918,7 @@ public class GroupMetadataManager {
      *
      * @return A StreamsGroup.
      * @throws IllegalStateException if the group does not exist and createIfNotExists is false or
-     *                               if the group is not a consumer group.
+     *                               if the group is not a streams group.
      * Package private for testing.
      */
     StreamsGroup getOrMaybeCreatePersistedStreamsGroup(
@@ -772,8 +934,8 @@ public class GroupMetadataManager {
         if (group == null) {
             StreamsGroup streamsGroup = new StreamsGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, streamsGroup);
-            // ToDo: migrate to streams group
-//            metrics.onConsumerGroupStateTransition(null, streamsGroup.state());
+            // TODO: Metrics
+            //metrics.onStreamsGroupStateTransition(null, streamsGroup.state());
             return streamsGroup;
         } else {
             if (group.type() == STREAMS) {
@@ -1191,7 +1353,7 @@ public class GroupMetadataManager {
      *
      * @return A boolean indicating whether the owned partitions are a subset or not.
      */
-    private boolean isSubset(
+    private boolean isPartitionSubset(
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
         Map<Uuid, Set<Integer>> target
     ) {
@@ -1199,6 +1361,34 @@ public class GroupMetadataManager {
 
         for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
             Set<Integer> partitions = target.get(topicPartitions.topicId());
+            if (partitions == null) return false;
+            for (Integer partitionId : topicPartitions.partitions()) {
+                if (!partitions.contains(partitionId)) return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Verifies that the tasks currently owned by the member (the ones set in the
+     * request) matches the ones that the member should own. It matches if the streams
+     * only owns tasks which are in the assigned tasks. It does not match if
+     * it owns any other tasks.
+     *
+     * @param ownedTasks  The tasks provided by the streams in the request.
+     * @param target      The tasks that the member should have.
+     *
+     * @return A boolean indicating whether the owned partitions are a subset or not.
+     */
+    private boolean isTaskSubset(
+        List<StreamsHeartbeatRequestData.TaskIds> ownedTasks,
+        Map<String, Set<Integer>> target
+    ) {
+        if (ownedTasks == null) return false;
+
+        for (StreamsHeartbeatRequestData.TaskIds topicPartitions : ownedTasks) {
+            Set<Integer> partitions = target.get(topicPartitions.subtopology());
             if (partitions == null) return false;
             for (Integer partitionId : topicPartitions.partitions()) {
                 if (!partitions.contains(partitionId)) return false;
@@ -1251,7 +1441,7 @@ public class GroupMetadataManager {
         } else if (receivedMemberEpoch < member.memberEpoch()) {
             // If the member comes with the previous epoch and has a subset of the current assignment partitions,
             // we accept it because the response with the bumped epoch may have been lost.
-            if (receivedMemberEpoch != member.previousMemberEpoch() || !isSubset(ownedTopicPartitions, member.assignedPartitions())) {
+            if (receivedMemberEpoch != member.previousMemberEpoch() || !this.isPartitionSubset(ownedTopicPartitions, member.assignedPartitions())) {
                 throw new FencedMemberEpochException("The consumer group member has a smaller member "
                     + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
                     + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
@@ -1307,6 +1497,117 @@ public class GroupMetadataManager {
      * @throws UnknownMemberIdException if no static member exists in the group against the provided instance id.
      */
     private void throwIfStaticMemberIsUnknown(ConsumerGroupMember staticMember, String receivedInstanceId) {
+        if (staticMember == null) {
+            throw Errors.UNKNOWN_MEMBER_ID.exception("Instance id " + receivedInstanceId + " is unknown.");
+        }
+    }
+
+    /**
+     * Checks whether the streams group can accept a new member or not based on the
+     * max group size defined.
+     *
+     * @param group     The streams group.
+     * @param memberId  The member id.
+     *
+     * @throws GroupMaxSizeReachedException if the maximum capacity has been reached.
+     */
+    private void throwIfStreamsGroupIsFull(
+        StreamsGroup group,
+        String memberId
+    ) throws GroupMaxSizeReachedException {
+        // If the streams group has reached its maximum capacity, the member is rejected if it is not
+        // already a member of the streams group.
+        if (group.numMembers() >= streamsGroupMaxSize && (memberId.isEmpty() || !group.hasMember(memberId))) {
+            throw new GroupMaxSizeReachedException("The streams group has reached its maximum capacity of "
+                + streamsGroupMaxSize + " members.");
+        }
+    }
+
+    /**
+     * Validates the member epoch provided in the heartbeat request.
+     *
+     * @param member                The streams group member.
+     * @param receivedMemberEpoch   The member epoch.
+     * @param ownedActiveTasks      The owned active tasks.
+     * @param ownedStandbyTasks     The owned standby tasks.
+     * @param ownedWarmupTasks      The owned warmup tasks.
+     *
+     * @throws FencedMemberEpochException if the provided epoch is ahead or behind the epoch known
+     *                                    by this coordinator.
+     */
+    private void throwIfMemberEpochIsInvalid(
+        StreamsGroupMember member,
+        int receivedMemberEpoch,
+        List<StreamsHeartbeatRequestData.TaskIds> ownedActiveTasks,
+        List<StreamsHeartbeatRequestData.TaskIds> ownedStandbyTasks,
+        List<StreamsHeartbeatRequestData.TaskIds> ownedWarmupTasks
+    ) {
+        if (receivedMemberEpoch > member.memberEpoch()) {
+            throw new FencedMemberEpochException("The streams group member has a greater member "
+                + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
+                + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
+        } else if (receivedMemberEpoch < member.memberEpoch()) {
+            // If the member comes with the previous epoch and has a subset of the current assignment partitions,
+            // we accept it because the response with the bumped epoch may have been lost.
+            if (receivedMemberEpoch != member.previousMemberEpoch()
+                || !isTaskSubset(ownedActiveTasks, member.assignedActiveTasks())
+                || !isTaskSubset(ownedStandbyTasks, member.assignedStandbyTasks())
+                || !isTaskSubset(ownedWarmupTasks, member.assignedWarmupTasks())) {
+                throw new FencedMemberEpochException("The streams group member has a smaller member "
+                    + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
+                    + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
+            }
+        }
+    }
+
+    /**
+     * Validates if the received instanceId has been released from the group
+     *
+     * @param member                The streams group member.
+     * @param groupId               The streams group id.
+     * @param receivedMemberId      The member id received in the request.
+     * @param receivedInstanceId    The instance id received in the request.
+     *
+     * @throws UnreleasedInstanceIdException if the instance id received in the request is still in use by an existing static member.
+     */
+    private void throwIfInstanceIdIsUnreleased(StreamsGroupMember member, String groupId, String receivedMemberId, String receivedInstanceId) {
+        if (member.memberEpoch() != LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+            // The new member can't join.
+            log.info("[GroupId {}] Static member {} with instance id {} cannot join the group because the instance id is" +
+                " is owned by member {}.", groupId, receivedMemberId, receivedInstanceId, member.memberId());
+            throw Errors.UNRELEASED_INSTANCE_ID.exception("Static member " + receivedMemberId + " with instance id "
+                + receivedInstanceId + " cannot join the group because the instance id is owned by " + member.memberId() + " member.");
+        }
+    }
+
+    /**
+     * Validates if the received instanceId has been released from the group
+     *
+     * @param member                The streams group member.
+     * @param groupId               The streams group id.
+     * @param receivedMemberId      The member id received in the request.
+     * @param receivedInstanceId    The instance id received in the request.
+     *
+     * @throws FencedInstanceIdException if the instance id provided is fenced because of another static member.
+     */
+    private void throwIfInstanceIdIsFenced(StreamsGroupMember member, String groupId, String receivedMemberId, String receivedInstanceId) {
+        if (!member.memberId().equals(receivedMemberId)) {
+            log.info("[GroupId {}] Static member {} with instance id {} is fenced by existing member {}.",
+                groupId, receivedMemberId, receivedInstanceId, member.memberId());
+            throw Errors.FENCED_INSTANCE_ID.exception("Static member " + receivedMemberId + " with instance id "
+                + receivedInstanceId + " was fenced by member " + member.memberId() + ".");
+        }
+    }
+
+    /**
+     * Validates if the received instanceId has been released from the group
+     *
+     * @param staticMember          The static member in the group.
+     * @param receivedInstanceId    The instance id received in the request.
+     *
+     * @throws UnknownMemberIdException if no static member exists in the group against the provided instance id.
+     */
+    private void throwIfStaticMemberIsUnknown(StreamsGroupMember staticMember, String receivedInstanceId) {
         if (staticMember == null) {
             throw Errors.UNKNOWN_MEMBER_ID.exception("Instance id " + receivedInstanceId + " is unknown.");
         }
@@ -1485,6 +1786,210 @@ public class GroupMetadataManager {
             .map(keyValue -> new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                 .setTopicId(keyValue.getKey())
                 .setPartitions(new ArrayList<>(keyValue.getValue())))
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Handles a regular heartbeat from a streams group member. It mainly consists of three parts: 1) The member is created or updated. The
+     * group epoch is bumped if the member has been created or updated. 2) The target assignment for the streams group is updated if the
+     * group epoch is larger than the current target assignment epoch. 3) The member's assignment is reconciled with the target assignment.
+     *
+     * @param groupId            The group id from the request.
+     * @param memberId           The member id from the request.
+     * @param memberEpoch        The member epoch from the request.
+     * @param instanceId         The instance id from the request or null.
+     * @param rackId             The rack id from the request or null.
+     * @param rebalanceTimeoutMs The rebalance timeout from the request or -1.
+     * @param topologyHash
+     * @param clientId           The client id.
+     * @param clientHost         The client host.
+     * @param assignorName       The assignor name from the request or null.
+     * @param ownedActiveTasks   The list of owned active tasks from the request or null.
+     * @param ownedStandbyTasks  The list of owned standby tasks from the request or null.
+     * @param ownedWarmupTasks   The list of owned warmup tasks from the request or null.
+     * @return A Result containing the StreamsHeartbeat response and a list of records to update the state machine.
+     */
+    private CoordinatorResult<StreamsHeartbeatResponseData, CoordinatorRecord> streamsHeartbeat(
+        String groupId,
+        String memberId,
+        int memberEpoch,
+        String instanceId,
+        String rackId,
+        int rebalanceTimeoutMs,
+        final byte[] topologyHash,
+        String clientId,
+        String clientHost,
+        String assignorName,
+        List<TaskIds> ownedActiveTasks,
+        List<TaskIds> ownedStandbyTasks,
+        List<TaskIds> ownedWarmupTasks,
+        final String processId,
+        final HostInfo hostInfo,
+        final List<KeyValue> clientTags,
+        final byte taskOffsetUpdateReason,
+        final List<TaskOffset> taskOffsets,
+        final byte[] userData,
+        final List<KeyValue> assignmentConfigs,
+        final boolean shutdownApplication
+    ) throws ApiException {
+        final long currentTimeMs = time.milliseconds();
+        final List<CoordinatorRecord> records = new ArrayList<>();
+
+        // Get or create the streams group.
+        boolean createIfNotExists = memberEpoch == 0;
+        final StreamsGroup group = getOrMaybeCreateStreamsGroup(groupId, createIfNotExists, records);
+        throwIfStreamsGroupIsFull(group, memberId);
+
+        if (group.topology() == null) {
+            // The group has not been initialized yet.
+            // TODO: WIP
+
+        }
+
+        // Get or create the member.
+        if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
+        StreamsGroupMember member;
+        StreamsGroupMember.Builder updatedMemberBuilder;
+        boolean staticMemberReplaced = false;
+        if (instanceId == null) {
+            member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
+            throwIfMemberEpochIsInvalid(member, memberEpoch, ownedActiveTasks, ownedStandbyTasks, ownedWarmupTasks);
+            if (createIfNotExists) {
+                log.info("[GroupId {}] Member {} joins the streams group.", groupId, memberId);
+            }
+            updatedMemberBuilder = new StreamsGroupMember.Builder(member);
+        } else {
+            member = group.staticMember(instanceId);
+            if (memberEpoch == 0) {
+                // A new static member joins or the existing static member rejoins.
+                if (member == null) {
+                    // New static member.
+                    member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
+                    updatedMemberBuilder = new StreamsGroupMember.Builder(member);
+                    log.info("[GroupId {}] Static member {} with instance id {} joins the streams group.", groupId, memberId, instanceId);
+                } else {
+                    // Static member rejoins with a different member id so it should replace
+                    // the previous instance iff the previous member had sent a leave group.
+                    throwIfInstanceIdIsUnreleased(member, groupId, memberId, instanceId);
+                    // Replace the current member.
+                    staticMemberReplaced = true;
+                    updatedMemberBuilder = new StreamsGroupMember.Builder(memberId)
+                        .setAssignedActiveTasks(member.assignedActiveTasks())
+                        .setAssignedStandbyTasks(member.assignedStandbyTasks())
+                        .setAssignedWarmupTasks(member.assignedWarmupTasks());
+                    // Remove the member without canceling its timers in case the change is reverted. If the
+                    // change is not reverted, the group validation will fail and the timer will do nothing.
+                    removeMember(records, groupId, member.memberId());
+                    log.info("[GroupId {}] Static member with unknown member id and instance id {} re-joins the streams group. " +
+                        "Created a new member {} to replace the existing member {}.", groupId, instanceId, memberId, member.memberId());
+                }
+            } else {
+                throwIfStaticMemberIsUnknown(member, instanceId);
+                throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
+                throwIfMemberEpochIsInvalid(member, memberEpoch, ownedActiveTasks, ownedStandbyTasks, ownedWarmupTasks);
+                updatedMemberBuilder = new StreamsGroupMember.Builder(member);
+            }
+        }
+
+        // 1. Create or update the member. If the member is new or has changed, a StreamsMemberMetadataValue
+        // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
+        // changed, the subscription metadata is updated and persisted by writing a StreamsPartitionMetadataValue
+        // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
+        // changed, and persisted by writing a StreamsMetadataValue record to the partition.
+        StreamsGroupMember updatedMember = updatedMemberBuilder
+            .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
+            .maybeUpdateRackId(Optional.ofNullable(rackId))
+            .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
+            .maybeUpdateAssignor(Optional.ofNullable(assignorName))
+            .maybeUpdateTopologyHash(Optional.ofNullable(topologyHash))
+            .setClientId(clientId)
+            .setClientHost(clientHost)
+            .build();
+
+        int groupEpoch = group.groupEpoch();
+        Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
+
+        if (group.hasMetadataExpired(currentTimeMs)) {
+            // The subscription metadata is updated when the refresh deadline has been reached.
+            subscriptionMetadata = group.computeSubscriptionMetadata(
+                metadataImage.topics(),
+                metadataImage.cluster()
+            );
+
+            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+                log.info("[GroupId {}] Computed new partition metadata: {}.",
+                    groupId, subscriptionMetadata);
+                records.add(newStreamsGroupPartitionMetadataRecord(groupId, subscriptionMetadata));
+                groupEpoch += 1;
+                records.add(newStreamsGroupEpochRecord(groupId, groupEpoch));
+                log.info("[GroupId {}] Bumped streams group epoch to {}.", groupId, groupEpoch);
+                metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
+            }
+
+            group.setMetadataRefreshDeadline(currentTimeMs + streamsGroupMetadataRefreshIntervalMs, groupEpoch);
+        }
+
+        // 2. Update the target assignment if the group epoch is larger than the target assignment epoch or a static member
+        // replaces an existing static member. The delta between the existing and the new target assignment is persisted to the partition.
+        int targetAssignmentEpoch = group.assignmentEpoch();
+        org.apache.kafka.coordinator.group.streams.Assignment targetAssignment = group.targetAssignment(memberId);
+        if (groupEpoch > targetAssignmentEpoch || staticMemberReplaced) {
+            targetAssignment = updateTargetAssignment(
+                group,
+                groupEpoch,
+                member,
+                updatedMember,
+                subscriptionMetadata,
+                staticMemberReplaced,
+                records
+            );
+            targetAssignmentEpoch = groupEpoch;
+        }
+
+        // 3. Reconcile the member's assignment with the target assignment if the member is not
+        // fully reconciled yet.
+        updatedMember = maybeReconcile(
+            groupId,
+            updatedMember,
+            group::currentActiveTaskEpoch,
+            targetAssignmentEpoch,
+            targetAssignment,
+            ownedActiveTasks,
+            ownedStandbyTasks,
+            ownedWarmupTasks,
+            records
+        );
+
+        scheduleStreamsGroupSessionTimeout(groupId, memberId);
+
+        // Prepare the response.
+        StreamsHeartbeatResponseData response = new StreamsHeartbeatResponseData()
+            .setMemberId(updatedMember.memberId())
+            .setMemberEpoch(updatedMember.memberEpoch())
+            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs);
+
+        // The assignment is only provided in the following cases:
+        // 1. The member sent a full request.
+        // 2. The member's assignment has been updated.
+        boolean isFullRequest = memberEpoch == 0;
+        if (isFullRequest
+            || hasAssignedActiveTasksChanged(member, updatedMember)
+            || hasAssignedStandbyTasksChanged(member, updatedMember)
+            || hasAssignedWarmupTasksChanged(member, updatedMember)
+        ) {
+            response.setActiveTasks(createStreamsHeartbeatResponseTaskIds(updatedMember.assignedActiveTasks()));
+            response.setStandbyTasks(createStreamsHeartbeatResponseTaskIds(updatedMember.assignedStandbyTasks()));
+            response.setWarmupTasks(createStreamsHeartbeatResponseTaskIds(updatedMember.assignedWarmupTasks()));
+        }
+
+        return new CoordinatorResult<>(records, response);
+    }
+
+    private List<StreamsHeartbeatResponseData.TaskIds> createStreamsHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
+        return taskIds.entrySet().stream()
+            .map(entry -> new StreamsHeartbeatResponseData.TaskIds()
+                .setSubtopology(entry.getKey())
+                .setPartitions(new ArrayList<>(entry.getValue())))
             .collect(Collectors.toList());
     }
 
@@ -2046,6 +2551,78 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Reconciles the current assignment of the member towards the target assignment if needed.
+     *
+     * @param groupId               The group id.
+     * @param member                The member to reconcile.
+     * @param currentActiveTaskEpoch The function returning the current epoch of
+     *                              a given partition.
+     * @param targetAssignmentEpoch The target assignment epoch.
+     * @param targetAssignment      The target assignment.
+     * @param ownedActiveTasks      The list of active tasks owned by the member. This
+     *                              is reported in the StreamsHeartbeat API and
+     *                              it could be null if not provided.
+     * @param ownedStandbyTasks     The list of standby owned by the member. This
+     *                              is reported in the StreamsHeartbeat API and
+     *                              it could be null if not provided.
+     * @param ownedWarmupTasks      The list of warmup tasks owned by the member. This
+     *                              is reported in the StreamsHeartbeat API and
+     *                              it could be null if not provided.
+     * @param records               The list to accumulate any new records.
+     * @return The received member if no changes have been made; or a new
+     *         member containing the new assignment.
+     */
+    private StreamsGroupMember maybeReconcile(
+        String groupId,
+        StreamsGroupMember member,
+        BiFunction<String, Integer, Integer> currentActiveTaskEpoch,
+        int targetAssignmentEpoch,
+        org.apache.kafka.coordinator.group.streams.Assignment targetAssignment,
+        List<StreamsHeartbeatRequestData.TaskIds> ownedActiveTasks,
+        List<StreamsHeartbeatRequestData.TaskIds> ownedStandbyTasks,
+        List<StreamsHeartbeatRequestData.TaskIds> ownedWarmupTasks,
+        List<CoordinatorRecord> records
+    ) {
+        if (member.isReconciledTo(targetAssignmentEpoch)) {
+            return member;
+        }
+
+        StreamsGroupMember updatedMember = new org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilder(member)
+            .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
+            .withCurrentActiveTaskEpoch(currentActiveTaskEpoch)
+            .withOwnedActiveTasks(ownedActiveTasks)
+            .withOwnedStandbyTasks(ownedStandbyTasks)
+            .withOwnedWarmupTasks(ownedWarmupTasks)
+            .build();
+
+        if (!updatedMember.equals(member)) {
+            records.add(newStreamsCurrentAssignmentRecord(groupId, updatedMember));
+
+            log.info("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
+                    + "assignedActiveTasks={}, assignedStandbyTasks={}, assignedWarmupTasks={} and revokedPartitions={}.",
+                groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
+                taskAssignmentToString(updatedMember.assignedActiveTasks()),
+                taskAssignmentToString(updatedMember.assignedStandbyTasks()),
+                taskAssignmentToString(updatedMember.assignedWarmupTasks()),
+                taskAssignmentToString(updatedMember.activeTasksPendingRevocation()));
+
+            // Schedule/cancel the rebalance timeout.
+            if (updatedMember.state() == org.apache.kafka.coordinator.group.streams.MemberState.UNREVOKED_TASKS) {
+                scheduleStreamsGroupRebalanceTimeout(
+                    groupId,
+                    updatedMember.memberId(),
+                    updatedMember.memberEpoch(),
+                    updatedMember.rebalanceTimeoutMs()
+                );
+            } else {
+                cancelStreamsGroupRebalanceTimeout(groupId, updatedMember.memberId());
+            }
+        }
+
+        return updatedMember;
+    }
+
+    /**
      * Updates the target assignment according to the updated member and subscription metadata.
      *
      * @param group                 The ConsumerGroup.
@@ -2085,6 +2662,66 @@ public class GroupMetadataManager {
                     .withTopicsImage(metadataImage.topics())
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;
+            // A new static member is replacing an older one with the same subscriptions.
+            // We just need to remove the older member and add the newer one. The new member should
+            // reuse the target assignment of the older member.
+            if (staticMemberReplaced) {
+                assignmentResult = assignmentResultBuilder
+                    .removeMember(member.memberId())
+                    .build();
+            } else {
+                assignmentResult = assignmentResultBuilder
+                    .build();
+            }
+
+            log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor: {}.",
+                group.groupId(), groupEpoch, preferredServerAssignor, assignmentResult.targetAssignment());
+
+            records.addAll(assignmentResult.records());
+            return assignmentResult.targetAssignment().get(updatedMember.memberId());
+        } catch (PartitionAssignorException ex) {
+            String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
+                groupEpoch, ex.getMessage());
+            log.error("[GroupId {}] {}.", group.groupId(), msg);
+            throw new UnknownServerException(msg, ex);
+        }
+    }
+
+    /**
+     * Updates the target assignment according to the updated member and subscription metadata.
+     *
+     * @param group                The StreamsGroup.
+     * @param groupEpoch           The group epoch.
+     * @param member               The existing member.
+     * @param updatedMember        The updated member.
+     * @param subscriptionMetadata The subscription metadata.
+     * @param staticMemberReplaced The boolean indicating whether the updated member is a static member that replaces the existing member.
+     * @param records              The list to accumulate any new records.
+     * @return The new target assignment.
+     */
+    private org.apache.kafka.coordinator.group.streams.Assignment updateTargetAssignment(
+        StreamsGroup group,
+        int groupEpoch,
+        StreamsGroupMember member,
+        StreamsGroupMember updatedMember,
+        Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> subscriptionMetadata,
+        boolean staticMemberReplaced,
+        List<CoordinatorRecord> records
+    ) {
+        String preferredServerAssignor = group.computePreferredServerAssignor(
+            member,
+            updatedMember
+        ).orElse(defaultAssignor.name());
+        try {
+            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
+                new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(group.groupId(), groupEpoch, taskAssignors.get(preferredServerAssignor), group.topology())
+                    .withMembers(group.members())
+                    .withStaticMembers(group.staticMembers())
+                    .withSubscriptionMetadata(subscriptionMetadata)
+                    .withTargetAssignment(group.targetAssignment())
+                    .withTopicsImage(metadataImage.topics())
+                    .addOrUpdateMember(updatedMember.memberId(), updatedMember);
+            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;
             // A new static member is replacing an older one with the same subscriptions.
             // We just need to remove the older member and add the newer one. The new member should
             // reuse the target assignment of the older member.
@@ -2151,6 +2788,46 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Handles leave request from a streams group member.
+     * @param groupId       The group id from the request.
+     * @param memberId      The member id from the request.
+     * @param memberEpoch   The member epoch from the request.
+     *
+     * @return A Result containing the StreamsHeartbeat response and
+     *         a list of records to update the state machine.
+     */
+    private CoordinatorResult<StreamsHeartbeatResponseData, CoordinatorRecord> streamsGroupLeave(
+        String groupId,
+        String instanceId,
+        String memberId,
+        int memberEpoch
+    ) throws ApiException {
+        StreamsGroup group = streamsGroup(groupId);
+        StreamsHeartbeatResponseData response = new StreamsHeartbeatResponseData()
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch);
+
+        if (instanceId == null) {
+            StreamsGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+            log.info("[GroupId {}] Member {} left the streams group.", groupId, memberId);
+            return streamsGroupFenceMember(group, member, response);
+        } else {
+            StreamsGroupMember member = group.staticMember(instanceId);
+            throwIfStaticMemberIsUnknown(member, instanceId);
+            throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
+            if (memberEpoch == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+                log.info("[GroupId {}] Static Member {} with instance id {} temporarily left the streams group.",
+                    group.groupId(), memberId, instanceId);
+                return streamsGroupStaticMemberGroupLeave(group, member);
+            } else {
+                log.info("[GroupId {}] Static Member {} with instance id {} left the streams group.",
+                    group.groupId(), memberId, instanceId);
+                return streamsGroupFenceMember(group, member, response);
+            }
+        }
+    }
+
+    /**
      * Handles the case when a static member decides to leave the group.
      * The member is not actually fenced from the group, and instead it's
      * member epoch is updated to -2 to reflect that a member using the given
@@ -2175,6 +2852,36 @@ public class GroupMetadataManager {
         return new CoordinatorResult<>(
             Collections.singletonList(newCurrentAssignmentRecord(group.groupId(), leavingStaticMember)),
             new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(member.memberId())
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+        );
+    }
+
+    /**
+     * Handles the case when a static member decides to leave the group.
+     * The member is not actually fenced from the group, and instead it's
+     * member epoch is updated to -2 to reflect that a member using the given
+     * instance id decided to leave the group and would be back within session
+     * timeout.
+     *
+     * @param group     The group.
+     * @param member    The static member in the group for the instance id.
+     *
+     * @return A CoordinatorResult with a single record signifying that the static member is leaving.
+     */
+    private CoordinatorResult<StreamsHeartbeatResponseData, CoordinatorRecord> streamsGroupStaticMemberGroupLeave(
+        StreamsGroup group,
+        StreamsGroupMember member
+    ) {
+        // We will write a member epoch of -2 for this departing static member.
+        StreamsGroupMember leavingStaticMember = new StreamsGroupMember.Builder(member)
+            .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+            .setActiveTasksPendingRevocation(Collections.emptyMap())
+            .build();
+
+        return new CoordinatorResult<>(
+            Collections.singletonList(newStreamsCurrentAssignmentRecord(group.groupId(), leavingStaticMember)),
+            new StreamsHeartbeatResponseData()
                 .setMemberId(member.memberId())
                 .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
         );
@@ -2224,6 +2931,32 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Fences a member from a streams group and maybe downgrade the streams group to a classic group.
+     *
+     * @param group     The group.
+     * @param member    The member.
+     * @param response  The response of the CoordinatorResult.
+     *
+     * @return The CoordinatorResult to be applied.
+     */
+    private <T> CoordinatorResult<T, CoordinatorRecord> streamsGroupFenceMember(
+        StreamsGroup group,
+        StreamsGroupMember member,
+        T response
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>();
+        removeMember(records, group.groupId(), member.memberId());
+
+        // We bump the group epoch.
+        int groupEpoch = group.groupEpoch() + 1;
+        records.add(newGroupEpochRecord(group.groupId(), groupEpoch));
+
+        cancelTimers(group.groupId(), member.memberId());
+
+        return new CoordinatorResult<>(records, response);
+    }
+
+    /**
      * Write tombstones for the member. The order matters here.
      *
      * @param records       The list of records to append the member assignment tombstone records.
@@ -2246,6 +2979,9 @@ public class GroupMetadataManager {
         cancelConsumerGroupSessionTimeout(groupId, memberId);
         cancelConsumerGroupRebalanceTimeout(groupId, memberId);
         cancelConsumerGroupSyncTimeout(groupId, memberId);
+        cancelStreamsGroupSessionTimeout(groupId, memberId);
+        cancelStreamsGroupRebalanceTimeout(groupId, memberId);
+        cancelStreamsGroupSyncTimeout(groupId, memberId);
     }
 
     /**
@@ -2259,6 +2995,19 @@ public class GroupMetadataManager {
         String memberId
     ) {
         scheduleConsumerGroupSessionTimeout(groupId, memberId, consumerGroupSessionTimeoutMs);
+    }
+
+    /**
+     * Schedules (or reschedules) the session timeout for the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void scheduleStreamsGroupSessionTimeout(
+        String groupId,
+        String memberId
+    ) {
+        scheduleStreamsGroupSessionTimeout(groupId, memberId, streamsGroupSessionTimeoutMs);
     }
 
     /**
@@ -2295,6 +3044,39 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Fences a member from a streams group. Returns an empty CoordinatorResult
+     * if the group or the member doesn't exist.
+     *
+     * @param groupId   The group id.
+     * @param memberId  The member id.
+     * @param reason    The reason for fencing the member.
+     *
+     * @return The CoordinatorResult to be applied.
+     */
+    private <T> CoordinatorResult<T, CoordinatorRecord> streamsGroupFenceMemberOperation(
+        String groupId,
+        String memberId,
+        String reason
+    ) {
+        try {
+            StreamsGroup group = streamsGroup(groupId);
+            StreamsGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+            log.info("[GroupId {}] Member {} fenced from the group because {}.",
+                groupId, memberId, reason);
+
+            return streamsGroupFenceMember(group, member, null);
+        } catch (GroupIdNotFoundException ex) {
+            log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
+                groupId, memberId);
+        } catch (UnknownMemberIdException ex) {
+            log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
+                groupId, memberId);
+        }
+
+        return new CoordinatorResult<>(Collections.emptyList());
+    }
+
+    /**
      * Schedules (or reschedules) the session timeout for the member.
      *
      * @param groupId           The group id.
@@ -2316,6 +3098,27 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Schedules (or reschedules) the session timeout for the member.
+     *
+     * @param groupId           The group id.
+     * @param memberId          The member id.
+     * @param sessionTimeoutMs  The session timeout.
+     */
+    private void scheduleStreamsGroupSessionTimeout(
+        String groupId,
+        String memberId,
+        int sessionTimeoutMs
+    ) {
+        timer.schedule(
+            streamsGroupSessionTimeoutKey(groupId, memberId),
+            sessionTimeoutMs,
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the member session expired.")
+        );
+    }
+
+    /**
      * Cancels the session timeout of the member.
      *
      * @param groupId       The group id.
@@ -2326,6 +3129,19 @@ public class GroupMetadataManager {
         String memberId
     ) {
         timer.cancel(consumerGroupSessionTimeoutKey(groupId, memberId));
+    }
+
+    /**
+     * Cancels the session timeout of the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void cancelStreamsGroupSessionTimeout(
+        String groupId,
+        String memberId
+    ) {
+        timer.cancel(streamsGroupSessionTimeoutKey(groupId, memberId));
     }
 
     /**
@@ -2372,6 +3188,49 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Schedules a rebalance timeout for the member.
+     *
+     * @param groupId               The group id.
+     * @param memberId              The member id.
+     * @param memberEpoch           The member epoch.
+     * @param rebalanceTimeoutMs    The rebalance timeout.
+     */
+    private void scheduleStreamsGroupRebalanceTimeout(
+        String groupId,
+        String memberId,
+        int memberEpoch,
+        int rebalanceTimeoutMs
+    ) {
+        String key = streamsGroupRebalanceTimeoutKey(groupId, memberId);
+        timer.schedule(key, rebalanceTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
+            try {
+                StreamsGroup group = streamsGroup(groupId);
+                StreamsGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+
+                if (member.memberEpoch() == memberEpoch) {
+                    log.info("[GroupId {}] Member {} fenced from the group because " +
+                            "it failed to transition from epoch {} within {}ms.",
+                        groupId, memberId, memberEpoch, rebalanceTimeoutMs);
+
+                    return streamsGroupFenceMember(group, member, null);
+                } else {
+                    log.debug("[GroupId {}] Ignoring rebalance timeout for {} because the member " +
+                        "left the epoch {}.", groupId, memberId, memberEpoch);
+                    return new CoordinatorResult<>(Collections.emptyList());
+                }
+            } catch (GroupIdNotFoundException ex) {
+                log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
+                    groupId, memberId);
+            } catch (UnknownMemberIdException ex) {
+                log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
+                    groupId, memberId);
+            }
+
+            return new CoordinatorResult<>(Collections.emptyList());
+        });
+    }
+
+    /**
      * Cancels the rebalance timeout of the member.
      *
      * @param groupId       The group id.
@@ -2382,6 +3241,19 @@ public class GroupMetadataManager {
         String memberId
     ) {
         timer.cancel(consumerGroupRebalanceTimeoutKey(groupId, memberId));
+    }
+
+    /**
+     * Cancels the rebalance timeout of the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void cancelStreamsGroupRebalanceTimeout(
+        String groupId,
+        String memberId
+    ) {
+        timer.cancel(streamsGroupRebalanceTimeoutKey(groupId, memberId));
     }
 
     /**
@@ -2406,6 +3278,27 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Schedules a join timeout for the member if there's not a join timeout.
+     *
+     * @param groupId               The group id.
+     * @param memberId              The member id.
+     * @param rebalanceTimeoutMs    The rebalance timeout.
+     */
+    private void scheduleStreamsGroupJoinTimeoutIfAbsent(
+        String groupId,
+        String memberId,
+        int rebalanceTimeoutMs
+    ) {
+        timer.scheduleIfAbsent(
+            streamsGroupJoinKey(groupId, memberId),
+            rebalanceTimeoutMs,
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the classic member failed to join within the rebalance timeout.")
+        );
+    }
+
+    /**
      * Cancels the join timeout of the member.
      *
      * @param groupId       The group id.
@@ -2416,6 +3309,19 @@ public class GroupMetadataManager {
         String memberId
     ) {
         timer.cancel(consumerGroupJoinKey(groupId, memberId));
+    }
+
+    /**
+     * Cancels the join timeout of the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void cancelStreamsGroupJoinTimeout(
+        String groupId,
+        String memberId
+    ) {
+        timer.cancel(streamsGroupJoinKey(groupId, memberId));
     }
 
     /**
@@ -2440,6 +3346,27 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Schedules a sync timeout for the member.
+     *
+     * @param groupId               The group id.
+     * @param memberId              The member id.
+     * @param rebalanceTimeoutMs    The rebalance timeout.
+     */
+    private void scheduleStreamsGroupSyncTimeout(
+        String groupId,
+        String memberId,
+        int rebalanceTimeoutMs
+    ) {
+        timer.schedule(
+            streamsGroupSyncKey(groupId, memberId),
+            rebalanceTimeoutMs,
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the member failed to sync within timeout.")
+        );
+    }
+
+    /**
      * Cancels the sync timeout of the member.
      *
      * @param groupId       The group id.
@@ -2450,6 +3377,19 @@ public class GroupMetadataManager {
         String memberId
     ) {
         timer.cancel(consumerGroupSyncKey(groupId, memberId));
+    }
+
+    /**
+     * Cancels the sync timeout of the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void cancelStreamsGroupSyncTimeout(
+        String groupId,
+        String memberId
+    ) {
+        timer.cancel(streamsGroupSyncKey(groupId, memberId));
     }
 
     /**
@@ -2530,37 +3470,39 @@ public class GroupMetadataManager {
     ) throws ApiException {
         throwIfStreamsHeartbeatRequestIsInvalid(request);
 
-        return new CoordinatorResult<>(
-            Collections.emptyList(),
-            new StreamsHeartbeatResponseData()
-                .setErrorCode(Errors.NONE.code())
-        );
-
-//        if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH || request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-//            // TODO: -1 means that the member wants to leave the group.
-//            // -2 means that a static member wants to leave the group.
-//            return consumerGroupLeave(
-//                request.groupId(),
-//                request.instanceId(),
-//                request.memberId(),
-//                request.memberEpoch()
-//            );
-//        } else {
-//            // TODO: Otherwise, it is a regular heartbeat.
-//            return consumerGroupHeartbeat(
-//                request.groupId(),
-//                request.memberId(),
-//                request.memberEpoch(),
-//                request.instanceId(),
-//                request.rackId(),
-//                request.rebalanceTimeoutMs(),
-//                context.clientId(),
-//                context.clientAddress.toString(),
-//                request.subscribedTopicNames(),
-//                request.serverAssignor(),
-//                request.topicPartitions()
-//            );
-//        }
+        if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH || request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+            // -2 means that a static member wants to leave the group.
+            return streamsGroupLeave(
+                request.groupId(),
+                request.instanceId(),
+                request.memberId(),
+                request.memberEpoch()
+            );
+        } else {
+            return streamsHeartbeat(
+                request.groupId(),
+                request.memberId(),
+                request.memberEpoch(),
+                request.instanceId(),
+                request.rackId(),
+                request.rebalanceTimeoutMs(),
+                request.topologyHash(),
+                context.clientId(),
+                context.clientAddress.toString(),
+                request.assignor(),
+                request.activeTasks(),
+                request.standbyTasks(),
+                request.warmupTasks(),
+                request.processId(),
+                request.hostInfo(),
+                request.clientTags(),
+                request.taskOffsetUpdateReason(),
+                request.taskOffset(),
+                request.userData(),
+                request.assignmentConfigs(),
+                request.shutdownApplication()
+            );
+        }
     }
 
     /**
@@ -3158,6 +4100,14 @@ public class GroupMetadataManager {
     }
 
     public static String consumerGroupRebalanceTimeoutKey(String groupId, String memberId) {
+        return "rebalance-timeout-" + groupId + "-" + memberId;
+    }
+
+    public static String streamsGroupSessionTimeoutKey(String groupId, String memberId) {
+        return "session-timeout-" + groupId + "-" + memberId;
+    }
+
+    public static String streamsGroupRebalanceTimeoutKey(String groupId, String memberId) {
         return "rebalance-timeout-" + groupId + "-" + memberId;
     }
 
@@ -5220,6 +6170,34 @@ public class GroupMetadataManager {
      * @return the sync key.
      */
     static String consumerGroupSyncKey(String groupId, String memberId) {
+        return "sync-" + groupId + "-" + memberId;
+    }
+
+    /**
+     * Generate a streams group join key for the timer.
+     *
+     * Package private for testing.
+     *
+     * @param groupId   The group id.
+     * @param memberId  The member id.
+     *
+     * @return the sync key.
+     */
+    static String streamsGroupJoinKey(String groupId, String memberId) {
+        return "join-" + groupId + "-" + memberId;
+    }
+
+    /**
+     * Generate a streams group sync key for the timer.
+     *
+     * Package private for testing.
+     *
+     * @param groupId   The group id.
+     * @param memberId  The member id.
+     *
+     * @return the sync key.
+     */
+    static String streamsGroupSyncKey(String groupId, String memberId) {
         return "sync-" + groupId + "-" + memberId;
     }
 }

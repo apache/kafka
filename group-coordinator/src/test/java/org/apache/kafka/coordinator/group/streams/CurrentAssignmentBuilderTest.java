@@ -49,7 +49,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(11, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 1, 2, 3),
                 mkTaskAssignment(subtopologyId2, 4, 5, 6))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> 10)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> 10)
             .build();
 
         assertEquals(
@@ -83,7 +83,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(11, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 1, 2, 3, 4),
                 mkTaskAssignment(subtopologyId2, 4, 5, 6, 7))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> -1)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> -1)
             .build();
 
         assertEquals(
@@ -117,7 +117,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(11, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 2, 3, 4),
                 mkTaskAssignment(subtopologyId2, 5, 6, 7))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> -1)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> -1)
             .build();
 
         assertEquals(
@@ -154,7 +154,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(11, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 1, 2, 3, 4),
                 mkTaskAssignment(subtopologyId2, 4, 5, 6, 7))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> 10)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> 10)
             .build();
 
         assertEquals(
@@ -188,7 +188,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(11, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 1, 2, 3),
                 mkTaskAssignment(subtopologyId2, 4, 5, 7))))
-            .withCurrentPartitionEpoch((subtopologyId, __) ->
+            .withCurrentActiveTaskEpoch((subtopologyId, __) ->
                 subtopologyId2.equals(subtopologyId) ? 10 : -1
             )
             .withOwnedActiveTasks(Collections.emptyList())
@@ -228,7 +228,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(11, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 2, 3),
                 mkTaskAssignment(subtopologyId2, 5, 6))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> -1)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> -1)
             .withOwnedActiveTasks(Arrays.asList(
                 new StreamsHeartbeatRequestData.TaskIds()
                     .setSubtopology(subtopologyId1)
@@ -273,7 +273,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(12, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 3),
                 mkTaskAssignment(subtopologyId2, 6))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> -1);
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> -1);
 
         assertEquals(
             member,
@@ -330,7 +330,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(12, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 3),
                 mkTaskAssignment(subtopologyId2, 6))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> -1)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> -1)
             .withOwnedActiveTasks(Arrays.asList(
                 new StreamsHeartbeatRequestData.TaskIds()
                     .setSubtopology(subtopologyId1)
@@ -374,7 +374,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(11, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 2, 3, 4),
                 mkTaskAssignment(subtopologyId2, 5, 6, 7))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> 10)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> 10)
             .withOwnedActiveTasks(Arrays.asList(
                 new StreamsHeartbeatRequestData.TaskIds()
                     .setSubtopology(subtopologyId1)
@@ -415,7 +415,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(12, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 2, 3),
                 mkTaskAssignment(subtopologyId2, 5, 6))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> 10)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> 10)
             .build();
 
         assertEquals(
@@ -449,7 +449,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(11, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 2, 3, 4),
                 mkTaskAssignment(subtopologyId2, 5, 6, 7))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> -1)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> -1)
             .build();
 
         assertEquals(
@@ -483,7 +483,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(11, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 2, 3, 4),
                 mkTaskAssignment(subtopologyId2, 5, 6, 7))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> 10)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> 10)
             .build();
 
         assertEquals(member, updatedMember);
@@ -507,7 +507,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(12, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 3),
                 mkTaskAssignment(subtopologyId2, 6))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> 10)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> 10)
             .build();
 
         assertEquals(
@@ -549,7 +549,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(12, new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 3),
                 mkTaskAssignment(subtopologyId2, 6))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> 10)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> 10)
             .build());
 
         // Then the member rejoins with no owned tasks.
@@ -557,7 +557,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(12, new Assignment(mkAssignment(
                 mkTaskAssignment(subtopologyId1, 3),
                 mkTaskAssignment(subtopologyId2, 6))))
-            .withCurrentPartitionEpoch((subtopologyId, partitionId) -> 11)
+            .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> 11)
             .withOwnedActiveTasks(Collections.emptyList())
             .build();
 

@@ -29,6 +29,8 @@ import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
@@ -47,6 +49,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
@@ -713,20 +716,20 @@ public class StreamsGroup implements Group {
     /**
      * Computes the subscription metadata based on the current subscription info.
      *
-     * @param subscribedTopicNames Map of topic names to the number of subscribers.
      * @param topicsImage          The current metadata for all available topics.
      * @param clusterImage         The current metadata for the Kafka cluster.
      * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
      */
     public Map<String, TopicMetadata> computeSubscriptionMetadata(
-        Map<String, Integer> subscribedTopicNames,
         TopicsImage topicsImage,
         ClusterImage clusterImage
     ) {
+        Set<String> subscribedTopicNames = topology.topicSubscription();
+
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
 
-        subscribedTopicNames.forEach((topicName, count) -> {
+        subscribedTopicNames.forEach(topicName -> {
             TopicImage topicImage = topicsImage.getTopic(topicName);
             if (topicImage != null) {
                 Map<Integer, Set<String>> partitionRacks = new HashMap<>();
@@ -891,7 +894,7 @@ public class StreamsGroup implements Group {
             records.add(CoordinatorRecordHelpers.newStreamsMemberSubscriptionTombstoneRecord(groupId(), memberId))
         );
 
-        records.add(CoordinatorRecordHelpers.newStreamsGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(CoordinatorRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord(groupId()));
         records.add(CoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId()));
         records.add(CoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId()));
     }
@@ -1135,7 +1138,7 @@ public class StreamsGroup implements Group {
         );
 
         records.add(CoordinatorRecordHelpers.newStreamsTargetAssignmentEpochRecord(groupId(), groupEpoch()));
-        records.add(CoordinatorRecordHelpers.newStreamsGroupSubscriptionMetadataRecord(groupId(), subscriptionMetadata()));
+        records.add(CoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord(groupId(), subscriptionMetadata()));
 
         members().forEach((__, streamsGroupMember) ->
             records.add(CoordinatorRecordHelpers.newStreamsCurrentAssignmentRecord(groupId(), streamsGroupMember))
@@ -1181,5 +1184,10 @@ public class StreamsGroup implements Group {
             }
         }
         return false;
+    }
+
+    public void setTopology(final StreamsGroupTopologyValue topology) {
+        this.topology = new StreamsTopology(topology.topologyHash(), topology.topology().stream().collect(Collectors.toMap(
+            Subtopology::subtopology, x -> x)));
     }
 }

@@ -200,11 +200,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * it is already a member.
      */
     private void process(final SubscriptionChangeEvent ignored) {
-        if (!requestManagers.heartbeatRequestManager.isPresent()) {
+        if (!requestManagers.membershipManager.isPresent()) {
             log.warn("Group membership manager not present when processing a subscribe event");
             return;
         }
-        MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
+        MembershipManager membershipManager = requestManagers.membershipManager.get();
         membershipManager.onSubscriptionUpdated();
     }
 

@@ -260,7 +260,7 @@ public class CoordinatorRecordHelpers {
      * @param newSubscriptionMetadata The subscription metadata.
      * @return The record.
      */
-    public static CoordinatorRecord newStreamsGroupSubscriptionMetadataRecord(
+    public static CoordinatorRecord newStreamsGroupPartitionMetadataRecord(
         String groupId,
         Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> newSubscriptionMetadata
     ) {
@@ -303,7 +303,7 @@ public class CoordinatorRecordHelpers {
      * @param groupId The streams group id.
      * @return The record.
      */
-    public static CoordinatorRecord newStreamsGroupSubscriptionMetadataTombstoneRecord(
+    public static CoordinatorRecord newStreamsGroupPartitionMetadataTombstoneRecord(
         String groupId
     ) {
         return new CoordinatorRecord(

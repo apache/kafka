@@ -118,11 +118,6 @@ public class TargetAssignmentBuilder {
     private Map<String, org.apache.kafka.coordinator.group.streams.Assignment> targetAssignment = Collections.emptyMap();
 
     /**
-     * Reverse lookup map representing tasks with their current member assignments.
-     */
-    private Map<String, Map<Integer, String>> invertedTargetAssignment = Collections.emptyMap();
-
-    /**
      * The topics image.
      */
     private TopicsImage topicsImage = TopicsImage.EMPTY;
@@ -210,19 +205,6 @@ public class TargetAssignmentBuilder {
         Map<String, org.apache.kafka.coordinator.group.streams.Assignment> targetAssignment
     ) {
         this.targetAssignment = targetAssignment;
-        return this;
-    }
-
-    /**
-     * Adds the existing topic partition assignments.
-     *
-     * @param invertedTargetAssignment The reverse lookup map of the current target assignment.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder withInvertedTargetAssignment(
-        Map<String, Map<Integer, String>> invertedTargetAssignment
-    ) {
-        this.invertedTargetAssignment = invertedTargetAssignment;
         return this;
     }
 

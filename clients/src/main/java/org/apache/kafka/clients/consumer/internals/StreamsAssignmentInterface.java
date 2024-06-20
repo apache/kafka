@@ -100,7 +100,13 @@ public class StreamsAssignmentInterface {
         this.taskLags = taskLags;
     }
 
-    public final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>();
+    public final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>(
+        new Assignment(
+            new HashSet<>(),
+            new HashSet<>(),
+            new HashSet<>()
+        )
+    );
 
     public final AtomicReference<Assignment> targetAssignment = new AtomicReference<>();
 

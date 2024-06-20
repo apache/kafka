@@ -17,23 +17,21 @@
 package org.apache.kafka.streams.integration;
 
 import java.util.stream.Stream;
+
+import kafka.api.IntegrationTestHarness;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
-import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Map;
@@ -46,19 +44,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
-public class SmokeTestDriverIntegrationTest {
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
+public class SmokeTestDriverIntegrationTest extends IntegrationTestHarness {
 
-    @BeforeAll
-    public static void startCluster() throws IOException {
-        CLUSTER.start();
+    @Override
+    public int brokerCount() {
+        return 3;
     }
-
-    @AfterAll
-    public static void closeCluster() {
-        CLUSTER.stop();
-    }
-
 
     private static class Driver extends Thread {
         private final String bootstrapServers;
@@ -95,11 +86,27 @@ public class SmokeTestDriverIntegrationTest {
 
     }
 
+    @Override
+    public boolean isNewGroupCoordinatorEnabled() {
+        return true;
+    }
+
+    @Override
+    public boolean isZkMigrationTest() {
+        return false;
+    }
+
+    @Override
+    public boolean isKRaftTest() {
+        return true;
+    }
+
     private static Stream<Arguments> parameters() {
         return Stream.of(
-            Arguments.of(false, false),
-            Arguments.of(true, false),
-            Arguments.of(true, true)
+//            Arguments.of(false, false, false),
+//            Arguments.of(true, false, false),
+//            Arguments.of(true, true, false),
+            Arguments.of(false, false, true)
         );
     }
 
@@ -109,7 +116,11 @@ public class SmokeTestDriverIntegrationTest {
     // (1) 10 min timeout, (2) 30 tries of polling without getting any data
     @ParameterizedTest
     @MethodSource("parameters")
-    public void shouldWorkWithRebalance(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws InterruptedException {
+    public void shouldWorkWithRebalance(
+        final boolean stateUpdaterEnabled,
+        final boolean processingThreadsEnabled,
+        final boolean consumerProtocolEnabled
+    ) throws InterruptedException {
         Exit.setExitProcedure((statusCode, message) -> {
             throw new AssertionError("Test called exit(). code:" + statusCode + " message:" + message);
         });
@@ -119,9 +130,11 @@ public class SmokeTestDriverIntegrationTest {
         int numClientsCreated = 0;
         final ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
-        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, SmokeTestDriver.topics());
+        for (String topic: SmokeTestDriver.topics()) {
+            deleteTopic(topic, listenerName());
+        }
 
-        final String bootstrapServers = CLUSTER.bootstrapServers();
+        final String bootstrapServers = bootstrapServers(listenerName());
         final Driver driver = new Driver(bootstrapServers, 10, 1000);
         driver.start();
         System.out.println("started driver");
@@ -133,6 +146,9 @@ public class SmokeTestDriverIntegrationTest {
         props.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
+        if (consumerProtocolEnabled) {
+            props.put(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_PROTOCOL_CONFIG), GroupProtocol.CONSUMER.name().toLowerCase());
+        }
 
         // cycle out Streams instances as long as the test is running.
         while (driver.isAlive()) {

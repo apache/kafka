@@ -170,6 +170,11 @@ public class StreamsGroupMember {
             return this;
         }
 
+        public Builder maybeUpdateTopologyHash(Optional<byte[]> topologyHash) {
+            this.topologyHash = topologyHash.orElse(this.topologyHash);
+            return this;
+        }
+
         public Builder setAssignor(String assignor) {
             this.assignor = assignor;
             return this;
