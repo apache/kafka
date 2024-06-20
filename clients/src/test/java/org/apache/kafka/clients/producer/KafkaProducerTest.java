@@ -954,7 +954,7 @@ public class KafkaProducerTest {
             });
             t.start();
             Throwable throwable = assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
-            assertEquals(UnknownTopicOrPartitionException.class, throwable.getCause().getClass());
+            assertInstanceOf(UnknownTopicOrPartitionException.class, throwable.getCause());
             running.set(false);
             t.join();
         }
