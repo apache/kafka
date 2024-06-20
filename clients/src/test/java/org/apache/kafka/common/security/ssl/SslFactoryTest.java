@@ -33,6 +33,7 @@ import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
