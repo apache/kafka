@@ -29,6 +29,8 @@
           "about": "String to uniquely identify the subtopology." },
         { "name": "SourceTopics", "type": "[]string", "versions": "0+",
           "about": "The topics the topology reads from." },
+        { "name": "SourceTopicRegex", "type": "string", "versions": "0+",
+          "about": "The regular expressions identifying topics the topology reads from." },
         { "name": "SinkTopics", "type": "[]string", "versions": "0+",
           "about": "The topics the topology writes to." },
         { "name": "StateChangelogTopics", "type": "[]TopicInfo", "versions": "0+",

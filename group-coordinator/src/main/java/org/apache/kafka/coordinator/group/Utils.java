@@ -235,4 +235,32 @@ public class Utils {
             return apiMessageAndVersion.message();
         }
     }
+
+
+    /**
+     * @return The provided assignment as a String.
+     *
+     * Example:
+     * [subtopologyid1-0, subtopologyid1-1, subtopologyid2-0, subtopologyid2-1]
+     */
+    public static String taskAssignmentToString(
+        Map<String, Set<Integer>> assignment
+    ) {
+        StringBuilder builder = new StringBuilder("[");
+        Iterator<Map.Entry<String, Set<Integer>>> subtopologyIterator = assignment.entrySet().iterator();
+        while (subtopologyIterator.hasNext()) {
+            Map.Entry<String, Set<Integer>> entry = subtopologyIterator.next();
+            Iterator<Integer> partitionsIterator = entry.getValue().iterator();
+            while (partitionsIterator.hasNext()) {
+                builder.append(entry.getKey());
+                builder.append("-");
+                builder.append(partitionsIterator.next());
+                if (partitionsIterator.hasNext() || subtopologyIterator.hasNext()) {
+                    builder.append(", ");
+                }
+            }
+        }
+        builder.append("]");
+        return builder.toString();
+    }
 }

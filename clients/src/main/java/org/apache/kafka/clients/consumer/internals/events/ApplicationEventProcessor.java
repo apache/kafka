@@ -244,7 +244,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * it is already a member.
      */
     private void process(final SubscriptionChangeEvent ignored) {
-        if (!requestManagers.consumerHeartbeatRequestManager.isPresent()) {
+        if (!requestManagers.membershipManager.isPresent()) {
             log.warn("Group membership manager not present when processing a subscribe event");
             return;
         }
@@ -303,7 +303,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
-        if (!requestManagers.consumerHeartbeatRequestManager.isPresent()) {
+        if (!requestManagers.membershipManager.isPresent()) {
             log.warn(
                 "An internal error occurred; the group membership manager was not present, so the notification of the {} callback execution could not be sent",
                 event.methodName()

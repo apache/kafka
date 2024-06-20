@@ -53,7 +53,7 @@ public class CurrentAssignmentBuilder {
      * A function which returns the current epoch of a topic-partition or -1 if the topic-partition is not assigned. The current epoch is
      * the epoch of the current owner.
      */
-    private BiFunction<String, Integer, Integer> currentPartitionEpoch;
+    private BiFunction<String, Integer, Integer> currentTaskEpoch;
 
     /**
      * The active tasks owned by the streams. This is directly provided by the member in the StreamsHeartbeat request.
@@ -99,13 +99,13 @@ public class CurrentAssignmentBuilder {
      * Sets a BiFunction which allows to retrieve the current epoch of a partition. This is used by the state machine to determine if a
      * partition is free or still used by another member.
      *
-     * @param currentPartitionEpoch A BiFunction which gets the epoch of a topic id / tasks id pair.
+     * @param currentTaskEpoch A BiFunction which gets the epoch of a topic id / tasks id pair.
      * @return This object.
      */
-    public CurrentAssignmentBuilder withCurrentPartitionEpoch(
-        BiFunction<String, Integer, Integer> currentPartitionEpoch
+    public CurrentAssignmentBuilder withCurrentActiveTaskEpoch(
+        BiFunction<String, Integer, Integer> currentTaskEpoch
     ) {
-        this.currentPartitionEpoch = Objects.requireNonNull(currentPartitionEpoch);
+        this.currentTaskEpoch = Objects.requireNonNull(currentTaskEpoch);
         return this;
     }
 
@@ -297,7 +297,7 @@ public class CurrentAssignmentBuilder {
             Set<Integer> tasksPendingAssignment = new HashSet<>(target);
             tasksPendingAssignment.removeAll(assignedTasks);
             hasUnreleasedTasks = tasksPendingAssignment.removeIf(partitionId ->
-                currentPartitionEpoch.apply(subtopologyId, partitionId) != -1
+                currentTaskEpoch.apply(subtopologyId, partitionId) != -1
             ) || hasUnreleasedTasks;
 
             if (!assignedTasks.isEmpty()) {

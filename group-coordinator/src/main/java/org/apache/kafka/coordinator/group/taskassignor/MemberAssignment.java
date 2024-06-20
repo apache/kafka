@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.taskassignor;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -24,6 +25,10 @@ import java.util.Set;
  * The task assignment for a Streams group member.
  */
 public class MemberAssignment {
+
+    public static MemberAssignment empty() {
+        return new MemberAssignment(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+    }
 
     /**
      * The target tasks assigned to this member keyed by subtopologyId.

@@ -93,6 +93,7 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
+import org.apache.kafka.coordinator.group.taskassignor.TaskAssignor;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -423,6 +424,7 @@ public class GroupMetadataManagerTestContext {
         private ShareGroupPartitionAssignor shareGroupAssignor = new MockPartitionAssignor("share");
         private final List<ShareGroupBuilder> shareGroupBuilders = new ArrayList<>();
         private int shareGroupMaxSize = Integer.MAX_VALUE;
+        private List<TaskAssignor> taskAssignors = Collections.singletonList(new MockTaskAssignor("mock"));
 
         public Builder withMetadataImage(MetadataImage metadataImage) {
             this.metadataImage = metadataImage;
@@ -520,6 +522,7 @@ public class GroupMetadataManagerTestContext {
                     .withShareGroupAssignor(shareGroupAssignor)
                     .withShareGroupMaxSize(shareGroupMaxSize)
                     .withGroupConfigManager(groupConfigManager)
+                    .withStreamsGroupAssignors(taskAssignors)
                     .build(),
                 groupConfigManager,
                 classicGroupInitialRebalanceDelayMs,

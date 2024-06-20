@@ -60,6 +60,7 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.taskassignor.MockAssignor;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -139,6 +140,7 @@ public class OffsetMetadataManagerTest {
                         .withConsumerGroupAssignors(Collections.singletonList(new RangeAssignor()))
                         .withGroupCoordinatorMetricsShard(metrics)
                         .withGroupConfigManager(configManager)
+                        .withStreamsGroupAssignors(Collections.singletonList(new MockAssignor()))
                         .build();
                 }
 

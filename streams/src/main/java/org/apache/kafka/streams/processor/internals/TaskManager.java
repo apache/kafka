@@ -1784,7 +1784,11 @@ public class TaskManager {
      */
     public void updateLags() {
         for (final Task t: tasks.activeTasks()) {
-            t.updateLags();
+            try {
+                t.updateLags();
+            } catch (final Throwable e) {
+                // noop
+            }
         }
     }
 
