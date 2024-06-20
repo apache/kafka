@@ -639,6 +639,7 @@ public class NetworkClient implements KafkaClient {
      * @param now The current time in milliseconds
      * @return The list of responses received
      */
+    // TODO: move bootstrapping logic here
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
         ensureActive();
