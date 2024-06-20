@@ -461,7 +461,6 @@ public final class RemoteLogManagerConfig {
         return config.getInt(REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP);
     }
 
-    // Dynamic Configs
     public long remoteLogIndexFileCacheTotalSizeBytes() {
         return config.getLong(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP);
     }
