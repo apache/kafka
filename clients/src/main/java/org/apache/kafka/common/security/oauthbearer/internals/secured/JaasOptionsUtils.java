@@ -17,13 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import java.net.URL;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import javax.net.ssl.SSLSocketFactory;
-import javax.security.auth.login.AppConfigurationEntry;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -31,8 +24,18 @@ import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.net.URL;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+import javax.net.ssl.SSLSocketFactory;
+import javax.security.auth.login.AppConfigurationEntry;
 
 /**
  * <code>JaasOptionsUtils</code> is a utility class to perform logic for the JAAS options and

@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.security.plain.internals;
 
+import org.apache.kafka.common.security.plain.internals.PlainSaslServer.PlainSaslServerFactory;
+
 import java.security.Provider;
 import java.security.Security;
-
-import org.apache.kafka.common.security.plain.internals.PlainSaslServer.PlainSaslServerFactory;
 
 public class PlainSaslServerProvider extends Provider {
 

@@ -18,11 +18,12 @@ package org.apache.kafka.common.security.auth;
 
 import org.apache.kafka.common.Configurable;
 
-import javax.net.ssl.SSLEngine;
 import java.io.Closeable;
 import java.security.KeyStore;
 import java.util.Map;
 import java.util.Set;
+
+import javax.net.ssl.SSLEngine;
 
 /**
  * Plugin interface for allowing creation of <code>SSLEngine</code> object in a custom way.

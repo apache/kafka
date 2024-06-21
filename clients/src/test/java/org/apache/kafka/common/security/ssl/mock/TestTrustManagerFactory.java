@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.common.security.ssl.mock;
 
+import java.net.Socket;
+import java.security.KeyStore;
+import java.security.cert.X509Certificate;
+
 import javax.net.ssl.ManagerFactoryParameters;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactorySpi;
 import javax.net.ssl.X509ExtendedTrustManager;
-import java.net.Socket;
-import java.security.KeyStore;
-import java.security.cert.X509Certificate;
 
 public class TestTrustManagerFactory extends TrustManagerFactorySpi {
     public static final String ALGORITHM = "TestAlgorithm";
@@ -82,4 +83,3 @@ public class TestTrustManagerFactory extends TrustManagerFactorySpi {
     }
 
 }
-
