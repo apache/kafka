@@ -348,8 +348,17 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   }
 
   private def withAuthorizer()(f: Authorizer => Unit): Unit = {
-    (servers.map(_.authorizer.get) ++ controllerServers.map(_.authorizer.get)).foreach { auth =>
-      f(auth)
+    if (isKRaftTest()) {
+      (servers.map(_.authorizer.get) ++ controllerServers.map(_.authorizer.get)).foreach { auth =>
+        f(auth)
+      }
+    } else {
+      val kafkaConfig = KafkaConfig.fromProps(brokerProps, doLog = false)
+      val auth = new AclAuthorizer
+      try {
+        auth.configure(kafkaConfig.originals)
+        f(auth)
+      } finally auth.close()
     }
   }
 
