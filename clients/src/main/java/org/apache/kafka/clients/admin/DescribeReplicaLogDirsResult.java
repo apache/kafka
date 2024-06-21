@@ -21,9 +21,9 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Collection;
 import java.util.concurrent.ExecutionException;
 
 
@@ -66,7 +66,7 @@ public class DescribeReplicaLogDirsResult {
             });
     }
 
-    static public class ReplicaLogDirInfo {
+    public static class ReplicaLogDirInfo {
         // The current log directory of the replica of this partition on the given broker.
         // Null if no replica is not found for this partition on the given broker.
         private final String currentReplicaLogDir;

@@ -24,7 +24,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.rocksdb.Cache;
 import org.rocksdb.RocksDB;
 import org.rocksdb.Statistics;

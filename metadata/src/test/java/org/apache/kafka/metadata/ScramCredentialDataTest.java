@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.util.MockRandom;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -92,6 +93,58 @@ public class ScramCredentialDataTest {
         testRoundTrip(SCRAMCREDENTIALDATA.get(0));
         testRoundTrip(SCRAMCREDENTIALDATA.get(1));
         testRoundTrip(SCRAMCREDENTIALDATA.get(2));
+    }
+
+    @Test
+    public void testEqualsAndHashCode() {
+        byte[] salt1 = {1, 2, 3};
+        byte[] storedKey1 = {4, 5, 6};
+        byte[] serverKey1 = {7, 8, 9};
+        int iterations1 = 1000;
+
+        byte[] salt2 = {1, 2, 3};
+        byte[] storedKey2 = {4, 5, 6};
+        byte[] serverKey2 = {7, 8, 9};
+        int iterations2 = 1000;
+
+        ScramCredentialData data1 = new ScramCredentialData(salt1, storedKey1, serverKey1, iterations1);
+        ScramCredentialData data2 = new ScramCredentialData(salt2, storedKey2, serverKey2, iterations2);
+
+        assertEquals(data1, data2);
+        assertEquals(data1.hashCode(), data2.hashCode());
+    }
+
+    @Test
+    public void testNotEqualsDifferentContent() {
+        byte[] salt1 = {1, 2, 3};
+        byte[] storedKey1 = {4, 5, 6};
+        byte[] serverKey1 = {7, 8, 9};
+        int iterations1 = 1000;
+
+        byte[] salt2 = {9, 8, 7};
+        byte[] storedKey2 = {6, 5, 4};
+        byte[] serverKey2 = {3, 2, 1};
+        int iterations2 = 2000;
+
+        ScramCredentialData data1 = new ScramCredentialData(salt1, storedKey1, serverKey1, iterations1);
+        ScramCredentialData data2 = new ScramCredentialData(salt2, storedKey2, serverKey2, iterations2);
+
+        assertNotEquals(data1, data2);
+        assertNotEquals(data1.hashCode(), data2.hashCode());
+    }
+
+    @Test
+    public void testEqualsSameInstance() {
+        byte[] salt = {1, 2, 3};
+        byte[] storedKey = {4, 5, 6};
+        byte[] serverKey = {7, 8, 9};
+        int iterations = 1000;
+
+        ScramCredentialData data = new ScramCredentialData(salt, storedKey, serverKey, iterations);
+
+        // Test equals method for same instance
+        assertEquals(data, data);
+        assertEquals(data.hashCode(), data.hashCode());
     }
 
     private void testRoundTrip(ScramCredentialData scramCredentialData) {

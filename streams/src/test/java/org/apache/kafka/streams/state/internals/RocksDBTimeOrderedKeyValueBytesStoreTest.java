@@ -48,7 +48,7 @@ class RocksDBTimeOrderedKeyValueBytesStoreTest {
     private RocksDBTimeOrderedKeyValueBytesStore bytesStore;
     private File stateDir;
     final String storeName = "bytes-store";
-    private final static String METRICS_SCOPE = "metrics-scope";
+    private static final String METRICS_SCOPE = "metrics-scope";
     private final String topic = "changelog";
 
 

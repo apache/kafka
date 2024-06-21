@@ -19,13 +19,11 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.connect.util.clusters.WorkerHandle;
-import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,13 +41,13 @@ import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONNECT_PROTOCOL_CONFIG;
 import static org.apache.kafka.connect.runtime.rest.InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER;
 import static org.apache.kafka.connect.runtime.rest.InternalRequestSignature.SIGNATURE_HEADER;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * A simple integration test to ensure that internal request validation becomes enabled with the
  * "sessioned" protocol.
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class SessionedProtocolIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(SessionedProtocolIntegrationTest.class);
@@ -60,7 +58,7 @@ public class SessionedProtocolIntegrationTest {
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
 
-    @Before
+    @BeforeEach
     public void setup() {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
@@ -81,7 +79,7 @@ public class SessionedProtocolIntegrationTest {
         connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
     }
 
-    @After
+    @AfterEach
     public void close() {
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
@@ -97,10 +95,6 @@ public class SessionedProtocolIntegrationTest {
         final Map<String, String> invalidSignatureHeaders = new HashMap<>();
         invalidSignatureHeaders.put(SIGNATURE_HEADER, "S2Fma2Flc3F1ZQ==");
         invalidSignatureHeaders.put(SIGNATURE_ALGORITHM_HEADER, "HmacSHA256");
-
-        TestUtils.waitForCondition(
-                () -> connect.workers().stream().allMatch(WorkerHandle::isRunning),
-                30000L, "Timed out waiting for workers to start");
 
         // We haven't created the connector yet, but this should still return a 400 instead of a 404
         // if the endpoint is secured
@@ -120,9 +114,10 @@ public class SessionedProtocolIntegrationTest {
                 + "expecting 403 error response",
             connectorTasksEndpoint
         );
-        TestUtils.waitForCondition(
-                () -> connect.requestPost(connectorTasksEndpoint, "[]", invalidSignatureHeaders).getStatus() == FORBIDDEN.getStatusCode(),
-                30000L, "Timed out waiting for workers to start");
+        assertEquals(
+                FORBIDDEN.getStatusCode(),
+                connect.requestPost(connectorTasksEndpoint, "[]", invalidSignatureHeaders).getStatus()
+        );
 
         // Create the connector now
         // setup up props for the sink connector

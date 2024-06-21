@@ -40,7 +40,7 @@ public final class QuorumFeatures {
     private final Map<String, VersionRange> localSupportedFeatures;
     private final List<Integer> quorumNodeIds;
 
-    static public Optional<String> reasonNotSupported(
+    public static Optional<String> reasonNotSupported(
         short newVersion,
         String what,
         VersionRange range

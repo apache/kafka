@@ -54,10 +54,10 @@ import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.crypto.spec.SecretKeySpec;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,6 +75,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
+
+import javax.crypto.spec.SecretKeySpec;
 
 import static org.apache.kafka.connect.runtime.TargetState.PAUSED;
 import static org.apache.kafka.connect.runtime.TargetState.STOPPED;
@@ -318,6 +320,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
     final Map<String, Integer> connectorTaskCountRecords = new HashMap<>();
     final Map<String, Integer> connectorTaskConfigGenerations = new HashMap<>();
+    final Map<String, AppliedConnectorConfig> appliedConnectorConfigs = new HashMap<>();
     final Set<String> connectorsPendingFencing = new HashSet<>();
 
     private final WorkerConfigTransformer configTransformer;
@@ -478,6 +481,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                     new HashMap<>(taskConfigs),
                     new HashMap<>(connectorTaskCountRecords),
                     new HashMap<>(connectorTaskConfigGenerations),
+                    new HashMap<>(appliedConnectorConfigs),
                     new HashSet<>(connectorsPendingFencing),
                     new HashSet<>(inconsistent),
                     configTransformer
@@ -1065,7 +1069,8 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
             // but compaction took place and both the original connector config and the
             // tombstone message for it have been removed from the config topic
             // We should ignore these task configs
-            if (!connectorConfigs.containsKey(connectorName)) {
+            Map<String, String> appliedConnectorConfig = connectorConfigs.get(connectorName);
+            if (appliedConnectorConfig == null) {
                 processConnectorRemoval(connectorName);
                 log.debug(
                         "Ignoring task configs for connector {}; it appears that the connector was deleted previously "
@@ -1123,6 +1128,11 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                     connectorTaskConfigGenerations.compute(connectorName, (ignored, generation) -> generation != null ? generation + 1 : 0);
                 }
                 inconsistent.remove(connectorName);
+
+                appliedConnectorConfigs.put(
+                        connectorName,
+                        new AppliedConnectorConfig(appliedConnectorConfig)
+                );
             }
             // Always clear the deferred entries, even if we didn't apply them. If they represented an inconsistent
             // update, then we need to see a completely fresh set of configs after this commit message, so we don't
@@ -1261,6 +1271,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         connectorTaskCounts.remove(connectorName);
         taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
         deferredTaskUpdates.remove(connectorName);
+        appliedConnectorConfigs.remove(connectorName);
     }
 
     private ConnectorTaskId parseTaskId(String key) {
@@ -1333,5 +1344,5 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         else
             throw new ConnectException("Expected integer value to be either Integer or Long");
     }
-}
 
+}

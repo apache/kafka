@@ -16,15 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.Random;
-import java.util.function.Supplier;
-
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
@@ -33,7 +24,17 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
+
 import org.slf4j.Logger;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.Random;
+import java.util.function.Supplier;
 
 /**
  * This class is responsible for managing the current state of this node and ensuring
@@ -518,9 +519,10 @@ public class QuorumState {
         LeaderState<T> state = new LeaderState<>(
             time,
             localIdOrThrow(),
+            localDirectoryId(),
             epoch(),
             epochStartOffset,
-            latestVoterSet.get().voterIds(),
+            latestVoterSet.get().voters(),
             candidateState.grantingVoters(),
             accumulator,
             fetchTimeoutMs,

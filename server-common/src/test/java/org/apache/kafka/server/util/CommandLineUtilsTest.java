@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.server.util;
 
-import joptsimple.OptionParser;
-import joptsimple.OptionSet;
-import joptsimple.OptionSpec;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+
+import joptsimple.OptionParser;
+import joptsimple.OptionSet;
+import joptsimple.OptionSpec;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -226,7 +227,7 @@ public class CommandLineUtilsTest {
         assertEquals("500", props.get("iondkey"));
     }
 
-    static private Properties createTestProps() {
+    private static Properties createTestProps() {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", "this");
         props.setProperty("bootstrap.controllers", "that");

@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.Uuid;
+
 import java.util.Objects;
 import java.util.Optional;
-import org.apache.kafka.common.Uuid;
 
 public final class ReplicaKey {
     private final int id;

@@ -76,14 +76,6 @@ if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
 else
   mockitoArtifactName = "mockito-inline"
 
-// easymock 5.2 is required for Java 21 support, but it breaks tests using powermock
-// powermock doesn't work with Java 16 or newer and hence it's safe to use the newer version in this case only
-String easymockVersion
-if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
-  easymockVersion = "5.2.0"
-else
-  easymockVersion = "4.3"
-
 // When adding, removing or updating dependencies, please also update the LICENSE-binary file accordingly.
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
 versions += [
@@ -149,7 +141,6 @@ versions += [
   netty: "4.1.110.Final",
   opentelemetryProto: "1.0.0-alpha",
   pcollections: "4.0.1",
-  powermock: "2.0.9",
   reflections: "0.10.2",
   reload4j: "1.2.25",
   rocksDB: "7.9.2",
@@ -184,7 +175,6 @@ libs += [
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
-  easymock: "org.easymock:easymock:$easymockVersion",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
@@ -236,7 +226,6 @@ libs += [
   kafkaStreams_35: "org.apache.kafka:kafka-streams:$versions.kafka_35",
   kafkaStreams_36: "org.apache.kafka:kafka-streams:$versions.kafka_36",
   kafkaStreams_37: "org.apache.kafka:kafka-streams:$versions.kafka_37",
-  log4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
@@ -246,9 +235,8 @@ libs += [
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
   pcollections: "org.pcollections:pcollections:$versions.pcollections",
   opentelemetryProto: "io.opentelemetry.proto:opentelemetry-proto:$versions.opentelemetryProto",
-  powermockJunit4: "org.powermock:powermock-module-junit4:$versions.powermock",
-  powermockEasymock: "org.powermock:powermock-api-easymock:$versions.powermock",
   reflections: "org.reflections:reflections:$versions.reflections",
+  reload4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
   scalaCollectionCompat: "org.scala-lang.modules:scala-collection-compat_$versions.baseScala:$versions.scalaCollectionCompat",
   scalaJava8Compat: "org.scala-lang.modules:scala-java8-compat_$versions.baseScala:$versions.scalaJava8Compat",
@@ -256,7 +244,7 @@ libs += [
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
-  slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
+  slf4jReload4j: "org.slf4j:slf4j-reload4j:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
   swaggerJaxrs2: "io.swagger.core.v3:swagger-jaxrs2:$swaggerVersion",

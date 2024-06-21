@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
-import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
@@ -39,14 +38,14 @@ public class SubscriptionReceiveProcessorSupplier<K, KO>
     implements ProcessorSupplier<KO, SubscriptionWrapper<K>, CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> {
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionReceiveProcessorSupplier.class);
 
-    private final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder;
+    private final String storeName;
     private final CombinedKeySchema<KO, K> keySchema;
 
     public SubscriptionReceiveProcessorSupplier(
-        final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder,
+        final String storeName,
         final CombinedKeySchema<KO, K> keySchema) {
 
-        this.storeBuilder = storeBuilder;
+        this.storeName = storeName;
         this.keySchema = keySchema;
     }
 
@@ -68,7 +67,7 @@ public class SubscriptionReceiveProcessorSupplier<K, KO>
                     internalProcessorContext.taskId().toString(),
                     internalProcessorContext.metrics()
                 );
-                store = internalProcessorContext.getStateStore(storeBuilder);
+                store = internalProcessorContext.getStateStore(storeName);
 
                 keySchema.init(context);
             }

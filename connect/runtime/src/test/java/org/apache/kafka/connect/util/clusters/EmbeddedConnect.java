@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Exit;
@@ -35,6 +33,10 @@ import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.SinkUtils;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
@@ -42,7 +44,6 @@ import org.eclipse.jetty.client.util.StringContentProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -53,6 +54,8 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import javax.ws.rs.core.Response;
 
 abstract class EmbeddedConnect {
 
@@ -118,7 +121,8 @@ abstract class EmbeddedConnect {
     };
 
     /**
-     * Start the connect cluster and the embedded Kafka and Zookeeper cluster.
+     * Start the Connect cluster and the embedded Kafka and Zookeeper cluster,
+     * and wait for the Kafka and Connect clusters to become healthy.
      */
     public void start() {
         if (maskExitProcedures) {
@@ -131,6 +135,27 @@ abstract class EmbeddedConnect {
             httpClient.start();
         } catch (Exception e) {
             throw new ConnectException("Failed to start HTTP client", e);
+        }
+
+        try {
+            if (numBrokers > 0) {
+                assertions().assertExactlyNumBrokersAreUp(
+                        numBrokers,
+                        "Kafka cluster did not start in time"
+                );
+                log.info("Completed startup of {} Kafka brokers", numBrokers);
+            }
+
+            int numWorkers = workers().size();
+            if (numWorkers > 0) {
+                assertions().assertExactlyNumWorkersAreUp(
+                        numWorkers,
+                        "Connect cluster did not start in time"
+                );
+                log.info("Completed startup of {} Connect workers", numWorkers);
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Interrupted while awaiting cluster startup", e);
         }
     }
 

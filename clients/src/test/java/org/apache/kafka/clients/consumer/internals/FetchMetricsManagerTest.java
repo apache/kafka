@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,8 +39,8 @@ public class FetchMetricsManagerTest {
     private static final double EPSILON = 0.0001;
 
     private final Time time = new MockTime(1, 0, 0);
-    private final static String TOPIC_NAME = "test";
-    private final static TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
+    private static final String TOPIC_NAME = "test";
+    private static final TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
 
     private Metrics metrics;
     private FetchMetricsRegistry metricsRegistry;

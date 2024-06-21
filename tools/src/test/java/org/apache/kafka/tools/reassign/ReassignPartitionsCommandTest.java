@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterConfigProperty;
+import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
@@ -51,13 +51,16 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.config.QuotaConfigs;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.TerseException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.AbstractMap;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;

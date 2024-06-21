@@ -55,14 +55,17 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.AdditionalAnswers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
 import java.nio.ByteBuffer;
@@ -90,15 +93,16 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -107,7 +111,8 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class AbstractWorkerSourceTaskTest {
 
     private static final String TOPIC = "topic";
@@ -151,7 +156,7 @@ public class AbstractWorkerSourceTaskTest {
 
     private AbstractWorkerSourceTask workerTask;
 
-    @Before
+    @BeforeEach
     public void setup() {
         Map<String, String> workerProps = workerProps();
         plugins = new Plugins(workerProps);
@@ -187,7 +192,7 @@ public class AbstractWorkerSourceTaskTest {
         return props;
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         if (metrics != null) metrics.stop();
         verifyNoMoreInteractions(statusListener);
@@ -249,6 +254,7 @@ public class AbstractWorkerSourceTaskTest {
         );
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = records;
@@ -269,6 +275,7 @@ public class AbstractWorkerSourceTaskTest {
         createWorkerTask();
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
@@ -288,7 +295,8 @@ public class AbstractWorkerSourceTaskTest {
         final Long timestamp = -3L;
         createWorkerTask();
 
-        expectSendRecord(emptyHeaders());
+        expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
+        expectApplyTransformationChain();
 
         workerTask.toSend = Collections.singletonList(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
@@ -304,6 +312,7 @@ public class AbstractWorkerSourceTaskTest {
         createWorkerTask();
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
@@ -329,6 +338,7 @@ public class AbstractWorkerSourceTaskTest {
         createWorkerTask();
 
         expectSendRecord(headers);
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
@@ -356,6 +366,7 @@ public class AbstractWorkerSourceTaskTest {
                 Collections::emptyList);
 
         expectSendRecord(null);
+        expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
         String stringA = "Árvíztűrő tükörfúrógép";
@@ -617,6 +628,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
 
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(foundTopic(TOPIC));
@@ -641,6 +653,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectSendRecord(emptyHeaders());
+        expectApplyTransformationChain();
 
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
@@ -666,7 +679,6 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
-        expectTaskGetTopic();
 
         when(transformationChain.apply(any(), eq(record1))).thenReturn(null);
         when(transformationChain.apply(any(), eq(record2))).thenReturn(null);
@@ -697,8 +709,6 @@ public class AbstractWorkerSourceTaskTest {
     private void expectSendRecord(Headers headers) {
         if (headers != null)
             expectConvertHeadersAndKeyValue(headers, TOPIC);
-
-        expectApplyTransformationChain();
 
         expectTaskGetTopic();
     }
@@ -792,11 +802,15 @@ public class AbstractWorkerSourceTaskTest {
         when(valueConverter.fromConnectData(eq(topic), any(Headers.class), eq(RECORD_SCHEMA),
                 eq(RECORD)))
                 .thenReturn(SERIALIZED_RECORD);
+        assertEquals(keyConverter.fromConnectData(topic, headers, KEY_SCHEMA, KEY), SERIALIZED_KEY);
+        assertEquals(valueConverter.fromConnectData(topic, headers, RECORD_SCHEMA, RECORD), SERIALIZED_RECORD);
     }
 
     private void expectApplyTransformationChain() {
         when(transformationChain.apply(any(), any(SourceRecord.class)))
                 .thenAnswer(AdditionalAnswers.returnsSecondArg());
+        SourceRecord randomString = mock(SourceRecord.class);
+        assertEquals(transformationChain.apply(null, randomString), randomString);
     }
 
     private RecordHeaders emptyHeaders() {

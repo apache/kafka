@@ -18,6 +18,7 @@ package kafka.log.remote.quota;
 
 import kafka.server.QuotaType;
 import kafka.server.SensorAccess;
+
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -27,14 +28,16 @@ import org.apache.kafka.common.metrics.QuotaViolationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.SimpleRate;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.runtime.BoxedUnit;
 
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import scala.runtime.BoxedUnit;
 
 public class RLMQuotaManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(RLMQuotaManager.class);

@@ -25,6 +25,7 @@ import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
@@ -94,6 +95,7 @@ public class FenceProducersHandlerTest {
         assertRetriableError(handler, transactionalId, Errors.COORDINATOR_LOAD_IN_PROGRESS);
         assertUnmappedKey(handler, transactionalId, Errors.NOT_COORDINATOR);
         assertUnmappedKey(handler, transactionalId, Errors.COORDINATOR_NOT_AVAILABLE);
+        assertRetriableError(handler, transactionalId, Errors.CONCURRENT_TRANSACTIONS);
     }
 
     private void assertFatalError(

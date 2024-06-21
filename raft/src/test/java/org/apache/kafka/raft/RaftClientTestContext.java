@@ -529,9 +529,24 @@ public final class RaftClientTestContext {
             .setHighWatermark(highWatermark)
             .setCurrentVoters(voterStates)
             .setObservers(observerStates);
+
+        DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection();
+
+        Consumer<DescribeQuorumResponseData.ReplicaState> addToNodes = replicaState -> {
+            if (nodes.find(replicaState.replicaId()) != null)
+                return;
+
+            nodes.add(new DescribeQuorumResponseData.Node()
+                .setNodeId(replicaState.replicaId()));
+        };
+
+        voterStates.forEach(addToNodes);
+        observerStates.forEach(addToNodes);
+
         DescribeQuorumResponseData expectedResponse = DescribeQuorumResponse.singletonResponse(
             metadataPartition,
-            partitionData
+            partitionData,
+            nodes
         );
         assertEquals(expectedResponse, response);
     }
@@ -596,7 +611,7 @@ public final class RaftClientTestContext {
 
     void deliverRequest(ApiMessage request) {
         RaftRequest.Inbound inboundRequest = new RaftRequest.Inbound(
-            channel.newCorrelationId(), request, time.milliseconds());
+            channel.newCorrelationId(), request.highestSupportedVersion(), request, time.milliseconds());
         inboundRequest.completion.whenComplete((response, exception) -> {
             if (exception != null) {
                 throw new RuntimeException(exception);
