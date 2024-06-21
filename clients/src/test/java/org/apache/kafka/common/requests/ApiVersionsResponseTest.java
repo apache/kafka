@@ -23,6 +23,7 @@ import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiMessageType.ListenerType;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
@@ -273,6 +274,27 @@ public class ApiVersionsResponseTest {
         assertEquals(expected, ApiVersionsResponse.intersect(thisVersion, other).get());
         // test for symmetric
         assertEquals(expected, ApiVersionsResponse.intersect(other, thisVersion).get());
+    }
+
+    @Test
+    public void testZeroVersionNotReturned() {
+        String featureName = "test.feature.version";
+        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
+            10,
+            RecordVersion.V1,
+            Features.supportedFeatures(Collections.singletonMap(featureName, new SupportedVersionRange((short) 0, (short) 0))),
+            Collections.emptyMap(),
+            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
+            null,
+            ListenerType.BROKER,
+            true,
+            false,
+            false
+        );
+
+        ApiVersionsResponseData.SupportedFeatureKey feature = response.data().supportedFeatures().find(featureName);
+        assertEquals(1, feature.maxVersion());
+        assertEquals(1, feature.minVersion());
     }
 
     private void verifyVersions(short forwardableAPIKey,
