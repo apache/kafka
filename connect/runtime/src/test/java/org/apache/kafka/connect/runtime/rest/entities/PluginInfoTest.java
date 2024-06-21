@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.rest.entities;
 
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;

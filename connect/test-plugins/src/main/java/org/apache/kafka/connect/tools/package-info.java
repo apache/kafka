@@ -14,33 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.rest.resources;
-
-import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
-
-import javax.inject.Inject;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
-
-import io.swagger.v3.oas.annotations.Operation;
-
-@Path("/")
-@Produces(MediaType.APPLICATION_JSON)
-public class RootResource {
-
-    private final Herder herder;
-
-    @Inject
-    public RootResource(Herder herder) {
-        this.herder = herder;
-    }
-
-    @GET
-    @Operation(summary = "Get details about this Connect worker and the id of the Kafka cluster it is connected to")
-    public ServerInfo serverInfo() {
-        return new ServerInfo(herder.kafkaClusterId());
-    }
-}
+/**
+ * Provides source and sink connector implementations used for testing
+ */
+package org.apache.kafka.connect.tools;
