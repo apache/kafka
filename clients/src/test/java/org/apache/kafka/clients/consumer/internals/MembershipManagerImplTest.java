@@ -64,6 +64,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer.invokeRebalanceCallbacks;
+import static org.apache.kafka.clients.consumer.internals.MembershipManagerImpl.TOPIC_PARTITION_COMPARATOR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -722,7 +723,7 @@ public class MembershipManagerImplTest {
 
         // Member should update the subscription and send ack when the delayed reconciliation
         // completes.
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(Collections.emptySet()), anyCollection());
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(Collections.emptySet(), Collections.emptySet());
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
 
         // Pending assignment that was discovered in metadata should be ready to reconcile in the
@@ -741,7 +742,7 @@ public class MembershipManagerImplTest {
         membershipManager.poll(time.milliseconds());
 
         assertEquals(Collections.emptySet(), membershipManager.topicsAwaitingReconciliation());
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(topicPartitions(topic2Assignment, topic2Metadata)), anyCollection());
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(topicPartitions(topic2Assignment, topic2Metadata)), eq(topicPartitions(topic2Assignment, topic2Metadata)));
     }
 
     /**
@@ -1155,8 +1156,9 @@ public class MembershipManagerImplTest {
         membershipManager.poll(time.milliseconds());
 
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 0));
+        HashSet<TopicPartition> expectedSet = new HashSet<>(expectedAssignment);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedAssignment)), any());
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(expectedSet), eq(expectedSet));
 
         // When ack for the reconciled assignment is sent, member should go back to STABLE
         // because the first assignment that was not resolved should have been discarded
@@ -1250,7 +1252,8 @@ public class MembershipManagerImplTest {
 
         // Assignment should have been reconciled.
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 1));
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedAssignment)), any());
+        HashSet<TopicPartition> expectedSet = new HashSet<>(expectedAssignment);
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(expectedSet), eq(expectedSet));
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
     }
@@ -1453,11 +1456,14 @@ public class MembershipManagerImplTest {
         verifyReconciliationNotTriggered(membershipManager);
         membershipManager.poll(time.milliseconds());
 
+        TreeSet<TopicPartition> expectedSet = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        expectedSet.add(new TopicPartition(topicName, 1));
+        expectedSet.add(new TopicPartition(topicName, 2));
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertEquals(topicIdPartitionsMap(topicId, 1, 2), membershipManager.currentAssignment().partitions);
         assertFalse(membershipManager.reconciliationInProgress());
 
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(anyCollection(), any());
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(expectedSet), eq(expectedSet));
     }
 
     @Test
@@ -2485,11 +2491,9 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).markPendingRevocation(anySet());
         List<TopicPartition> expectedTopicPartitionAssignment =
                 buildTopicPartitions(expectedCurrentAssignment);
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(any(), eq(new HashSet<>()));
-        if (expectedTopicPartitionAssignment.equals(Collections.emptyList()))
-            verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitionAssignment)), eq(new HashSet<>()));
-        else
-            verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitionAssignment)), eq(new HashSet<>()));
+        HashSet<TopicPartition> expectedSet = new HashSet<>(expectedTopicPartitionAssignment);
+        HashSet<TopicPartition> emptySet = new HashSet<>();
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(expectedSet), eq(emptySet));
     }
 
     private Map<Uuid, SortedSet<Integer>> assignmentByTopicId(List<TopicIdPartition> topicIdPartitions) {
@@ -2543,7 +2547,7 @@ public class MembershipManagerImplTest {
 
         if (triggerReconciliation) {
             membershipManager.poll(time.milliseconds());
-            verify(subscriptionState).assignFromSubscribedAwaitingCallback(any(), any());
+            verify(subscriptionState).assignFromSubscribedAwaitingCallback(anyCollection(), anyCollection());
         } else {
             verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
         }
