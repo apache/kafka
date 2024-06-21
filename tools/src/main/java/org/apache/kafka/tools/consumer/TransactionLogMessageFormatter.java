@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.tools.consumer;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -41,8 +45,12 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
                         byte[] value = consumerRecord.value();
                         TransactionLogValue transactionLogValue = 
                                 new TransactionLogValue(new ByteBufferAccessor(ByteBuffer.wrap(value)), version);
+                        JsonNode jsonNode = TransactionLogValueJsonConverter.write(transactionLogValue, version);
+                        ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
+                        json.set("version", new TextNode(version + ""));
+                        json.set("data", jsonNode);
                         try {
-                            output.write(TransactionLogValueJsonConverter.write(transactionLogValue, version).toString().getBytes());
+                            output.write(json.toString().getBytes());
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }

@@ -367,6 +367,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
             case "kafka.coordinate.group.TransactionLog\\$TransactionLogMessageFormatter":
                 System.err.println("WARNING: kafka.coordinate.group.TransactionLog\\$TransactionLogMessageFormatter is deprecated and will be removed in the next major release. " +
                         "Please use org.apache.kafka.tools.consumer.TransactionLogMessageFormatter instead");
+                return className;
             default:
                 return className;
         }
