@@ -17,6 +17,8 @@
   "apiKey": 2,
   "type": "metadata",
   "name": "TopicRecord",
+  // Version 0 first version of TopicRecord with Name and TopicId
+  // Version 1 adds TieredEpoch and TieredState for KIP-950
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
