@@ -316,7 +316,6 @@ public class MembershipManagerImplTest {
     private void mockStableMember(MembershipManagerImpl membershipManager) {
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(new Assignment());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        membershipManager.updateAssignment(new HashMap<>());
         membershipManager.onHeartbeatSuccess(heartbeatResponse.data());
         membershipManager.poll(time.milliseconds());
         membershipManager.onHeartbeatRequestSent();
@@ -1933,7 +1932,7 @@ public class MembershipManagerImplTest {
 
         assertEquals(MemberState.STALE, membershipManager.state());
         assertFalse(backgroundEventQueue.isEmpty());
-        assertEquals(backgroundEventQueue.peek().getClass().getCanonicalName(), ConsumerRebalanceListenerCallbackNeededEvent.class.getCanonicalName());
+        assertInstanceOf(ConsumerRebalanceListenerCallbackNeededEvent.class, backgroundEventQueue.peek());
 
         // Stale member triggers onPartitionLost callback that will not complete just yet
         ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = performCallback(
