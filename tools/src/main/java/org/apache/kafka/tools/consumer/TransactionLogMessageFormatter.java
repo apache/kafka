@@ -32,6 +32,8 @@ import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 public class TransactionLogMessageFormatter implements MessageFormatter {
 
     @Override
@@ -50,13 +52,13 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
                         json.set("version", new TextNode(version + ""));
                         json.set("data", jsonNode);
                         try {
-                            output.write(json.toString().getBytes());
+                            output.write(json.toString().getBytes(UTF_8));
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }
                     } else {
                         try {
-                            output.write(("unknown::version=" + version + "\n").getBytes());
+                            output.write(("unknown::version=" + version + "\n").getBytes(UTF_8));
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }
