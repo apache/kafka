@@ -248,7 +248,11 @@ public class RaftUtil {
      *
      * The partition index will already be populated when calling operator.
      *
+     * @param listenerName the listener used to accept the request
+     * @param apiVersion the api version of the request
      * @param topicPartition the topic partition to include
+     * @param leaderId the id of the leader
+     * @param endpoints the endpoints of the leader
      * @param operator unary operator responsible for populating all of the appropriate fields
      * @return the created fetch snapshot response data
      */

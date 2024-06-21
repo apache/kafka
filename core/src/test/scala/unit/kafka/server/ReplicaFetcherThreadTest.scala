@@ -121,15 +121,35 @@ class ReplicaFetcherThreadTest {
 
   @Test
   def shouldSendLatestRequestVersionsByDefault(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    val config = KafkaConfig.fromProps(props)
+    // Check unstable versions
+    val testingVersion = MetadataVersion.latestTesting
+    assertEquals(
+      ApiKeys.FETCH.latestVersion(true),
+      testingVersion.fetchRequestVersion
+    )
+    assertEquals(
+      ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(true),
+      testingVersion.offsetForLeaderEpochRequestVersion
+    )
+    assertEquals(
+      ApiKeys.LIST_OFFSETS.latestVersion(true),
+      testingVersion.listOffsetRequestVersion
+    )
 
-    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
-
-    assertEquals(ApiKeys.FETCH.latestVersion, config.interBrokerProtocolVersion.fetchRequestVersion())
-    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, config.interBrokerProtocolVersion.offsetForLeaderEpochRequestVersion)
-    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, config.interBrokerProtocolVersion.listOffsetRequestVersion)
+    // Check stable version
+    val productionVersion = MetadataVersion.latestProduction
+    assertEquals(
+      ApiKeys.FETCH.latestVersion(false),
+      productionVersion.fetchRequestVersion
+    )
+    assertEquals(
+      ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(false),
+      productionVersion.offsetForLeaderEpochRequestVersion
+    )
+    assertEquals(
+      ApiKeys.LIST_OFFSETS.latestVersion(false),
+      productionVersion.listOffsetRequestVersion
+    )
   }
 
   @Test
