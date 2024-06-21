@@ -161,19 +161,13 @@ public class HeartbeatRequestManagerTest {
                 backgroundEventHandler);
     }
 
-    private void resetWithZeroHeartbeatInterval() {
-        createHeartbeatStateWith0HeartbeatInterval();
-    }
-
     @Test
     public void testHeartbeatOnStartup() {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size());
 
-        resetWithZeroHeartbeatInterval();
-        when(membershipManager.state()).thenReturn(MemberState.STABLE);
-        mockStableMember();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mock(Node.class)));
         result = heartbeatRequestManager.poll(time.milliseconds());
@@ -187,9 +181,6 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testSuccessfulHeartbeatTiming() {
-        when(membershipManager.state()).thenReturn(MemberState.STABLE);
-        mockStableMember();
-
         long t = time.milliseconds();
         when(membershipManager.isLeavingGroup()).thenReturn(true);
         when(heartbeatRequestState.canSendRequest(t)).thenReturn(false);
@@ -229,10 +220,8 @@ public class HeartbeatRequestManagerTest {
     @Test
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments() {
-        resetWithZeroHeartbeatInterval();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         String topic = "topic1";
-        subscriptions.subscribe(Collections.singleton(topic), Optional.empty());
-        membershipManager.onSubscriptionUpdated();
 
         // Create a ConsumerHeartbeatRequest and verify the payload
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
@@ -266,7 +255,7 @@ public class HeartbeatRequestManagerTest {
     @ValueSource(booleans = {true, false})
     public void testSkippingHeartbeat(final boolean shouldSkipHeartbeat) {
         // The initial heartbeatInterval is set to 0
-        resetWithZeroHeartbeatInterval();
+        createHeartbeatStateWith0HeartbeatInterval();
 
         // Mocking notInGroup
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(shouldSkipHeartbeat);
@@ -286,8 +275,6 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testTimerNotDue() {
-        when(membershipManager.state()).thenReturn(MemberState.STABLE);
-        mockStableMember();
         time.sleep(100); // time elapsed < heartbeatInterval, no heartbeat should be sent
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
@@ -307,8 +294,6 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testHeartbeatNotSentIfAnotherOneInFlight() {
-        when(membershipManager.state()).thenReturn(MemberState.STABLE);
-        mockStableMember();
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
 
         // Heartbeat sent (no response received)
@@ -316,26 +301,23 @@ public class HeartbeatRequestManagerTest {
         assertEquals(1, result.unsentRequests.size());
         NetworkClientDelegate.UnsentRequest inflightReq = result.unsentRequests.get(0);
 
-        // Receive response for the inflight after the interval expired. The next HB should be sent
-        // on the next poll waiting only for the minimal backoff.
-        inflightReq.handler().onComplete(createHeartbeatResponse(inflightReq, Errors.NONE));
-        time.sleep(DEFAULT_RETRY_BACKOFF_MS);
-        when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
         result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, result.unsentRequests.size(), "A next heartbeat should be sent on " +
-                "the first poll after receiving a response that took longer than the interval, " +
-                "waiting only for the minimal backoff.");
-
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a " +
+                "previous one is in-flight");
 
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent when the " +
-            "interval expires if there is a previous HB request in-flight");
+                "interval expires if there is a previous HB request in-flight");
 
+        // Receive response for the inflight after the interval expired. The next HB should be sent
+        // on the next poll waiting only for the minimal backoff.
+        inflightReq.handler().onComplete(createHeartbeatResponse(inflightReq, Errors.NONE));
+        time.sleep(DEFAULT_RETRY_BACKOFF_MS);
         result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a " +
-                "previous one is in-flight");
+        assertEquals(1, result.unsentRequests.size(), "A next heartbeat should be sent on " +
+                "the first poll after receiving a response that took longer than the interval, " +
+                "waiting only for the minimal backoff.");
     }
 
     @Test
@@ -358,9 +340,7 @@ public class HeartbeatRequestManagerTest {
     @Test
     public void testNetworkTimeout() {
         // The initial heartbeatInterval is set to 0
-        resetWithZeroHeartbeatInterval();
-        when(membershipManager.state()).thenReturn(MemberState.STABLE);
-        mockStableMember();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
@@ -382,9 +362,7 @@ public class HeartbeatRequestManagerTest {
     @Test
     public void testFailureOnFatalException() {
         // The initial heartbeatInterval is set to 0
-        resetWithZeroHeartbeatInterval();
-        when(membershipManager.state()).thenReturn(MemberState.STABLE);
-        mockStableMember();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
 
         when(membershipManager.isLeavingGroup()).thenReturn(true);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
@@ -414,9 +392,7 @@ public class HeartbeatRequestManagerTest {
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testValidateConsumerGroupHeartbeatRequest() {
         // The initial heartbeatInterval is set to 0, but we're testing
-        resetWithZeroHeartbeatInterval();
-        when(membershipManager.state()).thenReturn(MemberState.STABLE);
-        mockStableMember();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
 
         List<String> subscribedTopics = Collections.singletonList("topic");
         subscriptions.subscribe(new HashSet<>(subscribedTopics), Optional.empty());
@@ -513,8 +489,6 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @MethodSource("errorProvider")
     public void testHeartbeatResponseOnErrorHandling(final Errors error, final boolean isFatal) {
-        when(membershipManager.state()).thenReturn(MemberState.STABLE);
-        mockStableMember();
         when(membershipManager.state()).thenReturn(MemberState.FATAL);
         when(membershipManager.isLeavingGroup()).thenReturn(true);
 
@@ -625,7 +599,6 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
         when(membershipManager.memberId()).thenReturn(DEFAULT_MEMBER_ID);
         when(membershipManager.memberEpoch()).thenReturn(1);
-        mockStableMember();
         data = heartbeatState.buildRequestData();
         data.setTopicPartitions(Collections.emptyList());
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
@@ -780,17 +753,12 @@ public class HeartbeatRequestManagerTest {
                 backgroundEventHandler);
 
         when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
-        when(membershipManager.state()).thenReturn(MemberState.STABLE);
-        mockStableMember();
-
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
-        when(membershipManager.isLeavingGroup()).thenReturn(true);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
 
         // Receive HB response fencing member
         when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
-        doNothing().when(membershipManager).transitionToFenced();
         ClientResponse response = createHeartbeatResponse(result.unsentRequests.get(0), Errors.FENCED_MEMBER_EPOCH);
         result.unsentRequests.get(0).handler().onComplete(response);
 
@@ -798,12 +766,12 @@ public class HeartbeatRequestManagerTest {
         verify(heartbeatRequestState).onFailedAttempt(anyLong());
         verify(heartbeatRequestState).reset();
 
-        when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(false);
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
         when(membershipManager.state()).thenReturn(MemberState.FENCED);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size(), "Member should not send heartbeats while FENCED");
 
-        when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         when(membershipManager.state()).thenReturn(MemberState.JOINING);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size(), "Fenced member should resume heartbeat after transitioning to JOINING");
@@ -820,23 +788,6 @@ public class HeartbeatRequestManagerTest {
     private void assertNoHeartbeat(HeartbeatRequestManager hrm) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(0, pollResult.unsentRequests.size());
-    }
-
-    private void mockStableMember() {
-        membershipManager.onSubscriptionUpdated();
-        // Heartbeat response without assignment to set the state to STABLE.
-        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptions.rebalanceListener()).thenReturn(Optional.empty());
-        ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
-                .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
-                .setMemberId(DEFAULT_MEMBER_ID)
-                .setMemberEpoch(DEFAULT_MEMBER_EPOCH)
-                .setAssignment(new Assignment())
-        );
-        membershipManager.onHeartbeatSuccess(rs1.data());
-        membershipManager.poll(time.milliseconds());
-        membershipManager.onHeartbeatRequestSent();
-        assertEquals(MemberState.STABLE, membershipManager.state());
     }
 
     private void ensureFatalError(Errors expectedError) {
