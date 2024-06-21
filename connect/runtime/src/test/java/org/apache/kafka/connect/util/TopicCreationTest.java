@@ -19,14 +19,15 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.runtime.TransformationStage;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
+import org.apache.kafka.connect.runtime.TransformationStage;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Cast;
 import org.apache.kafka.connect.transforms.RegexRouter;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
