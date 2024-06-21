@@ -143,6 +143,7 @@ object TransactionLog {
   }
 
   // Formatter for use with tools to read transaction log messages
+  @Deprecated
   class TransactionLogMessageFormatter extends MessageFormatter {
     def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
       Option(consumerRecord.key).map(key => readTxnRecordKey(ByteBuffer.wrap(key))).foreach {
