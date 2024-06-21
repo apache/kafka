@@ -150,7 +150,7 @@
         <code>task.assignor.class</code> config instead, as the internal config will be removed in a future release.
         If you were previously plugging in the <code>StickyTaskAssignor</code> via the legacy
         <code>internal.task.assignor.class</code> config, you will need to make sure that you are importing
-        version of the <code>org.apache.kafka.streams.processor.assignment.StickTaskAssignor</code> when you switch
+        the new <code>org.apache.kafka.streams.processor.assignment.StickTaskAssignor</code> when you switch
         over to the new <code>task.assignor.class</code> config, which is a version of the <code>StickyTaskAssignor</code>
         that implements the new public <code>TaskAssignor</code> interface.
 
