@@ -27,7 +27,9 @@
   //
   // Starting from Apache Kafka 2.4 (KIP-511), ApiKeys field is populated with the supported
   // versions of the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
-  "validVersions": "0-3",
+  //
+  // Version 4 fixes KAFKA-17011, which blocked SupportedFeatures.MinVersion from being 0.
+  "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
@@ -67,7 +69,7 @@
         {"name":  "MaxVersionLevel", "type": "int16", "versions":  "3+",
           "about": "The cluster-wide finalized max version level for the feature."},
         {"name":  "MinVersionLevel", "type": "int16", "versions":  "3+",
-          "about": "The cluster-wide finalized min version level for the feature."}
+          "about": "The cluster-wide finalized min version level for the feature. Due to KAFKA-17011, this must be 1 or greater in v3. It can be 0 in v4."}
       ]
     },
     { "name":  "ZkMigrationReady", "type": "bool", "versions": "3+", "taggedVersions": "3+",
