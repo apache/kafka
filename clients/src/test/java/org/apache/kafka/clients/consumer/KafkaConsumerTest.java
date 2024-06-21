@@ -2152,7 +2152,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = {"CLASSIC", "CONSUMER"})
+    @EnumSource(value = GroupProtocol.class)
     public void testMeasureCommitSyncDuration(GroupProtocol groupProtocol) {
         Time time = new MockTime(Duration.ofSeconds(1).toMillis());
         SubscriptionState subscription = new SubscriptionState(new LogContext(),
@@ -2181,7 +2181,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = {"CLASSIC", "CONSUMER"})
+    @EnumSource(value = GroupProtocol.class)
     public void testMeasureCommittedDurationOnFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer
             = consumerWithPendingError(groupProtocol, new MockTime(Duration.ofSeconds(1).toMillis()));
@@ -2197,7 +2197,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = {"CLASSIC", "CONSUMER"})
+    @EnumSource(value = GroupProtocol.class)
     public void testMeasureCommittedDuration(GroupProtocol groupProtocol) {
         long offset1 = 10000;
         Time time = new MockTime(Duration.ofSeconds(1).toMillis());
@@ -2426,7 +2426,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = {"CLASSIC", "CONSUMER"})
+    @EnumSource(value = GroupProtocol.class)
     public void testInvalidGroupMetadata(GroupProtocol groupProtocol) throws InterruptedException {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
