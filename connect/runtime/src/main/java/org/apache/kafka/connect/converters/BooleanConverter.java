@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.converters;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.BooleanDeserializer;
@@ -33,6 +31,9 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * {@link Converter} and {@link HeaderConverter} implementation that supports serializing to and
