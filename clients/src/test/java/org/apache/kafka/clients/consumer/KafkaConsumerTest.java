@@ -3235,7 +3235,7 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = {"CLASSIC", "CONSUMER"})
+    @EnumSource(value = GroupProtocol.class)
     public void testOffsetsForTimesTimeout(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerForCheckingTimeoutException(groupProtocol);
         assertEquals(
@@ -3245,7 +3245,7 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = {"CLASSIC", "CONSUMER"})
+    @EnumSource(value = GroupProtocol.class)
     public void testBeginningOffsetsTimeout(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerForCheckingTimeoutException(groupProtocol);
         assertEquals(
@@ -3255,7 +3255,7 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = {"CLASSIC", "CONSUMER"})
+    @EnumSource(value = GroupProtocol.class)
     public void testEndOffsetsTimeout(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerForCheckingTimeoutException(groupProtocol);
         assertEquals(
