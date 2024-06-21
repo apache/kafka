@@ -365,6 +365,10 @@ public class Selector implements Selectable, AutoCloseable {
             // Ideally, these resources are closed by the KafkaChannel but if the KafkaChannel is not created to an
             // error, this builder should close the resources it has created instead.
             Utils.closeQuietly(metadataRegistry, "metadataRegistry");
+            // If an Authentication Failure is encountered, throw that error directly.
+            if (e instanceof AuthenticationException) {
+                throw e;
+            }
             throw new IOException("Channel could not be created for socket " + socketChannel, e);
         }
     }

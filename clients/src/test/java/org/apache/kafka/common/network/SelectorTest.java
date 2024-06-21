@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -445,6 +446,29 @@ public class SelectorTest {
             socketChannel.configureBlocking(false);
             IOException e = assertThrows(IOException.class, () -> selector.register(channelId, socketChannel));
             assertTrue(e.getCause().getMessage().contains("Test exception"), "Unexpected exception: " + e);
+            assertFalse(socketChannel.isOpen(), "Socket not closed");
+            // Ideally, metadataRegistry is closed by the KafkaChannel but if the KafkaChannel is not created due to
+            // an error such as in a case like this, the Selector should be closing the metadataRegistry instead.
+            verify(mockedMetadataRegistry.constructed().get(0)).close();
+            selector.close();
+        }
+    }
+
+    @Test
+    public void registerAuthenticationFailure() throws Exception {
+        final String channelId = "1";
+
+        final ChannelBuilder channelBuilder = mock(ChannelBuilder.class);
+
+        when(channelBuilder.buildChannel(eq(channelId), any(SelectionKey.class), anyInt(), any(MemoryPool.class),
+            any(ChannelMetadataRegistry.class))).thenThrow(new SaslAuthenticationException("Authentication Failure"));
+
+        try (MockedConstruction<Selector.SelectorChannelMetadataRegistry> mockedMetadataRegistry =
+                 mockConstruction(Selector.SelectorChannelMetadataRegistry.class)) {
+            Selector selector = new Selector(CONNECTION_MAX_IDLE_MS, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+            final SocketChannel socketChannel = SocketChannel.open();
+            socketChannel.configureBlocking(false);
+            assertThrows(SaslAuthenticationException.class, () -> selector.register(channelId, socketChannel));
             assertFalse(socketChannel.isOpen(), "Socket not closed");
             // Ideally, metadataRegistry is closed by the KafkaChannel but if the KafkaChannel is not created due to
             // an error such as in a case like this, the Selector should be closing the metadataRegistry instead.
