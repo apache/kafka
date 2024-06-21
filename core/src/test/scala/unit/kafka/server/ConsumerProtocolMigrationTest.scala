@@ -450,6 +450,38 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       )
     )
 
+    // Member 1 heartbeats with illegal generation id.
+    heartbeat(
+      groupId = groupId,
+      generationId = 2,
+      memberId = memberId1,
+      expectedError = Errors.ILLEGAL_GENERATION
+    )
+
+    // Heartbeat with unknown member id.
+    heartbeat(
+      groupId = groupId,
+      generationId = 1,
+      memberId = "unknown-member-id",
+      expectedError = Errors.UNKNOWN_MEMBER_ID
+    )
+
+    // Member 1 heartbeats with unknown group id.
+    heartbeat(
+      groupId = "unknown-group-id",
+      generationId = 1,
+      memberId = memberId1,
+      expectedError = Errors.UNKNOWN_MEMBER_ID
+    )
+
+    // Member 2 heartbeats with classic protocol.
+    heartbeat(
+      groupId = groupId,
+      generationId = 1,
+      memberId = memberId2,
+      expectedError = Errors.UNKNOWN_MEMBER_ID
+    )
+
     // Member 1 heartbeats and gets REBALANCE_IN_PROGRESS.
     heartbeat(
       groupId = groupId,
@@ -510,7 +542,21 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       )
     }
 
+    // Member 1 rejoins with illegal protocol type.
+    assertEquals(
+      new JoinGroupResponseData()
+        .setProtocolName(null)
+        .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code),
+      sendJoinRequest(
+        groupId = groupId,
+        memberId = memberId1,
+        metadata = metadata(List.empty),
+        protocolType = "connect"
+      )
+    )
+
     // Member 1 rejoins with empty owned partitions.
+    // We still get a response without error even if the generation id is illegal.
     assertEquals(
       new JoinGroupResponseData()
         .setGenerationId(2)
@@ -521,6 +567,19 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         groupId = groupId,
         memberId = memberId1,
         metadata = metadata(List.empty)
+      )
+    )
+
+    // Try to join a new classic member with unsupported protocol name.
+    assertEquals(
+      new JoinGroupResponseData()
+        .setProtocolName(null)
+        .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code),
+      sendJoinRequest(
+        groupId = groupId,
+        memberId = "new-member",
+        metadata = metadata(List.empty),
+        protocolName = "consumer-roundrobin"
       )
     )
 
@@ -548,6 +607,58 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         statesFilter = List.empty,
         typesFilter = List(Group.GroupType.CONSUMER.toString)
       )
+    )
+
+    // Member 1 syncs with illegal generation.
+    verifySyncGroupWithOldProtocol(
+      groupId = groupId,
+      memberId = memberId1,
+      generationId = 1,
+      expectedProtocolType = null,
+      expectedProtocolName = null,
+      expectedError = Errors.ILLEGAL_GENERATION
+    )
+
+    // Member 1 syncs with unknown group id.
+    verifySyncGroupWithOldProtocol(
+      groupId = "unknown-group-id",
+      memberId = memberId1,
+      generationId = 2,
+      expectedProtocolType = null,
+      expectedProtocolName = null,
+      expectedError = Errors.UNKNOWN_MEMBER_ID
+    )
+
+    // Sync with unknown member id.
+    verifySyncGroupWithOldProtocol(
+      groupId = groupId,
+      memberId = "unknown-member-id",
+      generationId = 2,
+      expectedProtocolType = null,
+      expectedProtocolName = null,
+      expectedError = Errors.UNKNOWN_MEMBER_ID
+    )
+
+    // Member 1 syncs with illegal protocol type.
+    verifySyncGroupWithOldProtocol(
+      groupId = groupId,
+      memberId = memberId1,
+      generationId = 2,
+      protocolType = "connect",
+      expectedProtocolType = null,
+      expectedProtocolName = null,
+      expectedError = Errors.INCONSISTENT_GROUP_PROTOCOL
+    )
+
+    // Member 1 syncs with illegal protocol name.
+    verifySyncGroupWithOldProtocol(
+      groupId = groupId,
+      memberId = memberId1,
+      generationId = 2,
+      protocolName = "consumer-roundrobin",
+      expectedProtocolType = null,
+      expectedProtocolName = null,
+      expectedError = Errors.INCONSISTENT_GROUP_PROTOCOL
     )
 
     // Member 1 syncs.
