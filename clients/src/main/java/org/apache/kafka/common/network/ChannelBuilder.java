@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.network;
 
-import java.nio.channels.SelectionKey;
-
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.memory.MemoryPool;
+
+import java.nio.channels.SelectionKey;
 
 
 /**

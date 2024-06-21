@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.io.IOException;
-import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreamsWrapper;
@@ -28,28 +26,28 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TemporaryFolder;
-import org.junit.rules.Timeout;
 
-import static org.junit.Assert.assertTrue;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
-@Category({IntegrationTest.class})
+import java.io.IOException;
+import java.util.Properties;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@Tag("integration")
+@Timeout(600)
 public class JoinWithIncompleteMetadataIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
         STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -59,14 +57,10 @@ public class JoinWithIncompleteMetadataIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
-
-
-    @Rule
-    public final TemporaryFolder testFolder = new TemporaryFolder(TestUtils.tempDirectory());
 
     private static final String APP_ID = "join-incomplete-metadata-integration-test";
     private static final Long COMMIT_INTERVAL = 100L;
@@ -79,18 +73,19 @@ public class JoinWithIncompleteMetadataIntegrationTest {
     final ValueJoiner<String, String, String> valueJoiner = (value1, value2) -> value1 + "-" + value2;
     private KTable<Long, String> rightTable;
 
-    @Before
+    @BeforeEach
     public void prepareTopology() throws InterruptedException {
         CLUSTER.createTopics(INPUT_TOPIC_RIGHT, OUTPUT_TOPIC);
-        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath());
+        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
 
         builder = new StreamsBuilder();
         rightTable = builder.table(INPUT_TOPIC_RIGHT);
     }
 
-    @After
-    public void cleanup() throws InterruptedException {
+    @AfterEach
+    public void cleanup() throws InterruptedException, IOException {
         CLUSTER.deleteAllTopicsAndWait(120000);
+        IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
     }
 
     @Test

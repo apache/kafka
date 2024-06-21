@@ -16,12 +16,6 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.Collections;
-
-import javax.security.sasl.SaslException;
-
 import org.apache.kafka.common.security.scram.internals.ScramMessages.AbstractScramMessage;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFinalMessage;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFirstMessage;
@@ -30,6 +24,13 @@ import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirs
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Collections;
+
+import javax.security.sasl.SaslException;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
