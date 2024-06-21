@@ -57,7 +57,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -432,7 +431,7 @@ public class KafkaBasedLogTest {
             finalSuccessCallbackRef.set(finalSuccessCallback);
             store.readToEnd(finalSuccessCallback);
         });
-        final FutureCallback<Void> subsequentFailedCallback = new FutureCallback<>(((error, result) -> numFailures.getAndIncrement()));
+        final FutureCallback<Void> subsequentFailedCallback = new FutureCallback<>((error, result) -> numFailures.getAndIncrement());
 
         store.readToEnd(successCallback);
         store.readToEnd(firstFailedCallback);

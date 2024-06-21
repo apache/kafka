@@ -2159,7 +2159,8 @@ public class WorkerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testGetSourceConnectorOffsetsFetchError() {
+    public void testGetSourceConnectorOffsetsFetchError(boolean enableTopicCreation) {
+        setup(enableTopicCreation);
         mockKafkaClusterId();
 
         ConnectorOffsetBackingStore offsetStore = mock(ConnectorOffsetBackingStore.class);
