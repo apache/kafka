@@ -80,7 +80,7 @@ def get_jdk(version):
     """
     Get settings for the specified JDK version.
     """
-    jdk_java_home = preferences.get("jdk%d" % version, lambda: prompt.text("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
+    jdk_java_home = preferences.get("jdk%d" % version, lambda: prompt("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
     jdk_env = dict(os.environ)
     if jdk_java_home.strip(): jdk_env["JAVA_HOME"] = jdk_java_home
     else: jdk_java_home = jdk_env["JAVA_HOME"]

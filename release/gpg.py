@@ -16,7 +16,7 @@
 #
 
 """
-Auxiliary funcitons to interact with GNU Privacy Guard (GPG).
+Auxiliary functions to interact with GNU Privacy Guard (GPG).
 """
 
 import hashlib
@@ -28,7 +28,7 @@ from runtime import execute
 
 def key_exists(key_id):
     """
-    Check whether the specified GPG key exists locally.
+    Checks whether the specified GPG key exists locally.
     """
     try:
         execute(f"gpg --list-keys {key_id}")
