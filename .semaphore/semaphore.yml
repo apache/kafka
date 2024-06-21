@@ -43,10 +43,6 @@ global_job_config:
       - echo $SEMAPHORE_WORKFLOW_ID
       - echo $SEMAPHORE_GIT_REPO_SLUG
       - checkout
-      - |
-        if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
-          . vault-setup
-        fi
       - sem-version java 21
       - sem-version go 1.16.15
       - git config --global url."git@github.com:".insteadOf "https://github.com/"
@@ -57,18 +53,29 @@ blocks:
   - name: Gradle Build
     dependencies: []
     task:
-      prologue:
-        commands:
-          - make init-ci
       jobs:
         - name: Build, Compile, Validations, Publish
           commands:
+            - |
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
+                make init-ci
+              fi
+            - |
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
+                . vault-setup
+              fi
             - >-
-              if [ "$NANO_VERSION" = "true" ] && [ "$RELEASE_JOB" = "false" ] && [ "$ENABLE_PUBLISH_ARTIFACTS" = "true" ]; then
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]] && [ "$NANO_VERSION" = "true" ] && [ "$RELEASE_JOB" = "false" ] && [ "$ENABLE_PUBLISH_ARTIFACTS" = "true" ]; then
                 . ci-tools ci-update-version
               fi
-            - make compile-validate
-            - make check-scala-compatibility
+            - |
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
+                make compile-validate
+              fi
+            - |
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
+                make check-scala-compatibility
+              fi
             - |
               if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]] && [ "$PUBLISH" = "true" ] && [ "$SEMAPHORE_GIT_REF_TYPE" != "pull-request" ] && [ "$ENABLE_PUBLISH_ARTIFACTS" = "true" ]; then \
                 if [[ "$RELEASE_JOB" = "false" ]]; then \
@@ -81,7 +88,7 @@ blocks:
               fi
             - |
               echo "PUBLISH: $PUBLISH, RELEASE_JOB: $RELEASE_JOB, SEMAPHORE_GIT_REF_TYPE: $SEMAPHORE_GIT_REF_TYPE, ENABLE_DOWNSTREAM_TRIGGER: $ENABLE_DOWNSTREAM_TRIGGER"
-              if [ "$PUBLISH" = "true" ] && [ "$RELEASE_JOB" = "false" ] && [ "$SEMAPHORE_GIT_REF_TYPE" != "pull-request" ] && [ "$ENABLE_DOWNSTREAM_TRIGGER" = "true" ]; then
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]] && [ "$PUBLISH" = "true" ] && [ "$RELEASE_JOB" = "false" ] && [ "$SEMAPHORE_GIT_REF_TYPE" != "pull-request" ] && [ "$ENABLE_DOWNSTREAM_TRIGGER" = "true" ]; then
                 for project in $DOWNSTREAM_PROJECTS; do
                   sem-trigger -p $project -b $DOWNSTREAM_BRANCH_NAME -f .semaphore/semaphore.yml
                 done
@@ -89,9 +96,6 @@ blocks:
   - name: Tests
     dependencies: []
     task:
-      prologue:
-        commands:
-          - make init-ci
       jobs:
         - name: Unit tests and Integration tests
           commands:
