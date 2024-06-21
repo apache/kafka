@@ -2091,6 +2091,26 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         return timeUntilDrain;
     }
 
+    private long maybeSendBeginQuorumEpochRequests(
+        LeaderState<T> state,
+        long currentTimeMs
+    ) {
+        long timeUntilNextBeginQuorumSend = state.timeUntilBeginQuorumEpochTimerExpires(currentTimeMs);
+        if (timeUntilNextBeginQuorumSend == 0) {
+            timeUntilNextBeginQuorumSend = maybeSendRequests(
+                currentTimeMs,
+                partitionState
+                    .lastVoterSet()
+                    .voterNodes(state.votersExcludingLeader().stream(), channel.listenerName()),
+                this::buildBeginQuorumEpochRequest
+            );
+            state.resetBeginQuorumEpochTimer(currentTimeMs);
+            logger.trace("Attempted to send BeginQuorumEpochRequest as heartbeat to all voters. " +
+                "Request can be retried in {} ms", timeUntilNextBeginQuorumSend);
+        }
+        return timeUntilNextBeginQuorumSend;
+    }
+
     private long pollResigned(long currentTimeMs) {
         ResignedState state = quorum.resignedStateOrThrow();
         long endQuorumBackoffMs = maybeSendRequests(
@@ -2132,30 +2152,10 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             currentTimeMs
         );
 
-        long timeUntilNextBeginQuorumSend = state.timeUntilBeginQuorumEpochTimerExpires(currentTimeMs);
-
-        if (timeUntilNextBeginQuorumSend == 0) {
-            timeUntilNextBeginQuorumSend = maybeSendRequests(
-                currentTimeMs,
-                partitionState
-                    .lastVoterSet()
-                    .voterNodes(channel.listenerName()),
-                this::buildBeginQuorumEpochRequest
-            );
-            state.resetBeginQuorumEpochTimer(currentTimeMs);
-            logger.trace("Attempted to send BeginQuorumEpochRequest as heartbeat to all voters. " +
-                "Request can be retried in {} ms", timeUntilNextBeginQuorumSend);
-        } else if (!state.nonAcknowledgingVoters().isEmpty()) {
-            timeUntilNextBeginQuorumSend = maybeSendRequests(
-                currentTimeMs,
-                partitionState
-                    .lastVoterSet()
-                    .voterNodes(state.nonAcknowledgingVoters().stream(), channel.listenerName()),
-                this::buildBeginQuorumEpochRequest
-            );
-            logger.trace("Attempted to send BeginQuorumEpochRequest to non-acknowledging voters: {}. " +
-                "Request can be retried in {} ms", state.nonAcknowledgingVoters(), timeUntilNextBeginQuorumSend);
-        }
+        long timeUntilNextBeginQuorumSend = maybeSendBeginQuorumEpochRequests(
+            state,
+            currentTimeMs
+        );
 
         return Math.min(timeUntilFlush, Math.min(timeUntilNextBeginQuorumSend, timeUntilCheckQuorumExpires));
     }

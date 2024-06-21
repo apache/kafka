@@ -49,7 +49,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
-import org.opentest4j.AssertionFailedError;
+//import org.opentest4j.AssertionFailedError;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -511,14 +511,15 @@ public class KafkaRaftClientTest {
         // begin epoch requests should be sent out every beginQuorumEpochTimeoutMs
         context.time.sleep(context.beginQuorumEpochTimeoutMs);
         context.client.poll();
-        context.expectBeginEpoch(context.currentEpoch());
+        context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), 2);
 
+        context.time.sleep(context.beginQuorumEpochTimeoutMs / 2);
         context.client.poll();
-        assertThrows(AssertionFailedError.class, () -> context.expectBeginEpoch(context.currentEpoch()));
+        context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), 0);
 
-        context.time.sleep(context.beginQuorumEpochTimeoutMs);
+        context.time.sleep(context.beginQuorumEpochTimeoutMs / 2);
         context.client.poll();
-        context.expectBeginEpoch(context.currentEpoch());
+        context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), 2);
     }
 
     @Test

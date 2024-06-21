@@ -96,7 +96,7 @@ public class LeaderState<T> implements EpochState {
         this.checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
         this.checkQuorumTimer = time.timer(checkQuorumTimeoutMs);
         this.beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
-        this.beginQuorumEpochTimer = time.timer(beginQuorumEpochTimeoutMs);
+        this.beginQuorumEpochTimer = time.timer(0);
     }
 
     public long timeUntilBeginQuorumEpochTimerExpires(long currentTimeMs) {
@@ -214,7 +214,14 @@ public class LeaderState<T> implements EpochState {
         return localId;
     }
 
-    public Set<Integer> nonAcknowledgingVoters() {
+    public Set<Integer> votersExcludingLeader() {
+        Set<Integer> voters = new HashSet<>(voterStates.keySet());
+        voters.remove(localId);
+        return voters;
+    }
+
+    // visible for testing
+    Set<Integer> nonAcknowledgingVoters() {
         Set<Integer> nonAcknowledging = new HashSet<>();
         for (ReplicaState state : voterStates.values()) {
             if (!state.hasAcknowledgedLeader)

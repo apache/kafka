@@ -86,14 +86,17 @@ public class LeaderStateTest {
     }
 
     @Test
-    public void testFollowerAcknowledgement() {
+    public void testVotersExcludingFollowerAcknowledgement() {
         int node1 = 1;
         int node2 = 2;
         LeaderState<?> state = newLeaderState(mkSet(localId, node1, node2), 0L);
+        assertEquals(mkSet(node1, node2), state.votersExcludingLeader());
         assertEquals(mkSet(node1, node2), state.nonAcknowledgingVoters());
         state.addAcknowledgementFrom(node1);
+        assertEquals(mkSet(node1, node2), state.votersExcludingLeader());
         assertEquals(singleton(node2), state.nonAcknowledgingVoters());
         state.addAcknowledgementFrom(node2);
+        assertEquals(mkSet(node1, node2), state.votersExcludingLeader());
         assertEquals(emptySet(), state.nonAcknowledgingVoters());
     }
 
@@ -603,6 +606,7 @@ public class LeaderStateTest {
         LeaderState<?> state = newLeaderState(voterSet, epochStartOffset);
         assertFalse(state.updateLocalState(new LogOffsetMetadata(epochStartOffset + 1), voterSet));
         assertTrue(state.updateReplicaState(node2, 0, new LogOffsetMetadata(epochStartOffset + 1)));
+        assertEquals(mkSet(node1, node2), state.votersExcludingLeader());
         assertEquals(Optional.of(new LogOffsetMetadata(epochStartOffset + 1)), state.highWatermark());
 
         // node1 becomes an observer
@@ -610,7 +614,6 @@ public class LeaderStateTest {
         assertFalse(state.updateReplicaState(node1, fetchTimeMs, new LogOffsetMetadata(epochStartOffset + 1)));
         Set<Integer> voterSetWithoutNode1 = mkSet(leader, node2);
         state.updateLocalState(new LogOffsetMetadata(epochStartOffset + 5), voterSetWithoutNode1);
-
 
         time.sleep(500);
         DescribeQuorumResponseData.PartitionData partitionData = state.describeQuorum(time.milliseconds());
@@ -621,6 +624,7 @@ public class LeaderStateTest {
         assertEquals(node1, observer.replicaId());
         assertEquals(epochStartOffset + 1, observer.logEndOffset());
         assertEquals(2, partitionData.currentVoters().size());
+        assertEquals(mkSet(node2), state.votersExcludingLeader());
 
         // node1 catches up with leader, HW should not change
         time.sleep(500);
@@ -638,6 +642,7 @@ public class LeaderStateTest {
         assertEquals(epoch, partitionData.leaderEpoch());
         assertEquals(Collections.emptyList(), partitionData.observers());
         assertEquals(3, partitionData.currentVoters().size());
+        assertEquals(mkSet(node1, node2), state.votersExcludingLeader());
         DescribeQuorumResponseData.ReplicaState node1State = partitionData.currentVoters().stream()
             .filter(replicaState -> replicaState.replicaId() == node1)
             .findFirst().get();
@@ -792,13 +797,13 @@ public class LeaderStateTest {
 
     @Test
     public void testBeginQuorumEpochTimer() {
-        MockTime time = new MockTime();
         int leader = localId;
         int follower1 = 1;
         long epochStartOffset = 10L;
 
         Set<Integer> voterSet = mkSet(leader, follower1);
         LeaderState<?> state = newLeaderState(voterSet, epochStartOffset);
+        assertEquals(0, state.timeUntilBeginQuorumEpochTimerExpires(time.milliseconds()));
 
         long resetTime = time.milliseconds();
         state.resetBeginQuorumEpochTimer(resetTime);

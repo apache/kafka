@@ -614,7 +614,7 @@ public final class RaftClientTestContext {
     RaftRequest.Outbound assertSentBeginQuorumEpochRequest(int epoch, int numBeginEpochRequests) {
         List<RaftRequest.Outbound> requests = collectBeginEpochRequests(epoch);
         assertEquals(numBeginEpochRequests, requests.size());
-        return requests.get(0);
+        return !requests.isEmpty() ? requests.get(0) : null;
     }
 
     private List<RaftResponse.Outbound> drainSentResponses(
@@ -865,6 +865,7 @@ public final class RaftClientTestContext {
         List<RaftRequest.Outbound> requests = new ArrayList<>();
         for (RaftRequest.Outbound raftRequest : channel.drainSentRequests(Optional.of(ApiKeys.BEGIN_QUORUM_EPOCH))) {
             assertInstanceOf(BeginQuorumEpochRequestData.class, raftRequest.data());
+            assertNotEquals(localIdOrThrow(), raftRequest.destination().id());
             BeginQuorumEpochRequestData request = (BeginQuorumEpochRequestData) raftRequest.data();
 
             BeginQuorumEpochRequestData.PartitionData partitionRequest =

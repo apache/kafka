@@ -57,18 +57,6 @@ final public class VoterSet {
     }
 
     /**
-     * Returns the node information for all the voters
-     */
-    public Set<Node> voterNodes(ListenerName listenerName) {
-        Set<Node> allVoters = new HashSet<>();
-        for (VoterNode voter : voters.values()) {
-            voter.address(listenerName).ifPresent(address ->
-                allVoters.add(new Node(voter.voterKey().id(), address.getHostString(), address.getPort())));
-        }
-        return allVoters;
-    }
-
-    /**
      * Returns the node information for all the given voter ids and listener.
      *
      * @param voterIds the ids of the voters
