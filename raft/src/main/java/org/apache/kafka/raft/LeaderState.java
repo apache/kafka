@@ -122,9 +122,11 @@ public class LeaderState<T> implements EpochState {
         long remainingMs = checkQuorumTimer.remainingMs();
         if (remainingMs == 0) {
             log.info(
-                "Did not receive fetch request from the majority of the voters within {}ms. Current fetched voters are {}.",
+                "Did not receive fetch request from the majority of the voters within {}ms. " +
+                "Current fetched voters are {}, and voters are {}",
                 checkQuorumTimeoutMs,
-                fetchedVoters
+                fetchedVoters,
+                voterStates.values().stream().map(voter -> voter.replicaKey)
             );
         }
         return remainingMs;
@@ -138,8 +140,16 @@ public class LeaderState<T> implements EpochState {
      */
     public void updateCheckQuorumForFollowingVoter(ReplicaKey replicaKey, long currentTimeMs) {
         updateFetchedVoters(replicaKey);
-        // The majority number of the voters excluding the leader. Ex: 3 voters, the value will be 1
-        int majority = voterStates.size() / 2;
+        // The majority number of the voters. Ex: 2 for 3 voters, 3 for 4 voters... etc.
+        int majority = (voterStates.size() / 2) + 1;
+        // If the leader is in the voter set, it should be implicitly counted as part of the
+        // majority, but the leader will never be a member of the fetchedVoters.
+        // If the leader is not in the voter set, it is not in the majority. Then, the
+        // majority can only be composed of fetched voters.
+        if (voterStates.containsKey(localReplicaKey.id())) {
+            majority = majority - 1;
+        }
+
         if (fetchedVoters.size() >= majority) {
             fetchedVoters.clear();
             checkQuorumTimer.update(currentTimeMs);

@@ -17,6 +17,7 @@
 package kafka.server.share;
 
 import kafka.server.FetchSession;
+
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;

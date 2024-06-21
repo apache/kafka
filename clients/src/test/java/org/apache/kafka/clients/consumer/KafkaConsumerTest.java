@@ -96,6 +96,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -134,6 +135,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 
@@ -3195,8 +3197,9 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
     // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
     //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(value = GroupProtocol.class)
     public void configurableObjectsShouldSeeGeneratedClientId(GroupProtocol groupProtocol) {
+        CLIENT_IDS.clear();
         Properties props = new Properties();
         props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");

@@ -922,6 +922,51 @@ public class LeaderStateTest {
     }
 
     @Test
+    public void testCheckQuorumAfterVoterSetChanges() {
+        ReplicaKey nodeKey1 = ReplicaKey.of(1, Uuid.randomUuid());
+        ReplicaKey nodeKey2 = ReplicaKey.of(2, Uuid.randomUuid());
+        ReplicaKey nodeKey3 = ReplicaKey.of(3, Uuid.randomUuid());
+
+        VoterSet originalVoters  = localWithRemoteVoterSet(Stream.of(nodeKey1, nodeKey2), true);
+        LeaderState<?> state = newLeaderState(originalVoters, 0L);
+        assertEquals(checkQuorumTimeoutMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+
+        // checkQuorum timeout not exceeded, should not expire the timer
+        time.sleep(checkQuorumTimeoutMs / 2);
+        assertEquals(checkQuorumTimeoutMs / 2, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+
+        // received fetch request from 1 voter node, the timer should be reset
+        state.updateCheckQuorumForFollowingVoter(nodeKey1, time.milliseconds());
+        assertEquals(checkQuorumTimeoutMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+
+        // Adding 1 new voter to the voter set
+        VoterSet votersWithNode3 = originalVoters.addVoter(VoterSetTest.voterNode(nodeKey3)).get();
+        state.updateLocalState(new LogOffsetMetadata(1L), votersWithNode3);
+
+        time.sleep(checkQuorumTimeoutMs / 2);
+        // received fetch request from 1 voter node, the timer should not be reset because the majority should be 3
+        state.updateCheckQuorumForFollowingVoter(nodeKey1, time.milliseconds());
+        assertEquals(checkQuorumTimeoutMs / 2, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+
+        // Timer should be reset after receiving another voter's fetch request
+        state.updateCheckQuorumForFollowingVoter(nodeKey2, time.milliseconds());
+        assertEquals(checkQuorumTimeoutMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+
+        // removing leader from the voter set
+        VoterSet votersWithoutLeader = votersWithNode3.removeVoter(localReplicaKey).get();
+        state.updateLocalState(new LogOffsetMetadata(1L), votersWithoutLeader);
+
+        time.sleep(checkQuorumTimeoutMs / 2);
+        // received fetch request from 1 voter, the timer should not be reset.
+        state.updateCheckQuorumForFollowingVoter(nodeKey2, time.milliseconds());
+        assertEquals(checkQuorumTimeoutMs / 2, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+
+        // received fetch request from another voter, the timer should be reset since the current quorum majority is 2.
+        state.updateCheckQuorumForFollowingVoter(nodeKey1, time.milliseconds());
+        assertEquals(checkQuorumTimeoutMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+    }
+
+    @Test
     public void testCheckQuorumWithOneVoter() {
         int observer = 1;
 

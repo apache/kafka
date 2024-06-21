@@ -17,21 +17,22 @@
 
 package org.apache.kafka.connect.converters;
 
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.errors.DataException;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.errors.DataException;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 public class BooleanConverterTest {
     private static final String TOPIC = "topic";

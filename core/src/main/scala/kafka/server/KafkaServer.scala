@@ -695,7 +695,7 @@ class KafkaServer(
 
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.isRemoteStorageSystemEnabled()) {
-      Some(new RemoteLogManager(config, config.brokerId, config.logDirs.head, clusterId, time,
+      Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).asJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
           logManager.getLog(tp).foreach { log =>
@@ -1086,6 +1086,13 @@ class KafkaServer(
         fatal("Fatal error during KafkaServer shutdown.", e)
         isShuttingDown.set(false)
         throw e
+    }
+  }
+
+  override def isShutdown(): Boolean = {
+    BrokerState.fromValue(brokerState.value()) match {
+      case BrokerState.SHUTTING_DOWN | BrokerState.NOT_RUNNING => true
+      case _ => false
     }
   }
 
