@@ -52,35 +52,42 @@ public final class ClientUtils {
     private ClientUtils() {
     }
 
+    /*
+     * This method takes the bootstrap server urls and client dns lookup and passes them on
+     */
     public static List<InetSocketAddress> parseAndValidateAddresses(AbstractConfig config) {
         List<String> urls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
         String clientDnsLookupConfig = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG);
         return parseAndValidateAddresses(urls, clientDnsLookupConfig);
     }
 
+    /*
+     * This method simply passes along the variables from the method above
+     */
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, String clientDnsLookupConfig) {
         return parseAndValidateAddresses(urls, ClientDnsLookup.forConfig(clientDnsLookupConfig));
     }
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
-        List<InetSocketAddress> addresses = new ArrayList<>();
-        for (String url : urls) {
-            if (url != null && !url.isEmpty()) {
+        List<InetSocketAddress> addresses = new ArrayList<>(); // Create a list to store addresses
+        for (String url : urls) { // Iterating over the list of urls passed as a parameter
+            if (url != null && !url.isEmpty()) { // If url is not null AND not empty
                 try {
-                    String host = getHost(url);
-                    Integer port = getPort(url);
-                    if (host == null || port == null)
+                    String host = getHost(url);  // Get host from the url
+                    Integer port = getPort(url); // Get port from the url
+                    if (host == null || port == null) // If either is NULL, throw config exception
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
+                    // If clientDnsLookup equals the resolve server
                     if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
-                        InetAddress[] inetAddresses = InetAddress.getAllByName(host);
-                        for (InetAddress inetAddress : inetAddresses) {
+                        InetAddress[] inetAddresses = InetAddress.getAllByName(host); // Gets inetAddresses according to the host
+                        for (InetAddress inetAddress : inetAddresses) { // Iterate over inetAddresses
                             String resolvedCanonicalName = inetAddress.getCanonicalHostName();
-                            InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
-                            if (address.isUnresolved()) {
+                            InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port); // Full address instantiation
+                            if (address.isUnresolved()) { // If not immediately available, warn
                                 log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname {} failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, resolvedCanonicalName, host);
                             } else {
-                                addresses.add(address);
+                                addresses.add(address); // If available, add it to addresses
                             }
                         }
                     } else {
