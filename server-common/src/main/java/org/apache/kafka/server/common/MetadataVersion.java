@@ -201,8 +201,18 @@ public enum MetadataVersion {
     // Add new fetch request version for KIP-951
     IBP_3_7_IV4(19, "3.7", "IV4", false),
 
+    // New version for the Kafka 3.8.0 release.
     // Add ELR related supports (KIP-966).
-    IBP_3_8_IV0(20, "3.8", "IV0", true);
+    IBP_3_8_IV0(20, "3.8", "IV0", true),
+
+    //
+    // NOTE: MetadataVersions after this point are unstable and may be changed.
+    // If users attempt to use an unstable MetadataVersion, they will get an error.
+    // Please move this comment when updating the LATEST_PRODUCTION constant.
+    //
+
+    // Introduce version 1 of the GroupVersion feature (KIP-848).
+    IBP_4_0_IV0(21, "4.0", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version

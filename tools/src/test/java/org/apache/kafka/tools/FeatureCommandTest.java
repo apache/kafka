@@ -63,7 +63,7 @@ public class FeatureCommandTest {
                 "SupportedMaxVersion: 3.8-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(commandOutput));
     }
 
-    @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_7_IV4)
+    @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_8_IV0)
     public void testDescribeWithKRaftAndBootstrapControllers(ClusterInstance cluster) {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-controller", cluster.bootstrapControllers(), "describe"))

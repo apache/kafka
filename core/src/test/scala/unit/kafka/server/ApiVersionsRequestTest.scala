@@ -67,7 +67,7 @@ object ApiVersionsRequestTest {
     serverProperties.put("unstable.feature.versions.enable", "false")
     List(ClusterConfig.defaultBuilder()
       .setTypes(java.util.Collections.singleton(Type.ZK))
-      .setMetadataVersion(MetadataVersion.IBP_3_7_IV4)
+      .setMetadataVersion(MetadataVersion.IBP_3_8_IV0)
       .build()).asJava
   }
 
@@ -132,7 +132,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   }
 
   @ClusterTemplate("testApiVersionsRequestValidationV0Template")
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_3_7_IV4, serverProperties = Array(
+  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_3_8_IV0, serverProperties = Array(
       new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
       new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "false"),
   ))
