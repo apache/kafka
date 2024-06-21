@@ -30,7 +30,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.Assignment;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -217,28 +216,21 @@ public class HeartbeatRequestManagerTest {
         assertNextHeartbeatTiming(DEFAULT_HEARTBEAT_INTERVAL_MS - partOfInterval);
     }
 
-    @Test
+    @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
-    public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments() {
+    public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments(short version) {
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         String topic = "topic1";
 
         // Create a ConsumerHeartbeatRequest and verify the payload
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
-        when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
         assertInstanceOf(Builder.class, request.requestBuilder());
 
-        ConsumerGroupHeartbeatRequest heartbeatRequest = mock(ConsumerGroupHeartbeatRequest.class);
-        ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
-        data.setSubscribedTopicNames(Collections.singletonList(topic));
-        data.setRebalanceTimeoutMs(10000);
-        data.setGroupId("groupId");
-        data.setInstanceId("group-instance-id");
-
-        when(heartbeatRequest.data()).thenReturn(data);
+        ConsumerGroupHeartbeatRequest heartbeatRequest =
+                (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
 
         // Should include epoch 0 to join and no member ID.
         assertTrue(heartbeatRequest.data().memberId().isEmpty());
@@ -776,7 +768,7 @@ public class HeartbeatRequestManagerTest {
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size(), "Fenced member should resume heartbeat after transitioning to JOINING");
     }
-    
+
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testSendingLeaveGroupHeartbeatWhenPreviousOneInFlight(final short version) {
