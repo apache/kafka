@@ -22,16 +22,17 @@ import kafka.server.KafkaServer;
 import kafka.utils.CoreUtils;
 import kafka.utils.TestUtils;
 import kafka.zk.EmbeddedZookeeper;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -59,6 +60,7 @@ import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
