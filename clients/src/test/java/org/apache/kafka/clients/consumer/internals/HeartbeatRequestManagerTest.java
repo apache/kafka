@@ -776,6 +776,25 @@ public class HeartbeatRequestManagerTest {
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size(), "Fenced member should resume heartbeat after transitioning to JOINING");
     }
+    
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
+    public void testSendingLeaveGroupHeartbeatWhenPreviousOneInFlight(final short version) {
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a previous one is in-flight");
+
+        when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
+        when(heartbeatState.buildRequestData()).thenReturn(new ConsumerGroupHeartbeatRequestData().setMemberEpoch(-1));
+        ConsumerGroupHeartbeatRequest heartbeatToLeave = getHeartbeatRequest(heartbeatRequestManager, version);
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, heartbeatToLeave.data().memberEpoch());
+
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        NetworkClientDelegate.PollResult pollAgain = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, pollAgain.unsentRequests.size());
+    }
 
     private void assertHeartbeat(HeartbeatRequestManager hrm, int nextPollMs) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
