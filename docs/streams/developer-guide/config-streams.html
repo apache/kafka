@@ -1029,7 +1029,7 @@ streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksD
           <code>org.apache.kafka.streams.processor.assignment.TaskAssignor</code> interface. Defaults to the
           high-availability task assignor. One possible alternative implementation provided in Apache Kafka is the
           <code>org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor</code>, which was the default task
-          assignor before KIP-441 and minimizes task movement at the cost of stateful tsk availability. Alternative implementations of
+          assignor before KIP-441 and minimizes task movement at the cost of stateful task availability. Alternative implementations of
           the task assignment algorithm can be plugged into the application by implementing a custom <code>TaskAssignor</code> and setting this config to the name of the custom task assignor class.  
         </div>
       </blockquote>
