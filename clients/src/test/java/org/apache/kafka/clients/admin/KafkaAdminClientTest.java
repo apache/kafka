@@ -6946,6 +6946,21 @@ public class KafkaAdminClientTest {
             assertNotNull(result.descriptions().get(1).get());
         }
     }
+    
+    @Test
+    public void testDescribeLogDirsWithNonExistReplica() throws Exception {
+        TopicPartitionReplica tp = new TopicPartitionReplica("topic", 12, 0);
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponseFrom(
+                    prepareDescribeLogDirsResponse(Errors.NONE, "/data"),
+                    env.cluster().nodeById(0));
+
+            Map<TopicPartitionReplica, String> replicas = singletonMap(tp, "/data");
+            AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(replicas);
+            assertNull(result.values().get(tp).get());
+        }
+    }
 
     @Test
     public void testUnregisterBrokerSuccess() throws InterruptedException, ExecutionException {
