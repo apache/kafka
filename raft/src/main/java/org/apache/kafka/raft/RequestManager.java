@@ -372,7 +372,7 @@ public class RequestManager {
         @Override
         public String toString() {
             return String.format(
-                "ConnectionState(node=%s, state=%s, lastSendTimeMs=%d, lastFailTimeMs=%d, inFlightCorrelationId=%d)",
+                "ConnectionState(node=%s, state=%s, lastSendTimeMs=%d, lastFailTimeMs=%d, inFlightCorrelationId=%s)",
                 node,
                 state,
                 lastSendTimeMs,
