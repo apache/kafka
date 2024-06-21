@@ -39,11 +39,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
@@ -107,18 +105,20 @@ public class LegacyStickyTaskAssignorTest {
     private final List<Integer> expectedTopicGroupIds = asList(1, 2);
     private final Time time = new MockTime();
     private final Map<ProcessId, ClientState> clients = new TreeMap<>();
+    private boolean enableRackAwareTaskAssignor;
 
-    static Stream<Arguments> paramStoreType() {
-        return Stream.of(
-            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, false),
-            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, true),
-            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY, true)
-        );
+    public void setUp(final String rackAwareStrategy) {
+        enableRackAwareTaskAssignor = !rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignOneActiveTaskToEachProcessWhenTaskCountSameAsProcessCount(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClient(PID_1, 1);
         createClient(PID_2, 1);
         createClient(PID_3, 1);
@@ -132,8 +132,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithNoStandByTasks(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClient(PID_1, 2);
         createClient(PID_2, 2);
         createClient(PID_3, 2);
@@ -145,8 +150,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithStandByTasks(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClient(PID_1, 2);
         createClient(PID_2, 2);
         createClient(PID_3, 2);
@@ -158,8 +168,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldNotMigrateActiveTaskToOtherProcess(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
 
@@ -183,8 +198,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldMigrateActiveTasksToNewProcessWithoutChangingAllAssignments(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
         createClient(PID_3, 1);
@@ -199,8 +219,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignBasedOnCapacity(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClient(PID_1, 1);
         createClient(PID_2, 2);
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
@@ -211,8 +236,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignTasksEvenlyWithUnequalTopicGroupSizes(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_1_0);
 
         createClient(PID_2, 1);
@@ -234,8 +264,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldKeepActiveTaskStickinessWhenMoreClientThanActiveTasks(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_1);
@@ -264,8 +299,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignTasksToClientWithPreviousStandbyTasks(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final ClientState client1 = createClient(PID_1, 1);
         client1.addPreviousStandbyTasks(mkSet(TASK_0_2));
         final ClientState client2 = createClient(PID_2, 1);
@@ -283,8 +323,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
         c1.addPreviousStandbyTasks(mkSet(TASK_0_1));
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 2, TASK_0_2);
@@ -299,8 +344,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignStandbyTasksToDifferentClientThanCorrespondingActiveTaskIsAssignedTo(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_2);
@@ -329,8 +379,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignMultipleReplicasOfStandbyTask(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_2);
@@ -344,8 +399,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldNotAssignStandbyTaskReplicasWhenNoClientAvailableWithoutHavingTheTaskAssigned(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClient(PID_1, 1);
         final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0);
         assertThat(probingRebalanceNeeded, is(false));
@@ -353,8 +413,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignActiveAndStandbyTasks(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClient(PID_1, 1);
         createClient(PID_2, 1);
         createClient(PID_3, 1);
@@ -367,8 +432,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignAtLeastOneTaskToEachClientIfPossible(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClient(PID_1, 3);
         createClient(PID_2, 1);
         createClient(PID_3, 1);
@@ -381,8 +451,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignEachActiveTaskToOneClientWhenMoreClientsThanTasks(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClient(PID_1, 1);
         createClient(PID_2, 1);
         createClient(PID_3, 1);
@@ -397,8 +472,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldBalanceActiveAndStandbyTasksAcrossAvailableClients(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClient(PID_1, 1);
         createClient(PID_2, 1);
         createClient(PID_3, 1);
@@ -415,8 +495,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignMoreTasksToClientWithMoreCapacity(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClient(PID_2, 2);
         createClient(PID_1, 1);
 
@@ -442,8 +527,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
-    public void shouldEvenlyDistributeByTaskIdAndPartition(final String rackAwareStrategy, final boolean enable) {
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
+    public void shouldEvenlyDistributeByTaskIdAndPartition(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClient(PID_1, 4);
         createClient(PID_2, 4);
         createClient(PID_3, 4);
@@ -509,8 +599,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldNotHaveSameAssignmentOnAnyTwoHosts(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3, PID_4);
         createClient(PID_1, 1);
         createClient(PID_2, 1);
@@ -533,8 +628,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3);
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_3);
@@ -557,8 +657,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousStandbyTasks(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3, PID_4);
 
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
@@ -584,8 +689,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldReBalanceTasksAcrossAllClientsWhenCapacityAndTaskCountTheSame(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         createClient(PID_1, 1);
         createClient(PID_2, 1);
@@ -601,8 +711,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldReBalanceTasksAcrossClientsWhenCapacityLessThanTaskCount(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         createClient(PID_1, 1);
         createClient(PID_2, 1);
@@ -616,8 +731,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldRebalanceTasksToClientsBasedOnCapacity(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_0_3, TASK_0_2);
         createClient(PID_3, 2);
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_3);
@@ -627,8 +747,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldMoveMinimalNumberOfTasksWhenPreviouslyAboveCapacityAndNewClientAdded(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final Set<TaskId> p1PrevTasks = mkSet(TASK_0_0, TASK_0_2);
         final Set<TaskId> p2PrevTasks = mkSet(TASK_0_1, TASK_0_3);
 
@@ -649,8 +774,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldNotMoveAnyTasksWhenNewTasksAdded(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_2, TASK_0_3);
 
@@ -662,8 +792,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignNewTasksToNewClientWhenPreviousTasksAssignedToOldClients(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
 
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_2, TASK_0_1);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_0_3);
@@ -678,8 +813,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignTasksNotPreviouslyActiveToNewClient(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_1_2, TASK_1_3);
         c1.addPreviousStandbyTasks(mkSet(TASK_0_0, TASK_1_1, TASK_2_0, TASK_2_1, TASK_2_3));
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_1_1, TASK_2_2);
@@ -707,8 +847,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignTasksNotPreviouslyActiveToMultipleNewClients(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_1_2, TASK_1_3);
         c1.addPreviousStandbyTasks(mkSet(TASK_0_0, TASK_1_1, TASK_2_0, TASK_2_1, TASK_2_3));
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_1_1, TASK_2_2);
@@ -737,8 +882,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignTasksToNewClient(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
         createClient(PID_2, 1);
         assertThat(assign(rackAwareStrategy, TASK_0_1, TASK_0_2), is(false));
@@ -746,8 +896,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingClients(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_3, TASK_0_4, TASK_0_5);
         final ClientState newClient = createClient(PID_3, 1);
@@ -766,8 +921,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingAndBouncedClients(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_6);
         final ClientState c2 = createClient(PID_2, 1);
         c2.addPreviousStandbyTasks(mkSet(TASK_0_3, TASK_0_4, TASK_0_5));
@@ -789,8 +949,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldViolateBalanceToPreserveActiveTaskStickiness(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
         final ClientState c2 = createClient(PID_2, 1);
 
@@ -843,8 +1008,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldOptimizeStatefulAndStatelessTaskTraffic(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
         final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_1_0, TASK_1_1, TASK_0_3, TASK_1_3);
         final ClientState c3 = createClientWithPreviousActiveTasks(PID_3, 1, TASK_1_2);
@@ -921,8 +1091,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
-    public void shouldAssignRandomInput(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor) {
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
+    public void shouldAssignRandomInput(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final int nodeSize = 50;
         final int tpSize = 60;
         final int partitionSize = 3;
@@ -984,8 +1159,13 @@ public class LegacyStickyTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
     public void shouldRemainOriginalAssignmentWithoutTrafficCostForMinCostStrategy(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         // This test tests that if the traffic cost is 0, we should have same assignment with or without
         // rack aware assignor enabled
         final int nodeSize = 50;
