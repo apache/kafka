@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.connect.mirror;
 
-/** Directional pair of clusters, where source is replicated to target. */
+/**
+ * Directional pair of clusters, where source is mirrored to target.
+ */
 public class SourceAndTarget {
     private final String source;
     private final String target;

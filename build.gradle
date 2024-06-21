@@ -163,7 +163,7 @@ allprojects {
           libs.nettyHandler,
           libs.nettyTransportNativeEpoll,
 	  // be explicit about the reload4j version instead of relying on the transitive versions
-	  libs.log4j
+	  libs.reload4j
         )
       }
     }
@@ -200,8 +200,7 @@ def determineCommitId() {
 }
 
 
-def excludedSpotlessModules = [':connect:runtime',
-                               ':streams']
+def excludedSpotlessModules = [':streams']
 
 
 apply from: file('wrapper.gradle')
@@ -865,13 +864,13 @@ project(':server') {
 
     implementation libs.slf4jApi
 
-    compileOnly libs.log4j
+    compileOnly libs.reload4j
 
     testImplementation project(':clients').sourceSets.test.output
 
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
-    testImplementation libs.slf4jlog4j
+    testImplementation libs.slf4jReload4j
   }
 
   task createVersionFile() {
@@ -979,7 +978,7 @@ project(':core') {
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     implementation libs.commonsCli
 
-    compileOnly libs.log4j
+    compileOnly libs.reload4j
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':group-coordinator').sourceSets.test.output
@@ -1005,7 +1004,7 @@ project(':core') {
     testImplementation libs.apachedsMavibotPartition
     testImplementation libs.apachedsJdbmPartition
     testImplementation libs.junitJupiter
-    testImplementation libs.slf4jlog4j
+    testImplementation libs.slf4jReload4j
     testImplementation libs.caffeine
     
     generator project(':generator')
@@ -1271,12 +1270,12 @@ project(':metadata') {
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
-    compileOnly libs.log4j
+    compileOnly libs.reload4j
     testImplementation libs.junitJupiter
     testImplementation libs.jqwik
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
-    testImplementation libs.slf4jlog4j
+    testImplementation libs.slf4jReload4j
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -1409,7 +1408,7 @@ project(':group-coordinator') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
 
     generator project(':generator')
   }
@@ -1548,11 +1547,11 @@ project(':clients') {
     testImplementation libs.jacksonJaxrsJsonProvider
     testImplementation libs.jose4j
     testImplementation libs.junitJupiter
-    testImplementation libs.log4j
+    testImplementation libs.reload4j
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
 
@@ -1717,7 +1716,7 @@ project(':raft') {
     testImplementation libs.mockitoCore
     testImplementation libs.jqwik
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
 
     generator project(':generator')
   }
@@ -1811,7 +1810,7 @@ project(':server-common') {
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
   }
 
   task createVersionFile() {
@@ -1868,7 +1867,7 @@ project(':storage:storage-api') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
   }
 
   task createVersionFile() {
@@ -1952,7 +1951,7 @@ project(':storage') {
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
 
     generator project(':generator')
   }
@@ -2119,7 +2118,7 @@ project(':tools') {
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
-    implementation libs.slf4jlog4j
+    implementation libs.slf4jReload4j
     implementation libs.joptSimple
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
@@ -2145,7 +2144,7 @@ project(':tools') {
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
-    testImplementation libs.log4j
+    testImplementation libs.reload4j
   }
 
   javadoc {
@@ -2195,7 +2194,7 @@ project(':trogdor') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
   }
 
   javadoc {
@@ -2247,7 +2246,7 @@ project(':shell') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
   }
 
   javadoc {
@@ -2304,7 +2303,7 @@ project(':streams') {
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':server')
-    testImplementation libs.log4j
+    testImplementation libs.reload4j
     testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
     testImplementation libs.bcpkix
@@ -2314,7 +2313,7 @@ project(':streams') {
     testImplementation project(':group-coordinator')
 
     testRuntimeOnly project(':streams:test-utils')
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
 
     generator project(':generator')
   }
@@ -2464,7 +2463,7 @@ project(':streams:streams-scala') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.hamcrest
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
   }
 
   javadoc {
@@ -2516,7 +2515,7 @@ project(':streams:test-utils') {
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
   }
 
   javadoc {
@@ -2551,7 +2550,7 @@ project(':streams:examples') {
 
     implementation project(':streams')
 
-    implementation libs.slf4jlog4j
+    implementation libs.slf4jReload4j
 
     testImplementation project(':streams:test-utils')
     testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
@@ -2963,7 +2962,7 @@ project(':jmh-benchmarks') {
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.mockitoCore
-    implementation libs.slf4jlog4j
+    implementation libs.slf4jReload4j
     implementation libs.scalaLibrary
     implementation libs.scalaJava8Compat
   }
@@ -3007,7 +3006,7 @@ project(':log4j-appender') {
 
   dependencies {
     implementation project(':clients')
-    implementation libs.slf4jlog4j
+    implementation libs.slf4jReload4j
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
@@ -3032,7 +3031,7 @@ project(':connect:api') {
     implementation libs.jaxrsApi
 
     testImplementation libs.junitJupiter
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
     testImplementation project(':clients').sourceSets.test.output
   }
 
@@ -3070,7 +3069,7 @@ project(':connect:transforms') {
 
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
     testImplementation project(':clients').sourceSets.test.output
   }
 
@@ -3112,7 +3111,7 @@ project(':connect:json') {
 
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
     testImplementation project(':clients').sourceSets.test.output
   }
 
@@ -3156,7 +3155,7 @@ project(':connect:runtime') {
     api project(':connect:transforms')
 
     implementation libs.slf4jApi
-    implementation libs.log4j
+    implementation libs.reload4j
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonAnnotations
     implementation libs.jacksonJaxrsJsonProvider
@@ -3194,7 +3193,7 @@ project(':connect:runtime') {
     testImplementation libs.mockitoJunitJupiter
     testImplementation libs.httpclient
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.bcpkix
   }
 
@@ -3296,7 +3295,7 @@ project(':connect:file') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
@@ -3342,7 +3341,7 @@ project(':connect:basic-auth-extension') {
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.jerseyContainerServlet
   }
 
@@ -3395,7 +3394,7 @@ project(':connect:mirror') {
     implementation libs.swaggerAnnotations
 
     testImplementation libs.junitJupiter
-    testImplementation libs.log4j
+    testImplementation libs.reload4j
     testImplementation libs.mockitoCore
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime').sourceSets.test.output
@@ -3404,7 +3403,7 @@ project(':connect:mirror') {
     testImplementation project(':server')
 
     testRuntimeOnly project(':connect:runtime')
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.bcpkix
   }
 
@@ -3470,7 +3469,7 @@ project(':connect:mirror-client') {
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jReload4j
   }
 
   javadoc {
