@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.rest.entities;
 
 import org.apache.kafka.connect.runtime.TargetState;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
