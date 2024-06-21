@@ -214,7 +214,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testMemberIdAndEpochResetOnFencedMembers() {
-        
         MembershipManagerImpl membershipManager = createMemberInStableState();
         assertEquals(MEMBER_ID, membershipManager.memberId());
         assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
@@ -228,7 +227,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testTransitionToFatal() {
-        
         MembershipManagerImpl membershipManager = createMemberInStableState(null);
         assertEquals(MEMBER_ID, membershipManager.memberId());
         assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
@@ -255,7 +253,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testFencingWhenStateIsStable() {
-        
         MembershipManager membershipManager = createMemberInStableState();
         testFencedMemberReleasesAssignmentAndTransitionsToJoining(membershipManager);
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
@@ -345,7 +342,6 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testFencingWhenStateIsPrepareLeaving() {
-        
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
         ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent =
@@ -371,7 +367,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testNewAssignmentIgnoredWhenStateIsPrepareLeaving() {
-        
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
         ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent =
@@ -395,7 +390,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testFencingWhenStateIsLeaving() {
-        
         MembershipManagerImpl membershipManager = createMemberInStableState();
 
         // Start leaving group.
@@ -424,7 +418,6 @@ public class MembershipManagerImplTest {
     @Test
     public void testLeaveGroupEpoch() {
         // Static member should leave the group with epoch -2.
-        
         MembershipManagerImpl membershipManager = createMemberInStableState("instance1");
         mockLeaveGroup();
         membershipManager.leaveGroup();
@@ -517,7 +510,6 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testDelayedReconciliationResultDiscardedAfterPartitionsRevokedCallbackIfMemberRejoins() {
-        
         MembershipManagerImpl membershipManager = createMemberInStableState();
         Uuid topicId1 = Uuid.randomUuid();
         String topic1 = "topic1";
@@ -554,7 +546,6 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testDelayedReconciliationResultDiscardedAfterPartitionsAssignedCallbackIfMemberRejoins() {
-        
         MembershipManagerImpl membershipManager = createMemberInStableState();
         Uuid topicId1 = Uuid.randomUuid();
         String topic1 = "topic1";
@@ -587,7 +578,6 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testSameAssignmentReconciledAgainWhenFenced() {
-        
         MembershipManagerImpl membershipManager = createMemberInStableState();
         Uuid topic1 = Uuid.randomUuid();
         final Assignment assignment1 = new ConsumerGroupHeartbeatResponseData.Assignment();
@@ -640,7 +630,6 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testSameAssignmentReconciledAgainWithMissingTopic() {
-        
         MembershipManagerImpl membershipManager = createMemberInStableState();
         Uuid topic1 = Uuid.randomUuid();
         Uuid topic2 = Uuid.randomUuid();
@@ -826,6 +815,7 @@ public class MembershipManagerImplTest {
     // but is made available later.
     @Test
     public void testDelayedMetadataUsedToCompleteAssignment() {
+
         Uuid topicId1 = Uuid.randomUuid();
         String topic1 = "topic1";
         final TopicIdPartition topicId1Partition0 = new TopicIdPartition(topicId1, new TopicPartition(topic1, 0));
@@ -1082,7 +1072,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testFatalFailureWhenStateIsLeaving() {
-        
         MembershipManagerImpl membershipManager = createMemberInStableState();
 
         // Start leaving group.
@@ -1102,7 +1091,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testFatalFailureWhenMemberAlreadyLeft() {
-        
         MembershipManagerImpl membershipManager = createMemberInStableState();
 
         // Start leaving group.
@@ -1532,7 +1520,6 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testRevokePartitionsUsesTopicNamesLocalCacheWhenMetadataNotAvailable() {
-        
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
 
