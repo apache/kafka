@@ -610,20 +610,6 @@ public class SharePartition {
         fetchLock.set(false);
     }
 
-    /**
-     * The end offset of the share partition is the last offset of the fetched records from the leader.
-     *
-     * @return The end offset of the share partition.
-     */
-    private long endOffset() {
-        lock.readLock().lock();
-        try {
-            return this.endOffset;
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
     private void initialize() {
         log.debug("Initializing share partition: {}-{}", groupId, topicIdPartition);
         // Initialize the share partition by reading the state from the persister.
