@@ -37,6 +37,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Possible error codes:
@@ -258,11 +259,23 @@ public class ApiVersionsResponse extends AbstractResponse {
         final long finalizedFeaturesEpoch,
         final boolean zkMigrationEnabled
     ) {
+        Features<SupportedVersionRange> backwardsCompatibleFeatures = Features.supportedFeatures(latestSupportedFeatures.features().entrySet()
+            .stream()
+            .collect(Collectors.toMap(
+                entry -> entry.getKey(),
+                entry -> {
+                    short newMin = entry.getValue().min() == 0 ? 1 : entry.getValue().min();
+                    short newMax = entry.getValue().max() == 0 ? 1 : entry.getValue().max();
+                    return new SupportedVersionRange(newMin, newMax);
+                }
+            ))
+        );
+
         final ApiVersionsResponseData data = new ApiVersionsResponseData();
         data.setThrottleTimeMs(throttleTimeMs);
         data.setErrorCode(error.code());
         data.setApiKeys(apiKeys);
-        data.setSupportedFeatures(createSupportedFeatureKeys(latestSupportedFeatures));
+        data.setSupportedFeatures(createSupportedFeatureKeys(backwardsCompatibleFeatures));
         data.setFinalizedFeatures(createFinalizedFeatureKeys(finalizedFeatures));
         data.setFinalizedFeaturesEpoch(finalizedFeaturesEpoch);
         data.setZkMigrationReady(zkMigrationEnabled);
