@@ -364,8 +364,8 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
                 System.err.println("WARNING: kafka.tools.NoOpMessageFormatter is deprecated and will be removed in the next major release. " +
                         "Please use org.apache.kafka.tools.consumer.NoOpMessageFormatter instead");
                 return NoOpMessageFormatter.class.getName();
-            case "kafka.coordinate.group.TransactionLog\\$TransactionLogMessageFormatter":
-                System.err.println("WARNING: kafka.coordinate.group.TransactionLog\\$TransactionLogMessageFormatter is deprecated and will be removed in the next major release. " +
+            case "kafka.coordinator.transaction.TransactionLog$TransactionLogMessageFormatter":
+                System.err.println("WARNING: kafka.coordinator.transaction.TransactionLog$TransactionLogMessageFormatter is deprecated and will be removed in the next major release. " +
                         "Please use org.apache.kafka.tools.consumer.TransactionLogMessageFormatter instead");
                 return className;
             default:
