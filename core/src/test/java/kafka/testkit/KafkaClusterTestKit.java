@@ -105,14 +105,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
             if (controllerPorts.size() >= expectedControllers) {
                 future.complete(
                         controllerPorts
-                                .entrySet()
-                                .stream()
-                                .collect(
-                                        Collectors.toMap(
-                                                Map.Entry::getKey,
-                                                entry -> new InetSocketAddress("localhost", entry.getValue())
-                                        )
+                        .entrySet()
+                        .stream()
+                        .collect(
+                                Collectors.toMap(
+                                        Map.Entry::getKey,
+                                        entry -> new InetSocketAddress("localhost", entry.getValue())
                                 )
+                        )
                 );
             }
         }

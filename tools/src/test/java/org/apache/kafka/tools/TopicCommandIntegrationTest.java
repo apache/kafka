@@ -52,9 +52,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
-import scala.collection.mutable.Buffer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -71,6 +68,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
+import scala.collection.mutable.Buffer;
 
 import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_MAX_BYTES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
