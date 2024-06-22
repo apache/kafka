@@ -46,6 +46,7 @@
     <allow pkg="kafka.common"/>
     <allow pkg="kafka.message"/>
     <allow pkg="org.mockito"/>
+    <allow pkg="org.pcollections"/>
     <allow pkg="kafka.security.authorizer"/>
     <allow pkg="org.apache.kafka.security.authorizer"/>
     <allow pkg="org.apache.kafka.server"/>

@@ -18,6 +18,8 @@
 package org.apache.kafka.jmh.util;
 
 import org.apache.kafka.common.utils.CopyOnWriteMap;
+import org.apache.kafka.server.immutable.ImmutableMap;
+import org.apache.kafka.server.immutable.pcollections.PCollectionsImmutableMap;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -67,6 +69,7 @@ public class ConcurrentMapBenchmark {
 
     private Map<Integer, Integer> concurrentHashMap;
     private Map<Integer, Integer> copyOnWriteMap;
+    private ImmutableMap<Integer, Integer> pcollectionsImmutableMap;
     private int writePerLoops;
 
     @Setup(Level.Invocation)
@@ -75,6 +78,8 @@ public class ConcurrentMapBenchmark {
                 .collect(Collectors.toMap(i -> i, i -> i));
         concurrentHashMap = new ConcurrentHashMap<>(mapTemplate);
         copyOnWriteMap = new CopyOnWriteMap<>(mapTemplate);
+        pcollectionsImmutableMap = PCollectionsImmutableMap.empty();
+        mapTemplate.entrySet().stream().map(s -> pcollectionsImmutableMap.updated(s.getKey(), s.getValue()));
         writePerLoops = TIMES / (int) Math.round(writePercentage * TIMES);
     }
 
@@ -184,6 +189,62 @@ public class ConcurrentMapBenchmark {
                 copyOnWriteMap.computeIfAbsent(i + mapSize, key -> key);
             } else {
                 for (Map.Entry<Integer, Integer> entry : copyOnWriteMap.entrySet()) {
+                    blackhole.consume(entry);
+                }
+            }
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(TIMES)
+    public void testPCollectionsImmutableMapGet(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            if (i % writePerLoops == 0) {
+                // add offset mapSize to ensure computeIfAbsent do add new entry
+                pcollectionsImmutableMap = pcollectionsImmutableMap.updated(i + mapSize, 0);
+            } else {
+                blackhole.consume(pcollectionsImmutableMap.get(i % mapSize));
+            }
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(TIMES)
+    public void testPCollectionsImmutableMapGetRandom(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            if (i % writePerLoops == 0) {
+                // add offset mapSize to ensure computeIfAbsent do add new entry
+                pcollectionsImmutableMap = pcollectionsImmutableMap.updated(i + mapSize, 0);
+            } else {
+                blackhole.consume(pcollectionsImmutableMap.get(ThreadLocalRandom.current().nextInt(0, mapSize + 1)));
+            }
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(TIMES)
+    public void testPCollectionsImmutableMapValues(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            if (i % writePerLoops == 0) {
+                // add offset mapSize to ensure computeIfAbsent do add new entry
+                pcollectionsImmutableMap = pcollectionsImmutableMap.updated(i + mapSize, 0);
+            } else {
+                for (int value : pcollectionsImmutableMap.values()) {
+                    blackhole.consume(value);
+                }
+            }
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(TIMES)
+    public void testPCollectionsImmutableMapEntrySet(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            if (i % writePerLoops == 0) {
+                // add offset mapSize to ensure computeIfAbsent do add new entry
+                pcollectionsImmutableMap = pcollectionsImmutableMap.updated(i + mapSize, 0);
+            } else {
+                for (Map.Entry<Integer, Integer> entry : pcollectionsImmutableMap.entrySet()) {
                     blackhole.consume(entry);
                 }
             }
