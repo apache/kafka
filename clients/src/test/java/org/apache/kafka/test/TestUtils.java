@@ -576,15 +576,12 @@ public class TestUtils {
     public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
         throws InterruptedException {
         try {
-            future.get(5, TimeUnit.SECONDS);
+            future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.SECONDS);
             fail("Expected a " + exceptionClass.getSimpleName() + " exception, but got success.");
         } catch (ExecutionException ee) {
-            Throwable cause = ee.getCause();
-            assertEquals(exceptionClass, cause.getClass(),
-                "Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
-                    cause.getClass().getSimpleName());
+            assertInstanceOf(exceptionClass, ee.getCause(), "Expected a" + exceptionClass.getSimpleName() + "but got" + ee.getCause());
         } catch (TimeoutException e) {
-            assertInstanceOf(exceptionClass, e.getCause(), "Expected a" + exceptionClass.getSimpleName() + "but got" + e.getCause());
+            fail("Future did not throw expected exception " + exceptionClass.getSimpleName() + " in time.");
         }
     }
 
