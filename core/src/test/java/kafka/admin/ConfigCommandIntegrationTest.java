@@ -405,6 +405,51 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
+    @ClusterTest(types = {Type.ZK})
+    public void testUpdatingBothClusterAndBrokerLevelDynamicConfigUsingZooKeeper() {
+        cluster.shutdownBroker(0);
+        String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
+        KafkaZkClient zkClient = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkClient();
+
+        String brokerId = "1";
+        AdminZkClient adminZkClient = new AdminZkClient(zkClient, scala.None$.empty());
+        alterOpts = asList("--zookeeper", zkConnect, "--entity-type", "brokers", "--alter");
+
+        alterAndVerifyBothLevelConfig(zkClient, adminZkClient, Optional.of(brokerId),
+                singletonMap("message.max.bytes", "110000"));
+
+        alterAndVerifyBothLevelConfig(zkClient, adminZkClient, Optional.of(brokerId),
+                singletonMap("message.max.bytes", "130000"));
+
+        alterAndVerifyBothLevelConfig(zkClient, adminZkClient, Optional.of(brokerId),
+                singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"));
+
+        assertThrows(ConfigException.class,
+                () -> alterBothLevelConfigWithZk(zkClient, adminZkClient, Optional.of(brokerId), 
+                        singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks")));
+    }
+
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    public void testUpdatingBothClusterAndBrokerLevelDynamicConfigUsingZRaft() throws Exception {
+        alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
+
+        try (Admin client = cluster.createAdminClient()) {
+            
+            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId), singletonMap("message.max.bytes", "110000"));
+
+            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId), singletonMap("message.max.bytes", "130000"));
+            
+            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId),
+                    singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"));
+            
+            assertThrows(ExecutionException.class,
+                    () -> alterAndVerifyBothLevelConfig(client, Optional.empty(),
+                            singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks")));
+            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId),
+                    singletonMap("listener.name.external.ssl.keystore.password", "secret"));
+        }
+    }
+
     private void assertNonZeroStatusExit(Stream<String> args, Consumer<String> checkErrOut) {
         AtomicReference<Integer> exitStatus = new AtomicReference<>();
         Exit.setExitProcedure((status, __) -> {
@@ -437,11 +482,27 @@ public class ConfigCommandIntegrationTest {
         verifyConfig(zkClient, brokerId, configs);
     }
 
+    private void alterAndVerifyBothLevelConfig(KafkaZkClient zkClient, AdminZkClient adminZkClient,
+                                               Optional<String> brokerId, Map<String, String> configs) {
+        alterBothLevelConfigWithZk(zkClient, adminZkClient, brokerId, configs);
+        verifyConfig(zkClient, brokerId, configs);
+        verifyConfig(zkClient, Optional.empty(), configs);
+    }
+
     private void alterConfigWithZk(KafkaZkClient zkClient, AdminZkClient adminZkClient,
                                    Optional<String> brokerId, Map<String, String> config) {
         String configStr = transferConfigMapToString(config);
         ConfigCommand.ConfigCommandOptions addOpts =
                 new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), asList("--add-config", configStr)));
+        ConfigCommand.alterConfigWithZk(zkClient, addOpts, adminZkClient);
+    }
+
+    private void alterBothLevelConfigWithZk(KafkaZkClient zkClient, AdminZkClient adminZkClient,
+                                            Optional<String> brokerId, Map<String, String> configs) {
+        String configStr = transferConfigMapToString(configs);
+        ConfigCommand.ConfigCommandOptions addOpts =
+                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
+                        entityOp(Optional.empty()), asList("--add-config", configStr)));
         ConfigCommand.alterConfigWithZk(zkClient, addOpts, adminZkClient);
     }
 
@@ -490,10 +551,24 @@ public class ConfigCommandIntegrationTest {
         verifyConfig(client, brokerId, config);
     }
 
+    private void alterAndVerifyBothLevelConfig(Admin client, Optional<String> brokerId, Map<String, String> config) throws Exception {
+        alterBothLevelConfigWithKraft(client, brokerId, config);
+        verifyConfig(client, brokerId, config);
+        verifyConfig(client, Optional.empty(), config);
+    }
+
     private void alterConfigWithKraft(Admin client, Optional<String> brokerId, Map<String, String> config) {
         String configStr = transferConfigMapToString(config);
         ConfigCommand.ConfigCommandOptions addOpts =
                 new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), asList("--add-config", configStr)));
+        ConfigCommand.alterConfig(client, addOpts);
+    }
+
+    private void alterBothLevelConfigWithKraft(Admin client, Optional<String> brokerId, Map<String, String> config) {
+        String configStr = transferConfigMapToString(config);
+        ConfigCommand.ConfigCommandOptions addOpts =
+                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), 
+                        entityOp(Optional.empty()), asList("--add-config", configStr)));
         ConfigCommand.alterConfig(client, addOpts);
     }
 
