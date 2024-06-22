@@ -40,30 +40,38 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
         Optional.ofNullable(consumerRecord.key())
-                .ifPresent(key -> {
-                    ByteBuffer byteBuffer = ByteBuffer.wrap(key);
-                    short version = byteBuffer.getShort();
+                .map(key -> readToTransactionLogKey(ByteBuffer.wrap(key)))
+                .ifPresent(transactionLogKey -> {
+                    short version = ByteBuffer.wrap(consumerRecord.key()).getShort();
+                    ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
+                    json.set("version", new TextNode(Short.toString(version)));
+                    
                     if (version >= TransactionLogKey.LOWEST_SUPPORTED_VERSION
                             && version <= TransactionLogKey.HIGHEST_SUPPORTED_VERSION) {
                         byte[] value = consumerRecord.value();
                         TransactionLogValue transactionLogValue = 
                                 new TransactionLogValue(new ByteBufferAccessor(ByteBuffer.wrap(value)), version);
                         JsonNode jsonNode = TransactionLogValueJsonConverter.write(transactionLogValue, version);
-                        ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
-                        json.set("version", new TextNode(version + ""));
+                        json.set("transactionalId", new TextNode(transactionLogKey.transactionalId()));
                         json.set("data", jsonNode);
-                        try {
-                            output.write(json.toString().getBytes(UTF_8));
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
                     } else {
-                        try {
-                            output.write(("unknown::version=" + version + "\n").getBytes(UTF_8));
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
+                        json.set("data", new TextNode("unknown"));
+                    }
+                    try {
+                        output.write(json.toString().getBytes(UTF_8));
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
                     }
                 });
+    }
+
+    private TransactionLogKey readToTransactionLogKey(ByteBuffer byteBuffer) {
+        short version = byteBuffer.getShort();
+        if (version >= TransactionLogKey.LOWEST_SUPPORTED_VERSION
+                && version <= TransactionLogKey.HIGHEST_SUPPORTED_VERSION) {
+            return new TransactionLogKey(new ByteBufferAccessor(byteBuffer), version);
+        } else {
+            return new TransactionLogKey();
+        }
     }
 }
