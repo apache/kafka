@@ -16,8 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.ReplicaManager;
-
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
@@ -230,11 +228,6 @@ public class SharePartition {
      */
     private int stateEpoch;
 
-    /**
-     * The replica manager is used to get the earliest offset of the share partition, so we can adjust the start offset.
-     */
-    private final ReplicaManager replicaManager;
-
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
@@ -243,8 +236,7 @@ public class SharePartition {
         int recordLockDurationMs,
         Timer timer,
         Time time,
-        Persister persister,
-        ReplicaManager replicaManager
+        Persister persister
     ) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
@@ -258,7 +250,6 @@ public class SharePartition {
         this.timer = timer;
         this.time = time;
         this.persister = persister;
-        this.replicaManager = replicaManager;
         // Initialize the partition.
         initialize();
     }
@@ -575,12 +566,18 @@ public class SharePartition {
     }
 
     /**
-     * Checks if the number of records between startOffset and endOffset exceeds the record max
-     * in-flight limit.
+     * Checks if the records can be acquired for the share partition. The records can be acquired if
+     * the number of records in-flight is less than the max in-flight messages. Or if the fetch is
+     * to happen somewhere in between the record states cached in the share partition i.e. re-acquire
+     * the records that are already fetched before.
      *
-     * @return A boolean which indicates whether additional messages can be fetched for share partition.
+     * @return A boolean which indicates whether more records can be acquired or not.
      */
-    boolean canFetchRecords() {
+    boolean canAcquireRecords() {
+        if (nextFetchOffset() != endOffset() + 1) {
+            return true;
+        }
+
         lock.readLock().lock();
         long numRecords;
         try {

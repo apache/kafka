@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.ReplicaManager;
 import kafka.server.share.SharePartition.InFlightState;
 import kafka.server.share.SharePartition.RecordState;
 
@@ -81,7 +80,6 @@ public class SharePartitionTest {
     private static Timer mockTimer;
     private static final Time MOCK_TIME = new MockTime();
     private static final short MAX_IN_FLIGHT_MESSAGES = 200;
-    private static final ReplicaManager REPLICA_MANAGER = Mockito.mock(ReplicaManager.class);
 
     @BeforeEach
     public void setUp() {
@@ -434,31 +432,31 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testCanFetchRecordsWithEmptyCache() {
+    public void testCanAcquireRecordsWithEmptyCache() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(1).build();
-        assertTrue(sharePartition.canFetchRecords());
+        assertTrue(sharePartition.canAcquireRecords());
     }
 
     @Test
-    public void testCanFetchRecordsWithCachedDataAndLimitNotReached() {
+    public void testCanAcquireRecordsWithCachedDataAndLimitNotReached() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(6).build();
         sharePartition.acquire(
             MEMBER_ID,
             new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
         // Limit not reached as only 6 in-flight messages is the limit.
-        assertTrue(sharePartition.canFetchRecords());
+        assertTrue(sharePartition.canAcquireRecords());
     }
 
     @Test
-    public void testCanFetchRecordsWithCachedDataAndLimitReached() {
+    public void testCanAcquireRecordsWithCachedDataAndLimitReached() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(1).build();
         sharePartition.acquire(
             MEMBER_ID,
             new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
         // Limit reached as only one in-flight message is the limit.
-        assertFalse(sharePartition.canFetchRecords());
+        assertFalse(sharePartition.canAcquireRecords());
     }
 
     @Test
@@ -1108,7 +1106,6 @@ public class SharePartitionTest {
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
         private Persister persister = NoOpShareStatePersister.getInstance();
-        private ReplicaManager replicaManager = REPLICA_MANAGER;
 
         private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {
             this.maxInflightMessages = maxInflightMessages;
@@ -1126,7 +1123,7 @@ public class SharePartitionTest {
 
         public SharePartition build() {
             return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, maxInflightMessages, maxDeliveryCount,
-                acquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister, replicaManager);
+                acquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister);
         }
     }
 }
