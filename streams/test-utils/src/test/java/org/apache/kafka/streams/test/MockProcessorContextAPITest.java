@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
-import org.apache.kafka.streams.processor.api.InternalFixedKeyRecordFactory;
+import org.apache.kafka.streams.processor.api.TestFixedKeyRecordFactory;
 import org.apache.kafka.streams.processor.api.MockFixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
 import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForward;
@@ -133,12 +133,12 @@ public class MockProcessorContextAPITest {
                                 final String key = record.key();
                                 final Long value = record.value();
                                 if (count == 0) {
-                                    context.forward(InternalFixedKeyRecordFactory.create(
+                                    context.forward(TestFixedKeyRecordFactory.createFixedKeyRecord(
                                             new Record<>("start", -1L, 0L))); // broadcast
                                 }
                                 final String toChild = count % 2 == 0 ? "george" : "pete";
                                 context.forward(
-                                        InternalFixedKeyRecordFactory.create(new Record<>(key + value,
+                                        TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>(key + value,
                                                 key.length() + value, 0L)), toChild);
                                 count++;
                             }
@@ -264,17 +264,17 @@ public class MockProcessorContextAPITest {
 
                             @Override
                             public void process(final FixedKeyRecord<String, Object> record) {
-                                context.forward(InternalFixedKeyRecordFactory.create(new Record<String, Object>("appId", context.applicationId(), 0L)));
-                                context.forward(InternalFixedKeyRecordFactory.create(new Record<String, Object>("taskId", context.taskId(), 0L)));
+                                context.forward(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<String, Object>("appId", context.applicationId(), 0L)));
+                                context.forward(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<String, Object>("taskId", context.taskId(), 0L)));
 
                                 if (context.recordMetadata().isPresent()) {
                                     final RecordMetadata recordMetadata = context.recordMetadata().get();
-                                    context.forward(InternalFixedKeyRecordFactory.create(new Record<String, Object>("topic", recordMetadata.topic(), 0L)));
-                                    context.forward(InternalFixedKeyRecordFactory.create(new Record<String, Object>("partition", recordMetadata.partition(), 0L)));
-                                    context.forward(InternalFixedKeyRecordFactory.create(new Record<String, Object>("offset", recordMetadata.offset(), 0L)));
+                                    context.forward(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<String, Object>("topic", recordMetadata.topic(), 0L)));
+                                    context.forward(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<String, Object>("partition", recordMetadata.partition(), 0L)));
+                                    context.forward(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<String, Object>("offset", recordMetadata.offset(), 0L)));
                                 }
 
-                                context.forward(InternalFixedKeyRecordFactory.create(new Record<String, Object>("record", record, 0L)));
+                                context.forward(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<String, Object>("record", record, 0L)));
                             }
                         }
                 )
@@ -337,20 +337,22 @@ public class MockProcessorContextAPITest {
         processor.process(record1);
         processor.process(record2);
 
-        fixedKeyProcessor.process(InternalFixedKeyRecordFactory.create(record1));
-        fixedKeyProcessor.process(InternalFixedKeyRecordFactory.create(record2));
+        fixedKeyProcessor.process(TestFixedKeyRecordFactory.createFixedKeyRecord(record1));
+        fixedKeyProcessor.process(TestFixedKeyRecordFactory.createFixedKeyRecord(record2));
 
         final List<CapturedForward<? extends String, ? extends Long>> forwardedFromProcessor = processorContext.forwarded();
-        final List<CapturedForward<? extends String, ? extends Long>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded();
+        final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ? extends Long>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded();
 
         final List<CapturedForward<String, Long>> expectedFromProcessor = asList(
                 new CapturedForward<>(new Record<>("foo5", 8L, 0L)),
                 new CapturedForward<>(new Record<>("barbaz50", 56L, 0L))
         );
 
-        final List<CapturedForward<String, Long>> expectedFromFixedKeyProcessor = asList(
-                new CapturedForward<>(new Record<>("foo", 8L, 0L)),
-                new CapturedForward<>(new Record<>("barbaz", 56L, 0L))
+        final List<MockFixedKeyProcessorContext.CapturedForward<String, Long>> expectedFromFixedKeyProcessor = asList(
+                new MockFixedKeyProcessorContext.CapturedForward<>(
+                        TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("foo", 8L, 0L))),
+                new MockFixedKeyProcessorContext.CapturedForward<>(
+                        TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("barbaz", 56L, 0L)))
         );
 
         assertThat(forwardedFromProcessor, is(expectedFromProcessor));
@@ -381,52 +383,80 @@ public class MockProcessorContextAPITest {
         processor.process(record1);
         processor.process(record2);
 
-        fixedKeyProcessor.process(InternalFixedKeyRecordFactory.create(record1));
-        fixedKeyProcessor.process(InternalFixedKeyRecordFactory.create(record2));
+        fixedKeyProcessor.process(TestFixedKeyRecordFactory.createFixedKeyRecord(record1));
+        fixedKeyProcessor.process(TestFixedKeyRecordFactory.createFixedKeyRecord(record2));
 
         {
             final List<CapturedForward<? extends String, ? extends Long>> forwardedFromProcessor = processorContext.forwarded();
-            final List<CapturedForward<? extends String, ? extends Long>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded();
+            final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ? extends Long>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded();
             final List<CapturedForward<? extends String, ? extends Long>> expected = asList(
                     new CapturedForward<>(new Record<>("start", -1L, 0L), Optional.empty()),
                     new CapturedForward<>(new Record<>("foo5", 8L, 0L), Optional.of("george")),
                     new CapturedForward<>(new Record<>("barbaz50", 56L, 0L), Optional.of("pete"))
             );
 
+            final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ? extends Long>> expectedFromFixedKeyProcessor = asList(
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(
+                            new Record<>("start", -1L, 0L)), Optional.empty()),
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(
+                            new Record<>("foo5", 8L, 0L)), Optional.of("george")),
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(
+                            new Record<>("barbaz50", 56L, 0L)), Optional.of("pete"))
+            );
+
             assertThat(forwardedFromProcessor, is(expected));
-            assertThat(forwardedFromFixedKeyProcessor, is(expected));
+            assertThat(forwardedFromFixedKeyProcessor, is(expectedFromFixedKeyProcessor));
         }
         {
             final List<CapturedForward<? extends String, ? extends Long>> forwardedFromProcessor = processorContext.forwarded("george");
-            final List<CapturedForward<? extends String, ? extends Long>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded("george");
+            final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ? extends Long>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded("george");
             final List<CapturedForward<? extends String, ? extends Long>> expected = asList(
                     new CapturedForward<>(new Record<>("start", -1L, 0L), Optional.empty()),
                     new CapturedForward<>(new Record<>("foo5", 8L, 0L), Optional.of("george"))
             );
 
+            final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ? extends Long>> expectedFromFixedKeyProcessor = asList(
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(
+                            new Record<>("start", -1L, 0L)), Optional.empty()),
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(
+                            new Record<>("foo5", 8L, 0L)), Optional.of("george"))
+            );
+
             assertThat(forwardedFromProcessor, is(expected));
-            assertThat(forwardedFromFixedKeyProcessor, is(expected));
+            assertThat(forwardedFromFixedKeyProcessor, is(expectedFromFixedKeyProcessor));
         }
         {
             final List<CapturedForward<? extends String, ? extends Long>> forwardedFromProcessor = processorContext.forwarded("pete");
-            final List<CapturedForward<? extends String, ? extends Long>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded("pete");
+            final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ? extends Long>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded("pete");
             final List<CapturedForward<? extends String, ? extends Long>> expected = asList(
                     new CapturedForward<>(new Record<>("start", -1L, 0L), Optional.empty()),
                     new CapturedForward<>(new Record<>("barbaz50", 56L, 0L), Optional.of("pete"))
             );
 
+            final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ? extends Long>> expectedFromFixedKeyProcessor = asList(
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(
+                            new Record<>("start", -1L, 0L)), Optional.empty()),
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(
+                            new Record<>("barbaz50", 56L, 0L)), Optional.of("pete"))
+            );
+
+
             assertThat(forwardedFromProcessor, is(expected));
-            assertThat(forwardedFromFixedKeyProcessor, is(expected));
+            assertThat(forwardedFromFixedKeyProcessor, is(expectedFromFixedKeyProcessor));
         }
         {
             final List<CapturedForward<? extends String, ? extends Long>> forwardedFromProcessor = processorContext.forwarded("steve");
-            final List<CapturedForward<? extends String, ? extends Long>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded("steve");
+            final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ? extends Long>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded("steve");
             final List<CapturedForward<? extends String, ? extends Long>> expected = singletonList(
                     new CapturedForward<>(new Record<>("start", -1L, 0L))
             );
+            final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ? extends Long>> expectedFromFixedKeyProcessor = singletonList(
+                    new MockFixedKeyProcessorContext.CapturedForward<>(
+                            TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("start", -1L, 0L)))
+            );
 
             assertThat(forwardedFromProcessor, is(expected));
-            assertThat(forwardedFromFixedKeyProcessor, is(expected));
+            assertThat(forwardedFromFixedKeyProcessor, is(expectedFromFixedKeyProcessor));
         }
     }
 
@@ -448,14 +478,14 @@ public class MockProcessorContextAPITest {
         processor.process(record1);
         processor.process(record2);
 
-        fixedKeyProcessor.process(InternalFixedKeyRecordFactory.create(record1));
-        fixedKeyProcessor.process(InternalFixedKeyRecordFactory.create(record2));
+        fixedKeyProcessor.process(TestFixedKeyRecordFactory.createFixedKeyRecord(record1));
+        fixedKeyProcessor.process(TestFixedKeyRecordFactory.createFixedKeyRecord(record2));
 
         assertThat(processorContext.committed(), is(false));
         assertThat(fixedKeyProcessorContext.committed(), is(false));
 
         processor.process(record3);
-        fixedKeyProcessor.process(InternalFixedKeyRecordFactory.create(record3));
+        fixedKeyProcessor.process(TestFixedKeyRecordFactory.createFixedKeyRecord(record3));
 
         assertThat(processorContext.committed(), is(true));
         assertThat(fixedKeyProcessorContext.committed(), is(true));
@@ -495,8 +525,8 @@ public class MockProcessorContextAPITest {
         processor.process(record1);
         processor.process(record2);
 
-        fixedKeyProcessor.process(InternalFixedKeyRecordFactory.create(record1));
-        fixedKeyProcessor.process(InternalFixedKeyRecordFactory.create(record2));
+        fixedKeyProcessor.process(TestFixedKeyRecordFactory.createFixedKeyRecord(record1));
+        fixedKeyProcessor.process(TestFixedKeyRecordFactory.createFixedKeyRecord(record2));
 
         assertThat(processorStore.get("foo"), is(5L));
         assertThat(processorStore.get("bar"), is(50L));
@@ -528,20 +558,21 @@ public class MockProcessorContextAPITest {
         final Record<String, Object> record1 = new Record<>("foo", 5L, 0L);
 
         processor.process(record1);
-        fixedKeyProcessor.process(InternalFixedKeyRecordFactory.create(record1));
+        fixedKeyProcessor.process(TestFixedKeyRecordFactory.createFixedKeyRecord(record1));
         {
             final List<CapturedForward<? extends String, ?>> forwardedFromProcessor = processorContext.forwarded();
-            final List<CapturedForward<? extends String, ?>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded();
+            final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ?>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded();
             final List<CapturedForward<? extends String, ?>> expectedFromProcessor = asList(
                     new CapturedForward<>(new Record<>("appId", "testMetadata", 0L)),
                     new CapturedForward<>(new Record<>("taskId", new TaskId(0, 0), 0L)),
                     new CapturedForward<>(new Record<>("record", new Record<>("foo", 5L, 0L), 0L))
             );
 
-            final List<CapturedForward<? extends String, ?>> expectedFromFixedKeyProcessor = asList(
-                    new CapturedForward<>(new Record<>("appId", "testMetadata", 0L)),
-                    new CapturedForward<>(new Record<>("taskId", new TaskId(0, 0), 0L)),
-                    new CapturedForward<>(new Record<>("record", InternalFixedKeyRecordFactory.create(new Record<>("foo", 5L, 0L)), 0L))
+            final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ?>> expectedFromFixedKeyProcessor = asList(
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("appId", "testMetadata", 0L))),
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("taskId", new TaskId(0, 0), 0L))),
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("record",
+                            TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("foo", 5L, 0L)), 0L)))
             );
             assertThat(forwardedFromProcessor, is(expectedFromProcessor));
             assertThat(forwardedFromFixedKeyProcessor, is(expectedFromFixedKeyProcessor));
@@ -553,10 +584,10 @@ public class MockProcessorContextAPITest {
         fixedKeyProcessorContext.setRecordMetadata("t1", 0, 0L);
 
         processor.process(record1);
-        fixedKeyProcessor.process(InternalFixedKeyRecordFactory.create(record1));
+        fixedKeyProcessor.process(TestFixedKeyRecordFactory.createFixedKeyRecord(record1));
         {
             final List<CapturedForward<? extends String, ?>> forwardedFromProcessor = processorContext.forwarded();
-            final List<CapturedForward<? extends String, ?>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded();
+            final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ?>> forwardedFromFixedKeyProcessor = fixedKeyProcessorContext.forwarded();
 
             final List<CapturedForward<? extends String, ?>> expectedFromProcessor = asList(
                     new CapturedForward<>(new Record<>("appId", "testMetadata", 0L)),
@@ -566,13 +597,13 @@ public class MockProcessorContextAPITest {
                     new CapturedForward<>(new Record<>("offset", 0L, 0L)),
                     new CapturedForward<>(new Record<>("record", new Record<>("foo", 5L, 0L), 0L))
             );
-            final List<CapturedForward<? extends String, ?>> expectedFromFixedKeyProcessor = asList(
-                    new CapturedForward<>(new Record<>("appId", "testMetadata", 0L)),
-                    new CapturedForward<>(new Record<>("taskId", new TaskId(0, 0), 0L)),
-                    new CapturedForward<>(new Record<>("topic", "t1", 0L)),
-                    new CapturedForward<>(new Record<>("partition", 0, 0L)),
-                    new CapturedForward<>(new Record<>("offset", 0L, 0L)),
-                    new CapturedForward<>(new Record<>("record", InternalFixedKeyRecordFactory.create(new Record<>("foo", 5L, 0L)), 0L))
+            final List<MockFixedKeyProcessorContext.CapturedForward<? extends String, ?>> expectedFromFixedKeyProcessor = asList(
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("appId", "testMetadata", 0L))),
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("taskId", new TaskId(0, 0), 0L))),
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("topic", "t1", 0L))),
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("partition", 0, 0L))),
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("offset", 0L, 0L))),
+                    new MockFixedKeyProcessorContext.CapturedForward<>(TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("record", TestFixedKeyRecordFactory.createFixedKeyRecord(new Record<>("foo", 5L, 0L)), 0L)))
             );
             assertThat(forwardedFromProcessor, is(expectedFromProcessor));
             assertThat(forwardedFromFixedKeyProcessor, is(expectedFromFixedKeyProcessor));
