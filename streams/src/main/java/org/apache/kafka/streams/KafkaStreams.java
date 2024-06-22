@@ -1513,7 +1513,7 @@ public class KafkaStreams implements AutoCloseable {
             }
 
             stateDirectory.close();
-            adminClient.close();
+            adminClient.close(Duration.ofMillis(timeoutMs));
 
             streamsMetrics.removeAllClientLevelSensorsAndMetrics();
             metrics.close();
