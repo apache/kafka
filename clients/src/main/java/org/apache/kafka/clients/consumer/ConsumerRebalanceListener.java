@@ -30,7 +30,7 @@ import org.apache.kafka.common.TopicPartition;
  * <p>
  * When Kafka is managing the group membership, a partition re-assignment will be triggered whenever the members of the group change or the subscription
  * of the members changes. This can occur when processes die, new process instances are added or old instances come back to life after failure.
- * Partition re-assignments can also be triggered by changing affecting the subscribed topics (e.g. when the number of partitions is
+ * Partition re-assignments can also be triggered by changes affecting the subscribed topics (e.g. when the number of partitions is
  * administratively adjusted).
  * <p>
  * There are many uses for this functionality. One common use is saving offsets in a custom store. By saving offsets in
@@ -144,10 +144,9 @@ public interface ConsumerRebalanceListener {
     void onPartitionsRevoked(Collection<TopicPartition> partitions);
 
     /**
-     * A callback method the user is providing handling of cleanup up resource which are being assigned to other customers and
-     * customized offsets on completion of a successful partition re-assignment. For example, the customized store is a possible use.
-     * This method will be called after the partition re-assignment completes and before the
-     * consumer starts fetching data, and only as the result of a {@link Consumer#poll(java.time.Duration) poll(long)} call.
+     * A callback method the user can implement to be notified when partitions are assigned to this consumer.
+     * This method will be called after the partition re-assignment completes and before the consumer starts fetching data
+     * and only as the result of a {@link Consumer#poll(java.time.Duration) poll(long)} call.
      * <p>
      * It is guaranteed that under normal conditions all the processes in a consumer group will execute their
      * {@link #onPartitionsRevoked(Collection)} callback before any instance executes its
