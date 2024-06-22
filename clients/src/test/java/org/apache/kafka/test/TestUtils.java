@@ -706,4 +706,9 @@ public class TestUtils {
                 ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
                 zkMigrationEnabled);
     }
+
+    public static String getCurrentFunctionName() {
+        final StackTraceElement[] ste = Thread.currentThread().getStackTrace();
+        return ste[2].getMethodName();
+    }
 }
