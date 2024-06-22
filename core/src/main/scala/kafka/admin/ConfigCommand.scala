@@ -396,9 +396,11 @@ object ConfigCommand extends Logging {
           throw new InvalidConfigurationException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
         val newConfig = new JConfig(newEntries.asJava.values)
 
-        val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityNameHead)
-        val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
-        adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+        entityNames.foreach { entityName =>
+          val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityName)
+          val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+          adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+        }
 
       case BrokerLoggerConfigType =>
         val validLoggers = getResourceConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = true, describeAll = false).map(_.name)
