@@ -17,19 +17,21 @@
 
 package org.apache.kafka.tools;
 
-import kafka.admin.RackAwareTest;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
-import kafka.server.KafkaConfig;
-import kafka.utils.Logging;
+import kafka.test.ClusterConfig;
+import kafka.test.ClusterInstance;
+import kafka.test.annotation.ClusterTemplate;
+import kafka.test.annotation.Type;
+import kafka.test.junit.ClusterTestExtensions;
 import kafka.utils.TestUtils;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ListPartitionReassignmentsResult;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.PartitionReassignment;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
@@ -47,12 +49,12 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.extension.ExtendWith;
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
+import scala.collection.mutable.Buffer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -70,10 +72,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
-import scala.collection.mutable.Buffer;
-
 import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_MAX_BYTES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -86,652 +84,952 @@ import static org.mockito.Mockito.spy;
 
 @Tag("integration")
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
-public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTestHarness implements Logging, RackAwareTest {
+@ExtendWith(ClusterTestExtensions.class)
+public class TopicCommandIntegrationTest {
     private final short defaultReplicationFactor = 1;
     private final int defaultNumPartitions = 1;
-    private TopicCommand.TopicService topicService;
-    private Admin adminClient;
-    private String bootstrapServer;
-    private String testTopicName;
-    private Buffer<KafkaBroker> scalaBrokers;
-    private Seq<ControllerServer> scalaControllers;
 
-    /**
-     * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
-     * test and should not reuse previous configurations unless they select their ports randomly when servers are started.
-     *
-     * Note the replica fetch max bytes is set to `1` in order to throttle the rate of replication for test
-     * `testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress`.
-     */
-    @Override
-    public scala.collection.Seq<KafkaConfig> generateConfigs() {
-        Map<Integer, String> rackInfo = new HashMap<>();
-        rackInfo.put(0, "rack1");
-        rackInfo.put(1, "rack2");
-        rackInfo.put(2, "rack2");
-        rackInfo.put(3, "rack1");
-        rackInfo.put(4, "rack3");
-        rackInfo.put(5, "rack3");
-
-        List<Properties> brokerConfigs = ToolsTestUtils
-            .createBrokerProperties(6, zkConnectOrNull(), rackInfo, defaultNumPartitions, defaultReplicationFactor);
-
-        List<KafkaConfig> configs = new ArrayList<>();
-        for (Properties props : brokerConfigs) {
-            props.put(REPLICA_FETCH_MAX_BYTES_CONFIG, "1");
-            configs.add(KafkaConfig.fromProps(props));
-        }
-        return JavaConverters.asScalaBuffer(configs).toSeq();
-    }
+    private final ClusterInstance clusterInstance;
 
     private TopicCommand.TopicCommandOptions buildTopicCommandOptionsWithBootstrap(String... opts) {
+        String bootstrapServer = clusterInstance.bootstrapServers();
         String[] finalOptions = Stream.concat(Arrays.stream(opts),
                 Stream.of("--bootstrap-server", bootstrapServer)
         ).toArray(String[]::new);
         return new TopicCommand.TopicCommandOptions(finalOptions);
     }
 
-    @BeforeEach
-    public void setUp(TestInfo info) {
-        super.setUp(info);
-        // create adminClient
-        Properties props = new Properties();
-        bootstrapServer = bootstrapServers(listenerName());
-        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
-        adminClient = Admin.create(props);
-        topicService = new TopicCommand.TopicService(props, Optional.of(bootstrapServer));
-        testTopicName = String.format("%s-%s", info.getTestMethod().get().getName(), org.apache.kafka.test.TestUtils.randomString(10));
-        scalaBrokers = brokers();
-        scalaControllers = controllerServers();
-    }
+    static List<ClusterConfig> generate1() {
+        Map<String, String> serverProp = new HashMap<>();
+        serverProp.put(REPLICA_FETCH_MAX_BYTES_CONFIG, "1"); // if config name error, no exception throw
 
-    @AfterEach
-    public void close() throws Exception {
-        if (topicService != null)
-            topicService.close();
-        if (adminClient != null)
-            adminClient.close();
-    }
+        Map<Integer, Map<String, String>> rackInfo = new HashMap<>();
+        Map<String, String> infoPerBroker1 = new HashMap<>();
+        infoPerBroker1.put("broker.rack", "rack1");
+        Map<String, String> infoPerBroker2 = new HashMap<>();
+        infoPerBroker2.put("broker.rack", "rack2");
+        Map<String, String> infoPerBroker3 = new HashMap<>();
+        infoPerBroker3.put("broker.rack", "rack2");
+        Map<String, String> infoPerBroker4 = new HashMap<>();
+        infoPerBroker4.put("broker.rack", "rack1");
+        Map<String, String> infoPerBroker5 = new HashMap<>();
+        infoPerBroker5.put("broker.rack", "rack3");
+        Map<String, String> infoPerBroker6 = new HashMap<>();
+        infoPerBroker6.put("broker.rack", "rack3");
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreate(String quorum) throws Exception {
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 2, 1,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+        rackInfo.put(0, infoPerBroker1);
+        rackInfo.put(1, infoPerBroker2);
+        rackInfo.put(2, infoPerBroker3);
+        rackInfo.put(3, infoPerBroker4);
+        rackInfo.put(4, infoPerBroker5);
+        rackInfo.put(5, infoPerBroker6);
+
+        return Collections.singletonList(ClusterConfig.defaultBuilder()
+                .setBrokers(6)
+                .setServerProperties(serverProp)
+                .setPerServerProperties(rackInfo)
+                .build()
         );
-        assertTrue(adminClient.listTopics().names().get().contains(testTopicName),
-                "Admin client didn't see the created topic. It saw: " + adminClient.listTopics().names().get());
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWithDefaults(String quorum) throws Exception {
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        List<TopicPartitionInfo> partitions = adminClient
-            .describeTopics(Collections.singletonList(testTopicName))
-            .allTopicNames()
-            .get()
-            .get(testTopicName)
-            .partitions();
-        assertEquals(defaultNumPartitions, partitions.size(), "Unequal partition size: " + partitions.size());
-        assertEquals(defaultReplicationFactor, (short) partitions.get(0).replicas().size(), "Unequal replication factor: " + partitions.get(0).replicas().size());
+    TopicCommandIntegrationTest(ClusterInstance clusterInstance) {
+        this.clusterInstance = clusterInstance;
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWithDefaultReplication(String quorum) throws Exception {
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 2, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        List<TopicPartitionInfo>  partitions = adminClient
-            .describeTopics(Collections.singletonList(testTopicName))
-            .allTopicNames()
-            .get()
-            .get(testTopicName)
-            .partitions();
-        assertEquals(2, partitions.size(), "Unequal partition size: " + partitions.size());
-        assertEquals(defaultReplicationFactor, (short) partitions.get(0).replicas().size(), "Unequal replication factor: " + partitions.get(0).replicas().size());
+    @ClusterTemplate("generate1")
+    public void testCreate() throws InterruptedException, ExecutionException {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+            adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
+
+            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            Assertions.assertTrue(adminClient.listTopics().names().get().contains(testTopicName),
+                    "Admin client didn't see the created topic. It saw: " + adminClient.listTopics().names().get());
+
+            adminClient.deleteTopics(Collections.singletonList(testTopicName));
+            clusterInstance.waitForTopic(testTopicName, 0);
+            Assertions.assertTrue(adminClient.listTopics().names().get().isEmpty(),
+                    "Admin client see the created topic. It saw: " + adminClient.listTopics().names().get());
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWithDefaultPartitions(String quorum) throws Exception {
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, 2,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        List<TopicPartitionInfo> partitions = adminClient
-            .describeTopics(Collections.singletonList(testTopicName))
-            .allTopicNames()
-            .get()
-            .get(testTopicName)
-            .partitions();
+    @ClusterTemplate("generate1")
+    public void testCreateWithDefaults() throws InterruptedException, ExecutionException {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
 
-        assertEquals(defaultNumPartitions, partitions.size(), "Unequal partition size: " + partitions.size());
-        assertEquals(2, (short) partitions.get(0).replicas().size(), "Partitions not replicated: " + partitions.get(0).replicas().size());
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+            adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
+
+            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            Assertions.assertTrue(adminClient.listTopics().names().get().contains(testTopicName),
+                    "Admin client didn't see the created topic. It saw: " + adminClient.listTopics().names().get());
+
+            List<TopicPartitionInfo> partitions = adminClient
+                    .describeTopics(Collections.singletonList(testTopicName))
+                    .allTopicNames()
+                    .get()
+                    .get(testTopicName)
+                    .partitions();
+            Assertions.assertEquals(defaultNumPartitions, partitions.size(), "Unequal partition size: " + partitions.size());
+            Assertions.assertEquals(defaultReplicationFactor, (short) partitions.get(0).replicas().size(), "Unequal replication factor: " + partitions.get(0).replicas().size());
+
+            adminClient.deleteTopics(Collections.singletonList(testTopicName));
+            clusterInstance.waitForTopic(testTopicName, 0);
+            Assertions.assertTrue(adminClient.listTopics().names().get().isEmpty(),
+                    "Admin client see the created topic. It saw: " + adminClient.listTopics().names().get());
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWithConfigs(String quorum) throws Exception {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
-        Properties topicConfig = new Properties();
-        topicConfig.put(TopicConfig.DELETE_RETENTION_MS_CONFIG, "1000");
+    @ClusterTemplate("generate1")
+    public void testCreateWithDefaultReplication() throws InterruptedException, ExecutionException {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
 
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 2, 2,
-                scala.collection.immutable.Map$.MODULE$.empty(), topicConfig
-        );
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        Config configs = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
-        assertEquals(1000, Integer.valueOf(configs.get("delete.retention.ms").value()),
-                "Config not set correctly: " + configs.get("delete.retention.ms").value());
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 2, defaultReplicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            List<TopicPartitionInfo>  partitions = adminClient
+                    .describeTopics(Collections.singletonList(testTopicName))
+                    .allTopicNames()
+                    .get()
+                    .get(testTopicName)
+                    .partitions();
+            assertEquals(2, partitions.size(), "Unequal partition size: " + partitions.size());
+            assertEquals(defaultReplicationFactor, (short) partitions.get(0).replicas().size(), "Unequal replication factor: " + partitions.get(0).replicas().size());
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWhenAlreadyExists(String quorum) {
-        // create the topic
-        TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap(
-            "--create", "--partitions", Integer.toString(defaultNumPartitions), "--replication-factor", "1",
-                "--topic", testTopicName);
+    @ClusterTemplate("generate1")
+    public void testCreateWithDefaultPartitions() throws InterruptedException, ExecutionException {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
 
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        // try to re-create the topic
-        assertThrows(TopicExistsException.class, () -> topicService.createTopic(createOpts),
-                "Expected TopicExistsException to throw");
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, 2,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            List<TopicPartitionInfo> partitions = adminClient
+                    .describeTopics(Collections.singletonList(testTopicName))
+                    .allTopicNames()
+                    .get()
+                    .get(testTopicName)
+                    .partitions();
+
+            assertEquals(defaultNumPartitions, partitions.size(), "Unequal partition size: " + partitions.size());
+            assertEquals(2, (short) partitions.get(0).replicas().size(), "Partitions not replicated: " + partitions.get(0).replicas().size());
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWhenAlreadyExistsWithIfNotExists(String quorum) throws Exception {
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        TopicCommand.TopicCommandOptions createOpts =
-                buildTopicCommandOptionsWithBootstrap("--create", "--topic", testTopicName, "--if-not-exists");
-        topicService.createTopic(createOpts);
+    @ClusterTemplate("generate1")
+    public void testCreateWithConfigs() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
+            Properties topicConfig = new Properties();
+            topicConfig.put(TopicConfig.DELETE_RETENTION_MS_CONFIG, "1000");
+
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 2, 2,
+                    scala.collection.immutable.Map$.MODULE$.empty(), topicConfig
+            );
+
+            Config configs = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
+            assertEquals(1000, Integer.valueOf(configs.get("delete.retention.ms").value()),
+                    "Config not set correctly: " + configs.get("delete.retention.ms").value());
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWithReplicaAssignment(String quorum) throws Exception {
-        scala.collection.mutable.HashMap<Object, Seq<Object>> replicaAssignmentMap = new scala.collection.mutable.HashMap<>();
+    @ClusterTemplate("generate1")
+    public void testCreateWhenAlreadyExists() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (
+                Admin adminClient = clusterInstance.createAdminClient();
+                TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
+        ) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        replicaAssignmentMap.put(0, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 5, (Object) 4)).asScala().toSeq());
-        replicaAssignmentMap.put(1, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 3, (Object) 2)).asScala().toSeq());
-        replicaAssignmentMap.put(2, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 1, (Object) 0)).asScala().toSeq());
 
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions,
-                defaultReplicationFactor, replicaAssignmentMap, new Properties()
-        );
+            TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap(
+                    "--create", "--partitions", Integer.toString(defaultNumPartitions), "--replication-factor", "1",
+                    "--topic", testTopicName);
 
-        List<TopicPartitionInfo> partitions = adminClient
-            .describeTopics(Collections.singletonList(testTopicName))
-            .allTopicNames()
-            .get()
-            .get(testTopicName)
-            .partitions();
-        
-        assertEquals(3, partitions.size(),
-                "Unequal partition size: " + partitions.size());
-        assertEquals(Arrays.asList(5, 4), getPartitionReplicas(partitions, 0),
-                "Unexpected replica assignment: " + getPartitionReplicas(partitions, 0));
-        assertEquals(Arrays.asList(3, 2), getPartitionReplicas(partitions, 1),
-                "Unexpected replica assignment: " + getPartitionReplicas(partitions, 1));
-        assertEquals(Arrays.asList(1, 0), getPartitionReplicas(partitions, 2),
-                "Unexpected replica assignment: " + getPartitionReplicas(partitions, 2));
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            // try to re-create the topic
+            assertThrows(TopicExistsException.class, () -> topicService.createTopic(createOpts),
+                    "Expected TopicExistsException to throw");
+        }
+    }
+
+    @ClusterTemplate("generate1")
+    public void testCreateWhenAlreadyExistsWithIfNotExists() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (
+                Admin adminClient = clusterInstance.createAdminClient();
+                TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)
+        ) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            TopicCommand.TopicCommandOptions createOpts =
+                    buildTopicCommandOptionsWithBootstrap("--create", "--topic", testTopicName, "--if-not-exists");
+            topicService.createTopic(createOpts);
+        }
     }
 
     private List<Integer> getPartitionReplicas(List<TopicPartitionInfo> partitions, int partitionNumber) {
         return partitions.get(partitionNumber).replicas().stream().map(Node::id).collect(Collectors.toList());
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWithInvalidReplicationFactor(String quorum) {
-        TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "2", "--replication-factor", Integer.toString(Short.MAX_VALUE + 1),
-            "--topic", testTopicName);
-        assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
+    @ClusterTemplate("generate1")
+    public void testCreateWithReplicaAssignment() throws Exception {
+        scala.collection.mutable.HashMap<Object, Seq<Object>> replicaAssignmentMap = new scala.collection.mutable.HashMap<>();
+        try (Admin adminClient = clusterInstance.createAdminClient();) {
+            String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                    org.apache.kafka.test.TestUtils.randomString(10);
+
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+            replicaAssignmentMap.put(0, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 5, (Object) 4)).asScala().toSeq());
+            replicaAssignmentMap.put(1, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 3, (Object) 2)).asScala().toSeq());
+            replicaAssignmentMap.put(2, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 1, (Object) 0)).asScala().toSeq());
+
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions,
+                    defaultReplicationFactor, replicaAssignmentMap, new Properties()
+            );
+
+            List<TopicPartitionInfo> partitions = adminClient
+                    .describeTopics(Collections.singletonList(testTopicName))
+                    .allTopicNames()
+                    .get()
+                    .get(testTopicName)
+                    .partitions();
+
+            adminClient.close();
+            assertEquals(3, partitions.size(),
+                    "Unequal partition size: " + partitions.size());
+            assertEquals(Arrays.asList(5, 4), getPartitionReplicas(partitions, 0),
+                    "Unexpected replica assignment: " + getPartitionReplicas(partitions, 0));
+            assertEquals(Arrays.asList(3, 2), getPartitionReplicas(partitions, 1),
+                    "Unexpected replica assignment: " + getPartitionReplicas(partitions, 1));
+            assertEquals(Arrays.asList(1, 0), getPartitionReplicas(partitions, 2),
+                    "Unexpected replica assignment: " + getPartitionReplicas(partitions, 2));
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWithNegativeReplicationFactor(String quorum) {
-        TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create",
-            "--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName);
-        assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
+    @ClusterTemplate("generate1")
+    public void testCreateWithInvalidReplicationFactor() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
+
+            TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "2", "--replication-factor", Integer.toString(Short.MAX_VALUE + 1),
+                    "--topic", testTopicName);
+            assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWithNegativePartitionCount(String quorum) {
-        TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName);
-        assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
+    @ClusterTemplate("generate1")
+    public void testCreateWithNegativeReplicationFactor() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
+            TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create",
+                    "--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName);
+            assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testInvalidTopicLevelConfig(String quorum) {
-        TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap("--create",
-            "--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
-            "--config", "message.timestamp.type=boom");
-        assertThrows(ConfigException.class, () -> topicService.createTopic(createOpts), "Expected ConfigException to throw");
+    @ClusterTemplate("generate1")
+    public void testCreateWithNegativePartitionCount() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);) {
+            TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName);
+            assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testListTopics(String quorum) {
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
+    @ClusterTemplate("generate1")
+    public void testInvalidTopicLevelConfig() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();) {
+            TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
 
-        String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list"));
-        assertTrue(output.contains(testTopicName), "Expected topic name to be present in output: " + output);
+            TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap("--create",
+                    "--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
+                    "--config", "message.timestamp.type=boom");
+            assertThrows(ConfigException.class, () -> topicService.createTopic(createOpts), "Expected ConfigException to throw");
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testListTopicsWithIncludeList(String quorum) {
-        String topic1 = "kafka.testTopic1";
-        String topic2 = "kafka.testTopic2";
-        String topic3 = "oooof.testTopic1";
-        int partition = 2;
-        short replicationFactor = 2;
-        TestUtils.createTopicWithAdmin(adminClient, topic1, scalaBrokers, scalaControllers, partition, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        TestUtils.createTopicWithAdmin(adminClient, topic2, scalaBrokers, scalaControllers, partition, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        TestUtils.createTopicWithAdmin(adminClient, topic3, scalaBrokers, scalaControllers, partition, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
+    @ClusterTemplate("generate1")
+    public void testListTopics() {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list", "--topic", "kafka.*"));
-
-        assertTrue(output.contains(topic1), "Expected topic name " + topic1 + " to be present in output: " + output);
-        assertTrue(output.contains(topic2), "Expected topic name " + topic2 + " to be present in output: " + output);
-        assertFalse(output.contains(topic3), "Do not expect topic name " + topic3 + " to be present in output: " + output);
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list"));
+            assertTrue(output.contains(testTopicName), "Expected topic name to be present in output: " + output);
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testListTopicsWithExcludeInternal(String quorum) {
-        String topic1 = "kafka.testTopic1";
-        String hiddenConsumerTopic = Topic.GROUP_METADATA_TOPIC_NAME;
-        int partition = 2;
-        short replicationFactor = 2;
-        TestUtils.createTopicWithAdmin(adminClient, topic1, scalaBrokers, scalaControllers, partition, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        TestUtils.createTopicWithAdmin(adminClient, hiddenConsumerTopic, scalaBrokers, scalaControllers, partition, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
+    @ClusterTemplate("generate1")
+    public void testListTopicsWithIncludeList() {
+        try (Admin adminClient = clusterInstance.createAdminClient();) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list", "--exclude-internal"));
 
-        assertTrue(output.contains(topic1), "Expected topic name " + topic1 + " to be present in output: " + output);
-        assertFalse(output.contains(hiddenConsumerTopic), "Do not expect topic name " + hiddenConsumerTopic + " to be present in output: " + output);
+            String topic1 = "kafka.testTopic1";
+            String topic2 = "kafka.testTopic2";
+            String topic3 = "oooof.testTopic1";
+            int partition = 2;
+            short replicationFactor = 2;
+            TestUtils.createTopicWithAdmin(adminClient, topic1, scalaBrokers, scalaControllers, partition, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            TestUtils.createTopicWithAdmin(adminClient, topic2, scalaBrokers, scalaControllers, partition, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            TestUtils.createTopicWithAdmin(adminClient, topic3, scalaBrokers, scalaControllers, partition, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+
+            String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list", "--topic", "kafka.*"));
+            assertTrue(output.contains(topic1), "Expected topic name " + topic1 + " to be present in output: " + output);
+            assertTrue(output.contains(topic2), "Expected topic name " + topic2 + " to be present in output: " + output);
+            assertFalse(output.contains(topic3), "Do not expect topic name " + topic3 + " to be present in output: " + output);
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterPartitionCount(String quorum) throws ExecutionException, InterruptedException {
-        int partition = 2;
-        short replicationFactor = 2;
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName, "--partitions", "3"));
+    @ClusterTemplate("generate1")
+    public void testListTopicsWithExcludeInternal() {
+        try (Admin adminClient = clusterInstance.createAdminClient();) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
-        kafka.utils.TestUtils.waitUntilTrue(
-            () -> brokers().forall(b -> b.metadataCache().getTopicPartitions(testTopicName).size() == 3),
-            () -> "Timeout waiting for new assignment propagating to broker", org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
-        TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get();
-        assertEquals(3, topicDescription.partitions().size(), "Expected partition count to be 3. Got: " + topicDescription.partitions().size());
+            String topic1 = "kafka.testTopic1";
+            String hiddenConsumerTopic = Topic.GROUP_METADATA_TOPIC_NAME;
+            int partition = 2;
+            short replicationFactor = 2;
+            TestUtils.createTopicWithAdmin(adminClient, topic1, scalaBrokers, scalaControllers, partition, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+
+            if (clusterInstance.type() != Type.ZK) {
+                TestUtils.createTopicWithAdmin(adminClient, hiddenConsumerTopic, scalaBrokers, scalaControllers, partition, replicationFactor,
+                        scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+                );
+            }
+            String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list", "--exclude-internal"));
+            assertTrue(output.contains(topic1), "Expected topic name " + topic1 + " to be present in output: " + output);
+            assertFalse(output.contains(hiddenConsumerTopic), "Do not expect topic name " + hiddenConsumerTopic + " to be present in output: " + output);
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterAssignment(String quorum) throws ExecutionException, InterruptedException {
-        int partition = 2;
-        short replicationFactor = 2;
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter",
-            "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3"));
+    @ClusterTemplate("generate1")
+    public void testAlterPartitionCount() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
-        kafka.utils.TestUtils.waitUntilTrue(
-            () -> brokers().forall(b -> b.metadataCache().getTopicPartitions(testTopicName).size() == 3),
-            () -> "Timeout waiting for new assignment propagating to broker",
-            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+            int partition = 2;
+            short replicationFactor = 2;
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName, "--partitions", "3"));
 
-        TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get();
-        assertEquals(3, topicDescription.partitions().size(), "Expected partition count to be 3. Got: " + topicDescription.partitions().size());
-        List<Integer> partitionReplicas = getPartitionReplicas(topicDescription.partitions(), 2);
-        assertEquals(Arrays.asList(4, 2), partitionReplicas, "Expected to have replicas 4,2. Got: " + partitionReplicas);
+            TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
+            TestUtils.waitUntilTrue(
+                    () -> scalaBrokers.forall(b -> b.metadataCache().getTopicPartitions(testTopicName).size() == 3),
+                    () -> "Timeout waiting for new assignment propagating to broker", org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+            TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get();
+            assertEquals(3, topicDescription.partitions().size(), "Expected partition count to be 3. Got: " + topicDescription.partitions().size());
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterAssignmentWithMoreAssignmentThanPartitions(String quorum) {
-        int partition = 2;
-        short replicationFactor = 2;
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        assertThrows(ExecutionException.class,
-            () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter",
-                "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2,3:2", "--partitions", "3")),
-                "Expected to fail with ExecutionException");
+    @ClusterTemplate("generate1")
+    public void testAlterAssignment() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+
+            int partition = 2;
+            short replicationFactor = 2;
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter",
+                    "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3"));
+
+            TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
+            TestUtils.waitUntilTrue(
+                    () -> scalaBrokers.forall(b -> b.metadataCache().getTopicPartitions(testTopicName).size() == 3),
+                    () -> "Timeout waiting for new assignment propagating to broker",
+                    org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+
+            TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get();
+            assertEquals(3, topicDescription.partitions().size(), "Expected partition count to be 3. Got: " + topicDescription.partitions().size());
+            List<Integer> partitionReplicas = getPartitionReplicas(topicDescription.partitions(), 2);
+            assertEquals(Arrays.asList(4, 2), partitionReplicas, "Expected to have replicas 4,2. Got: " + partitionReplicas);
+
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterAssignmentWithMorePartitionsThanAssignment(String quorum) {
-        int partition = 2;
-        short replicationFactor = 2;
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
+    @ClusterTemplate("generate1")
+    public void testAlterAssignmentWithMoreAssignmentThanPartitions() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        assertThrows(ExecutionException.class,
-            () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName,
-                "--replica-assignment", "5:3,3:1,4:2", "--partitions", "6")),
-                "Expected to fail with ExecutionException");
+
+            int partition = 2;
+            short replicationFactor = 2;
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            assertThrows(ExecutionException.class,
+                    () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter",
+                            "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2,3:2", "--partitions", "3")),
+                    "Expected to fail with ExecutionException");
+
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterWithInvalidPartitionCount(String quorum) {
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        assertThrows(ExecutionException.class,
-            () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--partitions", "-1", "--topic", testTopicName)),
-                "Expected to fail with ExecutionException");
+    @ClusterTemplate("generate1")
+    public void testAlterAssignmentWithMorePartitionsThanAssignment() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
+
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+            int partition = 2;
+            short replicationFactor = 2;
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+
+            assertThrows(ExecutionException.class,
+                    () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName,
+                            "--replica-assignment", "5:3,3:1,4:2", "--partitions", "6")),
+                    "Expected to fail with ExecutionException");
+
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterWhenTopicDoesntExist(String quorum) {
-        // alter a topic that does not exist without --if-exists
-        TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName, "--partitions", "1");
+    @ClusterTemplate("generate1")
+    public void testAlterWithInvalidPartitionCount() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            assertThrows(ExecutionException.class,
+                    () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--partitions", "-1", "--topic", testTopicName)),
+                    "Expected to fail with ExecutionException");
+        }
+    }
+
+    @ClusterTemplate("generate1")
+    public void testAlterWhenTopicDoesntExist() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
+            // alter a topic that does not exist without --if-exists
+            TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName, "--partitions", "1");
+            assertThrows(IllegalArgumentException.class, () -> topicService.alterTopic(alterOpts), "Expected to fail with IllegalArgumentException");
+
+        }
+    }
+
+    @ClusterTemplate("generate1")
+    public void testAlterWhenTopicDoesntExistWithIfExists() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        Admin adminClient = clusterInstance.createAdminClient();
+
         TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
-        assertThrows(IllegalArgumentException.class, () -> topicService.alterTopic(alterOpts), "Expected to fail with IllegalArgumentException");
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterWhenTopicDoesntExistWithIfExists(String quorum) throws ExecutionException, InterruptedException {
         topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName, "--partitions", "1", "--if-exists"));
+        adminClient.close();
+        topicService.close();
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateAlterTopicWithRackAware(String quorum) throws Exception {
-        Map<Integer, String> rackInfo = new HashMap<>();
-        rackInfo.put(0, "rack1");
-        rackInfo.put(1, "rack2");
-        rackInfo.put(2, "rack2");
-        rackInfo.put(3, "rack1");
-        rackInfo.put(4, "rack3");
-        rackInfo.put(5, "rack3");
+    @ClusterTemplate("generate1")
+    public void testCreateAlterTopicWithRackAware() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
+        ) {
 
-        int numPartitions = 18;
-        int replicationFactor = 3;
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, numPartitions, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        Map<Integer, List<Integer>> assignment = adminClient.describeTopics(Collections.singletonList(testTopicName))
-            .allTopicNames().get().get(testTopicName).partitions()
-            .stream()
-            .collect(Collectors.toMap(
-                info -> info.partition(),
-                info -> info.replicas().stream().map(Node::id).collect(Collectors.toList())));
-        checkReplicaDistribution(assignment, rackInfo, rackInfo.size(), numPartitions,
-            replicationFactor, true, true, true);
 
-        int alteredNumPartitions = 36;
-        // verify that adding partitions will also be rack aware
-        TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap("--alter",
-            "--partitions", Integer.toString(alteredNumPartitions),
-            "--topic", testTopicName);
-        topicService.alterTopic(alterOpts);
+            Map<Integer, String> rackInfo = new HashMap<>();
+            rackInfo.put(0, "rack1");
+            rackInfo.put(1, "rack2");
+            rackInfo.put(2, "rack2");
+            rackInfo.put(3, "rack1");
+            rackInfo.put(4, "rack3");
+            rackInfo.put(5, "rack3");
 
-        TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
-        kafka.utils.TestUtils.waitUntilTrue(
-            () -> brokers().forall(p -> p.metadataCache().getTopicPartitions(testTopicName).size() == alteredNumPartitions),
-            () -> "Timeout waiting for new assignment propagating to broker",
-            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+            int numPartitions = 18;
+            int replicationFactor = 3;
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, numPartitions, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
 
-        assignment = adminClient.describeTopics(Collections.singletonList(testTopicName))
-            .allTopicNames().get().get(testTopicName).partitions().stream()
-            .collect(Collectors.toMap(info -> info.partition(), info -> info.replicas().stream().map(Node::id).collect(Collectors.toList())));
-        checkReplicaDistribution(assignment, rackInfo, rackInfo.size(), alteredNumPartitions, replicationFactor,
-            true, true, true);
+            Map<Integer, List<Integer>> assignment = adminClient.describeTopics(Collections.singletonList(testTopicName))
+                    .allTopicNames().get().get(testTopicName).partitions()
+                    .stream()
+                    .collect(Collectors.toMap(
+                            info -> info.partition(),
+                            info -> info.replicas().stream().map(Node::id).collect(Collectors.toList())));
+            checkReplicaDistribution(assignment, rackInfo, rackInfo.size(), numPartitions,
+                    replicationFactor, true, true, true);
+
+            int alteredNumPartitions = 36;
+            // verify that adding partitions will also be rack aware
+            TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap("--alter",
+                    "--partitions", Integer.toString(alteredNumPartitions),
+                    "--topic", testTopicName);
+            topicService.alterTopic(alterOpts);
+
+            TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
+            TestUtils.waitUntilTrue(
+                    () -> scalaBrokers.forall(p -> p.metadataCache().getTopicPartitions(testTopicName).size() == alteredNumPartitions),
+                    () -> "Timeout waiting for new assignment propagating to broker",
+                    org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+
+            assignment = adminClient.describeTopics(Collections.singletonList(testTopicName))
+                    .allTopicNames().get().get(testTopicName).partitions().stream()
+                    .collect(Collectors.toMap(info -> info.partition(), info -> info.replicas().stream().map(Node::id).collect(Collectors.toList())));
+            checkReplicaDistribution(assignment, rackInfo, rackInfo.size(), alteredNumPartitions, replicationFactor,
+                    true, true, true);
+
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testConfigPreservationAcrossPartitionAlteration(String quorum) throws Exception {
-        String cleanUpPolicy = "compact";
-        Properties topicConfig = new Properties();
-        topicConfig.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanUpPolicy);
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), topicConfig
-        );
+    @ClusterTemplate("generate1")
+    public void testConfigPreservationAcrossPartitionAlteration() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
-        Config props = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
-        // val props = adminZkClient.fetchEntityConfig(ConfigType.Topic, testTopicName)
-        assertNotNull(props.get(TopicConfig.CLEANUP_POLICY_CONFIG), "Properties after creation don't contain " + cleanUpPolicy);
-        assertEquals(cleanUpPolicy, props.get(TopicConfig.CLEANUP_POLICY_CONFIG).value(), "Properties after creation have incorrect value");
 
-        // pre-create the topic config changes path to avoid a NoNodeException
-        if (!isKRaftTest()) {
-            zkClient().makeSurePersistentPathExists(kafka.zk.ConfigEntityChangeNotificationZNode.path());
+            String cleanUpPolicy = "compact";
+            Properties topicConfig = new Properties();
+            topicConfig.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanUpPolicy);
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), topicConfig
+            );
+
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
+            Config props = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
+            assertNotNull(props.get(TopicConfig.CLEANUP_POLICY_CONFIG), "Properties after creation don't contain " + cleanUpPolicy);
+            assertEquals(cleanUpPolicy, props.get(TopicConfig.CLEANUP_POLICY_CONFIG).value(), "Properties after creation have incorrect value");
+
+            // modify the topic to add new partitions
+            int numPartitionsModified = 3;
+            TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap("--alter",
+                    "--partitions", Integer.toString(numPartitionsModified), "--topic", testTopicName);
+            topicService.alterTopic(alterOpts);
+
+            TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
+            Config newProps = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
+            assertNotNull(newProps.get(TopicConfig.CLEANUP_POLICY_CONFIG), "Updated properties do not contain " + TopicConfig.CLEANUP_POLICY_CONFIG);
+            assertEquals(cleanUpPolicy, newProps.get(TopicConfig.CLEANUP_POLICY_CONFIG).value(), "Updated properties have incorrect value");
+
+        }
+    }
+
+    @ClusterTemplate("generate1")
+    public void testTopicDeletion() throws Exception {
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)
+        ) {
+            String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                    org.apache.kafka.test.TestUtils.randomString(10);
+
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+
+            // create the NormalTopic
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            // delete the NormalTopic
+            TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName);
+
+            topicService.deleteTopic(deleteOpts);
+            TestUtils.verifyTopicDeletion(null, testTopicName, 1, scalaBrokers);
+
+        }
+    }
+
+    @ClusterTemplate("generate1")
+    public void testTopicWithCollidingCharDeletionAndCreateAgain() throws Exception {
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)
+        ) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+            // create the topic with colliding chars
+            String topicWithCollidingChar = "test.a";
+            TestUtils.createTopicWithAdmin(adminClient, topicWithCollidingChar, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            // delete the topic
+            TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap("--delete", "--topic", topicWithCollidingChar);
+
+            topicService.deleteTopic(deleteOpts);
+            TestUtils.verifyTopicDeletion(null, topicWithCollidingChar, 1, scalaBrokers);
+            assertDoesNotThrow(() -> TestUtils.createTopicWithAdmin(adminClient, topicWithCollidingChar, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            ), "Should be able to create a topic with colliding chars after deletion.");
+
+        }
+    }
+
+    @ClusterTemplate("generate1")
+    public void testDeleteInternalTopic() throws Exception {
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+
+            // create the offset topic
+            if (clusterInstance.type() != Type.ZK) {
+                TestUtils.createTopicWithAdmin(adminClient, Topic.GROUP_METADATA_TOPIC_NAME, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
+                        scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+                );
+            }
+
+            // Try to delete the Topic.GROUP_METADATA_TOPIC_NAME which is allowed by default.
+            // This is a difference between the new and the old command as the old one didn't allow internal topic deletion.
+            // If deleting internal topics is not desired, ACLS should be used to control it.
+            TopicCommand.TopicCommandOptions deleteOffsetTopicOpts =
+                    buildTopicCommandOptionsWithBootstrap("--delete", "--topic", Topic.GROUP_METADATA_TOPIC_NAME);
+
+            topicService.deleteTopic(deleteOffsetTopicOpts);
+            TestUtils.verifyTopicDeletion(null, Topic.GROUP_METADATA_TOPIC_NAME, defaultNumPartitions, scalaBrokers);
+
+        }
+    }
+
+    @ClusterTemplate("generate1")
+    public void testDeleteWhenTopicDoesntExist() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);) {
+            // delete a topic that does not exist
+            TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName);
+            assertThrows(IllegalArgumentException.class, () -> topicService.deleteTopic(deleteOpts),
+                    "Expected an exception when trying to delete a topic that does not exist.");
+        }
+    }
+
+    @ClusterTemplate("generate1")
+    public void testDeleteWhenTopicDoesntExistWithIfExists() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);) {
+            topicService.deleteTopic(buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName, "--if-exists"));
+        }
+    }
+
+    @ClusterTemplate("generate1")
+    public void testDescribe() {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+            int partition = 2;
+            short replicationFactor = 2;
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
+            String[] rows = output.split(System.lineSeparator());
+            assertEquals(3, rows.length, "Expected 3 rows in output, got " + rows.length);
+            assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), "Row does not start with " + testTopicName + ". Row is: " + rows[0]);
+        }
+    }
+
+    @ClusterTemplate("generate1")
+    public void testDescribeWithDescribeTopicPartitionsApi() throws ExecutionException, InterruptedException {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 20, (short) 2,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            TestUtils.createTopicWithAdmin(adminClient, "test-2", scalaBrokers, scalaControllers, 41, (short) 2,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            TestUtils.createTopicWithAdmin(adminClient, "test-3", scalaBrokers, scalaControllers, 5, (short) 2,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            TestUtils.createTopicWithAdmin(adminClient, "test-4", scalaBrokers, scalaControllers, 5, (short) 2,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            TestUtils.createTopicWithAdmin(adminClient, "test-5", scalaBrokers, scalaControllers, 100, (short) 2,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+
+            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap(
+                    "--describe", "--partition-size-limit-per-response=20", "--exclude-internal"));
+            String[] rows = output.split("\n");
+
+            assertEquals(176, rows.length, String.join("\n", rows));
+            assertTrue(rows[2].contains("\tElr"), rows[2]);
+            assertTrue(rows[2].contains("LastKnownElr"), rows[2]);
+
+        }
+    }
+
+    @ClusterTemplate("generate1")
+    public void testDescribeWhenTopicDoesntExist() {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();) {
+            TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> topicService.describeTopic(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName)),
+                    "Expected an exception when trying to describe a topic that does not exist.");
         }
 
-        // modify the topic to add new partitions
-        int numPartitionsModified = 3;
-        TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap("--alter",
-            "--partitions", Integer.toString(numPartitionsModified), "--topic", testTopicName);
-        topicService.alterTopic(alterOpts);
-
-        TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
-        Config newProps = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
-        assertNotNull(newProps.get(TopicConfig.CLEANUP_POLICY_CONFIG), "Updated properties do not contain " + TopicConfig.CLEANUP_POLICY_CONFIG);
-        assertEquals(cleanUpPolicy, newProps.get(TopicConfig.CLEANUP_POLICY_CONFIG).value(), "Updated properties have incorrect value");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testTopicDeletion(String quorum) throws Exception {
-        // create the NormalTopic
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        // delete the NormalTopic
-        TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName);
+    @ClusterTemplate("generate1")
+    public void testDescribeWhenTopicDoesntExistWithIfExists() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();) {
+            TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
 
-        if (!isKRaftTest()) {
-            String deletePath = kafka.zk.DeleteTopicsTopicZNode.path(testTopicName);
-            assertFalse(zkClient().pathExists(deletePath), "Delete path for topic shouldn't exist before deletion.");
+            topicService.describeTopic(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName, "--if-exists"));
+
+            adminClient.close();
+            topicService.close();
         }
-        topicService.deleteTopic(deleteOpts);
-        TestUtils.verifyTopicDeletion(zkClientOrNull(), testTopicName, 1, brokers());
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testTopicWithCollidingCharDeletionAndCreateAgain(String quorum) throws Exception {
-        // create the topic with colliding chars
-        String topicWithCollidingChar = "test.a";
-        TestUtils.createTopicWithAdmin(adminClient, topicWithCollidingChar, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        // delete the topic
-        TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap("--delete", "--topic", topicWithCollidingChar);
+    @ClusterTemplate("generate1")
+    public void testDescribeUnavailablePartitions() throws ExecutionException, InterruptedException {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
 
-        if (!isKRaftTest()) {
-            String deletePath = kafka.zk.DeleteTopicsTopicZNode.path(topicWithCollidingChar);
-            assertFalse(zkClient().pathExists(deletePath), "Delete path for topic shouldn't exist before deletion.");
-        }
-        topicService.deleteTopic(deleteOpts);
-        TestUtils.verifyTopicDeletion(zkClientOrNull(), topicWithCollidingChar, 1, brokers());
-        assertDoesNotThrow(() -> TestUtils.createTopicWithAdmin(adminClient, topicWithCollidingChar, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        ), "Should be able to create a topic with colliding chars after deletion.");
-    }
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteInternalTopic(String quorum) throws Exception {
-        // create the offset topic
-        TestUtils.createTopicWithAdmin(adminClient, Topic.GROUP_METADATA_TOPIC_NAME, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        // Try to delete the Topic.GROUP_METADATA_TOPIC_NAME which is allowed by default.
-        // This is a difference between the new and the old command as the old one didn't allow internal topic deletion.
-        // If deleting internal topics is not desired, ACLS should be used to control it.
-        TopicCommand.TopicCommandOptions deleteOffsetTopicOpts =
-                buildTopicCommandOptionsWithBootstrap("--delete", "--topic", Topic.GROUP_METADATA_TOPIC_NAME);
-        String deleteOffsetTopicPath = kafka.zk.DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME);
-        if (!isKRaftTest()) {
-            assertFalse(zkClient().pathExists(deleteOffsetTopicPath), "Delete path for topic shouldn't exist before deletion.");
-        }
-        topicService.deleteTopic(deleteOffsetTopicOpts);
-        TestUtils.verifyTopicDeletion(zkClientOrNull(), Topic.GROUP_METADATA_TOPIC_NAME, defaultNumPartitions, brokers());
-    }
+            int partitions = 6;
+            short replicationFactor = 1;
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partitions, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteWhenTopicDoesntExist(String quorum) {
-        // delete a topic that does not exist
-        TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName);
-        assertThrows(IllegalArgumentException.class, () -> topicService.deleteTopic(deleteOpts),
-                "Expected an exception when trying to delete a topic that does not exist.");
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteWhenTopicDoesntExistWithIfExists(String quorum) throws ExecutionException, InterruptedException {
-        topicService.deleteTopic(buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName, "--if-exists"));
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribe(String quorum) {
-        int partition = 2;
-        short replicationFactor = 2;
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
-        String[] rows = output.split(System.lineSeparator());
-        assertEquals(3, rows.length, "Expected 3 rows in output, got " + rows.length);
-        assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), "Row does not start with " + testTopicName + ". Row is: " + rows[0]);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"quorum=zk", "quorum=kraft"})
-    public void testDescribeWithDescribeTopicPartitionsApi(String quorum) throws ExecutionException, InterruptedException {
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 20, (short) 2,
-            scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        TestUtils.createTopicWithAdmin(adminClient, "test-2", scalaBrokers, scalaControllers, 41, (short) 2,
-            scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        TestUtils.createTopicWithAdmin(adminClient, "test-3", scalaBrokers, scalaControllers, 5, (short) 2,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        TestUtils.createTopicWithAdmin(adminClient, "test-4", scalaBrokers, scalaControllers, 5, (short) 2,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        TestUtils.createTopicWithAdmin(adminClient, "test-5", scalaBrokers, scalaControllers, 100, (short) 2,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-
-        String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap(
-            "--describe", "--partition-size-limit-per-response=20"));
-        String[] rows = output.split("\n");
-        assertEquals(176, rows.length, String.join("\n", rows));
-        assertTrue(rows[2].contains("\tElr"), rows[2]);
-        assertTrue(rows[2].contains("LastKnownElr"), rows[2]);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeWhenTopicDoesntExist(String quorum) {
-        assertThrows(IllegalArgumentException.class,
-            () -> topicService.describeTopic(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName)),
-                "Expected an exception when trying to describe a topic that does not exist.");
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeWhenTopicDoesntExistWithIfExists(String quorum) throws ExecutionException, InterruptedException {
-        topicService.describeTopic(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName, "--if-exists"));
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeUnavailablePartitions(String quorum) throws ExecutionException, InterruptedException {
-        int partitions = 6;
-        short replicationFactor = 1;
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partitions, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        try {
             // check which partition is on broker 0 which we'll kill
             TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
-                .allTopicNames().get().get(testTopicName);
+                    .allTopicNames().get().get(testTopicName);
             int partitionOnBroker0 = testTopicDescription.partitions().stream()
-                .filter(partition -> partition.leader().id() == 0)
-                .findFirst().get().partition();
+                    .filter(partition -> partition.leader().id() == 0)
+                    .findFirst().get().partition();
 
-            killBroker(0);
+            clusterInstance.shutdownBroker(0);
 
             // wait until the topic metadata for the test topic is propagated to each alive broker
-            kafka.utils.TestUtils.waitUntilTrue(
-                () -> {
-                    boolean result = true;
-                    for (KafkaBroker server : JavaConverters.asJavaCollection(brokers())) {
-                        if (server.config().brokerId() != 0) {
-                            Set<String> topicNames = Collections.singleton(testTopicName);
-                            Collection<MetadataResponseData.MetadataResponseTopic> topicMetadatas =
-                                JavaConverters.asJavaCollection(server.dataPlaneRequestProcessor().metadataCache()
-                                .getTopicMetadata(JavaConverters.asScalaSetConverter(topicNames).asScala().toSet(),
-                                    ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
-                                    false, false)
-                                );
-                            Optional<MetadataResponseData.MetadataResponseTopic> testTopicMetadata = topicMetadatas.stream()
-                                .filter(metadata -> metadata.name().equals(testTopicName))
-                                .findFirst();
-                            if (!testTopicMetadata.isPresent()) {
-                                throw new AssertionError("Topic metadata is not found in metadata cache");
+            TestUtils.waitUntilTrue(
+                    () -> {
+                        boolean result = true;
+                        for (KafkaBroker server : JavaConverters.asJavaCollection(scalaBrokers)) {
+                            if (server.config().brokerId() != 0) {
+                                Set<String> topicNames = Collections.singleton(testTopicName);
+                                Collection<MetadataResponseData.MetadataResponseTopic> topicMetadatas =
+                                        JavaConverters.asJavaCollection(server.dataPlaneRequestProcessor().metadataCache()
+                                                .getTopicMetadata(JavaConverters.asScalaSetConverter(topicNames).asScala().toSet(),
+                                                        ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+                                                        false, false)
+                                        );
+                                Optional<MetadataResponseData.MetadataResponseTopic> testTopicMetadata = topicMetadatas.stream()
+                                        .filter(metadata -> metadata.name().equals(testTopicName))
+                                        .findFirst();
+                                if (!testTopicMetadata.isPresent()) {
+                                    throw new AssertionError("Topic metadata is not found in metadata cache");
+                                }
+                                Optional<MetadataResponseData.MetadataResponsePartition> testPartitionMetadata = testTopicMetadata.get().partitions().stream()
+                                        .filter(metadata -> metadata.partitionIndex() == partitionOnBroker0)
+                                        .findFirst();
+                                if (!testPartitionMetadata.isPresent()) {
+                                    throw new AssertionError("Partition metadata is not found in metadata cache");
+                                }
+                                result = result && testPartitionMetadata.get().errorCode() == Errors.LEADER_NOT_AVAILABLE.code();
                             }
-                            Optional<MetadataResponseData.MetadataResponsePartition> testPartitionMetadata = testTopicMetadata.get().partitions().stream()
-                                .filter(metadata -> metadata.partitionIndex() == partitionOnBroker0)
-                                .findFirst();
-                            if (!testPartitionMetadata.isPresent()) {
-                                throw new AssertionError("Partition metadata is not found in metadata cache");
-                            }
-                            result = result && testPartitionMetadata.get().errorCode() == Errors.LEADER_NOT_AVAILABLE.code();
                         }
-                    }
-                    return result;
-                },
-                () -> String.format("Partition metadata for %s is not propagated", testTopicName),
-                org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+                        return result;
+                    },
+                    () -> String.format("Partition metadata for %s is not propagated", testTopicName),
+                    org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
 
             // grab the console output and assert
             String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName, "--unavailable-partitions"));
@@ -740,175 +1038,200 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                     "Unexpected Topic " + rows[0] + " received. Expect " + String.format("Topic: %s", testTopicName));
             assertTrue(rows[0].contains("Leader: none\tReplicas: 0\tIsr:"),
                     "Rows did not contain 'Leader: none\tReplicas: 0\tIsr:'");
-        } finally {
-            restartDeadBrokers(false);
+
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeUnderReplicatedPartitions(String quorum) {
-        int partitions = 1;
-        short replicationFactor = 6;
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partitions, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        try {
-            killBroker(0);
-            if (isKRaftTest()) {
-                ensureConsistentKRaftMetadata();
-            } else {
-                TestUtils.waitForPartitionMetadata(aliveBrokers(), testTopicName, 0, org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS);
-            }
+    @ClusterTemplate("generate1")
+    public void testDescribeUnderReplicatedPartitions() {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+            int partitions = 1;
+            short replicationFactor = 6;
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partitions, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+
+            clusterInstance.shutdownBroker(0);
+
+            TestUtils.waitForPartitionMetadata(
+                    JavaConverters.asScalaIteratorConverter(clusterInstance.aliveBrokers().values().iterator()).asScala().toSeq(),
+                    testTopicName, 0, org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS);
+
             String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-replicated-partitions"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), String.format("Unexpected output: %s", rows[0]));
-        } finally {
-            restartDeadBrokers(false);
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeUnderMinIsrPartitions(String quorum) {
-        Properties topicConfig = new Properties();
-        topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6");
-        int partitions = 1;
-        short replicationFactor = 6;
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partitions, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), topicConfig
-        );
-        try {
-            killBroker(0);
-            if (isKRaftTest()) {
-                ensureConsistentKRaftMetadata();
-            } else {
-                kafka.utils.TestUtils.waitUntilTrue(
-                    () -> aliveBrokers().forall(b -> b.metadataCache().getPartitionInfo(testTopicName, 0).get().isr().size() == 5),
+
+    @ClusterTemplate("generate1")
+    public void testDescribeUnderMinIsrPartitions() {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+
+        try (Admin adminClient = clusterInstance.createAdminClient();) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+            Properties topicConfig = new Properties();
+            topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6");
+            int partitions = 1;
+            short replicationFactor = 6;
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partitions, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), topicConfig
+            );
+            clusterInstance.shutdownBroker(0);
+
+            TestUtils.waitUntilTrue(
+                    () -> JavaConverters.asScalaIteratorConverter(clusterInstance.aliveBrokers().values().iterator()).asScala().toSeq()
+                            .forall(b -> b.metadataCache().getPartitionInfo(testTopicName, 0).get().isr().size() == 5),
                     () -> String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", testTopicName),
                     org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L
-                );
-            }
-            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-min-isr-partitions"));
+            );
+
+            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-min-isr-partitions", "--exclude-internal"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)),
                     "Unexpected topic: " + rows[0]);
-        } finally {
-            restartDeadBrokers(false);
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(String quorum) throws ExecutionException, InterruptedException {
-        TopicPartition tp = new TopicPartition(testTopicName, 0);
+    @ClusterTemplate("generate1")
+    public void testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress() throws ExecutionException, InterruptedException {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
 
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        // Produce multiple batches.
-        TestUtils.generateAndProduceMessages(brokers(), testTopicName, 10, -1);
-        TestUtils.generateAndProduceMessages(brokers(), testTopicName, 10, -1);
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            TopicPartition tp = new TopicPartition(testTopicName, 0);
 
-        // Enable throttling. Note the broker config sets the replica max fetch bytes to `1` upon to minimize replication
-        // throughput so the reassignment doesn't complete quickly.
-        List<Integer> brokerIds = JavaConverters.seqAsJavaList(brokers()).stream()
-            .map(broker -> broker.config().brokerId()).collect(Collectors.toList());
+            // Produce multiple batches.
+            TestUtils.generateAndProduceMessages(scalaBrokers, testTopicName, 10, -1);
+            TestUtils.generateAndProduceMessages(scalaBrokers, testTopicName, 10, -1);
 
-        ToolsTestUtils.setReplicationThrottleForPartitions(adminClient, brokerIds, Collections.singleton(tp), 1);
+            // Enable throttling. Note the broker config sets the replica max fetch bytes to `1` upon to minimize replication
+            // throughput so the reassignment doesn't complete quickly.
+            List<Integer> brokerIds = JavaConverters.seqAsJavaList(scalaBrokers).stream()
+                    .map(broker -> broker.config().brokerId()).collect(Collectors.toList());
 
-        TopicDescription testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).allTopicNames().get().get(testTopicName);
-        TopicPartitionInfo firstPartition = testTopicDesc.partitions().get(0);
+            ToolsTestUtils.setReplicationThrottleForPartitions(adminClient, brokerIds, Collections.singleton(tp), 1);
 
-        List<Integer> replicasOfFirstPartition = firstPartition.replicas().stream().map(Node::id).collect(Collectors.toList());
-        List<Integer> replicasDiff = new ArrayList<>(brokerIds);
-        replicasDiff.removeAll(replicasOfFirstPartition);
-        Integer targetReplica = replicasDiff.get(0);
+            TopicDescription testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).allTopicNames().get().get(testTopicName);
+            TopicPartitionInfo firstPartition = testTopicDesc.partitions().get(0);
 
-        adminClient.alterPartitionReassignments(Collections.singletonMap(tp,
-            Optional.of(new NewPartitionReassignment(Collections.singletonList(targetReplica))))).all().get();
+            List<Integer> replicasOfFirstPartition = firstPartition.replicas().stream().map(Node::id).collect(Collectors.toList());
+            List<Integer> replicasDiff = new ArrayList<>(brokerIds);
+            replicasDiff.removeAll(replicasOfFirstPartition);
+            Integer targetReplica = replicasDiff.get(0);
 
-        // let's wait until the LAIR is propagated
-        kafka.utils.TestUtils.waitUntilTrue(
-            () -> {
+            adminClient.alterPartitionReassignments(Collections.singletonMap(tp,
+                    Optional.of(new NewPartitionReassignment(Collections.singletonList(targetReplica))))).all().get();
+
+            // let's wait until the LAIR is propagated
+            TestUtils.waitUntilTrue(
+                    () -> {
+                        try {
+                            return !adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments().get()
+                                    .get(tp).addingReplicas().isEmpty();
+                        } catch (InterruptedException | ExecutionException e) {
+                            throw new RuntimeException(e);
+                        }
+                    },
+                    () -> "Reassignment didn't add the second node",
+                    org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+
+            // describe the topic and test if it's under-replicated
+            String simpleDescribeOutput = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
+            String[] simpleDescribeOutputRows = simpleDescribeOutput.split(System.lineSeparator());
+            assertTrue(simpleDescribeOutputRows[0].startsWith(String.format("Topic: %s", testTopicName)),
+                    "Unexpected describe output: " + simpleDescribeOutputRows[0]);
+            assertEquals(2, simpleDescribeOutputRows.length,
+                    "Unexpected describe output length: " + simpleDescribeOutputRows.length);
+
+            String underReplicatedOutput = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-replicated-partitions"));
+            assertEquals("", underReplicatedOutput,
+                    String.format("--under-replicated-partitions shouldn't return anything: '%s'", underReplicatedOutput));
+
+            int maxRetries = 20;
+            long pause = 100L;
+            long waitTimeMs = maxRetries * pause;
+            AtomicReference<PartitionReassignment> reassignmentsRef = new AtomicReference<>();
+
+            TestUtils.waitUntilTrue(() -> {
                 try {
-                    return !adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments().get()
-                        .get(tp).addingReplicas().isEmpty();
+                    PartitionReassignment tempReassignments = adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments().get().get(tp);
+                    reassignmentsRef.set(tempReassignments);
                 } catch (InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
+                    throw new RuntimeException("Error while fetching reassignments", e);
                 }
-            },
-            () -> "Reassignment didn't add the second node",
-            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+                return reassignmentsRef.get() != null;
+            }, () -> "Reassignments did not become non-null within the specified time", waitTimeMs, pause);
 
-        ensureConsistentKRaftMetadata();
+            assertFalse(reassignmentsRef.get().addingReplicas().isEmpty());
 
-        // describe the topic and test if it's under-replicated
-        String simpleDescribeOutput = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
-        String[] simpleDescribeOutputRows = simpleDescribeOutput.split(System.lineSeparator());
-        assertTrue(simpleDescribeOutputRows[0].startsWith(String.format("Topic: %s", testTopicName)),
-                "Unexpected describe output: " + simpleDescribeOutputRows[0]);
-        assertEquals(2, simpleDescribeOutputRows.length,
-                "Unexpected describe output length: " + simpleDescribeOutputRows.length);
-
-        String underReplicatedOutput = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-replicated-partitions"));
-        assertEquals("", underReplicatedOutput,
-            String.format("--under-replicated-partitions shouldn't return anything: '%s'", underReplicatedOutput));
-
-        int maxRetries = 20;
-        long pause = 100L;
-        long waitTimeMs = maxRetries * pause;
-        AtomicReference<PartitionReassignment> reassignmentsRef = new AtomicReference<>();
-
-        TestUtils.waitUntilTrue(() -> {
-            try {
-                PartitionReassignment tempReassignments = adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments().get().get(tp);
-                reassignmentsRef.set(tempReassignments);
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException("Error while fetching reassignments", e);
-            }
-            return reassignmentsRef.get() != null;
-        }, () -> "Reassignments did not become non-null within the specified time", waitTimeMs, pause);
-
-        assertFalse(reassignmentsRef.get().addingReplicas().isEmpty());
-
-        ToolsTestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Collections.singleton(tp));
-        TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
+            ToolsTestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Collections.singleton(tp));
+            TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeAtMinIsrPartitions(String quorum) {
-        Properties topicConfig = new Properties();
-        topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "4");
+    @ClusterTemplate("generate1")
+    public void testDescribeAtMinIsrPartitions() {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
 
-        int partitions = 1;
-        short replicationFactor = 6;
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partitions, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), topicConfig
-        );
-        try {
-            killBroker(0);
-            killBroker(1);
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-            if (isKRaftTest()) {
-                ensureConsistentKRaftMetadata();
-            } else {
-                kafka.utils.TestUtils.waitUntilTrue(
-                    () -> aliveBrokers().forall(broker -> broker.metadataCache().getPartitionInfo(testTopicName, 0).get().isr().size() == 4),
+            Properties topicConfig = new Properties();
+            topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "4");
+
+            int partitions = 1;
+            short replicationFactor = 6;
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partitions, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), topicConfig
+            );
+            clusterInstance.shutdownBroker(0);
+            clusterInstance.shutdownBroker(1);
+
+            TestUtils.waitUntilTrue(
+                    () ->  JavaConverters.asScalaIteratorConverter(clusterInstance.aliveBrokers().values().iterator()).asScala().toSeq()
+                            .forall(broker -> broker.metadataCache().getPartitionInfo(testTopicName, 0).get().isr().size() == 4),
                     () -> String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", testTopicName),
                     org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L
-                );
-            }
+            );
 
-            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--at-min-isr-partitions"));
+            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--at-min-isr-partitions", "--exclude-internal"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)),
                     "Unexpected output: " + rows[0]);
             assertEquals(1, rows.length);
-        } finally {
-            restartDeadBrokers(false);
         }
     }
 
@@ -921,119 +1244,151 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
      *
      * Output should only display the (1) topic with partition under min ISR count and (3) topic with offline partition
      */
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeUnderMinIsrPartitionsMixed(String quorum) {
-        String underMinIsrTopic = "under-min-isr-topic";
-        String notUnderMinIsrTopic = "not-under-min-isr-topic";
-        String offlineTopic = "offline-topic";
-        String fullyReplicatedTopic = "fully-replicated-topic";
+    @ClusterTemplate("generate1")
+    public void testDescribeUnderMinIsrPartitionsMixed() {
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        scala.collection.mutable.HashMap<Object, Seq<Object>> fullyReplicatedReplicaAssignmentMap = new scala.collection.mutable.HashMap<>();
-        fullyReplicatedReplicaAssignmentMap.put(0, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 1, (Object) 2, (Object) 3)).asScala().toSeq());
+            String underMinIsrTopic = "under-min-isr-topic";
+            String notUnderMinIsrTopic = "not-under-min-isr-topic";
+            String offlineTopic = "offline-topic";
+            String fullyReplicatedTopic = "fully-replicated-topic";
 
-        scala.collection.mutable.HashMap<Object, Seq<Object>> offlineReplicaAssignmentMap = new scala.collection.mutable.HashMap<>();
-        offlineReplicaAssignmentMap.put(0, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 0)).asScala().toSeq());
+            scala.collection.mutable.HashMap<Object, Seq<Object>> fullyReplicatedReplicaAssignmentMap = new scala.collection.mutable.HashMap<>();
+            fullyReplicatedReplicaAssignmentMap.put(0, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 1, (Object) 2, (Object) 3)).asScala().toSeq());
 
-        Properties topicConfig = new Properties();
-        topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6");
+            scala.collection.mutable.HashMap<Object, Seq<Object>> offlineReplicaAssignmentMap = new scala.collection.mutable.HashMap<>();
+            offlineReplicaAssignmentMap.put(0, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 0)).asScala().toSeq());
 
-        int partitions = 1;
-        short replicationFactor = 6;
-        int negativePartition = -1;
-        short negativeReplicationFactor = -1;
-        TestUtils.createTopicWithAdmin(adminClient, underMinIsrTopic, scalaBrokers, scalaControllers, partitions, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), topicConfig
-        );
-        TestUtils.createTopicWithAdmin(adminClient, notUnderMinIsrTopic, scalaBrokers, scalaControllers, partitions, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        TestUtils.createTopicWithAdmin(adminClient, offlineTopic, scalaBrokers, scalaControllers, negativePartition, negativeReplicationFactor,
-                offlineReplicaAssignmentMap, new Properties()
-        );
-        TestUtils.createTopicWithAdmin(adminClient, fullyReplicatedTopic, scalaBrokers, scalaControllers, negativePartition, negativeReplicationFactor,
-                fullyReplicatedReplicaAssignmentMap, new Properties()
-        );
+            Properties topicConfig = new Properties();
+            topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6");
 
+            int partitions = 1;
+            short replicationFactor = 6;
+            int negativePartition = -1;
+            short negativeReplicationFactor = -1;
+            TestUtils.createTopicWithAdmin(adminClient, underMinIsrTopic, scalaBrokers, scalaControllers, partitions, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), topicConfig
+            );
+            TestUtils.createTopicWithAdmin(adminClient, notUnderMinIsrTopic, scalaBrokers, scalaControllers, partitions, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            TestUtils.createTopicWithAdmin(adminClient, offlineTopic, scalaBrokers, scalaControllers, negativePartition, negativeReplicationFactor,
+                    offlineReplicaAssignmentMap, new Properties()
+            );
+            TestUtils.createTopicWithAdmin(adminClient, fullyReplicatedTopic, scalaBrokers, scalaControllers, negativePartition, negativeReplicationFactor,
+                    fullyReplicatedReplicaAssignmentMap, new Properties()
+            );
 
-        try {
-            killBroker(0);
-            if (isKRaftTest()) {
-                ensureConsistentKRaftMetadata();
-            } else {
-                kafka.utils.TestUtils.waitUntilTrue(
-                    () -> aliveBrokers().forall(broker ->
-                        broker.metadataCache().getPartitionInfo(underMinIsrTopic, 0).get().isr().size() < 6 &&
-                            broker.metadataCache().getPartitionInfo(offlineTopic, 0).get().leader() == MetadataResponse.NO_LEADER_ID),
+            clusterInstance.shutdownBroker(0);
+
+            TestUtils.waitUntilTrue(
+                    () -> JavaConverters.asScalaIteratorConverter(clusterInstance.aliveBrokers().values().iterator()).asScala().toSeq()
+                            .forall(broker -> broker.metadataCache().getPartitionInfo(underMinIsrTopic, 0).get().isr().size() < 6 &&
+                                    broker.metadataCache().getPartitionInfo(offlineTopic, 0).get().leader() == MetadataResponse.NO_LEADER_ID),
                     () -> "Timeout waiting for partition metadata propagating to brokers for underMinIsrTopic topic",
                     org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
-            }
+
             TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
-            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-min-isr-partitions"));
+            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-min-isr-partitions", "--exclude-internal"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", underMinIsrTopic)),
                     "Unexpected output: " + rows[0]);
             assertTrue(rows[1].startsWith(String.format("\tTopic: %s", offlineTopic)),
                     "Unexpected output: " + rows[1]);
             assertEquals(2, rows.length);
-        } finally {
-            restartDeadBrokers(false);
+
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeReportOverriddenConfigs(String quorum) {
-        String config = "file.delete.delay.ms=1000";
-        Properties topicConfig = new Properties();
-        topicConfig.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, "1000");
+    @ClusterTemplate("generate1")
+    public void testDescribeReportOverriddenConfigs() {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient()) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        int partitions = 2;
-        short replicationFactor = 2;
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partitions, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), topicConfig
-        );
-        String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe"));
-        assertTrue(output.contains(config), String.format("Describe output should have contained %s", config));
+            String config = "file.delete.delay.ms=1000";
+            Properties topicConfig = new Properties();
+            topicConfig.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, "1000");
+
+            int partitions = 2;
+            short replicationFactor = 2;
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partitions, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), topicConfig
+            );
+            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe"));
+            assertTrue(output.contains(config), String.format("Describe output should have contained %s", config));
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeAndListTopicsWithoutInternalTopics(String quorum) {
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        TestUtils.createTopicWithAdmin(adminClient, Topic.GROUP_METADATA_TOPIC_NAME, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        // test describe
-        String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--describe", "--exclude-internal"));
-        assertTrue(output.contains(testTopicName),
-            String.format("Output should have contained %s", testTopicName));
-        assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME),
-                "Output should not have contained " + Topic.GROUP_METADATA_TOPIC_NAME);
+    @ClusterTemplate("generate1")
+    public void testDescribeAndListTopicsWithoutInternalTopics() {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        try (Admin adminClient = clusterInstance.createAdminClient();) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
 
-        // test list
-        output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list", "--exclude-internal"));
-        assertTrue(output.contains(testTopicName), String.format("Output should have contained %s", testTopicName));
-        assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME),
-                "Output should not have contained " + Topic.GROUP_METADATA_TOPIC_NAME);
+            TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+
+            if (clusterInstance.type() != Type.ZK) {
+                TestUtils.createTopicWithAdmin(adminClient, Topic.GROUP_METADATA_TOPIC_NAME, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
+                        scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+                );
+            }
+
+            // test describe
+            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--describe", "--exclude-internal"));
+            assertTrue(output.contains(testTopicName),
+                    String.format("Output should have contained %s", testTopicName));
+            assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME),
+                    "Output should not have contained " + Topic.GROUP_METADATA_TOPIC_NAME);
+
+            // test list
+            output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list", "--exclude-internal"));
+            assertTrue(output.contains(testTopicName), String.format("Output should have contained %s", testTopicName));
+            assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME),
+                    "Output should not have contained " + Topic.GROUP_METADATA_TOPIC_NAME);
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(String quorum) throws Exception {
+    @ClusterTemplate("generate1")
+    public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized() throws Exception {
+        String testTopicName = org.apache.kafka.test.TestUtils.getCurrentFunctionName() + "-" +
+                org.apache.kafka.test.TestUtils.randomString(10);
+        Admin adminClient = clusterInstance.createAdminClient();
+        Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                        clusterInstance.brokers().values().iterator())
+                .asScala().toBuffer();
+        Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                        clusterInstance.controllers().values().iterator())
+                .asScala().toSeq();
+
         adminClient = spy(adminClient);
-        topicService.close(); // need to be closed before initializing a new one with the spy version of adminclient, otherwise will have the extra adminclient(s) not closed.
+
         ListPartitionReassignmentsResult result = AdminClientTestUtils.listPartitionReassignmentsResult(
                 new ClusterAuthorizationException("Unauthorized"));
 
         doReturn(result).when(adminClient).listPartitionReassignments(
                 Collections.singleton(new TopicPartition(testTopicName, 0))
         );
-
-        topicService = new TopicCommand.TopicService(adminClient);
-
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
                 scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
         );
@@ -1042,33 +1397,45 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         String[] rows = output.split(System.lineSeparator());
         assertEquals(2, rows.length, "Unexpected output: " + output);
         assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), "Unexpected output: " + rows[0]);
+
+        adminClient.close();
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWithTopicNameCollision(String quorum) {
-        String topic = "foo_bar";
-        int partitions = 1;
-        short replicationFactor = 6;
-        TestUtils.createTopicWithAdmin(adminClient, topic, scalaBrokers, scalaControllers, partitions, replicationFactor,
-                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
-        );
-        assertThrows(TopicExistsException.class,
-            () -> topicService.createTopic(buildTopicCommandOptionsWithBootstrap("--create", "--topic", topic)));
+    @ClusterTemplate("generate1")
+    public void testCreateWithTopicNameCollision() throws Exception {
+        try (Admin adminClient = clusterInstance.createAdminClient();
+             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);) {
+            Buffer<KafkaBroker> scalaBrokers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer();
+            Seq<ControllerServer> scalaControllers = JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.controllers().values().iterator())
+                    .asScala().toSeq();
+
+            String topic = "foo_bar";
+            int partitions = 1;
+            short replicationFactor = 6;
+            TestUtils.createTopicWithAdmin(adminClient, topic, scalaBrokers, scalaControllers, partitions, replicationFactor,
+                    scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+            );
+            assertThrows(TopicExistsException.class,
+                    () -> topicService.createTopic(buildTopicCommandOptionsWithBootstrap("--create", "--topic", topic)));
+
+        }
     }
 
     private void checkReplicaDistribution(Map<Integer, List<Integer>> assignment,
-                                         Map<Integer, String> brokerRackMapping,
-                                         Integer numBrokers,
-                                         Integer numPartitions,
-                                         Integer replicationFactor,
-                                         Boolean verifyRackAware,
-                                         Boolean verifyLeaderDistribution,
-                                         Boolean verifyReplicasDistribution) {
+                                          Map<Integer, String> brokerRackMapping,
+                                          Integer numBrokers,
+                                          Integer numPartitions,
+                                          Integer replicationFactor,
+                                          Boolean verifyRackAware,
+                                          Boolean verifyLeaderDistribution,
+                                          Boolean verifyReplicasDistribution) {
         // always verify that no broker will be assigned for more than one replica
         assignment.entrySet().stream()
-            .forEach(entry -> assertEquals(new HashSet<>(entry.getValue()).size(), entry.getValue().size(),
-                "More than one replica is assigned to same broker for the same partition"));
+                .forEach(entry -> assertEquals(new HashSet<>(entry.getValue()).size(), entry.getValue().size(),
+                        "More than one replica is assigned to same broker for the same partition"));
 
         ReplicaDistributions distribution = getReplicaDistribution(assignment, brokerRackMapping);
 
@@ -1076,8 +1443,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             Map<Integer, List<String>> partitionRackMap = distribution.partitionRacks;
 
             List<Integer> partitionRackMapValueSize = partitionRackMap.values().stream()
-                .map(value -> (int) value.stream().distinct().count())
-                .collect(Collectors.toList());
+                    .map(value -> (int) value.stream().distinct().count())
+                    .collect(Collectors.toList());
 
             List<Integer> expected = Collections.nCopies(numPartitions, replicationFactor);
             assertEquals(expected, partitionRackMapValueSize, "More than one replica of the same partition is assigned to the same rack");
@@ -1100,7 +1467,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     private String captureDescribeTopicStandardOut(TopicCommand.TopicCommandOptions opts) {
         Runnable runnable = () -> {
-            try {
+            try (Admin adminClient = clusterInstance.createAdminClient();
+                 TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
                 topicService.describeTopic(opts);
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -1111,7 +1479,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     private String captureListTopicStandardOut(TopicCommand.TopicCommandOptions opts) {
         Runnable runnable = () -> {
-            try {
+            try (Admin adminClient = clusterInstance.createAdminClient();
+                 TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);) {
                 topicService.listTopics(opts);
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -1136,8 +1505,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 if (brokerRackMapping.containsKey(brokerId)) {
                     rack = brokerRackMapping.get(brokerId);
                     List<String> partitionRackValues = Stream.of(Collections.singletonList(rack), partitionRackMap.getOrDefault(partitionId, Collections.emptyList()))
-                        .flatMap(List::stream)
-                        .collect(Collectors.toList());
+                            .flatMap(List::stream)
+                            .collect(Collectors.toList());
                     partitionRackMap.put(partitionId, partitionRackValues);
                 } else {
                     System.err.printf("No mapping found for %s in `brokerRackMapping`%n", brokerId);
@@ -1160,5 +1529,4 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             this.brokerReplicasCount = brokerReplicasCount;
         }
     }
-
 }
