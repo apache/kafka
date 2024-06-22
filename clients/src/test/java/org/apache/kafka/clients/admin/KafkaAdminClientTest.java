@@ -6949,16 +6949,20 @@ public class KafkaAdminClientTest {
     
     @Test
     public void testDescribeLogDirsWithNonExistReplica() throws Exception {
-        TopicPartitionReplica tp = new TopicPartitionReplica("topic", 12, 0);
+        int brokerId = 0;
+        TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic1", 12, brokerId);
+        TopicPartitionReplica tpr2 = new TopicPartitionReplica("topic2", 12, brokerId);
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponseFrom(
-                    prepareDescribeLogDirsResponse(Errors.NONE, "/data"),
-                    env.cluster().nodeById(0));
+                    new DescribeLogDirsResponse(
+                            new DescribeLogDirsResponseData().setResults(singletonList(
+                                    prepareDescribeLogDirsResult(tpr1, "/var/data/kafka0", 123456, 1, false)))),
+                    env.cluster().nodeById(brokerId));
 
-            Map<TopicPartitionReplica, String> replicas = singletonMap(tp, "/data");
-            AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(replicas);
-            assertNull(result.values().get(tp).get());
+            DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(asList(tpr1, tpr2));
+            Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
+            assertNull(values.get(tpr2).get().getCurrentReplicaLogDir());
         }
     }
 
