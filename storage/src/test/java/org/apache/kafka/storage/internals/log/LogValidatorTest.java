@@ -53,7 +53,6 @@ import com.yammer.metrics.core.MetricName;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -72,8 +71,10 @@ import java.util.stream.LongStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -115,9 +116,9 @@ public class LogValidatorTest {
             // Validation for v2 and above is strict for this case. For older formats, we fix invalid
             // internal offsets by rewriting the batch.
             if (version.value >= RecordBatch.MAGIC_VALUE_V2) {
-                assertThrows(InvalidRecordException.class, () -> {
-                    validateMessages(invalidRecords, version.value, CompressionType.GZIP, compression);
-                });
+                assertThrows(InvalidRecordException.class, () ->
+                        validateMessages(invalidRecords, version.value, CompressionType.GZIP, compression)
+                );
             } else {
                 ValidationResult result = validateMessages(invalidRecords, version.value, CompressionType.GZIP, compression);
                 List<Long> recordsResult = new ArrayList<>();
@@ -461,14 +462,9 @@ public class LogValidatorTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magicValue, compression, TimestampType.CREATE_TIME, 0L);
 
-        records.forEach(record -> {
-            try {
-                builder.appendUncheckedWithOffset(0, record);
-            } catch (IOException ex) {
-                // FIXME: What should bu put here?
-                System.out.println(ex);
-            }
-        });
+        records.forEach(record ->
+                assertDoesNotThrow(() -> builder.appendUncheckedWithOffset(0, record))
+        );
 
         return builder.build();
     }
@@ -623,17 +619,10 @@ public class LogValidatorTest {
         verifyRecordValidationStats(validatedResults.recordValidationStats, 0, records, true);
     }
 
-    private MemoryRecords createRecords(byte magicValue,
-                                        Long timestamp,
-                                        Compression codec) {
-        List<byte[]> records = Arrays.asList("hello".getBytes(), "there".getBytes(), "beautiful".getBytes());
-        return createRecords(records, magicValue, timestamp, codec);
-    }
-
     private MemoryRecords createRecords(List<byte[]> records,
-                                            byte magicValue,
-                                            long timestamp,
-                                            Compression codec) {
+                                        byte magicValue,
+                                        long timestamp,
+                                        Compression codec) {
         ByteBuffer buf = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L);
 
@@ -722,27 +711,27 @@ public class LogValidatorTest {
                 compression
         );
 
-        assertThrows(RecordValidationException.class, () -> {
-            new LogValidator(
-                    records,
-                    new TopicPartition("topic", 0),
-                    time,
-                    CompressionType.GZIP,
-                    compression,
-                    false,
-                    RecordBatch.MAGIC_VALUE_V1,
-                    TimestampType.CREATE_TIME,
-                    1000L,
-                    1000L,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                    AppendOrigin.CLIENT,
-                    MetadataVersion.latestTesting()
-            ).validateMessagesAndAssignOffsets(
-                    PrimitiveRef.ofLong(0),
-                    metricsRecorder,
-                    RequestLocal.withThreadConfinedCaching().bufferSupplier()
-            );
-        });
+        assertThrows(RecordValidationException.class, () ->
+                new LogValidator(
+                        records,
+                        new TopicPartition("topic", 0),
+                        time,
+                        CompressionType.GZIP,
+                        compression,
+                        false,
+                        RecordBatch.MAGIC_VALUE_V1,
+                        TimestampType.CREATE_TIME,
+                        1000L,
+                        1000L,
+                        RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                        AppendOrigin.CLIENT,
+                        MetadataVersion.latestTesting()
+                ).validateMessagesAndAssignOffsets(
+                        PrimitiveRef.ofLong(0),
+                        metricsRecorder,
+                        RequestLocal.withThreadConfinedCaching().bufferSupplier()
+                )
+        );
     }
 
     @Test
@@ -754,27 +743,27 @@ public class LogValidatorTest {
                 Compression.NONE
         );
 
-        assertThrows(RecordValidationException.class, () -> {
-            new LogValidator(
-                    records,
-                    new TopicPartition("topic", 0),
-                    time,
-                    CompressionType.NONE,
-                    Compression.NONE,
-                    false,
-                    RecordBatch.MAGIC_VALUE_V2,
-                    TimestampType.CREATE_TIME,
-                    1000L,
-                    1000L,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                    AppendOrigin.CLIENT,
-                    MetadataVersion.latestTesting()
-            ).validateMessagesAndAssignOffsets(
-                    PrimitiveRef.ofLong(0),
-                    metricsRecorder,
-                    RequestLocal.withThreadConfinedCaching().bufferSupplier()
-            );
-        });
+        assertThrows(RecordValidationException.class, () ->
+                new LogValidator(
+                        records,
+                        new TopicPartition("topic", 0),
+                        time,
+                        CompressionType.NONE,
+                        Compression.NONE,
+                        false,
+                        RecordBatch.MAGIC_VALUE_V2,
+                        TimestampType.CREATE_TIME,
+                        1000L,
+                        1000L,
+                        RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                        AppendOrigin.CLIENT,
+                        MetadataVersion.latestTesting()
+                ).validateMessagesAndAssignOffsets(
+                        PrimitiveRef.ofLong(0),
+                        metricsRecorder,
+                        RequestLocal.withThreadConfinedCaching().bufferSupplier()
+                )
+        );
     }
 
 
@@ -788,27 +777,27 @@ public class LogValidatorTest {
                 compression
         );
 
-        assertThrows(RecordValidationException.class, () -> {
-            new LogValidator(
-                    records,
-                    new TopicPartition("topic", 0),
-                    time,
-                    CompressionType.GZIP,
-                    compression,
-                    false,
-                    RecordBatch.MAGIC_VALUE_V2,
-                    TimestampType.CREATE_TIME,
-                    1000L,
-                    1000L,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                    AppendOrigin.CLIENT,
-                    MetadataVersion.latestTesting()
-            ).validateMessagesAndAssignOffsets(
-                    PrimitiveRef.ofLong(0),
-                    metricsRecorder,
-                    RequestLocal.withThreadConfinedCaching().bufferSupplier()
-            );
-        });
+        assertThrows(RecordValidationException.class, () ->
+                new LogValidator(
+                        records,
+                        new TopicPartition("topic", 0),
+                        time,
+                        CompressionType.GZIP,
+                        compression,
+                        false,
+                        RecordBatch.MAGIC_VALUE_V2,
+                        TimestampType.CREATE_TIME,
+                        1000L,
+                        1000L,
+                        RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                        AppendOrigin.CLIENT,
+                        MetadataVersion.latestTesting()
+                ).validateMessagesAndAssignOffsets(
+                        PrimitiveRef.ofLong(0),
+                        metricsRecorder,
+                        RequestLocal.withThreadConfinedCaching().bufferSupplier()
+                )
+        );
     }
 
     @Test
@@ -1501,25 +1490,25 @@ public class LogValidatorTest {
     public void testZStdCompressedWithUnavailableIBPVersion() {
         // The timestamps should be overwritten
         MemoryRecords records = createRecords(RecordBatch.MAGIC_VALUE_V2, 1234L, Compression.NONE);
-        assertThrows(UnsupportedCompressionTypeException.class, () -> {
-            new LogValidator(
-                    records,
-                    topicPartition,
-                    time,
-                    CompressionType.NONE,
-                    Compression.zstd().build(),
-                    false,
-                    RecordBatch.MAGIC_VALUE_V2,
-                    TimestampType.LOG_APPEND_TIME,
-                    1000L,
-                    1000L,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                    AppendOrigin.CLIENT,
-                    MetadataVersion.IBP_2_0_IV1
-            ).validateMessagesAndAssignOffsets(
-                    PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
-            );
-        });
+        assertThrows(UnsupportedCompressionTypeException.class, () ->
+                new LogValidator(
+                        records,
+                        topicPartition,
+                        time,
+                        CompressionType.NONE,
+                        Compression.zstd().build(),
+                        false,
+                        RecordBatch.MAGIC_VALUE_V2,
+                        TimestampType.LOG_APPEND_TIME,
+                        1000L,
+                        1000L,
+                        RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                        AppendOrigin.CLIENT,
+                        MetadataVersion.IBP_2_0_IV1
+                ).validateMessagesAndAssignOffsets(
+                        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
+                )
+        );
     }
 
     @Test
@@ -1528,27 +1517,27 @@ public class LogValidatorTest {
         Compression compression = Compression.gzip().build();
         MemoryRecords records = createRecords(RecordBatch.MAGIC_VALUE_V2, now - 1001L, compression);
 
-        RecordValidationException e = assertThrows(RecordValidationException.class, () -> {
-            new LogValidator(
-                    records,
-                    topicPartition,
-                    time,
-                    CompressionType.GZIP,
-                    compression,
-                    false,
-                    RecordBatch.MAGIC_VALUE_V1,
-                    TimestampType.CREATE_TIME,
-                    1000L,
-                    1000L,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                    AppendOrigin.CLIENT,
-                    MetadataVersion.latestTesting()
-            ).validateMessagesAndAssignOffsets(
-                    PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
-            );
-        });
+        RecordValidationException e = assertThrows(RecordValidationException.class, () ->
+                new LogValidator(
+                        records,
+                        topicPartition,
+                        time,
+                        CompressionType.GZIP,
+                        compression,
+                        false,
+                        RecordBatch.MAGIC_VALUE_V1,
+                        TimestampType.CREATE_TIME,
+                        1000L,
+                        1000L,
+                        RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                        AppendOrigin.CLIENT,
+                        MetadataVersion.latestTesting()
+                ).validateMessagesAndAssignOffsets(
+                        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
+                )
+        );
 
-        assertTrue(e.invalidException() instanceof InvalidTimestampException);
+        assertInstanceOf(InvalidTimestampException.class, e.invalidException());
         assertFalse(e.recordErrors().isEmpty());
         assertEquals(3, e.recordErrors().size());
     }
@@ -1565,7 +1554,7 @@ public class LogValidatorTest {
             );
         });
 
-        assertTrue(e.invalidException() instanceof InvalidRecordException);
+        assertInstanceOf(InvalidRecordException.class, e.invalidException());
         assertFalse(e.recordErrors().isEmpty());
         // recordsWithInvalidInnerMagic creates 20 records
         assertEquals(20, e.recordErrors().size());
@@ -1596,13 +1585,13 @@ public class LogValidatorTest {
         }
         MemoryRecords invalidOffsetTimestampRecords = builder.build();
 
-        RecordValidationException e = assertThrows(RecordValidationException.class, () -> {
-            validateMessages(invalidOffsetTimestampRecords,
-                    RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, compression);
-        });
+        RecordValidationException e = assertThrows(RecordValidationException.class, () ->
+                validateMessages(invalidOffsetTimestampRecords,
+                        RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, compression)
+        );
         // If there is a mix of both regular InvalidRecordException and InvalidTimestampException,
         // InvalidTimestampException takes precedence
-        assertTrue(e.invalidException() instanceof InvalidTimestampException);
+        assertInstanceOf(InvalidTimestampException.class, e.invalidException());
         assertFalse(e.recordErrors().isEmpty());
         assertEquals(6, e.recordErrors().size());
     }
@@ -1615,27 +1604,27 @@ public class LogValidatorTest {
         long fiveMinutesBeforeThreshold = now - timestampBeforeMaxConfig - (5 * 60 * 1000L);
         Compression compression = Compression.gzip().build();
         MemoryRecords records = createRecords(RecordBatch.MAGIC_VALUE_V2, fiveMinutesBeforeThreshold, compression);
-        RecordValidationException e = assertThrows(RecordValidationException.class, () -> {
-            new LogValidator(
-                    records,
-                    topicPartition,
-                    time,
-                    CompressionType.GZIP,
-                    compression,
-                    false,
-                    RecordBatch.MAGIC_VALUE_V2,
-                    TimestampType.CREATE_TIME,
-                    timestampBeforeMaxConfig,
-                    timestampAfterMaxConfig,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                    AppendOrigin.CLIENT,
-                    MetadataVersion.latestTesting()
-            ).validateMessagesAndAssignOffsets(
-                    PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
-            );
-        });
+        RecordValidationException e = assertThrows(RecordValidationException.class, () ->
+                new LogValidator(
+                        records,
+                        topicPartition,
+                        time,
+                        CompressionType.GZIP,
+                        compression,
+                        false,
+                        RecordBatch.MAGIC_VALUE_V2,
+                        TimestampType.CREATE_TIME,
+                        timestampBeforeMaxConfig,
+                        timestampAfterMaxConfig,
+                        RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                        AppendOrigin.CLIENT,
+                        MetadataVersion.latestTesting()
+                ).validateMessagesAndAssignOffsets(
+                        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
+                )
+        );
 
-        assertTrue(e.invalidException() instanceof InvalidTimestampException);
+        assertInstanceOf(InvalidTimestampException.class, e.invalidException());
         assertFalse(e.recordErrors().isEmpty());
         assertEquals(3, e.recordErrors().size());
     }
@@ -1648,27 +1637,27 @@ public class LogValidatorTest {
         long fiveMinutesAfterThreshold = now + timestampAfterMaxConfig + (5 * 60 * 1000L);
         Compression compression = Compression.gzip().build();
         MemoryRecords records = createRecords(RecordBatch.MAGIC_VALUE_V2, fiveMinutesAfterThreshold, compression);
-        RecordValidationException e = assertThrows(RecordValidationException.class, () -> {
-            new LogValidator(
-                    records,
-                    topicPartition,
-                    time,
-                    CompressionType.GZIP,
-                    compression,
-                    false,
-                    RecordBatch.MAGIC_VALUE_V2,
-                    TimestampType.CREATE_TIME,
-                    timestampBeforeMaxConfig,
-                    timestampAfterMaxConfig,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                    AppendOrigin.CLIENT,
-                    MetadataVersion.latestTesting()
-            ).validateMessagesAndAssignOffsets(
-                    PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
-            );
-        });
+        RecordValidationException e = assertThrows(RecordValidationException.class, () ->
+                new LogValidator(
+                        records,
+                        topicPartition,
+                        time,
+                        CompressionType.GZIP,
+                        compression,
+                        false,
+                        RecordBatch.MAGIC_VALUE_V2,
+                        TimestampType.CREATE_TIME,
+                        timestampBeforeMaxConfig,
+                        timestampAfterMaxConfig,
+                        RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                        AppendOrigin.CLIENT,
+                        MetadataVersion.latestTesting()
+                ).validateMessagesAndAssignOffsets(
+                        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
+                )
+        );
 
-        assertTrue(e.invalidException() instanceof InvalidTimestampException);
+        assertInstanceOf(InvalidTimestampException.class, e.invalidException());
         assertFalse(e.recordErrors().isEmpty());
         assertEquals(3, e.recordErrors().size());
     }
@@ -1677,8 +1666,8 @@ public class LogValidatorTest {
     @Test
     public void testDifferentLevelDoesNotCauseRecompression() {
         List<byte[]> records = Arrays.asList(
-                Collections.nCopies(256, "some").stream().collect(Collectors.joining("")).getBytes(),
-                Collections.nCopies(256, "data").stream().collect(Collectors.joining("")).getBytes()
+                String.join("", Collections.nCopies(256, "some")).getBytes(),
+                String.join("", Collections.nCopies(256, "data")).getBytes()
         );
 
         // Records from the producer were created with gzip max level
@@ -2043,8 +2032,7 @@ public class LogValidatorTest {
         long offset = baseOffset;
         Iterator<Record> iterator = records.records().iterator();
 
-        while (iterator.hasNext()) {
-            Record record = iterator.next();
+        for (Record record : records.records()) {
             Assertions.assertEquals(offset, record.offset(), "Unexpected offset in message set iterator");
             offset += 1;
         }
@@ -2052,7 +2040,7 @@ public class LogValidatorTest {
 
     private MemoryRecords createNonIncreasingOffsetRecords(byte magicValue,
                                                            long timestamp,
-                                                        Compression codec) {
+                                                           Compression codec) {
         ByteBuffer buf = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L);
         builder.appendWithOffset(0, timestamp, null, "hello".getBytes());
