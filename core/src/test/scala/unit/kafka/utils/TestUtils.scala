@@ -645,7 +645,7 @@ object TestUtils extends Logging {
   /**
    * Returns security configuration options for broker or clients
    *
-   * @param mode Client or server mode
+   * @param connectionMode Client or server mode
    * @param securityProtocol Security protocol which indicates if SASL or SSL or both configs are included
    * @param trustStoreFile Trust store file must be provided for SSL and SASL_SSL
    * @param certAlias Alias of certificate in SSL key store
@@ -655,7 +655,7 @@ object TestUtils extends Logging {
    * @param needsClientCert If not empty, a flag which indicates if client certificates are required. By default
    *                        client certificates are generated only if securityProtocol is SSL (not for SASL_SSL).
    */
-  def securityConfigs(mode: ConnectionMode,
+  def securityConfigs(connectionMode: ConnectionMode,
                       securityProtocol: SecurityProtocol,
                       trustStoreFile: Option[File],
                       certAlias: String,
@@ -666,7 +666,7 @@ object TestUtils extends Logging {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol)) {
       val addClientCert = needsClientCert.getOrElse(securityProtocol == SecurityProtocol.SSL)
-      props ++= sslConfigs(mode, addClientCert, trustStoreFile, certAlias, certCn, tlsProtocol)
+      props ++= sslConfigs(connectionMode, addClientCert, trustStoreFile, certAlias, certCn, tlsProtocol)
     }
 
     if (usesSaslAuthentication(securityProtocol))
