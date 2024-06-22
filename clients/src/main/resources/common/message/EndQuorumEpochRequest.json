@@ -49,7 +49,7 @@
         }
       ]
     },
-    { "name": "LeaderEndpoints", "type": "[]LeaderEndpoint", "versions": "1+",
+    { "name": "LeaderEndpoints", "type": "[]LeaderEndpoint", "versions": "1+", "ignorable": true,
       "about": "Endpoints for the leader", "fields": [
         { "name": "Name", "type": "string", "versions": "1+", "mapKey": true, "about": "The name of the endpoint" },
         { "name": "Host", "type": "string", "versions": "1+", "about": "The node's hostname" },
