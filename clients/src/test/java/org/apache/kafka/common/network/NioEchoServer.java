@@ -229,16 +229,8 @@ public class NioEchoServer extends Thread {
                 synchronized (newChannels) {
                     for (SocketChannel socketChannel : newChannels) {
                         String id = id();
-                        // This try-catch block prevents the NioEchoServer from crashing in a rare condition
-                        // when attempting to register new connections where a connection is already registered.
-                        // Without this, the test fails because the connection unexpectedly becomes idle and expires, leading to a timeout.
-                        try {
-                            selector.register(id, socketChannel);
-                            socketChannels.add(socketChannel);
-                        } catch (IllegalStateException e) {
-                            LOG.warn("Failed to register new channel: {}", id, e);
-                            socketChannel.close();
-                        }
+                        selector.register(id, socketChannel);
+                        socketChannels.add(socketChannel);
                     }
                     newChannels.clear();
                 }
