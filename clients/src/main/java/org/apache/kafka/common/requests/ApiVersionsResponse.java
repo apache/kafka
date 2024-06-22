@@ -260,14 +260,13 @@ public class ApiVersionsResponse extends AbstractResponse {
         final boolean zkMigrationEnabled
     ) {
         Features<SupportedVersionRange> backwardsCompatibleFeatures = Features.supportedFeatures(latestSupportedFeatures.features().entrySet()
-            .stream()
+            .stream().filter(entry -> {
+                SupportedVersionRange supportedVersionRange = entry.getValue();
+                return supportedVersionRange.min() != 0;
+            })
             .collect(Collectors.toMap(
                 entry -> entry.getKey(),
-                entry -> {
-                    short newMin = entry.getValue().min() == 0 ? 1 : entry.getValue().min();
-                    short newMax = entry.getValue().max() == 0 ? 1 : entry.getValue().max();
-                    return new SupportedVersionRange(newMin, newMax);
-                }
+                entry -> entry.getValue()
             ))
         );
 

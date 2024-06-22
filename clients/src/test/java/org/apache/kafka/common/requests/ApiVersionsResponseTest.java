@@ -23,7 +23,6 @@ import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiMessageType.ListenerType;
-import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
@@ -282,19 +281,18 @@ public class ApiVersionsResponseTest {
         ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
             10,
             RecordVersion.V1,
-            Features.supportedFeatures(Collections.singletonMap(featureName, new SupportedVersionRange((short) 0, (short) 0))),
+            Features.supportedFeatures(Collections.singletonMap(featureName, new SupportedVersionRange((short) 0, (short) 1))),
             Collections.emptyMap(),
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
             ListenerType.BROKER,
             true,
             false,
-            false
+            true
         );
 
-        ApiVersionsResponseData.SupportedFeatureKey feature = response.data().supportedFeatures().find(featureName);
-        assertEquals(1, feature.maxVersion());
-        assertEquals(1, feature.minVersion());
+        // Feature should not be in the supported features due to the 0 version.
+        assertEquals(null, response.data().supportedFeatures().find(featureName));
     }
 
     private void verifyVersions(short forwardableAPIKey,
