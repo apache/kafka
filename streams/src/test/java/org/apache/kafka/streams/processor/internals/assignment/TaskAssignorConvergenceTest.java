@@ -46,11 +46,9 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ValueSource;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -370,23 +368,6 @@ public class TaskAssignorConvergenceTest {
             // Details in https://cwiki.apache.org/confluence/display/KAFKA/KIP-925%3A+Rack+aware+task+assignment+in+Kafka+Streams
             skewThreshold = 4;
         }
-    }
-
-//    @Parameterized.Parameters(name = "rackAwareStrategy={0}")
-//    public static Collection<Object[]> getParamStoreType() {
-//        return asList(new Object[][] {
-//            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE},
-//            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC},
-//            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY},
-//        });
-//    }
-
-    static Stream<Arguments> rackAwareStrategy() {
-        return Stream.of(
-            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE),
-            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC),
-            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)
-        );
     }
 
     @ParameterizedTest
