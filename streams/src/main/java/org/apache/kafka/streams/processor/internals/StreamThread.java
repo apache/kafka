@@ -303,7 +303,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Sensor commitRatioSensor;
     private final Sensor failedStreamThreadSensor;
 
-    private final long logSummaryIntervalMs; // log a summary of processing every 2 minutes
+    private final long logSummaryIntervalMs; // the count summary log output time interval
     private long lastLogSummaryMs = -1L;
     private long totalRecordsProcessedSinceLastSummary = 0L;
     private long totalPunctuatorsSinceLastSummary = 0L;
