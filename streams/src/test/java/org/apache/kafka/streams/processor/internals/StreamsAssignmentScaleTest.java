@@ -201,7 +201,7 @@ public class StreamsAssignmentScaleTest {
         final TaskManager taskManager = mock(TaskManager.class);
         when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
 
-        final AdminClient adminClient = createMockAdminClientForAssignor(changelogEndOffsets);
+        final AdminClient adminClient = createMockAdminClientForAssignor(changelogEndOffsets, true);
 
         final ReferenceContainer referenceContainer = new ReferenceContainer();
         referenceContainer.mainConsumer = mainConsumer;

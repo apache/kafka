@@ -164,7 +164,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
     }
 
     public void setUp() {
-        adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS);
+        adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS, true);
     }
 
 
@@ -232,8 +232,9 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
         createMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-            singletonList(APPLICATION_ID + "-store1-changelog"),
-            singletonList(3)));
+                singletonList(APPLICATION_ID + "-store1-changelog"),
+                singletonList(3)),
+            true);
         configurePartitionAssignorWith(singletonMap(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, rebalanceInterval));
 
         final String firstConsumer = "consumer1";

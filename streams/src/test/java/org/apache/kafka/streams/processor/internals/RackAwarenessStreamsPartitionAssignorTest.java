@@ -182,8 +182,9 @@ public class RackAwarenessStreamsPartitionAssignorTest {
 
         createMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-            Arrays.asList(APPLICATION_ID + "-store2-changelog", APPLICATION_ID + "-store3-changelog", APPLICATION_ID + "-store4-changelog"),
-            Arrays.asList(3, 3, 3)));
+                Arrays.asList(APPLICATION_ID + "-store2-changelog", APPLICATION_ID + "-store3-changelog", APPLICATION_ID + "-store4-changelog"),
+                Arrays.asList(3, 3, 3)),
+            true);
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1));
 
         final Map<String, String> clientTags1 = new HashMap<>();
@@ -225,9 +226,9 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         setupTopology(3, 0);
 
         createMockTaskManager();
-        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-            Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
-            Arrays.asList(3, 3, 3)));
+        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
+                Arrays.asList(3, 3, 3)),
+            true);
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1));
 
         // use the same tag value for key1, and different value for key2
@@ -273,8 +274,9 @@ public class RackAwarenessStreamsPartitionAssignorTest {
 
         createMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-            Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
-            Arrays.asList(3, 3, 3)));
+                Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
+                Arrays.asList(3, 3, 3)),
+            true);
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2));
 
         final Map<String, String> clientTags1 = mkMap(
@@ -338,8 +340,9 @@ public class RackAwarenessStreamsPartitionAssignorTest {
 
         createMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-            Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
-            Arrays.asList(3, 3, 3)));
+                Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
+                Arrays.asList(3, 3, 3)),
+            true);
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2));
 
         final Map<String, String> clientTags1 = mkMap(
