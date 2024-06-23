@@ -439,8 +439,9 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(1, countOccurrencesInTopology(topology, "Sink: .*-repartition.*"));
     }
 
-    @Test
-    public void shouldNotRepartitionWithMarkAsPartitionedFollowingSelectKey() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldNotRepartitionWithMarkAsPartitionedFollowingSelectKey(final String topologyOptimization) throws Exception {
         final long timestamp = System.currentTimeMillis();
 
         sendEvents(
@@ -462,7 +463,7 @@ public class KStreamRepartitionIntegrationTest {
                 .to(outputTopic);
 
 
-        startStreams(builder);
+        startStreams(builder, createStreamsConfig(topologyOptimization));
 
         validateReceivedMessages(
                 new IntegerDeserializer(),
@@ -478,8 +479,9 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(0, countOccurrencesInTopology(topology, "Sink: .*-repartition.*"));
     }
 
-    @Test
-    public void shouldNotRepartitionWithMarkAsPartitionedFollowingMap() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldNotRepartitionWithMarkAsPartitionedFollowingMap(final String topologyOptimization) throws Exception {
         final String topicBMapperName = "topic-b-mapper";
         final long timestamp = System.currentTimeMillis();
 
@@ -502,7 +504,7 @@ public class KStreamRepartitionIntegrationTest {
                 .to(outputTopic);
 
 
-        startStreams(builder);
+        startStreams(builder, createStreamsConfig(topologyOptimization));
 
         validateReceivedMessages(
                 new IntegerDeserializer(),
