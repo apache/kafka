@@ -227,9 +227,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                          final Named named) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(named, "named can't be null");
-        final boolean repartitionRequired = !(graphNode instanceof PartitionPreservingNode);
         final ProcessorGraphNode<K, V> selectKeyProcessorNode = internalSelectKey(mapper, new NamedInternal(named));
-        selectKeyProcessorNode.keyChangingOperation(repartitionRequired);
 
         builder.addGraphNode(graphNode, selectKeyProcessorNode);
 
@@ -239,7 +237,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 null,
                 valueSerde,
                 subTopologySourceNodes,
-                repartitionRequired,
+                true,
                 selectKeyProcessorNode,
                 builder);
     }
@@ -270,8 +268,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 new ProcessorParameters<>(new KStreamMap<>(mapper), name);
         final ProcessorGraphNode<? super K, ? super V> mapProcessorNode =
                 new ProcessorGraphNode<>(name, processorParameters);
-        final boolean repartitionRequired = !(graphNode instanceof PartitionPreservingNode);
-        mapProcessorNode.keyChangingOperation(repartitionRequired);
 
         builder.addGraphNode(graphNode, mapProcessorNode);
 
@@ -281,7 +277,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 null,
                 null,
                 subTopologySourceNodes,
-                repartitionRequired,
+                true,
                 mapProcessorNode,
                 builder);
     }
@@ -338,19 +334,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                             final Named named) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(named, "named can't be null");
-
-        final boolean repartitionRequired = !(graphNode instanceof PartitionPreservingNode);
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FLATMAP_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
                 new ProcessorParameters<>(new KStreamFlatMap<>(mapper), name);
         final ProcessorGraphNode<? super K, ? super V> flatMapNode =
                 new ProcessorGraphNode<>(name, processorParameters);
-        flatMapNode.keyChangingOperation(repartitionRequired);
 
         builder.addGraphNode(graphNode, flatMapNode);
 
         // key and value serde cannot be preserved
-        return new KStreamImpl<>(name, null, null, subTopologySourceNodes, repartitionRequired, flatMapNode, builder);
+        return new KStreamImpl<>(name, null, null, subTopologySourceNodes, true, flatMapNode, builder);
     }
 
     @Override
@@ -800,10 +793,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(keySelector, "keySelector can't be null");
         Objects.requireNonNull(grouped, "grouped can't be null");
 
-        final boolean repartitionRequired = !(graphNode instanceof PartitionPreservingNode);
         final GroupedInternal<KR, V> groupedInternal = new GroupedInternal<>(grouped);
         final ProcessorGraphNode<K, V> selectKeyMapNode = internalSelectKey(keySelector, new NamedInternal(groupedInternal.name()));
-        selectKeyMapNode.keyChangingOperation(repartitionRequired);
 
         builder.addGraphNode(graphNode, selectKeyMapNode);
 
@@ -811,7 +802,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 selectKeyMapNode.nodeName(),
                 subTopologySourceNodes,
                 groupedInternal,
-                repartitionRequired,
+                true,
                 selectKeyMapNode,
                 builder);
     }
@@ -1353,13 +1344,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         for (final String stateStoreName : stateStoreNames) {
             Objects.requireNonNull(stateStoreName, "stateStoreNames can't contain `null` as store name");
         }
-        final boolean repartitionRequired = !(graphNode instanceof PartitionPreservingNode);
         final String name = new NamedInternal(named).name();
         final StatefulProcessorNode<? super K, ? super V> transformNode = new StatefulProcessorNode<>(
                 name,
                 new ProcessorParameters<>(new KStreamFlatTransform<>(transformerSupplier), name),
                 stateStoreNames);
-        transformNode.keyChangingOperation(repartitionRequired);
 
         builder.addGraphNode(graphNode, transformNode);
 
@@ -1369,7 +1358,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 null,
                 null,
                 subTopologySourceNodes,
-                repartitionRequired,
+                true,
                 transformNode,
                 builder);
     }
