@@ -73,27 +73,27 @@ public class KeyValueStoreMaterializerTest {
     @Mock
     private StreamsConfig streamsConfig;
 
-    public void setUp(final boolean mockKeyValueStoreSupplier, final boolean mockVersionedStoreSupplier) {
-        if (mockKeyValueStoreSupplier) {
-            when(keyValueStoreSupplier.get()).thenReturn(innerKeyValueStore);
-            when(keyValueStoreSupplier.name()).thenReturn(STORE_NAME);
-            when(keyValueStoreSupplier.metricsScope()).thenReturn(METRICS_SCOPE);
-        }
-
-        if (mockVersionedStoreSupplier) {
-            when(innerVersionedStore.name()).thenReturn(STORE_NAME);
-            when(versionedStoreSupplier.get()).thenReturn(innerVersionedStore);
-            when(versionedStoreSupplier.name()).thenReturn(STORE_NAME);
-            when(versionedStoreSupplier.metricsScope()).thenReturn(METRICS_SCOPE);
-        }
-
+    public void setUp() {
         doReturn(BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class)
                 .when(streamsConfig).getClass(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG);
     }
 
+    private void mockInnerVersionedStore() {
+        when(innerVersionedStore.name()).thenReturn(STORE_NAME);
+        when(versionedStoreSupplier.get()).thenReturn(innerVersionedStore);
+        when(versionedStoreSupplier.name()).thenReturn(STORE_NAME);
+        when(versionedStoreSupplier.metricsScope()).thenReturn(METRICS_SCOPE);
+    }
+
+    private void mockKeyValueStoreSupplier() {
+        when(keyValueStoreSupplier.get()).thenReturn(innerKeyValueStore);
+        when(keyValueStoreSupplier.name()).thenReturn(STORE_NAME);
+        when(keyValueStoreSupplier.metricsScope()).thenReturn(METRICS_SCOPE);
+    }
+
     @Test
     public void shouldCreateTimestampedBuilderWithCachingAndLoggingEnabledByDefault() {
-        setUp(false, false);
+        setUp();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.as("store"), nameProvider, STORE_PREFIX);
 
@@ -108,7 +108,7 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateDefaultTimestampedBuilderWithCachingDisabled() {
-        setUp(false, false);
+        setUp();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store").withCachingDisabled(), nameProvider, STORE_PREFIX
         );
@@ -121,7 +121,7 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateDefaultTimestampedBuilderWithLoggingDisabled() {
-        setUp(false, false);
+        setUp();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store").withLoggingDisabled(), nameProvider, STORE_PREFIX
         );
@@ -135,7 +135,7 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateDefaultTimestampedBuilderWithCachingAndLoggingDisabled() {
-        setUp(false, false);
+        setUp();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store").withCachingDisabled().withLoggingDisabled(), nameProvider, STORE_PREFIX
         );
@@ -149,7 +149,9 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateTimestampedStoreWithProvidedSupplierAndCachingAndLoggingEnabledByDefault() {
-        setUp(true, false);
+        setUp();
+        mockKeyValueStoreSupplier();
+
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.as(keyValueStoreSupplier), nameProvider, STORE_PREFIX);
 
@@ -165,7 +167,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateTimestampedStoreWithProvidedSupplierAndCachingDisabled() {
-        setUp(true, false);
+        setUp();
+        mockKeyValueStoreSupplier();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.<String, String>as(keyValueStoreSupplier).withCachingDisabled(), nameProvider, STORE_PREFIX);
 
@@ -178,7 +181,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateTimestampedStoreWithProvidedSupplierAndLoggingDisabled() {
-        setUp(true, false);
+        setUp();
+        mockKeyValueStoreSupplier();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.<String, String>as(keyValueStoreSupplier).withLoggingDisabled(), nameProvider, STORE_PREFIX);
 
@@ -192,7 +196,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateTimestampedStoreWithProvidedSupplierAndCachingAndLoggingDisabled() {
-        setUp(true, false);
+        setUp();
+        mockKeyValueStoreSupplier();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.<String, String>as(keyValueStoreSupplier).withCachingDisabled().withLoggingDisabled(), nameProvider, STORE_PREFIX);
 
@@ -206,7 +211,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateVersionedStoreWithProvidedSupplierAndLoggingEnabledByDefault() {
-        setUp(false, true);
+        setUp();
+        mockInnerVersionedStore();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.as(versionedStoreSupplier), nameProvider, STORE_PREFIX);
 
@@ -222,7 +228,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateVersionedStoreWithProvidedSupplierAndLoggingDisabled() {
-        setUp(false, true);
+        setUp();
+        mockInnerVersionedStore();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.<String, String>as(versionedStoreSupplier).withLoggingDisabled(), nameProvider, STORE_PREFIX);
 
@@ -236,7 +243,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldNotBuildVersionedStoreWithCachingEvenIfExplicitlySet() {
-        setUp(false, true);
+        setUp();
+        mockInnerVersionedStore();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.<String, String>as(versionedStoreSupplier).withCachingEnabled(), nameProvider, STORE_PREFIX);
 

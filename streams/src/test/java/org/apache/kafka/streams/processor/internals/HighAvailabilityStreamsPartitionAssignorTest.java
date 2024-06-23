@@ -163,14 +163,9 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
     }
 
-    public void setUp() {
-        adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS, true);
-    }
-
-
     @Test
     public void shouldReturnAllActiveTasksToPreviousOwnerRegardlessOfBalanceAndTriggerRebalanceIfEndOffsetFetchFailsAndHighAvailabilityEnabled() {
-        setUp();
+        adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS, true);
         final long rebalanceInterval = 5 * 60 * 1000L;
 
         builder.addSource(null, "source1", null, null, null, "topic1");

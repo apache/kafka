@@ -170,7 +170,7 @@ public class StoreChangelogReaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.EXCLUDE, names = {"GLOBAL"})
+    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.INCLUDE, names = {"ACTIVE", "STANDBY"})
     public void shouldNotRegisterSameStoreMultipleTimes(final Task.TaskType type) {
         setupStateManagerMock(type);
 
@@ -190,7 +190,7 @@ public class StoreChangelogReaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.EXCLUDE, names = {"GLOBAL"})
+    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.INCLUDE, names = {"ACTIVE", "STANDBY"})
     public void shouldSupportUnregisterChangelogBeforeInitialization(final Task.TaskType type) {
         setupStateManagerMock(type);
 
@@ -220,7 +220,7 @@ public class StoreChangelogReaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.EXCLUDE, names = {"GLOBAL"})
+    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.INCLUDE, names = {"ACTIVE", "STANDBY"})
     public void shouldSupportUnregisterChangelogBeforeCompletion(final Task.TaskType type) {
         setupStateManagerMock(type);
         setupStoreMetadata();
@@ -273,7 +273,7 @@ public class StoreChangelogReaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.EXCLUDE, names = {"GLOBAL"})
+    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.INCLUDE, names = {"ACTIVE", "STANDBY"})
     public void shouldSupportUnregisterChangelogAfterCompletion(final Task.TaskType type) {
         setupStateManagerMock(type);
         setupStoreMetadata();
@@ -332,7 +332,7 @@ public class StoreChangelogReaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.EXCLUDE, names = {"GLOBAL"})
+    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.INCLUDE, names = {"ACTIVE", "STANDBY"})
     public void shouldInitializeChangelogAndCheckForCompletion(final Task.TaskType type) {
         setupStateManagerMock(type);
         setupStoreMetadata();
@@ -375,7 +375,7 @@ public class StoreChangelogReaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.EXCLUDE, names = {"GLOBAL"})
+    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.INCLUDE, names = {"ACTIVE", "STANDBY"})
     public void shouldTriggerRestoreListenerWithOffsetZeroIfPositionThrowsTimeoutException(final Task.TaskType type) {
         // restore listener is only triggered for active tasks
         if (type == ACTIVE) {
@@ -408,7 +408,7 @@ public class StoreChangelogReaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.EXCLUDE, names = {"GLOBAL"})
+    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.INCLUDE, names = {"ACTIVE", "STANDBY"})
     public void shouldPollWithRightTimeoutWithStateUpdater(final Task.TaskType type) {
         setupStateManagerMock(type);
         setupStoreMetadata();
@@ -417,7 +417,7 @@ public class StoreChangelogReaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.EXCLUDE, names = {"GLOBAL"})
+    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.INCLUDE, names = {"ACTIVE", "STANDBY"})
     public void shouldPollWithRightTimeoutWithoutStateUpdater(final Task.TaskType type) {
         setupStateManagerMock(type);
         setupStoreMetadata();
@@ -432,7 +432,7 @@ public class StoreChangelogReaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.EXCLUDE, names = {"GLOBAL"})
+    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.INCLUDE, names = {"ACTIVE", "STANDBY"})
     public void shouldPollWithRightTimeoutWithStateUpdaterDefault(final Task.TaskType type) {
         setupStateManagerMock(type);
         setupStoreMetadata();
@@ -475,7 +475,7 @@ public class StoreChangelogReaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.EXCLUDE, names = {"GLOBAL"})
+    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.INCLUDE, names = {"ACTIVE", "STANDBY"})
     public void shouldRestoreFromPositionAndCheckForCompletion(final Task.TaskType type) {
         setupStateManagerMock(type);
         setupStoreMetadata();
@@ -549,7 +549,7 @@ public class StoreChangelogReaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.EXCLUDE, names = {"GLOBAL"})
+    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.INCLUDE, names = {"ACTIVE", "STANDBY"})
     public void shouldRestoreFromBeginningAndCheckCompletion(final Task.TaskType type) {
         setupStateManagerMock(type);
         setupStoreMetadata();
@@ -829,7 +829,7 @@ public class StoreChangelogReaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.EXCLUDE, names = {"GLOBAL"})
+    @EnumSource(value = Task.TaskType.class, mode = EnumSource.Mode.INCLUDE, names = {"ACTIVE", "STANDBY"})
     public void shouldRequestCommittedOffsetsAndHandleTimeoutException(final Task.TaskType type) {
         setupStateManagerMock(type);
         setupStoreMetadata();

@@ -116,6 +116,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 public class RackAwareTaskAssignorTest {
@@ -169,7 +170,7 @@ public class RackAwareTaskAssignorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("paramStoreType")
+    @ValueSource(booleans = {true, false})
     public void shouldDisableAssignorFromConfig(final boolean stateful) {
         setUp(stateful);
         final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(

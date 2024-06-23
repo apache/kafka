@@ -57,7 +57,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
@@ -87,25 +86,25 @@ public class StreamsAssignmentScaleTest {
     /* HighAvailabilityTaskAssignor tests */
 
     @Test
-    @Timeout(value = 300, unit = TimeUnit.SECONDS)
+    @Timeout(value = 300)
     public void testHighAvailabilityTaskAssignorLargePartitionCount() {
         completeLargeAssignment(6_000, 2, 1, 1, HighAvailabilityTaskAssignor.class);
     }
 
     @Test
-    @Timeout(value = 300, unit = TimeUnit.SECONDS)
+    @Timeout(value = 300)
     public void testHighAvailabilityTaskAssignorLargeNumConsumers() {
         completeLargeAssignment(1_000, 1_000, 1, 1, HighAvailabilityTaskAssignor.class);
     }
 
     @Test
-    @Timeout(value = 300, unit = TimeUnit.SECONDS)
+    @Timeout(value = 300)
     public void testHighAvailabilityTaskAssignorManyStandbys() {
         completeLargeAssignment(1_000, 100, 1, 50, HighAvailabilityTaskAssignor.class);
     }
 
     @Test
-    @Timeout(value = 300, unit = TimeUnit.SECONDS)
+    @Timeout(value = 300)
     public void testHighAvailabilityTaskAssignorManyThreadsPerClient() {
         completeLargeAssignment(1_000, 10, 1000, 1, HighAvailabilityTaskAssignor.class);
     }
@@ -113,25 +112,25 @@ public class StreamsAssignmentScaleTest {
     /* LegacyStickyTaskAssignor tests */
 
     @Test
-    @Timeout(value = 300, unit = TimeUnit.SECONDS)
+    @Timeout(value = 300)
     public void testStickyTaskAssignorLargePartitionCount() {
         completeLargeAssignment(2_000, 2, 1, 1, LegacyStickyTaskAssignor.class);
     }
 
     @Test
-    @Timeout(value = 300, unit = TimeUnit.SECONDS)
+    @Timeout(value = 300)
     public void testStickyTaskAssignorLargeNumConsumers() {
         completeLargeAssignment(1_000, 1_000, 1, 1, LegacyStickyTaskAssignor.class);
     }
 
     @Test
-    @Timeout(value = 300, unit = TimeUnit.SECONDS)
+    @Timeout(value = 300)
     public void testStickyTaskAssignorManyStandbys() {
         completeLargeAssignment(1_000, 100, 1, 20, LegacyStickyTaskAssignor.class);
     }
 
     @Test
-    @Timeout(value = 300, unit = TimeUnit.SECONDS)
+    @Timeout(value = 300)
     public void testStickyTaskAssignorManyThreadsPerClient() {
         completeLargeAssignment(1_000, 10, 1000, 1, LegacyStickyTaskAssignor.class);
     }
@@ -139,25 +138,25 @@ public class StreamsAssignmentScaleTest {
     /* FallbackPriorTaskAssignor tests */
 
     @Test
-    @Timeout(value = 300, unit = TimeUnit.SECONDS)
+    @Timeout(value = 300)
     public void testFallbackPriorTaskAssignorLargePartitionCount() {
         completeLargeAssignment(2_000, 2, 1, 1, FallbackPriorTaskAssignor.class);
     }
 
     @Test
-    @Timeout(value = 300, unit = TimeUnit.SECONDS)
+    @Timeout(value = 300)
     public void testFallbackPriorTaskAssignorLargeNumConsumers() {
         completeLargeAssignment(1_000, 1_000, 1, 1, FallbackPriorTaskAssignor.class);
     }
 
     @Test
-    @Timeout(value = 300, unit = TimeUnit.SECONDS)
+    @Timeout(value = 300)
     public void testFallbackPriorTaskAssignorManyStandbys() {
         completeLargeAssignment(1_000, 100, 1, 20, FallbackPriorTaskAssignor.class);
     }
 
     @Test
-    @Timeout(value = 300, unit = TimeUnit.SECONDS)
+    @Timeout(value = 300)
     public void testFallbackPriorTaskAssignorManyThreadsPerClient() {
         completeLargeAssignment(1_000, 10, 1000, 1, FallbackPriorTaskAssignor.class);
     }
