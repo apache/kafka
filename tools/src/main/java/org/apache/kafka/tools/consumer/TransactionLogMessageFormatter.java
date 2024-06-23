@@ -46,8 +46,8 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
                     ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
                     json.set("version", new TextNode(Short.toString(version)));
                     
-                    if (version >= TransactionLogKey.LOWEST_SUPPORTED_VERSION
-                            && version <= TransactionLogKey.HIGHEST_SUPPORTED_VERSION) {
+                    if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION
+                            && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
                         byte[] value = consumerRecord.value();
                         TransactionLogValue transactionLogValue = 
                                 new TransactionLogValue(new ByteBufferAccessor(ByteBuffer.wrap(value)), version);
