@@ -1128,7 +1128,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(2, sharePartition.timer().size());
 
-        // Allowing acquisition lock to expire.
+        // Allowing acquisition lock to expire. The acquisition lock timeout will cause release of records for all the acquired records.
         TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 0 &&
@@ -1164,6 +1164,7 @@ public class SharePartitionTest {
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
+        // Acquisition lock timeout task should be created on re-acquire action.
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
     }
@@ -1190,7 +1191,8 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(0L).offsetState());
 
-        // Allowing acquisition lock to expire.
+        // Allowing acquisition lock to expire. This will not cause any change to cached state map since the batch is already acknowledged.
+        // Hence, the acquisition lock timeout task would be cancelled already.
         TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 0 &&
@@ -1220,7 +1222,8 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(0, sharePartition.timer().size());
 
-        // Allowing acquisition lock to expire.
+        // Allowing acquisition lock to expire. This will not cause any change to cached state map since the batch is already acknowledged.
+        // Hence, the acquisition lock timeout task would be cancelled already.
         TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 5 &&
@@ -1234,24 +1237,27 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockOnAcknowledgingMultipleRecordBatchWithGapOffsets() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(5, 10);
         // Gap from 15-17 offsets.
         recordsBuilder.appendWithOffset(18, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+        MemoryRecords records2 = recordsBuilder.build();
+        MemoryRecords records3 = memoryRecords(2, 1);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(2, 1),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records3,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         assertNotNull(sharePartition.cachedState().get(1L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(2, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(2, sharePartition.timer().size());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, recordsBuilder.build(),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                         Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
@@ -1266,7 +1272,8 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(1L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        // Allowing acquisition lock to expire.
+        // Allowing acquisition lock to expire. The acquisition lock timeout will cause release of records for batch with starting offset 1.
+        // Since, other records have been acknowledged.
         TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 1 &&
@@ -1307,6 +1314,7 @@ public class SharePartitionTest {
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
+        // Acquisition lock timeout task should be created only on offsets which have been acquired again.
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(10L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(11L).acquisitionLockTimeoutTask());
         assertNotNull(sharePartition.cachedState().get(10L).offsetState().get(12L).acquisitionLockTimeoutTask());
@@ -1317,7 +1325,7 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(17L).acquisitionLockTimeoutTask());
         assertEquals(3, sharePartition.timer().size());
 
-        // Allowing acquisition lock to expire.
+        // Allowing acquisition lock to expire for the acquired subset batch.
         TestUtils.waitForCondition(
                 () -> {
                     Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
@@ -1349,6 +1357,7 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockOnAcknowledgingMultipleSubsetRecordBatchWithGapOffsets() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
         // Gap from 12-13 offsets.
@@ -1357,15 +1366,16 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(16, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         // Gap from 17-19 offsets.
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+        MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(2, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, recordsBuilder.build(),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1397,7 +1407,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(10L).offsetState().get(20L).acquisitionLockTimeoutTask());
         assertEquals(3, sharePartition.timer().size());
 
-        // Allowing acquisition lock to expire.
+        // Allowing acquisition lock to expire for the offsets that have not been acknowledged yet.
         TestUtils.waitForCondition(
                 () -> {
                     Map<Long, InFlightState> expectedOffsetStateMap1 = new HashMap<>();
@@ -1442,7 +1452,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquisitionLockReleaseExceedsMaxDeliveryCount() throws InterruptedException {
+    public void testAcquisitionLockTimeoutCauseMaxDeliveryCountExceed() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
                 .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
                 .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
@@ -1481,11 +1491,11 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        // Allowing acquisition lock to expire.
+        // Allowing acquisition lock to expire to archive the records that reach max delivery count.
         TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 0 &&
-                        //After the second delivery attempt fails to acknowledge the record correctly, the record should be archived.
+                        // After the second delivery attempt fails to acknowledge the record correctly, the record should be archived.
                         sharePartition.cachedState().get(10L).batchState() == RecordState.ARCHIVED &&
                         sharePartition.cachedState().get(10L).batchDeliveryCount() == 2 &&
                         sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask() == null,
@@ -1494,7 +1504,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquisitionLockReleaseSPSOMovesForward() throws InterruptedException {
+    public void testAcquisitionLockTimeoutCauseSPSOMoveForward() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
                 .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
                 .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
@@ -1532,7 +1542,7 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(0L).offsetState().get(8L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(0L).offsetState().get(9L).acquisitionLockTimeoutTask());
 
-        // Allowing acquisition lock to expire.
+        // Allowing acquisition lock to expire to archive the records that reach max delivery count.
         TestUtils.waitForCondition(
                 () -> {
                     Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
@@ -1570,7 +1580,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquisitionLockReleaseSPSOMovesForwardAndCachedStateCleared() throws InterruptedException {
+    public void testAcquisitionLockTimeoutCauseSPSOMoveForwardAndClearCachedState() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
                 .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
                 .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
@@ -1599,7 +1609,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        // Allowing acquisition lock to expire.
+        // Allowing acquisition lock to expire to archive the records that reach max delivery count.
         TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         // After the second failed attempt to acknowledge the record batch successfully, the record batch is archived.
@@ -1630,7 +1640,7 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> "Acquisition lock never got released.");
 
-        // Acknowledge with ACCEPT type.
+        // Acknowledge with ACCEPT type should throw InvalidRecordStateException since they've been released due to acquisition lock timeout.
         CompletableFuture<Optional<Throwable>> ackResult = sharePartition.acknowledge(MEMBER_ID,
                 Collections.singletonList(new ShareAcknowledgementBatch(5, 9, Collections.singletonList((byte) 1))));
         assertFalse(ackResult.isCompletedExceptionally());
@@ -1639,7 +1649,7 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(0, sharePartition.timer().size());
 
-        // Try acknowledging with REJECT type.
+        // Try acknowledging with REJECT type should throw InvalidRecordStateException since they've been released due to acquisition lock timeout.
         ackResult = sharePartition.acknowledge(MEMBER_ID,
                 Collections.singletonList(new ShareAcknowledgementBatch(5, 9, Collections.singletonList((byte) 3))));
         assertFalse(ackResult.isCompletedExceptionally());
@@ -1660,6 +1670,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
+        // Acknowledge with REJECT type.
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(new ShareAcknowledgementBatch(5, 6, Collections.singletonList((byte) 2))));
 
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(5L).acquisitionLockTimeoutTask());
@@ -1669,6 +1680,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(5L).offsetState().get(9L).acquisitionLockTimeoutTask());
         assertEquals(3, sharePartition.timer().size());
 
+        // Acknowledge with ACCEPT type.
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(new ShareAcknowledgementBatch(8, 9, Collections.singletonList((byte) 1))));
 
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(5L).acquisitionLockTimeoutTask());
@@ -1678,7 +1690,7 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(9L).acquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        // Allowing acquisition lock to expire.
+        // Allowing acquisition lock to expire will only affect the offsets that have not been acknowledged yet.
         TestUtils.waitForCondition(
                 () -> {
                     // Check cached state.
@@ -1723,7 +1735,7 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.timer().size());
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
 
-        // Allowing acquisition lock to expire.
+        // Allowing acquisition lock to expire. Even if write share group state RPC fails, state transition still happens.
         TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 5 &&
@@ -1763,7 +1775,7 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        // Allowing acquisition lock to expire.
+        // Allowing acquisition lock to expire. Even if write share group state RPC fails, state transition still happens.
         TestUtils.waitForCondition(
                 () -> {
                     Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();

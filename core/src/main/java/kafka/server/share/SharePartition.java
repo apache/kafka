@@ -1322,7 +1322,7 @@ public class SharePartition {
         try {
             Map.Entry<Long, InFlightBatch> floorOffset = cachedState.floorEntry(firstOffset);
             if (floorOffset == null) {
-                log.error("Base Offset {} not found for share partition: {}-{}", firstOffset, groupId, topicIdPartition);
+                log.error("Base offset {} not found for share partition: {}-{}", firstOffset, groupId, topicIdPartition);
                 return;
             }
             List<PersisterStateBatch> stateBatches = new ArrayList<>();
@@ -1333,6 +1333,7 @@ public class SharePartition {
                 if (inFlightBatch.offsetState() == null
                         && inFlightBatch.batchState() == RecordState.ACQUIRED
                         && checkForStartOffsetWithinBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset())) {
+
                     // For the case when batch.firstOffset < start offset <= batch.lastOffset, we will be having some
                     // acquired records that need to move to archived state despite their delivery count.
                     inFlightBatch.maybeInitializeOffsetStateUpdate();
@@ -1347,10 +1348,12 @@ public class SharePartition {
             }
 
             if (!stateBatches.isEmpty() && !isWriteShareGroupStateSuccessful(stateBatches)) {
+
                 // Even if write share group state RPC call fails, we will still go ahead with the state transition.
                 log.error("Failed to write the share group state on acquisition lock timeout for share partition: {}-{} memberId {}. " +
                                 "Proceeding with state transition.", groupId, topicIdPartition, memberId);
             }
+
             // Update the cached state and start and end offsets after releasing the acquisition lock on timeout.
             maybeUpdateCachedStateAndOffsets();
         } finally {
@@ -1374,6 +1377,7 @@ public class SharePartition {
             }
             stateBatches.add(new PersisterStateBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset(),
                     updateResult.state.id, (short) updateResult.deliveryCount));
+
             // Update acquisition lock timeout task for the batch to null since it is completed now.
             updateResult.updateAcquisitionLockTimeoutTask(null);
             if (updateResult.state != RecordState.ARCHIVED) {
@@ -1391,6 +1395,7 @@ public class SharePartition {
                                                                   long firstOffset,
                                                                   long lastOffset) {
         for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState().entrySet()) {
+
             // For the first batch which might have offsets prior to the request base
             // offset i.e. cached batch of 10-14 offsets and request batch of 12-13.
             if (offsetState.getKey() < firstOffset) {
@@ -1419,6 +1424,7 @@ public class SharePartition {
             }
             stateBatches.add(new PersisterStateBatch(offsetState.getKey(), offsetState.getKey(),
                     updateResult.state.id, (short) updateResult.deliveryCount));
+
             // Update acquisition lock timeout task for the offset to null since it is completed now.
             updateResult.updateAcquisitionLockTimeoutTask(null);
             if (updateResult.state != RecordState.ARCHIVED) {
