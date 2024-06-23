@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyConfig;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.StateStore;
@@ -957,8 +958,13 @@ public class InternalTopologyBuilder {
      * @return subset of the full topology
      */
     public synchronized ProcessorTopology buildSubtopology(final int topicGroupId) {
+        return buildSubtopology(topicGroupId, null);
+    }
+
+    public synchronized ProcessorTopology buildSubtopology(final int topicGroupId,
+                                                           final ProcessingExceptionHandler processingExceptionHandler) {
         final Set<String> nodeGroup = nodeGroups().get(topicGroupId);
-        return build(nodeGroup);
+        return build(nodeGroup, processingExceptionHandler);
     }
 
     /**
@@ -988,8 +994,13 @@ public class InternalTopologyBuilder {
         return globalGroups;
     }
 
-    @SuppressWarnings("unchecked")
     private ProcessorTopology build(final Set<String> nodeGroup) {
+        return build(nodeGroup, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ProcessorTopology build(final Set<String> nodeGroup,
+                                    final ProcessingExceptionHandler processingExceptionHandler) {
         Objects.requireNonNull(applicationId, "topology has not completed optimization");
 
         final Map<String, ProcessorNode<?, ?, ?, ?>> processorMap = new LinkedHashMap<>();
@@ -1009,7 +1020,8 @@ public class InternalTopologyBuilder {
                     buildProcessorNode(processorMap,
                                        stateStoreMap,
                                        (ProcessorNodeFactory<?, ?, ?, ?>) factory,
-                                       (ProcessorNode<Object, Object, Object, Object>) node);
+                                       (ProcessorNode<Object, Object, Object, Object>) node,
+                                       processingExceptionHandler);
 
                 } else if (factory instanceof SourceNodeFactory) {
                     buildSourceNode(topicSourceMap,
@@ -1098,8 +1110,10 @@ public class InternalTopologyBuilder {
     private void buildProcessorNode(final Map<String, ProcessorNode<?, ?, ?, ?>> processorMap,
                                     final Map<String, StateStore> stateStoreMap,
                                     final ProcessorNodeFactory<?, ?, ?, ?> factory,
-                                    final ProcessorNode<Object, Object, Object, Object> node) {
+                                    final ProcessorNode<Object, Object, Object, Object> node,
+                                    final ProcessingExceptionHandler processingExceptionHandler) {
 
+        node.setProcessingExceptionHandler(processingExceptionHandler);
         for (final String predecessor : factory.predecessors) {
             final ProcessorNode<Object, Object, Object, Object> predecessorNode = getProcessor(processorMap, predecessor);
             predecessorNode.addChild(node);

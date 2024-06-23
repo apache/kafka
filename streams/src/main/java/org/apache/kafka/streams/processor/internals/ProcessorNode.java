@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
@@ -40,6 +41,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     private final String name;
 
     public final Set<String> stateStores;
+    public ProcessingExceptionHandler processingExceptionHandler;
 
     private InternalProcessorContext<KOut, VOut> internalProcessorContext;
     private String threadId;
@@ -183,6 +185,10 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
     public boolean isTerminalNode() {
         return children.isEmpty();
+    }
+
+    public void setProcessingExceptionHandler(final ProcessingExceptionHandler processingExceptionHandler) {
+        this.processingExceptionHandler = processingExceptionHandler;
     }
 
     /**
