@@ -37,6 +37,11 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import kafka.utils.TestUtils;
+import org.junit.jupiter.api.extension.AfterAllCallback;
+import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -56,12 +61,22 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROU
     @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "100"),
 })  // Set defaults for a few params in @ClusterTest(s)
 @ExtendWith(ClusterTestExtensions.class)
-public class ClusterTestExtensionsTest {
+public class ClusterTestExtensionsTest implements BeforeAllCallback, AfterAllCallback {
 
     private final ClusterInstance clusterInstance;
 
     ClusterTestExtensionsTest(ClusterInstance clusterInstance) {     // Constructor injections
         this.clusterInstance = clusterInstance;
+    }
+
+    @Override
+    public void afterAll(ExtensionContext extent) throws Exception {
+        TestUtils.verifyNoUnexpectedThreads("@AfterAllCallback");
+    }
+
+    @Override
+    public void beforeAll(ExtensionContext context) throws Exception {
+        TestUtils.verifyNoUnexpectedThreads("@BeforeAllCallback");
     }
 
     // Static methods can generate cluster configurations
@@ -170,12 +185,12 @@ public class ClusterTestExtensionsTest {
         @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, disksPerBroker = 2),
     })
     public void testClusterTestWithDisksPerBroker() throws ExecutionException, InterruptedException {
-        Admin admin = clusterInstance.createAdminClient();
-
-        DescribeLogDirsResult result = admin.describeLogDirs(clusterInstance.brokerIds());
-        result.allDescriptions().get().forEach((brokerId, logDirDescriptionMap) -> {
-            Assertions.assertEquals(clusterInstance.config().numDisksPerBroker(), logDirDescriptionMap.size());
-        });
+        try (Admin admin = clusterInstance.createAdminClient()) {
+            DescribeLogDirsResult result = admin.describeLogDirs(clusterInstance.brokerIds());
+            result.allDescriptions().get().forEach((brokerId, logDirDescriptionMap) -> {
+                Assertions.assertEquals(clusterInstance.config().numDisksPerBroker(), logDirDescriptionMap.size());
+            });
+        }
     }
 
     @ClusterTest(autoStart = AutoStart.NO)
