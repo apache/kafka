@@ -1633,7 +1633,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public KStream<K, V> markAsPartitioned() {
+    public KStream<K, V> markAsPartitioned(final Named named) {
+
+        final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, PARTITION_PRESERVE_NAME);
+
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
                 new ProcessorParameters<>(new PassThrough<>(), PARTITION_PRESERVE_NAME + name);
 
@@ -1643,7 +1646,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         builder.addGraphNode(graphNode, partitionPreservingNode);
         return new KStreamImpl<>(
-                partitionPreservingNode.nodeName(),
+                name,
                 keySerde,
                 valueSerde,
                 subTopologySourceNodes,

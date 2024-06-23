@@ -455,7 +455,7 @@ public class KStreamRepartitionIntegrationTest {
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
                 .selectKey((key, value) -> Integer.valueOf(value))
-                .markAsPartitioned()
+                .markAsPartitioned(Named.as("partition-preserved"))
                 .groupByKey()
                 .count()
                 .toStream()
@@ -495,7 +495,7 @@ public class KStreamRepartitionIntegrationTest {
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
                 .map(KeyValue::new, Named.as(topicBMapperName))
-                .markAsPartitioned()
+                .markAsPartitioned(Named.as("partition-preserved"))
                 .groupByKey()
                 .count()
                 .toStream()
