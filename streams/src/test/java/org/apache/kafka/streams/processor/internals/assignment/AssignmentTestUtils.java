@@ -246,11 +246,13 @@ public final class AssignmentTestUtils {
 
     // If you don't care about setting the end offsets for each specific topic partition, the helper method
     // getTopicPartitionOffsetMap is useful for building this input map for all partitions
-    public static AdminClient createMockAdminClientForAssignor(final Map<TopicPartition, Long> changelogEndOffsets) {
+    public static AdminClient createMockAdminClientForAssignor(final Map<TopicPartition, Long> changelogEndOffsets, final boolean mockListOffsets) {
         final AdminClient adminClient = mock(AdminClient.class);
 
         final ListOffsetsResult result = mock(ListOffsetsResult.class);
-        when(adminClient.listOffsets(any())).thenReturn(result);
+        if (mockListOffsets) {
+            when(adminClient.listOffsets(any())).thenReturn(result);
+        }
         for (final Map.Entry<TopicPartition, Long> entry : changelogEndOffsets.entrySet()) {
             final KafkaFutureImpl<ListOffsetsResultInfo> partitionFuture = new KafkaFutureImpl<>();
             final ListOffsetsResultInfo info = mock(ListOffsetsResultInfo.class);

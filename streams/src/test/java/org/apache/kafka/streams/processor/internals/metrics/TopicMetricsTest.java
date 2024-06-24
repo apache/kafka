@@ -19,8 +19,8 @@ package org.apache.kafka.streams.processor.internals.metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 
-import org.junit.AfterClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import java.util.Collections;
 import java.util.Map;
@@ -47,7 +47,7 @@ public class TopicMetricsTest {
     private static final MockedStatic<StreamsMetricsImpl> STREAMS_METRICS_STATIC_MOCK = mockStatic(StreamsMetricsImpl.class);
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
 
-    @AfterClass
+    @AfterAll
     public static void cleanUp() {
         STREAMS_METRICS_STATIC_MOCK.close();
     }

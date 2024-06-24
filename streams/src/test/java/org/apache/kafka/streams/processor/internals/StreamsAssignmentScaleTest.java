@@ -37,15 +37,17 @@ import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityT
 import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,8 +74,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
-@Category({IntegrationTest.class})
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@Tag("integration")
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StreamsAssignmentScaleTest {
     static final long MAX_ASSIGNMENT_DURATION = 120 * 1000L; // we should stay below `max.poll.interval.ms`
     static final String APPLICATION_ID = "streams-assignment-scale-test";
@@ -82,66 +85,78 @@ public class StreamsAssignmentScaleTest {
 
     /* HighAvailabilityTaskAssignor tests */
 
-    @Test(timeout = 300 * 1000)
+    @Test
+    @Timeout(value = 300)
     public void testHighAvailabilityTaskAssignorLargePartitionCount() {
         completeLargeAssignment(6_000, 2, 1, 1, HighAvailabilityTaskAssignor.class);
     }
 
-    @Test(timeout = 300 * 1000)
+    @Test
+    @Timeout(value = 300)
     public void testHighAvailabilityTaskAssignorLargeNumConsumers() {
         completeLargeAssignment(1_000, 1_000, 1, 1, HighAvailabilityTaskAssignor.class);
     }
 
-    @Test(timeout = 300 * 1000)
+    @Test
+    @Timeout(value = 300)
     public void testHighAvailabilityTaskAssignorManyStandbys() {
         completeLargeAssignment(1_000, 100, 1, 50, HighAvailabilityTaskAssignor.class);
     }
 
-    @Test(timeout = 300 * 1000)
+    @Test
+    @Timeout(value = 300)
     public void testHighAvailabilityTaskAssignorManyThreadsPerClient() {
         completeLargeAssignment(1_000, 10, 1000, 1, HighAvailabilityTaskAssignor.class);
     }
 
     /* LegacyStickyTaskAssignor tests */
 
-    @Test(timeout = 300 * 1000)
+    @Test
+    @Timeout(value = 300)
     public void testStickyTaskAssignorLargePartitionCount() {
         completeLargeAssignment(2_000, 2, 1, 1, LegacyStickyTaskAssignor.class);
     }
 
-    @Test(timeout = 300 * 1000)
+    @Test
+    @Timeout(value = 300)
     public void testStickyTaskAssignorLargeNumConsumers() {
         completeLargeAssignment(1_000, 1_000, 1, 1, LegacyStickyTaskAssignor.class);
     }
 
-    @Test(timeout = 300 * 1000)
+    @Test
+    @Timeout(value = 300)
     public void testStickyTaskAssignorManyStandbys() {
         completeLargeAssignment(1_000, 100, 1, 20, LegacyStickyTaskAssignor.class);
     }
 
-    @Test(timeout = 300 * 1000)
+    @Test
+    @Timeout(value = 300)
     public void testStickyTaskAssignorManyThreadsPerClient() {
         completeLargeAssignment(1_000, 10, 1000, 1, LegacyStickyTaskAssignor.class);
     }
 
     /* FallbackPriorTaskAssignor tests */
 
-    @Test(timeout = 300 * 1000)
+    @Test
+    @Timeout(value = 300)
     public void testFallbackPriorTaskAssignorLargePartitionCount() {
         completeLargeAssignment(2_000, 2, 1, 1, FallbackPriorTaskAssignor.class);
     }
 
-    @Test(timeout = 300 * 1000)
+    @Test
+    @Timeout(value = 300)
     public void testFallbackPriorTaskAssignorLargeNumConsumers() {
         completeLargeAssignment(1_000, 1_000, 1, 1, FallbackPriorTaskAssignor.class);
     }
 
-    @Test(timeout = 300 * 1000)
+    @Test
+    @Timeout(value = 300)
     public void testFallbackPriorTaskAssignorManyStandbys() {
         completeLargeAssignment(1_000, 100, 1, 20, FallbackPriorTaskAssignor.class);
     }
 
-    @Test(timeout = 300 * 1000)
+    @Test
+    @Timeout(value = 300)
     public void testFallbackPriorTaskAssignorManyThreadsPerClient() {
         completeLargeAssignment(1_000, 10, 1000, 1, FallbackPriorTaskAssignor.class);
     }
@@ -184,8 +199,8 @@ public class StreamsAssignmentScaleTest {
         final Consumer<byte[], byte[]> mainConsumer = mock(Consumer.class);
         final TaskManager taskManager = mock(TaskManager.class);
         when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
-        when(mainConsumer.committed(anySet())).thenReturn(Collections.emptyMap());
-        final AdminClient adminClient = createMockAdminClientForAssignor(changelogEndOffsets);
+
+        final AdminClient adminClient = createMockAdminClientForAssignor(changelogEndOffsets, true);
 
         final ReferenceContainer referenceContainer = new ReferenceContainer();
         referenceContainer.mainConsumer = mainConsumer;
