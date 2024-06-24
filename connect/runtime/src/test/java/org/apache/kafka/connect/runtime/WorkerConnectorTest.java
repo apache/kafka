@@ -139,7 +139,8 @@ public class WorkerConnectorTest {
 
     @ParameterizedTest
     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
-    public void testInitializeAndStopFailure() {
+    public void testInitializeAndStopFailure(ConnectorType connectorType) {
+        setup(connectorType);
         RuntimeException exception1 = new RuntimeException();
         RuntimeException exception2 = new RuntimeException();
 
@@ -393,7 +394,8 @@ public class WorkerConnectorTest {
 
     @ParameterizedTest
     @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
-    public void testStartupAndStopFailure() {
+    public void testStartupAndStopFailure(ConnectorType connectorType) {
+        setup(connectorType);
         RuntimeException exception1 = new RuntimeException();
         RuntimeException exception2 = new RuntimeException();
 
