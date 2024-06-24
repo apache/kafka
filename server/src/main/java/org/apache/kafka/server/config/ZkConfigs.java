@@ -18,6 +18,7 @@ package org.apache.kafka.server.config;
 
 
 import org.apache.kafka.common.config.ConfigDef;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -119,7 +120,7 @@ public final class ZkConfigs {
         ZK_SSL_CLIENT_ENABLE_DOC = "Set client to use TLS when connecting to ZooKeeper." +
             " An explicit value overrides any value set via the <code>zookeeper.client.secure</code> system property (note the different name)." +
             " Defaults to false if neither is set; when true, <code>" + ZK_CLIENT_CNXN_SOCKET_CONFIG + "</code> must be set (typically to <code>org.apache.zookeeper.ClientCnxnSocketNetty</code>); other values to set may include " +
-            ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().stream().filter(x -> !x.equals(ZK_SSL_CLIENT_ENABLE_CONFIG) && !x.equals(ZK_CLIENT_CNXN_SOCKET_CONFIG)).sorted().collect(Collectors.joining("<code>", "</code>, <code>", "</code>"));
+            ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().stream().filter(x -> !x.equals(ZK_SSL_CLIENT_ENABLE_CONFIG) && !x.equals(ZK_CLIENT_CNXN_SOCKET_CONFIG)).sorted().collect(Collectors.joining("</code>, <code>", "<code>", "</code>"));
         ZK_CLIENT_CNXN_SOCKET_DOC = "Typically set to <code>org.apache.zookeeper.ClientCnxnSocketNetty</code> when using TLS connectivity to ZooKeeper." +
             " Overrides any explicit value set via the same-named <code>" + ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZK_CLIENT_CNXN_SOCKET_CONFIG) + "</code> system property.";
         ZK_SSL_KEY_STORE_LOCATION_DOC = "Keystore location when using a client-side certificate with TLS connectivity to ZooKeeper." +

@@ -17,13 +17,15 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.test.TestUtils;
+
+import org.junit.jupiter.api.Test;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
 
 public class ConfigurationUtilsTest extends OAuthBearerTest {
 

@@ -45,9 +45,9 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -61,10 +61,10 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RecordQueueTest {
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
@@ -102,12 +102,12 @@ public class RecordQueueTest {
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
     @SuppressWarnings("unchecked")
-    @Before
+    @BeforeEach
     public void before() {
         mockSourceNodeWithMetrics.init(context);
     }
 
-    @After
+    @AfterEach
     public void after() {
         mockSourceNodeWithMetrics.close();
     }

@@ -70,7 +70,7 @@ public class ForeignTableJoinProcessorSupplierTests {
         context = new MockInternalNewProcessorContext<>(props, new TaskId(0, 0), stateDir);
 
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
-        processor = new ForeignTableJoinProcessorSupplier<String, String, String>(storeBuilder(), COMBINED_KEY_SCHEMA).get();
+        processor = new ForeignTableJoinProcessorSupplier<String, String, String>(storeBuilder().name(), COMBINED_KEY_SCHEMA).get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
         stateStore.init((StateStoreContext) context, stateStore);

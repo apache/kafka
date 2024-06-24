@@ -16,6 +16,23 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.security.authenticator.SaslInternalConfigs;
+import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.ScramCredentialCallback;
+import org.apache.kafka.common.security.scram.ScramLoginModule;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFinalMessage;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFirstMessage;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFinalMessage;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirstMessage;
+import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCredentialCallback;
+import org.apache.kafka.common.utils.Utils;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -30,22 +47,6 @@ import javax.security.auth.callback.NameCallback;
 import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
-
-import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.IllegalSaslStateException;
-import org.apache.kafka.common.errors.SaslAuthenticationException;
-import org.apache.kafka.common.security.authenticator.SaslInternalConfigs;
-import org.apache.kafka.common.security.scram.ScramCredential;
-import org.apache.kafka.common.security.scram.ScramCredentialCallback;
-import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFinalMessage;
-import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFirstMessage;
-import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFinalMessage;
-import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirstMessage;
-import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCredentialCallback;
-import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * SaslServer implementation for SASL/SCRAM. This server is configured with a callback

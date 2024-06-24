@@ -18,6 +18,7 @@
 package org.apache.kafka.metadata.authorizer;
 
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

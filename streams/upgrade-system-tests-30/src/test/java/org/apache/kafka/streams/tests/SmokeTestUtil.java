@@ -26,9 +26,9 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 
 import java.time.Instant;
-import org.apache.kafka.streams.processor.api.Record;
 
 public class SmokeTestUtil {
 

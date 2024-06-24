@@ -56,11 +56,14 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -79,12 +82,12 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.AbstractHerder.keysWithVariableValues;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -98,7 +101,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class AbstractHerderTest {
 
     private static final String CONN1 = "sourceA";
@@ -455,6 +459,7 @@ public class AbstractHerderTest {
 
         assertThrows(BadRequestException.class, () -> herder.validateConnectorConfig(Collections.emptyMap(), s -> null, false));
         verify(transformer).transform(Collections.emptyMap());
+        assertEquals(worker.getPlugins(), plugins);
     }
 
     @Test
@@ -1050,16 +1055,16 @@ public class AbstractHerderTest {
         verify(plugins).withClassLoader(newPluginInstance.get().getClass().getClassLoader());
     }
 
-    @Test(expected = NotFoundException.class)
+    @Test
     public void testGetConnectorConfigDefWithBadName() throws Exception {
         String connName = "AnotherPlugin";
         AbstractHerder herder = testHerder();
         when(worker.getPlugins()).thenReturn(plugins);
         when(plugins.pluginClass(anyString())).thenThrow(new ClassNotFoundException());
-        herder.connectorPluginConfig(connName);
+        assertThrows(NotFoundException.class, () -> herder.connectorPluginConfig(connName));
     }
 
-    @Test(expected = BadRequestException.class)
+    @Test
     @SuppressWarnings({"rawtypes", "unchecked"})
     public void testGetConnectorConfigDefWithInvalidPluginType() throws Exception {
         String connName = "AnotherPlugin";
@@ -1067,7 +1072,7 @@ public class AbstractHerderTest {
         when(worker.getPlugins()).thenReturn(plugins);
         when(plugins.pluginClass(anyString())).thenReturn((Class) Object.class);
         when(plugins.newPlugin(anyString())).thenReturn(new DirectoryConfigProvider());
-        herder.connectorPluginConfig(connName);
+        assertThrows(BadRequestException.class, () -> herder.connectorPluginConfig(connName));
     }
 
     @Test
@@ -1228,7 +1233,7 @@ public class AbstractHerderTest {
     private void testConfigProviderRegex(String rawConnConfig, boolean expected) {
         Set<String> keys = keysWithVariableValues(Collections.singletonMap("key", rawConnConfig), ConfigTransformer.DEFAULT_PATTERN);
         boolean actual = keys != null && !keys.isEmpty() && keys.contains("key");
-        assertEquals(String.format("%s should have matched regex", rawConnConfig), expected, actual);
+        assertEquals(expected, actual, String.format("%s should have matched regex", rawConnConfig));
     }
 
     private AbstractHerder createConfigValidationHerder(Class<? extends Connector> connectorClass,
