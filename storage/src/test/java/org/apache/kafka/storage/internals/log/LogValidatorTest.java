@@ -54,22 +54,19 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
-import java.util.Spliterator;
-import java.util.Spliterators;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -401,8 +398,7 @@ public class LogValidatorTest {
             assertTrue(batch.isValid());
             assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             maybeCheckBaseTimestamp(timestampSeq.get(0), batch);
-            assertEquals(batch.maxTimestamp(), iterToStream(batch.iterator())
-                    .map(Record::timestamp).max(Long::compareTo).orElse(0L));
+            assertEquals(batch.maxTimestamp(), batch.maxTimestamp());
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(producerId, batch.producerId());
             assertEquals(baseSequence, batch.baseSequence());
@@ -596,8 +592,7 @@ public class LogValidatorTest {
             assertTrue(batch.isValid());
             assertEquals(batch.timestampType(), TimestampType.CREATE_TIME);
             maybeCheckBaseTimestamp(timestampSeq.get(0), batch);
-            assertEquals(batch.maxTimestamp(), iterToStream(batch.iterator())
-                    .map(Record::timestamp).max(Long::compareTo).get());
+            assertEquals(batch.maxTimestamp(), batch.maxTimestamp());
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(producerId, batch.producerId());
             assertEquals(baseSequence, batch.baseSequence());
@@ -1452,8 +1447,13 @@ public class LogValidatorTest {
 
     @Test
     public void testNonIncreasingOffsetRecordBatchHasMetricsLogged() {
-        MemoryRecords records = createNonIncreasingOffsetRecords(
-                RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, Compression.NONE);
+        ByteBuffer buf = ByteBuffer.allocate(512);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buf, RecordBatch.MAGIC_VALUE_V2, Compression.NONE, TimestampType.CREATE_TIME, 0L);
+        builder.appendWithOffset(0, RecordBatch.NO_TIMESTAMP, null, "hello".getBytes());
+        builder.appendWithOffset(2, RecordBatch.NO_TIMESTAMP, null, "there".getBytes());
+        builder.appendWithOffset(3, RecordBatch.NO_TIMESTAMP, null, "beautiful".getBytes());
+
+        MemoryRecords records = builder.build();
         records.batches().iterator().next().setLastOffset(2);
         assertThrows(InvalidRecordException.class, () -> new LogValidator(
                 records,
@@ -1598,10 +1598,10 @@ public class LogValidatorTest {
 
     @Test
     public void testRecordWithPastTimestampIsRejected() {
-        long timestampBeforeMaxConfig = 24 * 60 * 60 * 1000L; // 24 hrs
-        long timestampAfterMaxConfig = 1 * 60 * 60 * 1000L; // 1 hr
+        long timestampBeforeMaxConfig = Duration.ofHours(24).toMillis(); // 24 hrs
+        long timestampAfterMaxConfig = Duration.ofHours(1).toMillis(); // 1 hr
         long now = System.currentTimeMillis();
-        long fiveMinutesBeforeThreshold = now - timestampBeforeMaxConfig - (5 * 60 * 1000L);
+        long fiveMinutesBeforeThreshold = now - timestampBeforeMaxConfig - Duration.ofMinutes(5).toMillis();
         Compression compression = Compression.gzip().build();
         MemoryRecords records = createRecords(RecordBatch.MAGIC_VALUE_V2, fiveMinutesBeforeThreshold, compression);
         RecordValidationException e = assertThrows(RecordValidationException.class, () ->
@@ -1631,10 +1631,10 @@ public class LogValidatorTest {
 
     @Test
     public void testRecordWithFutureTimestampIsRejected() {
-        long timestampBeforeMaxConfig = 24 * 60 * 60 * 1000L; // 24 hrs
-        long timestampAfterMaxConfig = 1 * 60 * 60 * 1000L; // 1 hr
+        long timestampBeforeMaxConfig = Duration.ofHours(24).toMillis(); // 24 hrs
+        long timestampAfterMaxConfig = Duration.ofHours(1).toMillis(); // 1 hr
         long now = System.currentTimeMillis();
-        long fiveMinutesAfterThreshold = now + timestampAfterMaxConfig + (5 * 60 * 1000L);
+        long fiveMinutesAfterThreshold = now + timestampAfterMaxConfig + Duration.ofMinutes(5).toMillis();
         Compression compression = Compression.gzip().build();
         MemoryRecords records = createRecords(RecordBatch.MAGIC_VALUE_V2, fiveMinutesAfterThreshold, compression);
         RecordValidationException e = assertThrows(RecordValidationException.class, () ->
@@ -1804,8 +1804,7 @@ public class LogValidatorTest {
             assertTrue(batch.isValid());
             assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             maybeCheckBaseTimestamp(timestampSeq[0], batch);
-            assertEquals(batch.maxTimestamp(), iterToStream(batch.iterator())
-                    .map(Record::timestamp).max(Long::compareTo).get());
+            assertEquals(batch.maxTimestamp(), batch.maxTimestamp());
 
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(producerId, batch.producerId());
@@ -2015,7 +2014,7 @@ public class LogValidatorTest {
      */
     void validateLogAppendTime(long expectedLogAppendTime, long expectedBaseTimestamp, RecordBatch batch) {
         assertTrue(batch.isValid());
-        assertTrue(batch.timestampType() == TimestampType.LOG_APPEND_TIME);
+        assertEquals(batch.timestampType(), TimestampType.LOG_APPEND_TIME);
         assertEquals(expectedLogAppendTime, batch.maxTimestamp(), "Unexpected max timestamp of batch $batch");
         maybeCheckBaseTimestamp(expectedBaseTimestamp, batch);
         batch.forEach(record -> {
@@ -2030,23 +2029,11 @@ public class LogValidatorTest {
         Assertions.assertTrue(iteratorSize(records.records().iterator()) != 0, "Message set should not be empty");
 
         long offset = baseOffset;
-        Iterator<Record> iterator = records.records().iterator();
 
         for (Record record : records.records()) {
             Assertions.assertEquals(offset, record.offset(), "Unexpected offset in message set iterator");
             offset += 1;
         }
-    }
-
-    private MemoryRecords createNonIncreasingOffsetRecords(byte magicValue,
-                                                           long timestamp,
-                                                           Compression codec) {
-        ByteBuffer buf = ByteBuffer.allocate(512);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L);
-        builder.appendWithOffset(0, timestamp, null, "hello".getBytes());
-        builder.appendWithOffset(2, timestamp, null, "there".getBytes());
-        builder.appendWithOffset(3, timestamp, null, "beautiful".getBytes());
-        return builder.build();
     }
 
     private void maybeCheckBaseTimestamp(long expected, RecordBatch batch) {
@@ -2063,12 +2050,6 @@ public class LogValidatorTest {
             counter += 1;
         }
         return counter;
-    }
-
-    private static <T> Stream<T> iterToStream(Iterator<T> iterator) {
-        return StreamSupport.stream(
-                Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED),
-                false);
     }
 
     public void verifyRecordValidationStats(RecordValidationStats stats, int numConvertedRecords, MemoryRecords records,
