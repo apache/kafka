@@ -284,10 +284,8 @@ public class SharePartitionManager implements AutoCloseable {
                     throw Errors.INVALID_REQUEST.exception();
                 }
                 context = new FinalContext();
-                synchronized (cache) {
-                    if (cache.remove(key) != null) {
-                        log.debug("Removed share session with key {}", key);
-                    }
+                if (cache.remove(key) != null) {
+                    log.debug("Removed share session with key {}", key);
                 }
             } else {
                 if (cache.remove(key) != null) {
