@@ -63,6 +63,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.SortedSet;
+import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -595,13 +596,14 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testHeartbeatState() {
+        CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
         membershipManager = new MembershipManagerImpl(
                 DEFAULT_GROUP_ID,
                 Optional.empty(),
                 0,
                 Optional.of("uniform"),
                 subscriptions,
-                mock(CommitRequestManager.class),
+                commitRequestManager,
                 (ConsumerMetadata) metadata,
                 logContext,
                 Optional.of(mock(ClientTelemetryReporter.class)),
@@ -639,6 +641,19 @@ public class HeartbeatRequestManagerTest {
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
 
         // Mock a response from the group coordinator, that supplies the member ID and a new epoch
+        membershipManager.onSubscriptionUpdated();
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptions.rebalanceListener()).thenReturn(Optional.empty());
+        ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+                .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
+                .setMemberId(DEFAULT_MEMBER_ID)
+                .setMemberEpoch(DEFAULT_MEMBER_EPOCH)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment())
+        );
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+        membershipManager.onHeartbeatSuccess(rs1.data());
+        membershipManager.poll(time.milliseconds());
+        membershipManager.onHeartbeatRequestSent();
         data = heartbeatState.buildRequestData();
         data.setTopicPartitions(Collections.emptyList());
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
@@ -657,6 +672,7 @@ public class HeartbeatRequestManagerTest {
         subscriptions.subscribe(Collections.singleton(topic), Optional.empty());
         membershipManager.onSubscriptionUpdated();
         membershipManager.transitionToFenced(); // And indirect way of moving to JOINING state
+        when(subscriptions.subscription()).thenReturn(Collections.singleton(topic));
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
         assertEquals(DEFAULT_MEMBER_ID, data.memberId());
@@ -691,7 +707,7 @@ public class HeartbeatRequestManagerTest {
         ConsumerGroupHeartbeatResponseData.Assignment assignmentTopic1 =
             new ConsumerGroupHeartbeatResponseData.Assignment();
         assignmentTopic1.setTopicPartitions(Collections.singletonList(tpTopic1));
-        ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+        rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
                 .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
                 .setMemberId(DEFAULT_MEMBER_ID)
                 .setMemberEpoch(1)
