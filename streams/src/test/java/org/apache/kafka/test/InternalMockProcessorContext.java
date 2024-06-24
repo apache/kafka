@@ -239,6 +239,14 @@ public class InternalMockProcessorContext<KOut, VOut>
                 appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
+        this.recordContext = new ProcessorRecordContext(
+                0,
+                0,
+                0,
+                "topic",
+                new RecordHeaders(),
+                new ConsumerRecord<>("topic", 0, 0, new byte[0], new byte[0])
+        );
     }
 
     @Override
