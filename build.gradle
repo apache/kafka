@@ -2965,7 +2965,6 @@ project(':jmh-benchmarks') {
     implementation libs.slf4jReload4j
     implementation libs.scalaLibrary
     implementation libs.scalaJava8Compat
-    implementation libs.pcollections
   }
 
   tasks.withType(JavaCompile) {
