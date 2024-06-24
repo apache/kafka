@@ -107,7 +107,7 @@ public class FeatureControlManagerTest {
             manager.finalizedFeatures(-1));
         assertEquals(ControllerResult.of(emptyList(), Collections.
                 singletonMap(TestFeatureVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
-                    "Invalid update version 3 for feature "+ TestFeatureVersion.FEATURE_NAME + ". Local controller 0 only supports versions 0-2"))),
+                    "Invalid update version 3 for feature " + TestFeatureVersion.FEATURE_NAME + ". Local controller 0 only supports versions 0-2"))),
             manager.updateFeatures(updateMap(TestFeatureVersion.FEATURE_NAME, 3),
                 Collections.singletonMap(TestFeatureVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
                 false));
@@ -198,7 +198,7 @@ public class FeatureControlManagerTest {
 
         assertEquals(ControllerResult.of(emptyList(), Collections.
                 singletonMap(TestFeatureVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
-                    "Invalid update version 2 for feature " + TestFeatureVersion.FEATURE_NAME +"." +
+                    "Invalid update version 2 for feature " + TestFeatureVersion.FEATURE_NAME + "." +
                     " Can't downgrade the version of this feature without setting the upgrade type to either safe or unsafe downgrade."))),
             manager.updateFeatures(updateMap(TestFeatureVersion.FEATURE_NAME, 2), Collections.emptyMap(), false));
 

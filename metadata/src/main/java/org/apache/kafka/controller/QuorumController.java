@@ -2236,8 +2236,8 @@ public final class QuorumController implements Controller {
             responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
             List<String> featuresWithErrors = new ArrayList<>();
             result.forEach((featureName, error) -> {
-                if (!error.equals(Errors.NONE))  {
-                    featuresWithErrors.add(featureName);
+                if (!error.error().equals(Errors.NONE))  {
+                    featuresWithErrors.add(featureName + ":" + error.error().exceptionName() + " (" + error.message() + ")");
                 }
                 responseData.results().add(
                     new UpdateFeaturesResponseData.UpdatableFeatureResult()

@@ -91,8 +91,8 @@ public class UpdateFeaturesResponse extends AbstractResponse {
             final String feature = updateError.getKey();
             final ApiError error = updateError.getValue();
 
-            if (!error.equals(Errors.NONE)) {
-                featuresWithErrors.add(feature);
+            if (!error.error().equals(Errors.NONE)) {
+                featuresWithErrors.add(feature + ":" + error.error().exceptionName() + " (" + error.message() + ")");
             }
 
             final UpdatableFeatureResult result = new UpdatableFeatureResult();
