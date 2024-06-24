@@ -212,7 +212,7 @@ public enum MetadataVersion {
     //
 
     // Support ListOffsetRequest v9 for KIP-1005.
-    IBP_3_9_IV0(21, "3.9", "IV0", true),
+    IBP_3_9_IV0(21, "3.9", "IV0", false),
 
     // Add ELR related supports (KIP-966).
     IBP_3_9_IV1(22, "3.9", "IV1", true),
