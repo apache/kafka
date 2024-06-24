@@ -20,7 +20,6 @@ package kafka.server
 import com.yammer.metrics.core.MetricName
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
-import kafka.metrics.LinuxIoMetricsCollector
 import kafka.network.SocketServer
 import kafka.utils.Logging
 import org.apache.kafka.common.ClusterResource
@@ -34,7 +33,7 @@ import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.util.Scheduler
 
 import java.time.Duration
@@ -73,6 +72,9 @@ object KafkaBroker {
 }
 
 trait KafkaBroker extends Logging {
+  // Number of shards to split FetchSessionCache into. This is to reduce contention when trying to
+  // acquire lock while handling Fetch requests.
+  val NumFetchSessionCacheShards: Int = 8
 
   def authorizer: Option[Authorizer]
   def brokerState: BrokerState
@@ -95,6 +97,7 @@ trait KafkaBroker extends Logging {
   def awaitShutdown(): Unit
   def shutdown(): Unit = shutdown(Duration.ofMinutes(5))
   def shutdown(timeout: Duration): Unit
+  def isShutdown(): Boolean
   def brokerTopicStats: BrokerTopicStats
   def credentialProvider: CredentialProvider
   def clientToControllerChannelManager: NodeToControllerChannelManager
@@ -112,7 +115,7 @@ trait KafkaBroker extends Logging {
   metricsGroup.newGauge("ClusterId", () => clusterId)
   metricsGroup.newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
-  private val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying)
+  private val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM)
 
   if (linuxIoMetricsCollector.usable()) {
     metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())

@@ -18,40 +18,21 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.requests.TransactionResult;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * A simple interface to write records to Partitions/Logs. It contains the minimum
  * required for coordinators.
- *
- * @param <T> The record type.
  */
-public interface PartitionWriter<T> {
-
-    /**
-     * Serializer to translate T to bytes.
-     *
-     * @param <T> The record type.
-     */
-    interface Serializer<T> {
-        /**
-         * Serializes the key of the record.
-         */
-        byte[] serializeKey(T record);
-
-        /**
-         * Serializes the value of the record.
-         */
-        byte[] serializeValue(T record);
-    }
+public interface PartitionWriter {
 
     /**
      * Listener allowing to listen to high watermark changes. This is meant
-     * to be used in conjunction with {{@link PartitionWriter#append(TopicPartition, List)}}.
+     * to be used in conjunction with {{@link PartitionWriter#append(TopicPartition, VerificationGuard, MemoryRecords)}}.
      */
     interface Listener {
         void onHighWatermarkUpdated(
@@ -83,42 +64,27 @@ public interface PartitionWriter<T> {
     );
 
     /**
-     * Write records to the partitions. Records are written in one batch so
-     * atomicity is guaranteed.
+     * Return the LogConfig of the partition.
+     *
+     * @param tp    The partition.
+     * @return The LogConfig.
+     */
+    LogConfig config(
+        TopicPartition tp
+    );
+
+    /**
+     * Write records to the partitions.
      *
      * @param tp                The partition to write records to.
-     * @param producerId        The producer id.
-     * @param producerEpoch     The producer epoch.
      * @param verificationGuard The verification guard.
-     * @param records           The list of records. The records are written in a single batch.
+     * @param records           The MemoryRecords.
      * @return The log end offset right after the written records.
-     * @throws KafkaException Any KafkaException caught during the write operation.
      */
     long append(
         TopicPartition tp,
-        long producerId,
-        short producerEpoch,
         VerificationGuard verificationGuard,
-        List<T> records
-    ) throws KafkaException;
-
-    /**
-     * Write the transaction end marker.
-     *
-     * @param tp                The partition to write records to.
-     * @param producerId        The producer id.
-     * @param producerEpoch     The producer epoch.
-     * @param coordinatorEpoch  The epoch of the transaction coordinator.
-     * @param result            The transaction result.
-     * @return The log end offset right after the written records.
-     * @throws KafkaException Any KafkaException caught during the write operation.
-     */
-    long appendEndTransactionMarker(
-        TopicPartition tp,
-        long producerId,
-        short producerEpoch,
-        int coordinatorEpoch,
-        TransactionResult result
+        MemoryRecords records
     ) throws KafkaException;
 
     /**

@@ -40,6 +40,8 @@
       "default": null, "taggedVersions": "0+", "tag": 0,
       "about": "The classic member metadata which includes the supported protocols of the consumer if it uses the classic protocol. The metadata is null if the consumer uses the consumer protocol.",
       "fields": [
+        { "name": "SessionTimeoutMs", "type": "int32", "versions": "0+",
+          "about": "The session timeout if the consumer uses the classic protocol." },
         { "name": "SupportedProtocols", "type": "[]ClassicProtocol", "versions": "0+",
           "about": "The list of protocols that the member supports if the consumer uses the classic protocol.",
           "fields": [

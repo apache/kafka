@@ -33,7 +33,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 
 import java.util
 import java.util.concurrent.ThreadLocalRandom
@@ -539,9 +539,9 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   override def metadataVersion(): MetadataVersion = _currentImage.features().metadataVersion()
 
-  override def features(): Features = {
+  override def features(): FinalizedFeatures = {
     val image = _currentImage
-    new Features(image.features().metadataVersion(),
+    new FinalizedFeatures(image.features().metadataVersion(),
       image.features().finalizedVersions(),
       image.highestOffsetAndEpoch().offset,
       true)

@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

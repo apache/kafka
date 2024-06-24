@@ -51,6 +51,19 @@ bash tests/docker/ducker-ak up -j 'openjdk:11'; tests/docker/run_tests.sh
 ```
 REBUILD="t" bash tests/docker/run_tests.sh
 ```
+* Run tests with Kafka in `native` mode
+  - To run tests with Kafka in `native` mode, pass `{"kafka_mode": "native"}` to the ducktape globals. This will bring up ducker nodes with the native Kafka binary inside them and use it to start Kafka while running the tests.
+    ```
+    _DUCKTAPE_OPTIONS="--globals '{\"kafka_mode\":\"native\"}'" TC_PATHS="tests/kafkatest/tests/"  bash tests/docker/run_tests.sh
+    ```
+  - To only bring up ducker nodes with kafka native binary inside it.
+    ```
+    bash tests/docker/ducker-ak up -m native
+    ```
+  - To run tests with Kafka in `native` mode using `ducker-ak test`(Make sure that the ducker nodes are already up with kafka native binary inside it).
+    ```
+    tests/docker/ducker-ak test tests/kafkatest/tests/client/compression_test.py -- --globals '{\"kafka_mode\":\"native\"}'
+    ```
 * Debug tests in VS Code:
   - Run test with `--debug` flag (can be before or after file name):
     ```

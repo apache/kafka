@@ -22,13 +22,13 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsConfig;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class TimeWindowedSerializerTest {
@@ -39,7 +39,7 @@ public class TimeWindowedSerializerTest {
     public void testTimeWindowedSerializerConstructor() {
         timeWindowedSerializer.configure(props, true);
         final Serializer<?> inner = timeWindowedSerializer.innerSerializer();
-        assertNotNull("Inner serializer should be not null", inner);
+        assertNotNull(inner, "Inner serializer should be not null");
         assertInstanceOf(StringSerializer.class, inner, "Inner serializer type should be StringSerializer");
     }
 

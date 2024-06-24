@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.clients.admin.Admin;
@@ -26,6 +25,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfigs;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.ConfigType;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.server.util.MockTime;
@@ -116,7 +116,7 @@ public class EmbeddedKafkaCluster {
 
         brokerConfig.put(ZkConfigs.ZK_CONNECT_CONFIG, zKConnectString());
         putIfAbsent(brokerConfig, SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:" + DEFAULT_BROKER_PORT);
-        putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
+        putIfAbsent(brokerConfig, ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, true);
         putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
         putIfAbsent(brokerConfig, GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 0);
         putIfAbsent(brokerConfig, GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0);
@@ -126,7 +126,7 @@ public class EmbeddedKafkaCluster {
         putIfAbsent(brokerConfig, ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
 
         for (int i = 0; i < brokers.length; i++) {
-            brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
+            brokerConfig.put(ServerConfigs.BROKER_ID_CONFIG, i);
             log.debug("Starting a Kafka instance on {} ...", brokerConfig.get(SocketServerConfigs.LISTENERS_CONFIG));
 
             final Properties effectiveConfig = new Properties();

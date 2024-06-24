@@ -17,15 +17,16 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Optional;
-
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Optional;
 
 import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -202,7 +203,7 @@ public class PartitionReassignmentReplicasTest {
             partitionAssignment(Arrays.asList(0, 1, 2)), partitionAssignment(Arrays.asList(0, 1, 3)));
         assertTrue(replicas.isReassignmentInProgress());
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-            replicas.maybeCompleteReassignment(Arrays.asList(3));
+            replicas.maybeCompleteReassignment(Collections.singletonList(3));
         assertFalse(reassignmentOptional.isPresent());
     }
 

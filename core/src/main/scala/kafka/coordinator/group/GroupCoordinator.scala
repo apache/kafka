@@ -36,6 +36,7 @@ import org.apache.kafka.coordinator.group.{Group, OffsetConfig}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.VerificationGuard
 
+import scala.annotation.nowarn
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.math.max
 
@@ -929,7 +930,7 @@ private[group] class GroupCoordinator(
               offsetTopicPartition, offsetMetadata, newRequestLocal, responseCallback, Some(verificationGuard))
           }
         }
-        val supportedOperation = if (apiVersion >= 4) genericError else defaultError
+        val transactionSupportedOperation = if (apiVersion >= 4) genericError else defaultError
         groupManager.replicaManager.maybeStartTransactionVerificationForPartition(
           topicPartition = offsetTopicPartition,
           transactionalId,
@@ -943,7 +944,7 @@ private[group] class GroupCoordinator(
             postVerificationCallback,
             requestLocal
           ),
-          supportedOperation
+          transactionSupportedOperation
         )
     }
   }
@@ -1767,6 +1768,7 @@ object GroupCoordinator {
     GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, time, metrics)
   }
 
+  @nowarn("cat=deprecation")
   private[group] def offsetConfig(config: KafkaConfig) = new OffsetConfig(
     config.offsetMetadataMaxSize,
     config.offsetsLoadBufferSize,

@@ -20,8 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StopReplicaRequestData;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionV0;
-import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicV1;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
+import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicV1;
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -94,15 +94,13 @@ public class StopReplicaRequest extends AbstractControlRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=StopReplicaRequest").
-                append(", controllerId=").append(controllerId).
-                append(", controllerEpoch=").append(controllerEpoch).
-                append(", brokerEpoch=").append(brokerEpoch).
-                append(", deletePartitions=").append(deletePartitions).
-                append(", topicStates=").append(topicStates.stream().map(StopReplicaTopicState::toString).collect(Collectors.joining(","))).
-                append(")");
-            return bld.toString();
+            return "(type=StopReplicaRequest" +
+                    ", controllerId=" + controllerId +
+                    ", controllerEpoch=" + controllerEpoch +
+                    ", brokerEpoch=" + brokerEpoch +
+                    ", deletePartitions=" + deletePartitions +
+                    ", topicStates=" + topicStates.stream().map(StopReplicaTopicState::toString).collect(Collectors.joining(",")) +
+                    ")";
         }
     }
 

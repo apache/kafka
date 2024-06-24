@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import java.util.Set;
-
 import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Set;
 
 /**
  * The <code>b64token</code> value as defined in

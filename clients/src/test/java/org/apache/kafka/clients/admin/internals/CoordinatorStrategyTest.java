@@ -23,6 +23,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -90,7 +91,7 @@ public class CoordinatorStrategyTest {
         strategy.disableBatch();
 
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(
-                new HashSet<>(Arrays.asList(CoordinatorKey.byTransactionalId("txnid")))));
+                new HashSet<>(Collections.singletonList(CoordinatorKey.byTransactionalId("txnid")))));
     }
 
     @Test

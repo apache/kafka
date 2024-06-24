@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.tiered.storage;
 
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
+import org.apache.kafka.storage.internals.log.EpochEntry;
+import org.apache.kafka.tiered.storage.actions.AlterLogDirAction;
 import org.apache.kafka.tiered.storage.actions.BounceBrokerAction;
 import org.apache.kafka.tiered.storage.actions.ConsumeAction;
 import org.apache.kafka.tiered.storage.actions.CreatePartitionsAction;
@@ -48,13 +55,8 @@ import org.apache.kafka.tiered.storage.specs.ProducableSpec;
 import org.apache.kafka.tiered.storage.specs.RemoteDeleteSegmentSpec;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchSpec;
 import org.apache.kafka.tiered.storage.specs.TopicSpec;
-import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
-import org.apache.kafka.storage.internals.log.EpochEntry;
 
+import java.io.FilenameFilter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -290,6 +292,13 @@ public final class TieredStorageTestBuilder {
         return this;
     }
 
+    public TieredStorageTestBuilder eraseBrokerStorage(Integer brokerId,
+                                                       FilenameFilter filenameFilter,
+                                                       boolean isStopped) {
+        actions.add(new EraseBrokerStorageAction(brokerId, filenameFilter, isStopped));
+        return this;
+    }
+
     public TieredStorageTestBuilder expectEmptyRemoteStorage(String topic,
                                                              Integer partition) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
@@ -310,6 +319,14 @@ public final class TieredStorageTestBuilder {
                                                     List<Integer> replicaIds) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         actions.add(new ReassignReplicaAction(topicPartition, replicaIds));
+        return this;
+    }
+
+    public TieredStorageTestBuilder alterLogDir(String topic,
+                                                Integer partition,
+                                                int replicaIds) {
+        TopicPartition topicPartition = new TopicPartition(topic, partition);
+        actions.add(new AlterLogDirAction(topicPartition, replicaIds));
         return this;
     }
 
@@ -396,4 +413,3 @@ public final class TieredStorageTestBuilder {
         return deleteSegmentSpecList;
     }
 }
-

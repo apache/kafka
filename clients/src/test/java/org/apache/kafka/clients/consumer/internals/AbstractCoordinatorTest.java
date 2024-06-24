@@ -58,6 +58,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -299,9 +300,9 @@ public class AbstractCoordinatorTest {
         coordinator.ensureCoordinatorReadyAsync();
 
         // But should wakeup in sync variation even if timer is 0.
-        assertThrows(WakeupException.class, () -> {
-            coordinator.ensureCoordinatorReady(mockTime.timer(0));
-        });
+        assertThrows(WakeupException.class, () ->
+            coordinator.ensureCoordinatorReady(mockTime.timer(0))
+        );
     }
 
     @Test
@@ -1018,7 +1019,7 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
-    public void testHeartbeatRequestWithFencedInstanceIdException() throws InterruptedException {
+    public void testHeartbeatRequestWithFencedInstanceIdException() {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
 
@@ -1418,11 +1419,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
-        try {
-            coordinator.ensureActiveGroup();
-            fail("Should have woken up from ensureActiveGroup()");
-        } catch (WakeupException e) {
-        }
+        assertThrows(WakeupException.class, () -> coordinator.ensureActiveGroup(), "Should have woken up from ensureActiveGroup()");
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(0, coordinator.onJoinCompleteInvokes);
@@ -1458,11 +1455,7 @@ public class AbstractCoordinatorTest {
         }, syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
-        try {
-            coordinator.ensureActiveGroup();
-            fail("Should have woken up from ensureActiveGroup()");
-        } catch (WakeupException e) {
-        }
+        assertThrows(WakeupException.class, () -> coordinator.ensureActiveGroup(), "Should have woken up from ensureActiveGroup()");
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(0, coordinator.onJoinCompleteInvokes);
@@ -1526,11 +1519,7 @@ public class AbstractCoordinatorTest {
         }, syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
-        try {
-            coordinator.ensureActiveGroup();
-            fail("Should have woken up from ensureActiveGroup()");
-        } catch (WakeupException e) {
-        }
+        assertThrows(WakeupException.class, () -> coordinator.ensureActiveGroup(), "Should have woken up from ensureActiveGroup()");
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(0, coordinator.onJoinCompleteInvokes);

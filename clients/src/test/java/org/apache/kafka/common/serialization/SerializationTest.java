@@ -18,6 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Bytes;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -26,6 +27,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -42,8 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SerializationTest {
 
-    final private String topic = "testTopic";
-    final private Map<Class<?>, List<Object>> testData = new HashMap<Class<?>, List<Object>>() {
+    private final String topic = "testTopic";
+    private final Map<Class<?>, List<Object>> testData = new HashMap<Class<?>, List<Object>>() {
         {
             put(String.class, Arrays.asList(null, "my string"));
             put(Short.class, Arrays.asList(null, (short) 32767, (short) -32768));
@@ -62,7 +64,7 @@ public class SerializationTest {
         }
     };
 
-    private class DummyClass {
+    private static class DummyClass {
     }
 
     @SuppressWarnings("unchecked")
@@ -147,7 +149,7 @@ public class SerializationTest {
     @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldReturnEmptyCollection() {
-        List<Integer> testData = Arrays.asList();
+        List<Integer> testData = Collections.emptyList();
         Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
         assertEquals(testData,
             listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)),

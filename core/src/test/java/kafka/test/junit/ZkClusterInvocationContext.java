@@ -19,24 +19,24 @@ package kafka.test.junit;
 
 import kafka.api.IntegrationTestHarness;
 import kafka.network.SocketServer;
-import kafka.server.BrokerFeatures;
+import kafka.server.ControllerServer;
+import kafka.server.KafkaBroker;
 import kafka.server.KafkaServer;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
+import kafka.test.annotation.Type;
 import kafka.utils.EmptyTestInfo;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
-import scala.Option;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
-import scala.compat.java8.OptionConverters;
 
 import java.io.File;
 import java.util.Arrays;
@@ -51,7 +51,11 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
+
+import scala.Option;
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
+import scala.compat.java8.OptionConverters;
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG;
@@ -81,10 +85,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
     @Override
     public String getDisplayName(int invocationIndex) {
-        String clusterDesc = clusterConfig.nameTags().entrySet().stream()
-            .map(Object::toString)
-            .collect(Collectors.joining(", "));
-        return String.format("%s [%d] Type=ZK, %s", baseDisplayName, invocationIndex, clusterDesc);
+        return String.format("%s [%d] Type=ZK, %s", baseDisplayName, invocationIndex, String.join(",", clusterConfig.displayTags()));
     }
 
     @Override
@@ -132,13 +133,6 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
-        public Collection<SocketServer> brokerSocketServers() {
-            return servers()
-                    .map(KafkaServer::socketServer)
-                    .collect(Collectors.toList());
-        }
-
-        @Override
         public ListenerName clientListener() {
             return clusterReference.get().listenerName();
         }
@@ -151,46 +145,21 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
         @Override
         public Collection<SocketServer> controllerSocketServers() {
-            return servers()
-                .filter(broker -> broker.kafkaController().isActive())
-                .map(KafkaServer::socketServer)
+            return brokers().values().stream()
+                .filter(s -> ((KafkaServer) s).kafkaController().isActive())
+                .map(KafkaBroker::socketServer)
                 .collect(Collectors.toList());
         }
 
         @Override
-        public SocketServer anyBrokerSocketServer() {
-            return servers()
-                .map(KafkaServer::socketServer)
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
-        }
-
-        @Override
-        public SocketServer anyControllerSocketServer() {
-            return servers()
-                .filter(broker -> broker.kafkaController().isActive())
-                .map(KafkaServer::socketServer)
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
-        }
-
-        @Override
-        public Map<Integer, BrokerFeatures> brokerFeatures() {
-            return servers().collect(Collectors.toMap(
-                brokerServer -> brokerServer.config().nodeId(),
-                KafkaServer::brokerFeatures
-            ));
-        }
-
-        @Override
         public String clusterId() {
-            return servers().findFirst().map(KafkaServer::clusterId).orElseThrow(
+            return brokers().values().stream().findFirst().map(KafkaBroker::clusterId).orElseThrow(
                 () -> new RuntimeException("No broker instances found"));
         }
 
         @Override
-        public ClusterType clusterType() {
-            return ClusterType.ZK;
+        public Type type() {
+            return Type.ZK;
         }
 
         @Override
@@ -201,13 +170,6 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         @Override
         public Set<Integer> controllerIds() {
             return brokerIds();
-        }
-
-        @Override
-        public Set<Integer> brokerIds() {
-            return servers()
-                .map(brokerServer -> brokerServer.config().nodeId())
-                .collect(Collectors.toSet());
         }
 
         @Override
@@ -273,14 +235,22 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         private KafkaServer findBrokerOrThrow(int brokerId) {
-            return servers()
+            return brokers().values().stream()
                 .filter(server -> server.config().brokerId() == brokerId)
+                .map(s -> (KafkaServer) s)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
         }
 
-        public Stream<KafkaServer> servers() {
-            return JavaConverters.asJavaCollection(clusterReference.get().servers()).stream();
+        @Override
+        public Map<Integer, ControllerServer> controllers() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public Map<Integer, KafkaBroker> brokers() {
+            return JavaConverters.asJavaCollection(clusterReference.get().servers())
+                    .stream().collect(Collectors.toMap(s -> s.config().brokerId(), s -> s));
         }
     }
 
@@ -301,7 +271,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         public void modifyConfigs(Seq<Properties> props) {
             super.modifyConfigs(props);
             for (int i = 0; i < props.length(); i++) {
-                props.apply(i).putAll(clusterConfig.perBrokerOverrideProperties().getOrDefault(i, Collections.emptyMap()));
+                props.apply(i).putAll(clusterConfig.perServerOverrideProperties().getOrDefault(i, Collections.emptyMap()));
             }
         }
 

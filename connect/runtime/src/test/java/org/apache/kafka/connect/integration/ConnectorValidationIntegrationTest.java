@@ -27,11 +27,11 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Filter;
 import org.apache.kafka.connect.transforms.predicates.RecordIsTombstone;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -56,7 +56,7 @@ import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREAT
 /**
  * Integration test for preflight connector config validation
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class ConnectorValidationIntegrationTest {
 
     private static final String WORKER_GROUP_ID = "connect-worker-group-id";
@@ -64,7 +64,7 @@ public class ConnectorValidationIntegrationTest {
     // Use a single embedded cluster for all test cases in order to cut down on runtime
     private static EmbeddedConnectCluster connect;
 
-    @BeforeClass
+    @BeforeAll
     public static void setup() {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(GROUP_ID_CONFIG, WORKER_GROUP_ID);
@@ -79,7 +79,7 @@ public class ConnectorValidationIntegrationTest {
         connect.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void close() {
         if (connect != null) {
             // stop all Connect, Kafka and Zk threads.
@@ -474,7 +474,7 @@ public class ConnectorValidationIntegrationTest {
         );
     }
 
-    public static abstract class TestConverter implements Converter, HeaderConverter {
+    public abstract static class TestConverter implements Converter, HeaderConverter {
 
         // Defined by both Converter and HeaderConverter interfaces
         @Override
@@ -517,7 +517,7 @@ public class ConnectorValidationIntegrationTest {
         }
     }
 
-    public static abstract class AbstractTestConverter extends TestConverter {
+    public abstract static class AbstractTestConverter extends TestConverter {
     }
 
     public static class TestConverterWithPrivateConstructor extends TestConverter {

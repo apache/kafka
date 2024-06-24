@@ -19,7 +19,9 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.LeastLoadedNode;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
@@ -32,6 +34,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -39,10 +42,10 @@ import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -86,6 +89,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -149,16 +153,15 @@ public class SenderTest {
     private static final int DELIVERY_TIMEOUT_MS = 1500;
     private static final long TOPIC_IDLE_MS = 60 * 1000;
 
-    private TopicPartition tp0 = new TopicPartition("test", 0);
-    private TopicPartition tp1 = new TopicPartition("test", 1);
-
-    private TopicPartition tp2 = new TopicPartition("test", 2);
+    private final TopicPartition tp0 = new TopicPartition("test", 0);
+    private final TopicPartition tp1 = new TopicPartition("test", 1);
+    private final TopicPartition tp2 = new TopicPartition("test", 2);
     private MockTime time = new MockTime();
-    private int batchSize = 16 * 1024;
-    private ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, TOPIC_IDLE_MS,
+    private final int batchSize = 16 * 1024;
+    private final ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, TOPIC_IDLE_MS,
             new LogContext(), new ClusterResourceListeners(), time);
+    private final ApiVersions apiVersions = new ApiVersions();
     private MockClient client = new MockClient(time, metadata);
-    private ApiVersions apiVersions = new ApiVersions();
     private Metrics metrics = null;
     private RecordAccumulator accumulator = null;
     private Sender sender = null;
@@ -299,7 +302,8 @@ public class SenderTest {
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
-                time, true, new ApiVersions(), throttleTimeSensor, logContext);
+                time, true, new ApiVersions(), throttleTimeSensor, logContext,
+                MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.ZK_BROKER);
@@ -517,7 +521,7 @@ public class SenderTest {
         sender.runOnce();  // We should try to flush the batch, but we expire it instead without sending anything.
         assertEquals(messagesPerBatch, expiryCallbackCount.get(), "Callbacks not invoked for expiry");
         assertNull(unexpectedException.get(), "Unexpected exception");
-        // Make sure that the reconds were appended back to the batch.
+        // Make sure that the records were appended back to the batch.
         assertNotNull(accumulator.getDeque(tp1));
         assertEquals(1, accumulator.getDeque(tp1).size());
         assertEquals(messagesPerBatch, accumulator.getDeque(tp1).peekFirst().recordCount);
@@ -570,7 +574,7 @@ public class SenderTest {
             // otherwise it wouldn't update the stats.
             RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42);
             long totalSize = 1024 * 1024;
-            accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L, 0L,
+            accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
                 DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, apiVersions, null,
                 new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"));
 
@@ -2309,7 +2313,7 @@ public class SenderTest {
         sender.runOnce();  // receive response
         assertTrue(responseFuture.isDone());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
-        assertEquals(1L, (long) transactionManager.sequenceNumber(tp0));
+        assertEquals(1L, transactionManager.sequenceNumber(tp0));
     }
 
     @Test
@@ -2418,7 +2422,7 @@ public class SenderTest {
         // Set a good compression ratio.
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
         try (Metrics m = new Metrics()) {
-            accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.GZIP,
+            accumulator = new RecordAccumulator(logContext, batchSize, Compression.gzip().build(),
                 0, 0L, 0L, deliveryTimeoutMs, m, metricGrpName, time, new ApiVersions(), txnManager,
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics"));
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
@@ -2472,7 +2476,7 @@ public class SenderTest {
             assertEquals(OptionalInt.of(0), txnManager.lastAckedSequence(tp), "The last ack'd sequence number should be 0");
             assertFalse(f2.isDone(), "The future shouldn't have been done.");
             assertEquals(0L, f1.get().offset(), "Offset of the first message should be 0");
-            sender.runOnce(); // send the seconcd produce request
+            sender.runOnce(); // send the second produce request
             id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
             node = new Node(Integer.parseInt(id), "localhost", 0);
@@ -2956,7 +2960,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testTransactionAbortedExceptionOnAbortWithoutError() throws InterruptedException, ExecutionException {
+    public void testTransactionAbortedExceptionOnAbortWithoutError() throws InterruptedException {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         TransactionManager txnManager = new TransactionManager(logContext, "testTransactionAbortedExceptionOnAbortWithoutError", 60000, 100, apiVersions);
 
@@ -3151,7 +3155,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testTransactionAbortablenExceptionIsAnAbortableError() throws Exception {
+    public void testTransactionAbortableExceptionIsAnAbortableError() throws Exception {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
         TransactionManager txnManager = new TransactionManager(logContext, "textTransactionAbortableException", 60000, 100, apiVersions);
@@ -3201,7 +3205,7 @@ public class SenderTest {
             long retryBackoffMaxMs = 100L;
             // lingerMs is 0 to send batch as soon as any records are available on it.
             this.accumulator = new RecordAccumulator(logContext, batchSize,
-                CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
+                Compression.NONE, 0, 10L, retryBackoffMaxMs,
                 DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
@@ -3232,7 +3236,7 @@ public class SenderTest {
             assertTrue(client.hasInFlightRequests());
             client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
             sender.runOnce(); // receive produce response, batch scheduled for retry
-            assertTrue(!futureIsProduced.isDone(), "Produce request is yet not done.");
+            assertFalse(futureIsProduced.isDone(), "Produce request should not be done.");
 
             // TEST that as new-leader(with epochA) is discovered, the batch is retried immediately i.e. skips any backoff period.
             // Update leader epoch for tp0
@@ -3253,13 +3257,13 @@ public class SenderTest {
             assertTrue(client.hasInFlightRequests());
             client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
             sender.runOnce(); // receive produce response, schedule batch for retry.
-            assertTrue(!futureIsProduced.isDone(), "Produce request is yet not done.");
+            assertFalse(futureIsProduced.isDone(), "Produce request should not be done.");
 
             // TEST that a subsequent retry to the same leader(epochA) waits the backoff period.
             sender.runOnce(); //send produce request
             // No batches in-flight
             assertEquals(0, sender.inFlightBatches(tp0).size());
-            assertTrue(!client.hasInFlightRequests());
+            assertFalse(client.hasInFlightRequests());
 
             // TEST that after waiting for longer than backoff period, batch is retried again.
             time.sleep(2 * retryBackoffMaxMs);
@@ -3279,7 +3283,7 @@ public class SenderTest {
     // This test is expected to run fast. If timeout, the sender is not able to close properly.
     @Timeout(5)
     @Test
-    public void testSenderShouldCloseWhenTransactionManagerInErrorState() throws Exception {
+    public void testSenderShouldCloseWhenTransactionManagerInErrorState() {
         metrics.close();
         Map<String, String> clientTags = Collections.singletonMap("client-id", "clientA");
         metrics = new Metrics(new MetricConfig().tags(clientTags));
@@ -3315,7 +3319,7 @@ public class SenderTest {
             long retryBackoffMaxMs = 100L;
             // lingerMs is 0 to send batch as soon as any records are available on it.
             this.accumulator = new RecordAccumulator(logContext, batchSize,
-                CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
+                Compression.NONE, 0, 10L, retryBackoffMaxMs,
                 DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
@@ -3356,8 +3360,8 @@ public class SenderTest {
             responses.put(tp2, new OffsetAndError(100, Errors.NONE));
             client.respond(produceResponse(responses));
             sender.runOnce(); // receive produce response, batch scheduled for retry
-            assertTrue(!futureIsProducedTp0.isDone(), "Produce request to tp0 should be unfinished.");
-            assertTrue(!futureIsProducedTp1.isDone(), "Produce request to tp1 should be unfinished.");
+            assertFalse(futureIsProducedTp0.isDone(), "Produce request to tp0 should be unfinished.");
+            assertFalse(futureIsProducedTp1.isDone(), "Produce request to tp1 should be unfinished.");
             assertTrue(futureIsProducedTp2.isDone(), "Produce request to tp0 should be done.");
 
             // Validate metadata is unchanged as new leader info wasn't received.
@@ -3395,7 +3399,7 @@ public class SenderTest {
             long retryBackoffMaxMs = 100L;
             // lingerMs is 0 to send batch as soon as any records are available on it.
             this.accumulator = new RecordAccumulator(logContext, batchSize,
-                CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
+                Compression.NONE, 0, 10L, retryBackoffMaxMs,
                 DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
@@ -3452,8 +3456,8 @@ public class SenderTest {
 
             client.respond(produceResponse(responses, partitionLeaderInfo, newNodes));
             sender.runOnce(); // receive produce response, batch scheduled for retry
-            assertTrue(!futureIsProducedTp0.isDone(), "Produce request to tp0 should be unfinished.");
-            assertTrue(!futureIsProducedTp1.isDone(), "Produce request to tp1 should be unfinished.");
+            assertFalse(futureIsProducedTp0.isDone(), "Produce request to tp0 should be unfinished.");
+            assertFalse(futureIsProducedTp1.isDone(), "Produce request to tp1 should be unfinished.");
             assertTrue(futureIsProducedTp2.isDone(), "Produce request to tp0 should be done.");
 
             // Validate metadata is unchanged as new leader info wasn't received.
@@ -3492,9 +3496,9 @@ public class SenderTest {
         assertEquals(expectedMessage, e1.getCause().getMessage());
     }
 
-    class AssertEndTxnRequestMatcher implements MockClient.RequestMatcher {
+    private static class AssertEndTxnRequestMatcher implements MockClient.RequestMatcher {
 
-        private TransactionResult requiredResult;
+        private final TransactionResult requiredResult;
         private boolean matched = false;
 
         AssertEndTxnRequestMatcher(TransactionResult requiredResult) {
@@ -3513,7 +3517,7 @@ public class SenderTest {
         }
     }
 
-    private class MatchingBufferPool extends BufferPool {
+    private static class MatchingBufferPool extends BufferPool {
         IdentityHashMap<ByteBuffer, Boolean> allocatedBuffers;
 
         MatchingBufferPool(long totalSize, int batchSize, Metrics metrics, Time time, String metricGrpName) {
@@ -3697,7 +3701,7 @@ public class SenderTest {
         this.metrics = new Metrics(metricConfig, time);
         BufferPool pool = (customPool == null) ? new BufferPool(totalSize, batchSize, metrics, time, metricGrpName) : customPool;
 
-        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, lingerMs, 0L, 0L,
+        this.accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, lingerMs, 0L, 0L,
             DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, transactionManager, pool);
         this.senderMetricsRegistry = new SenderMetricsRegistry(this.metrics);
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, guaranteeOrder, MAX_REQUEST_SIZE, ACKS_ALL,
@@ -3797,12 +3801,12 @@ public class SenderTest {
         client = new MockClient(time, metadata) {
             volatile boolean canSendMore = true;
             @Override
-            public Node leastLoadedNode(long now) {
+            public LeastLoadedNode leastLoadedNode(long now) {
                 for (Node node : metadata.fetch().nodes()) {
                     if (isReady(node, now) && canSendMore)
-                        return node;
+                        return new LeastLoadedNode(node, true);
                 }
-                return null;
+                return new LeastLoadedNode(null, false);
             }
 
             @Override
@@ -3821,7 +3825,7 @@ public class SenderTest {
         while (!client.ready(node, time.milliseconds()))
             client.poll(0, time.milliseconds());
         client.send(request, time.milliseconds());
-        while (client.leastLoadedNode(time.milliseconds()) != null)
+        while (client.leastLoadedNode(time.milliseconds()).node() != null)
             client.poll(0, time.milliseconds());
     }
 

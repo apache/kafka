@@ -201,7 +201,7 @@ object AbstractCoordinatorConcurrencyTest {
       producerEpoch: Short,
       baseSequence: Int,
       callback: ((Errors, VerificationGuard)) => Unit,
-      supportedOperation: SupportedOperation
+      transactionSupportedOperation: TransactionSupportedOperation
     ): Unit = {
       // Skip verification
       callback((Errors.NONE, VerificationGuard.SENTINEL))

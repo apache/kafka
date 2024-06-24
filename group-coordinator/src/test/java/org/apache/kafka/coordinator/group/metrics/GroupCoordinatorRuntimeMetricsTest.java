@@ -22,6 +22,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.CoordinatorState;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

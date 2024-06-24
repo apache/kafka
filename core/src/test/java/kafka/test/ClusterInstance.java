@@ -18,11 +18,16 @@
 package kafka.test;
 
 import kafka.network.SocketServer;
-import kafka.server.BrokerFeatures;
+import kafka.server.BrokerServer;
+import kafka.server.ControllerServer;
+import kafka.server.KafkaBroker;
 import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.Type;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.test.TestUtils;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -31,27 +36,28 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 
 public interface ClusterInstance {
 
-    enum ClusterType {
-        ZK,
-        RAFT
-    }
-
-    /**
-     * Cluster type. For now, only ZK is supported.
-     */
-    ClusterType clusterType();
+    Type type();
 
     default boolean isKRaftTest() {
-        return clusterType() == ClusterType.RAFT;
+        return type() == Type.KRAFT || type() == Type.CO_KRAFT;
     }
+
+    Map<Integer, KafkaBroker> brokers();
+
+    default Map<Integer, KafkaBroker> aliveBrokers() {
+        return brokers().entrySet().stream().filter(entry -> !entry.getValue().isShutdown())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    Map<Integer, ControllerServer> controllers();
 
     /**
      * The immutable cluster configuration used to create this cluster.
@@ -68,7 +74,9 @@ public interface ClusterInstance {
     /**
      * Return the set of all broker IDs configured for this test.
      */
-    Set<Integer> brokerIds();
+    default Set<Integer> brokerIds() {
+        return brokers().keySet();
+    }
 
     /**
      * The listener for this cluster as configured by {@link ClusterTest} or by {@link ClusterConfig}. If
@@ -104,7 +112,11 @@ public interface ClusterInstance {
      * A collection of all brokers in the cluster. In ZK-based clusters this will also include the broker which is
      * acting as the controller (since ZK controllers serve both broker and controller roles).
      */
-    Collection<SocketServer> brokerSocketServers();
+    default Collection<SocketServer> brokerSocketServers() {
+        return brokers().values().stream()
+                .map(KafkaBroker::socketServer)
+                .collect(Collectors.toList());
+    }
 
     /**
      * A collection of all controllers in the cluster. For ZK-based clusters, this will return the broker which is also
@@ -115,17 +127,20 @@ public interface ClusterInstance {
     /**
      * Return any one of the broker servers. Throw an error if none are found
      */
-    SocketServer anyBrokerSocketServer();
+    default SocketServer anyBrokerSocketServer() {
+        return brokerSocketServers().stream()
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
+    }
 
     /**
      * Return any one of the controller servers. Throw an error if none are found
      */
-    SocketServer anyControllerSocketServer();
-
-    /**
-     * Return a mapping of the underlying broker IDs to their supported features
-     */
-    Map<Integer, BrokerFeatures> brokerFeatures();
+    default SocketServer anyControllerSocketServer() {
+        return controllerSocketServers().stream()
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
+    }
 
     String clusterId();
 
@@ -144,6 +159,20 @@ public interface ClusterInstance {
         return createAdminClient(new Properties());
     }
 
+    default Set<GroupProtocol> supportedGroupProtocols() {
+        Map<String, String> serverProperties = config().serverProperties();
+        Set<GroupProtocol> supportedGroupProtocols = new HashSet<>();
+        supportedGroupProtocols.add(CLASSIC);
+
+        if (serverProperties.getOrDefault(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "").contains("consumer")) {
+            supportedGroupProtocols.add(CONSUMER);
+        }
+
+        return Collections.unmodifiableSet(supportedGroupProtocols);
+    }
+
+    //---------------------------[modify]---------------------------//
+
     void start();
 
     void stop();
@@ -152,19 +181,23 @@ public interface ClusterInstance {
 
     void startBroker(int brokerId);
 
+    //---------------------------[wait]---------------------------//
+
     void waitForReadyBrokers() throws InterruptedException;
 
-    default Set<GroupProtocol> supportedGroupProtocols() {
-        Map<String, String> serverProperties = config().serverProperties();
-        Set<GroupProtocol> supportedGroupProtocols = new HashSet<>();
-        supportedGroupProtocols.add(CLASSIC);
+    default void waitForTopic(String topic, int partitions) throws InterruptedException {
+        // wait for metadata
+        TestUtils.waitForCondition(
+            () -> brokers().values().stream().allMatch(broker -> partitions == 0 ?
+                broker.metadataCache().numPartitions(topic).isEmpty() :
+                broker.metadataCache().numPartitions(topic).contains(partitions)
+        ), 60000L, topic + " metadata not propagated after 60000 ms");
 
-        // KafkaConfig#isNewGroupCoordinatorEnabled check both NEW_GROUP_COORDINATOR_ENABLE_CONFIG and GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG
-        if (serverProperties.getOrDefault(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "").equals("true") ||
-                serverProperties.getOrDefault(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "").contains("consumer")) {
-            supportedGroupProtocols.add(CONSUMER);
+        for (ControllerServer controller : controllers().values()) {
+            long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset - 1;
+            TestUtils.waitForCondition(
+                () -> brokers().values().stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
+                60000L, "Timeout waiting for controller metadata propagating to brokers");
         }
-
-        return Collections.unmodifiableSet(supportedGroupProtocols);
     }
 }

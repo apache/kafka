@@ -26,7 +26,6 @@ import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +59,7 @@ public class ConsumerGroupMember {
         private int rebalanceTimeoutMs = -1;
         private String clientId = "";
         private String clientHost = "";
-        private List<String> subscribedTopicNames = Collections.emptyList();
+        private Set<String> subscribedTopicNames = Collections.emptySet();
         private String subscribedTopicRegex = "";
         private String serverAssignorName = null;
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
@@ -148,15 +147,13 @@ public class ConsumerGroupMember {
             return this;
         }
 
-        public Builder setSubscribedTopicNames(List<String> subscribedTopicNames) {
-            this.subscribedTopicNames = subscribedTopicNames;
-            this.subscribedTopicNames.sort(Comparator.naturalOrder());
+        public Builder setSubscribedTopicNames(List<String> subscribedTopicList) {
+            if (subscribedTopicNames != null) this.subscribedTopicNames = new HashSet<>(subscribedTopicList);
             return this;
         }
 
-        public Builder maybeUpdateSubscribedTopicNames(Optional<List<String>> subscribedTopicNames) {
-            this.subscribedTopicNames = subscribedTopicNames.orElse(this.subscribedTopicNames);
-            this.subscribedTopicNames.sort(Comparator.naturalOrder());
+        public Builder maybeUpdateSubscribedTopicNames(Optional<List<String>> subscribedTopicList) {
+            subscribedTopicList.ifPresent(list -> this.subscribedTopicNames = new HashSet<>(list));
             return this;
         }
 
@@ -197,20 +194,6 @@ public class ConsumerGroupMember {
 
         public Builder setClassicMemberMetadata(ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata) {
             this.classicMemberMetadata = classicMemberMetadata;
-            return this;
-        }
-
-        public Builder setSupportedClassicProtocols(JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols) {
-            List<ConsumerGroupMemberMetadataValue.ClassicProtocol> newSupportedProtocols = new ArrayList<>();
-            protocols.forEach(protocol ->
-                newSupportedProtocols.add(
-                    new ConsumerGroupMemberMetadataValue.ClassicProtocol()
-                        .setName(protocol.name())
-                        .setMetadata(protocol.metadata())
-                )
-            );
-            this.classicMemberMetadata = new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                .setSupportedProtocols(newSupportedProtocols);
             return this;
         }
 
@@ -313,7 +296,7 @@ public class ConsumerGroupMember {
     /**
      * The list of subscriptions (topic names) configured by the member.
      */
-    private final List<String> subscribedTopicNames;
+    private final Set<String> subscribedTopicNames;
 
     /**
      * The subscription pattern configured by the member.
@@ -349,7 +332,7 @@ public class ConsumerGroupMember {
         int rebalanceTimeoutMs,
         String clientId,
         String clientHost,
-        List<String> subscribedTopicNames,
+        Set<String> subscribedTopicNames,
         String subscribedTopicRegex,
         String serverAssignorName,
         MemberState state,
@@ -433,7 +416,7 @@ public class ConsumerGroupMember {
     /**
      * @return The list of subscribed topic names.
      */
-    public List<String> subscribedTopicNames() {
+    public Set<String> subscribedTopicNames() {
         return subscribedTopicNames;
     }
 
@@ -496,6 +479,17 @@ public class ConsumerGroupMember {
     }
 
     /**
+     * @return The session timeout if the member uses the classic protocol.
+     */
+    public Optional<Integer> classicProtocolSessionTimeout() {
+        if (useClassicProtocol()) {
+            return Optional.ofNullable(classicMemberMetadata.sessionTimeoutMs());
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    /**
      * @return The classicMemberMetadata if the consumer uses the classic protocol.
      */
     public Optional<ConsumerGroupMemberMetadataValue.ClassicMemberMetadata> classicMemberMetadata() {
@@ -536,7 +530,7 @@ public class ConsumerGroupMember {
             .setClientId(clientId)
             .setInstanceId(instanceId)
             .setRackId(rackId)
-            .setSubscribedTopicNames(subscribedTopicNames)
+            .setSubscribedTopicNames(subscribedTopicNames == null ? null : new ArrayList<>(subscribedTopicNames))
             .setSubscribedTopicRegex(subscribedTopicRegex);
     }
 
@@ -546,27 +540,35 @@ public class ConsumerGroupMember {
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            String topicName = lookupTopicNameById(topicId, topicsImage);
-            if (topicName != null) {
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            if (topicImage != null) {
                 topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
                     .setTopicId(topicId)
-                    .setTopicName(topicName)
+                    .setTopicName(topicImage.name())
                     .setPartitions(new ArrayList<>(partitionSet)));
             }
         });
         return topicPartitions;
     }
 
-    private static String lookupTopicNameById(
-        Uuid topicId,
-        TopicsImage topicsImage
+    /**
+     * Converts the JoinGroupRequestProtocolCollection to a list of ClassicProtocol.
+     *
+     * @param protocols The JoinGroupRequestProtocolCollection.
+     * @return The converted list of ClassicProtocol.
+     */
+    public static List<ConsumerGroupMemberMetadataValue.ClassicProtocol> classicProtocolListFromJoinRequestProtocolCollection(
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols
     ) {
-        TopicImage topicImage = topicsImage.getTopic(topicId);
-        if (topicImage != null) {
-            return topicImage.name();
-        } else {
-            return null;
-        }
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> newSupportedProtocols = new ArrayList<>();
+        protocols.forEach(protocol ->
+            newSupportedProtocols.add(
+                new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                    .setName(protocol.name())
+                    .setMetadata(protocol.metadata())
+            )
+        );
+        return newSupportedProtocols;
     }
 
     /**

@@ -17,8 +17,8 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.Record;
-import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
@@ -63,12 +63,12 @@ public class ConsumerGroupBuilder {
         return this;
     }
 
-    public List<Record> build(TopicsImage topicsImage) {
-        List<Record> records = new ArrayList<>();
+    public List<CoordinatorRecord> build(TopicsImage topicsImage) {
+        List<CoordinatorRecord> records = new ArrayList<>();
 
         // Add subscription records for members.
         members.forEach((memberId, member) ->
-            records.add(RecordHelpers.newMemberSubscriptionRecord(groupId, member))
+            records.add(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, member))
         );
 
         // Add subscription metadata.
@@ -90,23 +90,23 @@ public class ConsumerGroupBuilder {
         }
 
         if (!subscriptionMetadata.isEmpty()) {
-            records.add(RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+            records.add(CoordinatorRecordHelpers.newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
         }
 
         // Add group epoch record.
-        records.add(RecordHelpers.newGroupEpochRecord(groupId, groupEpoch));
+        records.add(CoordinatorRecordHelpers.newGroupEpochRecord(groupId, groupEpoch));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->
-            records.add(RecordHelpers.newTargetAssignmentRecord(groupId, memberId, assignment.partitions()))
+            records.add(CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, memberId, assignment.partitions()))
         );
 
         // Add target assignment epoch.
-        records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId, assignmentEpoch));
+        records.add(CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId, assignmentEpoch));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->
-            records.add(RecordHelpers.newCurrentAssignmentRecord(groupId, member))
+            records.add(CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, member))
         );
 
         return records;

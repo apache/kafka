@@ -31,9 +31,9 @@ import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,8 +44,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
@@ -54,7 +54,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
     private final KeyValueStoreTestDriver<Bytes, byte[]> byteStoreDriver = KeyValueStoreTestDriver.create(Bytes.class, byte[].class);
     private InMemoryKeyValueStore inMemoryKeyValueStore;
 
-    @Before
+    @BeforeEach
     public void createStringKeyValueStore() {
         super.before();
         final StateStoreContext byteStoreContext = byteStoreDriver.context();
@@ -67,7 +67,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         this.inMemoryKeyValueStore = getInMemoryStore();
     }
 
-    @After
+    @AfterEach
     public void after() {
         super.after();
         byteStore.close();

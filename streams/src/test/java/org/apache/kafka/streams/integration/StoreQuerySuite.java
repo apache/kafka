@@ -22,6 +22,7 @@ import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStoreTest
 import org.apache.kafka.streams.state.internals.GlobalStateStoreProviderTest;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProviderTest;
 import org.apache.kafka.streams.state.internals.WrappingStoreProviderTest;
+
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 

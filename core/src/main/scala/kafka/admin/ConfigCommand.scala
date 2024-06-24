@@ -19,7 +19,7 @@ package kafka.admin
 
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 import joptsimple._
 import kafka.server.{DynamicBrokerConfig, DynamicConfig, KafkaConfig}
 import kafka.utils.Implicits._
@@ -210,15 +210,19 @@ object ConfigCommand extends Logging {
     }
   }
 
-  def createPasswordEncoder(encoderConfigs: Map[String, String]): PasswordEncoder = {
-    encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG)
-    val encoderSecret = encoderConfigs.getOrElse(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG,
-      throw new IllegalArgumentException("Password encoder secret not specified"))
+  def createPasswordEncoder(encoderConfigs: java.util.Map[String, String]): PasswordEncoder = {
+    val encoderSecret = Optional.ofNullable(encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG))
+      .orElseThrow(() => new IllegalArgumentException("Password encoder secret not specified"))
     PasswordEncoder.encrypting(new Password(encoderSecret),
       null,
-      encoderConfigs.getOrElse(PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG, PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT),
-      encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_CONFIG).map(_.toInt).getOrElse(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_DEFAULT),
-      encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG).map(_.toInt).getOrElse(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_DEFAULT))
+      encoderConfigs.getOrDefault(PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG, PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT),
+      Optional.ofNullable(encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_CONFIG))
+        .map[Int](Integer.parseInt)
+        .orElse(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_DEFAULT),
+      Optional.ofNullable(encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG))
+        .map[Int](Integer.parseInt)
+        .orElse(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_DEFAULT)
+    )
   }
 
   /**
@@ -244,8 +248,11 @@ object ConfigCommand extends Logging {
           " to override the default encoding parameters. Password encoder configs will not be persisted" +
           " in ZooKeeper."
       )
-
-      val passwordEncoder = createPasswordEncoder(passwordEncoderConfigs.asScala)
+      val passwordConfigsMap = new java.util.HashMap[String, String]
+      passwordEncoderConfigs.forEach { (key, value) =>
+        passwordConfigsMap.put(key.toString, value.toString)
+      }
+      val passwordEncoder = createPasswordEncoder(passwordConfigsMap)
       passwordConfigs.foreach { configName =>
         val encodedValue = passwordEncoder.encode(new Password(configsToBeAdded.getProperty(configName)))
         configsToBeAdded.setProperty(configName, encodedValue)
@@ -253,7 +260,7 @@ object ConfigCommand extends Logging {
     }
   }
 
-  private[admin] def describeConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
+  def describeConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configEntity = parseEntity(opts)
     val entityType = configEntity.root.entityType
     val describeAllUsers = entityType == ConfigType.USER && configEntity.root.sanitizedName.isEmpty && configEntity.child.isEmpty
@@ -348,7 +355,7 @@ object ConfigCommand extends Logging {
   }
 
   @nowarn("cat=deprecation")
-  private[admin] def alterConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
+  def alterConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     val entityTypeHead = entityTypes.head
@@ -529,7 +536,7 @@ object ConfigCommand extends Logging {
       .all().get(60, TimeUnit.SECONDS)
   }
 
-  private[admin] def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
+  def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     val describeAll = opts.options.has(opts.allOpt)
@@ -749,7 +756,7 @@ object ConfigCommand extends Logging {
     }
   }
 
-  private[admin] def parseEntity(opts: ConfigCommandOptions): ConfigEntity = {
+  def parseEntity(opts: ConfigCommandOptions): ConfigEntity = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     if (entityTypes.head == ConfigType.USER || entityTypes.head == ConfigType.CLIENT)

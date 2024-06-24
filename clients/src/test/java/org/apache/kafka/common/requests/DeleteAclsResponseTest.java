@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterRe
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsMatchingAcl;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourceType;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -39,13 +40,13 @@ public class DeleteAclsResponseTest {
     private static final short V1 = 1;
 
     private static final DeleteAclsMatchingAcl LITERAL_ACL1 = new DeleteAclsMatchingAcl()
-        .setResourceType(ResourceType.TOPIC.code())
-        .setResourceName("foo")
-        .setPatternType(PatternType.LITERAL.code())
-        .setPrincipal("User:ANONYMOUS")
-        .setHost("127.0.0.1")
-        .setOperation(AclOperation.READ.code())
-        .setPermissionType(AclPermissionType.DENY.code());
+            .setResourceType(ResourceType.TOPIC.code())
+            .setResourceName("foo")
+            .setPatternType(PatternType.LITERAL.code())
+            .setPrincipal("User:ANONYMOUS")
+            .setHost("127.0.0.1")
+            .setOperation(AclOperation.READ.code())
+            .setPermissionType(AclPermissionType.DENY.code());
 
     private static final DeleteAclsMatchingAcl LITERAL_ACL2 = new DeleteAclsMatchingAcl()
             .setResourceType(ResourceType.GROUP.code())
@@ -80,7 +81,7 @@ public class DeleteAclsResponseTest {
     private static final DeleteAclsFilterResult PREFIXED_RESPONSE = new DeleteAclsFilterResult().setMatchingAcls(asList(
         LITERAL_ACL1, PREFIXED_ACL1));
 
-    private static final DeleteAclsFilterResult UNKNOWN_RESPONSE = new DeleteAclsFilterResult().setMatchingAcls(asList(
+    private static final DeleteAclsFilterResult UNKNOWN_RESPONSE = new DeleteAclsFilterResult().setMatchingAcls(singletonList(
             UNKNOWN_ACL));
 
     @Test

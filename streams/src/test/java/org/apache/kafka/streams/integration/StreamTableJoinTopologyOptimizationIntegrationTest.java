@@ -36,23 +36,20 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -61,25 +58,23 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(value = Parameterized.class)
-@Category({IntegrationTest.class})
+@Tag("integration")
+@Timeout(600)
 public class StreamTableJoinTopologyOptimizationIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -91,26 +86,13 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
     private KafkaStreams kafkaStreams;
 
     private Properties streamsConfiguration;
+    private TestInfo testInfo;
 
-    @Rule
-    public TestName testName = new TestName();
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws InterruptedException {
+        this.testInfo = testInfo;
 
-    @Parameterized.Parameter
-    public String topologyOptimization;
-
-    @Parameterized.Parameters(name = "Optimization = {0}")
-    public static Collection<?> topologyOptimization() {
-        return Arrays.asList(new String[][]{
-            {StreamsConfig.OPTIMIZE},
-            {StreamsConfig.NO_OPTIMIZATION}
-        });
-    }
-
-    @Before
-    public void before() throws InterruptedException {
-        streamsConfiguration = new Properties();
-
-        final String safeTestName = safeUniqueTestName(testName);
+        final String safeTestName = safeUniqueTestName(testInfo);
 
         tableTopic = "table-topic" + safeTestName;
         inputTopic = "stream-topic-" + safeTestName;
@@ -120,7 +102,18 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
         CLUSTER.createTopic(inputTopic, 4, 1);
         CLUSTER.createTopic(tableTopic, 2, 1);
         CLUSTER.createTopic(outputTopic, 4, 1);
+    }
 
+    @AfterEach
+    public void whenShuttingDown() throws IOException {
+        if (kafkaStreams != null) {
+            kafkaStreams.close();
+        }
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+    }
+
+    private Properties getStreamsConfiguration(final String topologyOptimization) {
+        final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
@@ -129,18 +122,13 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, topologyOptimization);
+        return streamsConfiguration;
     }
 
-    @After
-    public void whenShuttingDown() throws IOException {
-        if (kafkaStreams != null) {
-            kafkaStreams.close();
-        }
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-    }
-
-    @Test
-    public void shouldDoStreamTableJoinWithDifferentNumberOfPartitions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldDoStreamTableJoinWithDifferentNumberOfPartitions(final String topologyOptimization) throws Exception {
+        this.streamsConfiguration = getStreamsConfiguration(topologyOptimization);
         final String storeName = "store";
         final String selectKeyName = "selectKey";
 
@@ -241,7 +229,7 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
                                                  final Deserializer<V> valueSerializer,
                                                  final List<KeyValue<K, V>> expectedRecords) throws Exception {
 
-        final String safeTestName = safeUniqueTestName(testName);
+        final String safeTestName = safeUniqueTestName(testInfo);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);

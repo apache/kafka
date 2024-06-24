@@ -29,7 +29,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -44,25 +43,29 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore.RawAndDeserializedValue;
 import org.apache.kafka.test.KeyValueIteratorStub;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -70,7 +73,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("this-escape")
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class MeteredTimestampedKeyValueStoreTest {
 
     private static final String APPLICATION_ID = "test-app";
@@ -93,8 +97,9 @@ public class MeteredTimestampedKeyValueStoreTest {
     private KeyValueStore<Bytes, byte[]> inner;
     @Mock
     private InternalProcessorContext context;
+    private MockTime mockTime;
 
-    private final static Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
+    private static final Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
 
     private MeteredTimestampedKeyValueStore<String, String> metered;
     private final KeyValue<Bytes, byte[]> byteKeyValueTimestampPair = KeyValue.pair(KEY_BYTES,
@@ -103,35 +108,37 @@ public class MeteredTimestampedKeyValueStoreTest {
     private final Metrics metrics = new Metrics();
     private Map<String, String> tags;
 
-    @Before
-    public void before() {
-        final Time mockTime = new MockTime();
+    private void setUpWithoutContext() {
+        mockTime = new MockTime();
         metered = new MeteredTimestampedKeyValueStore<>(
-            inner,
-            "scope",
-            mockTime,
-            Serdes.String(),
-            new ValueAndTimestampSerde<>(Serdes.String())
+                inner,
+                "scope",
+                mockTime,
+                Serdes.String(),
+                new ValueAndTimestampSerde<>(Serdes.String())
         );
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
+        tags = mkMap(
+                mkEntry(THREAD_ID_TAG_KEY, threadId),
+                mkEntry("task-id", taskId.toString()),
+                mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
+        );
+    }
+
+    private void setUp() {
+        setUpWithoutContext();
         when(context.applicationId()).thenReturn(APPLICATION_ID);
         when(context.metrics())
             .thenReturn(new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, mockTime));
         when(context.taskId()).thenReturn(taskId);
         when(context.changelogFor(STORE_NAME)).thenReturn(CHANGELOG_TOPIC);
-        expectSerdes();
         when(inner.name()).thenReturn(STORE_NAME);
         when(context.appConfigs()).thenReturn(CONFIGS);
-        tags = mkMap(
-            mkEntry(THREAD_ID_TAG_KEY, threadId),
-            mkEntry("task-id", taskId.toString()),
-            mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
-        );
-
     }
-
+    
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private void expectSerdes() {
+    private void setUpWithExpectSerdes() {
+        setUp();
         when(context.keySerde()).thenReturn((Serde) Serdes.String());
         when(context.valueSerde()).thenReturn((Serde) Serdes.Long());
     }
@@ -143,6 +150,7 @@ public class MeteredTimestampedKeyValueStoreTest {
     @SuppressWarnings("deprecation")
     @Test
     public void shouldDelegateDeprecatedInit() {
+        setUp();
         final MeteredTimestampedKeyValueStore<String, String> outer = new MeteredTimestampedKeyValueStore<>(
             inner,
             STORE_TYPE,
@@ -156,6 +164,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldDelegateInit() {
+        setUp();
         final MeteredTimestampedKeyValueStore<String, String> outer = new MeteredTimestampedKeyValueStore<>(
             inner,
             STORE_TYPE,
@@ -169,11 +178,13 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldPassChangelogTopicNameToStateStoreSerde() {
+        setUp();
         doShouldPassChangelogTopicNameToStateStoreSerde(CHANGELOG_TOPIC);
     }
 
     @Test
     public void shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled() {
+        setUp();
         final String defaultChangelogTopicName = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, STORE_NAME, taskId.topologyName());
         when(context.changelogFor(STORE_NAME)).thenReturn(null);
         doShouldPassChangelogTopicNameToStateStoreSerde(defaultChangelogTopicName);
@@ -208,6 +219,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void testMetrics() {
+        setUp();
         init();
         final JmxReporter reporter = new JmxReporter();
         final MetricsContext metricsContext = new KafkaMetricsContext("kafka.streams");
@@ -226,6 +238,7 @@ public class MeteredTimestampedKeyValueStoreTest {
     }
     @Test
     public void shouldWriteBytesToInnerStoreAndRecordPutMetric() {
+        setUp();
         doNothing().when(inner).put(KEY_BYTES, VALUE_AND_TIMESTAMP_BYTES);
         init();
 
@@ -237,6 +250,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldGetWithBinary() {
+        setUp();
         when(inner.get(KEY_BYTES)).thenReturn(VALUE_AND_TIMESTAMP_BYTES);
 
         init();
@@ -246,9 +260,9 @@ public class MeteredTimestampedKeyValueStoreTest {
         assertArrayEquals(valueWithBinary.serializedValue, VALUE_AND_TIMESTAMP_BYTES);
     }
 
-    @SuppressWarnings("resource")
     @Test
     public void shouldNotPutIfSameValuesAndGreaterTimestamp() {
+        setUp();
         init();
 
         metered.put(KEY, VALUE_AND_TIMESTAMP);
@@ -259,9 +273,9 @@ public class MeteredTimestampedKeyValueStoreTest {
         assertFalse(metered.putIfDifferentValues(KEY, newValueAndTimestamp, encodedOldValue));
     }
 
-    @SuppressWarnings("resource")
     @Test
     public void shouldPutIfOutOfOrder() {
+        setUp();
         doNothing().when(inner).put(KEY_BYTES, VALUE_AND_TIMESTAMP_BYTES);
         init();
 
@@ -276,6 +290,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldGetBytesFromInnerStoreAndReturnGetMetric() {
+        setUp();
         when(inner.get(KEY_BYTES)).thenReturn(VALUE_AND_TIMESTAMP_BYTES);
         init();
 
@@ -287,6 +302,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldPutIfAbsentAndRecordPutIfAbsentMetric() {
+        setUp();
         when(inner.putIfAbsent(KEY_BYTES, VALUE_AND_TIMESTAMP_BYTES)).thenReturn(null);
         init();
 
@@ -303,6 +319,7 @@ public class MeteredTimestampedKeyValueStoreTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldPutAllToInnerStoreAndRecordPutAllMetric() {
+        setUp();
         doNothing().when(inner).putAll(any(List.class));
         init();
 
@@ -314,6 +331,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldDeleteFromInnerStoreAndRecordDeleteMetric() {
+        setUp();
         when(inner.delete(KEY_BYTES)).thenReturn(VALUE_AND_TIMESTAMP_BYTES);
         init();
 
@@ -325,6 +343,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldGetRangeFromInnerStoreAndRecordRangeMetric() {
+        setUp();
         when(inner.range(KEY_BYTES, KEY_BYTES)).thenReturn(
             new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampPair).iterator()));
         init();
@@ -340,6 +359,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldGetAllFromInnerStoreAndRecordAllMetric() {
+        setUp();
         when(inner.all())
             .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampPair).iterator()));
         init();
@@ -355,6 +375,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldFlushInnerWhenFlushTimeRecords() {
+        setUp();
         doNothing().when(inner).flush();
         init();
 
@@ -369,6 +390,7 @@ public class MeteredTimestampedKeyValueStoreTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldSetFlushListenerOnWrappedCachingStore() {
+        setUpWithoutContext();
         final CachedKeyValueStore cachedKeyValueStore = mock(CachedKeyValueStore.class);
 
         when(cachedKeyValueStore.setFlushListener(any(CacheFlushListener.class), eq(false))).thenReturn(true);
@@ -384,6 +406,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldNotSetFlushListenerOnWrappedNoneCachingStore() {
+        setUpWithoutContext();
         assertFalse(metered.setFlushListener(null, false));
     }
 
@@ -393,6 +416,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Test
     public void shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext() {
+        setUpWithExpectSerdes();
         final MeteredTimestampedKeyValueStore<String, Long> store = new MeteredTimestampedKeyValueStore<>(
             inner,
             STORE_TYPE,
@@ -417,8 +441,8 @@ public class MeteredTimestampedKeyValueStoreTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldNotThrowExceptionIfSerdesCorrectlySetFromConstructorParameters() {
+        setUp();
         final MeteredTimestampedKeyValueStore<String, Long> store = new MeteredTimestampedKeyValueStore<>(
             inner,
             STORE_TYPE,
@@ -436,5 +460,91 @@ public class MeteredTimestampedKeyValueStoreTest {
             }
             throw exception;
         }
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetric() {
+        setUp();
+        when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        assertThat(openIteratorsMetric, not(nullValue()));
+
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+
+        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.all()) {
+            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+        }
+
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+    }
+
+    @Test
+    public void shouldTimeIteratorDuration() {
+        setUp();
+        when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
+        init();
+
+        final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
+        assertThat(iteratorDurationAvgMetric, not(nullValue()));
+        assertThat(iteratorDurationMaxMetric, not(nullValue()));
+
+        assertThat((Double) iteratorDurationAvgMetric.metricValue(), equalTo(Double.NaN));
+        assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
+
+        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.all()) {
+            // nothing to do, just close immediately
+            mockTime.sleep(2);
+        }
+
+        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+
+        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.all()) {
+            // nothing to do, just close immediately
+            mockTime.sleep(3);
+        }
+
+        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.5 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+    }
+
+    @Test
+    public void shouldTrackOldestOpenIteratorTimestamp() {
+        setUp();
+        when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
+        init();
+
+        final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
+        assertThat(oldestIteratorTimestampMetric, not(nullValue()));
+
+        assertThat(oldestIteratorTimestampMetric.metricValue(), nullValue());
+
+        KeyValueIterator<String, ValueAndTimestamp<String>> second = null;
+        final long secondTimestamp;
+        try {
+            try (final KeyValueIterator<String, ValueAndTimestamp<String>> first = metered.all()) {
+                final long oldestTimestamp = mockTime.milliseconds();
+                assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
+                mockTime.sleep(100);
+
+                // open a second iterator before closing the first to test that we still produce the first iterator's timestamp
+                second = metered.all();
+                secondTimestamp = mockTime.milliseconds();
+                assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
+                mockTime.sleep(100);
+            }
+
+            // now that the first iterator is closed, check that the timestamp has advanced to the still open second iterator
+            assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(secondTimestamp));
+        } finally {
+            if (second != null) {
+                second.close();
+            }
+        }
+
+        assertThat((Integer) oldestIteratorTimestampMetric.metricValue(), nullValue());
     }
 }

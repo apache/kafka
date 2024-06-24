@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -207,6 +208,29 @@ public class ConsumerProtocolTest {
     }
 
     @Test
+    public void serializeDeserializeConsumerProtocolAssignmentAllVersions() {
+        ConsumerProtocolAssignment assignment = new ConsumerProtocolAssignment()
+            .setAssignedPartitions(
+                new ConsumerProtocolAssignment.TopicPartitionCollection(Arrays.asList(
+                    new ConsumerProtocolAssignment.TopicPartition()
+                        .setTopic(tp1.topic())
+                        .setPartitions(Collections.singletonList(tp1.partition())),
+                    new ConsumerProtocolAssignment.TopicPartition()
+                        .setTopic(tp2.topic())
+                        .setPartitions(Collections.singletonList(tp2.partition()))
+                ).iterator())
+            )
+            .setUserData(ByteBuffer.wrap("hello".getBytes()));
+
+        for (short version = ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION; version++) {
+            ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignment, version);
+            ConsumerProtocolAssignment parsedAssignment = ConsumerProtocol.deserializeConsumerProtocolAssignment(buffer);
+            assertEquals(toSet(assignment.assignedPartitions()), toSet(parsedAssignment.assignedPartitions()));
+            assertEquals(assignment.userData(), parsedAssignment.userData());
+        }
+    }
+
+    @Test
     public void serializeDeserializeAssignment() {
         List<TopicPartition> partitions = Arrays.asList(tp1, tp2);
         ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment(partitions, ByteBuffer.wrap(new byte[0])));
@@ -254,6 +278,47 @@ public class ConsumerProtocolTest {
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(buffer);
         assertEquals(toSet(Collections.singletonList(tp1)), toSet(assignment.partitions()));
+    }
+
+    @Test
+    public void serializeDeserializeConsumerProtocolSubscriptionAllVersions() {
+        List<TopicPartition> ownedPartitions = Arrays.asList(
+            new TopicPartition("foo", 0),
+            new TopicPartition("bar", 0));
+        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"),
+            ByteBuffer.wrap("hello".getBytes()), ownedPartitions, generationId, rackId);
+
+        for (short version = ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION; version++) {
+            ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription, version);
+            ConsumerProtocolSubscription parsedSubscription = ConsumerProtocol.deserializeConsumerProtocolSubscription(buffer);
+
+            assertEquals(toSet(subscription.topics()), toSet(parsedSubscription.topics()));
+            assertEquals(subscription.userData(), parsedSubscription.userData());
+
+            if (version >= 1) {
+                assertEquals(
+                    toSet(Arrays.asList(
+                        new ConsumerProtocolSubscription.TopicPartition().setTopic("foo").setPartitions(Collections.singletonList(0)),
+                        new ConsumerProtocolSubscription.TopicPartition().setTopic("bar").setPartitions(Collections.singletonList(0))
+                    )),
+                    toSet(parsedSubscription.ownedPartitions())
+                );
+            } else {
+                assertEquals(new ConsumerProtocolSubscription.TopicPartitionCollection(), parsedSubscription.ownedPartitions());
+            }
+
+            if (version >= 2) {
+                assertEquals(generationId, parsedSubscription.generationId());
+            } else {
+                assertEquals(DEFAULT_GENERATION, parsedSubscription.generationId());
+            }
+
+            if (version >= 3) {
+                assertEquals(rackId.get(), parsedSubscription.rackId());
+            } else {
+                assertNull(parsedSubscription.rackId());
+            }
+        }
     }
 
     private ByteBuffer generateFutureSubscriptionVersionData() {

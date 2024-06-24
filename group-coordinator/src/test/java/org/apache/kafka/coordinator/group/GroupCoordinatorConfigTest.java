@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -27,8 +29,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class GroupCoordinatorConfigTest {
     @Test
     public void testConfigs() {
-        PartitionAssignor assignor = new RangeAssignor();
+        ConsumerGroupPartitionAssignor assignor = new RangeAssignor();
         GroupCoordinatorConfig config = new GroupCoordinatorConfig(
+            10,
             10,
             30,
             10,
@@ -44,7 +47,8 @@ public class GroupCoordinatorConfigTest {
             600000L,
             24 * 60 * 60 * 1000L,
             5000,
-            ConsumerGroupMigrationPolicy.DISABLED
+            ConsumerGroupMigrationPolicy.DISABLED,
+            CompressionType.GZIP
         );
 
         assertEquals(10, config.numThreads);
@@ -62,6 +66,8 @@ public class GroupCoordinatorConfigTest {
         assertEquals(10 * 60 * 1000, config.offsetsRetentionCheckIntervalMs);
         assertEquals(24 * 60 * 60 * 1000L, config.offsetsRetentionMs);
         assertEquals(5000, config.offsetCommitTimeoutMs);
+        assertEquals(CompressionType.GZIP, config.compressionType);
+        assertEquals(10, config.appendLingerMs);
     }
 
     public static GroupCoordinatorConfig createGroupCoordinatorConfig(
@@ -71,6 +77,7 @@ public class GroupCoordinatorConfigTest {
     ) {
         return new GroupCoordinatorConfig(
             1,
+            10,
             45,
             5,
             Integer.MAX_VALUE,
@@ -85,7 +92,8 @@ public class GroupCoordinatorConfigTest {
             offsetsRetentionCheckIntervalMs,
             offsetsRetentionMs,
             5000,
-            ConsumerGroupMigrationPolicy.DISABLED
+            ConsumerGroupMigrationPolicy.DISABLED,
+            CompressionType.NONE
         );
     }
 }

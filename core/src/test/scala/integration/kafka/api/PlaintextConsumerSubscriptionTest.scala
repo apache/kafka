@@ -12,14 +12,16 @@
   */
 package kafka.api
 
-import kafka.utils.TestInfoUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.InvalidTopicException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
+import java.time.Duration
 import java.util.regex.Pattern
 import java.util.stream.Stream
 import scala.jdk.CollectionConverters._
@@ -223,6 +225,26 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     assertEquals(0, consumer.assignment.size())
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSubscribeInvalidTopic(quorum: String, groupProtocol: String): Unit = {
+    // Invalid topic name due to space
+    val invalidTopicName = "topic abc"
+    val consumer = createConsumer()
+
+    consumer.subscribe(List(invalidTopicName).asJava)
+
+    var exception : InvalidTopicException = null
+    TestUtils.waitUntilTrue(() => {
+      try consumer.poll(Duration.ofMillis(500)) catch {
+        case e : InvalidTopicException => exception = e
+        case e : Throwable => fail(s"An InvalidTopicException should be thrown. But ${e.getClass} is thrown")
+      }
+      exception != null
+    }, waitTimeMs = 5000, msg = "An InvalidTopicException should be thrown.")
+
+    assertEquals(s"Invalid topics: [${invalidTopicName}]", exception.getMessage)
+  }
 }
 
 object PlaintextConsumerSubscriptionTest {

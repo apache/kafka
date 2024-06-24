@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.ValidString;
 import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.types.Password;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -121,7 +122,7 @@ public class ConfigDefTest {
     @Test
     public void testBadInputs() {
         testBadInputs(Type.INT, "hello", "42.5", 42.5, Long.MAX_VALUE, Long.toString(Long.MAX_VALUE), new Object());
-        testBadInputs(Type.LONG, "hello", "42.5", Long.toString(Long.MAX_VALUE) + "00", new Object());
+        testBadInputs(Type.LONG, "hello", "42.5", Long.MAX_VALUE + "00", new Object());
         testBadInputs(Type.DOUBLE, "hello", new Object());
         testBadInputs(Type.STRING, new Object());
         testBadInputs(Type.LIST, 53, new Object());
@@ -242,7 +243,7 @@ public class ConfigDefTest {
         String errorMessageC = "Missing required configuration \"c\" which has no default value.";
         ConfigValue configA = new ConfigValue("a", 1, Collections.emptyList(), Collections.emptyList());
         ConfigValue configB = new ConfigValue("b", null, Collections.emptyList(), Arrays.asList(errorMessageB, errorMessageB));
-        ConfigValue configC = new ConfigValue("c", null, Collections.emptyList(), Arrays.asList(errorMessageC));
+        ConfigValue configC = new ConfigValue("c", null, Collections.emptyList(), singletonList(errorMessageC));
         ConfigValue configD = new ConfigValue("d", 10, Collections.emptyList(), Collections.emptyList());
         expected.put("a", configA);
         expected.put("b", configB);
@@ -253,7 +254,7 @@ public class ConfigDefTest {
             .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
             .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
             .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
-            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false));
+            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", singletonList("b"), new IntegerRecommender(false));
 
         Map<String, String> props = new HashMap<>();
         props.put("a", "1");
@@ -279,7 +280,7 @@ public class ConfigDefTest {
 
         ConfigValue configA = new ConfigValue("a", 1, Arrays.asList(1, 2, 3), Collections.emptyList());
         ConfigValue configB = new ConfigValue("b", null, Arrays.asList(4, 5), Arrays.asList(errorMessageB, errorMessageB));
-        ConfigValue configC = new ConfigValue("c", null, Arrays.asList(4, 5), Arrays.asList(errorMessageC));
+        ConfigValue configC = new ConfigValue("c", null, Arrays.asList(4, 5), singletonList(errorMessageC));
         ConfigValue configD = new ConfigValue("d", 10, Arrays.asList(1, 2, 3), Collections.emptyList());
 
         expected.put("a", configA);
@@ -291,7 +292,7 @@ public class ConfigDefTest {
             .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
             .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
             .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
-            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false));
+            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", singletonList("b"), new IntegerRecommender(false));
 
         Map<String, String> props = new HashMap<>();
         props.put("a", "1");
@@ -313,9 +314,9 @@ public class ConfigDefTest {
         String errorMessageD = "d is referred in the dependents, but not defined.";
 
         ConfigValue configA = new ConfigValue("a", 1, Arrays.asList(1, 2, 3), Collections.emptyList());
-        ConfigValue configB = new ConfigValue("b", null, Arrays.asList(4, 5), Arrays.asList(errorMessageB));
-        ConfigValue configC = new ConfigValue("c", null, Arrays.asList(4, 5), Arrays.asList(errorMessageC));
-        ConfigValue configD = new ConfigValue("d", null, Collections.emptyList(), Arrays.asList(errorMessageD));
+        ConfigValue configB = new ConfigValue("b", null, Arrays.asList(4, 5), singletonList(errorMessageB));
+        ConfigValue configC = new ConfigValue("c", null, Arrays.asList(4, 5), singletonList(errorMessageC));
+        ConfigValue configD = new ConfigValue("d", null, Collections.emptyList(), singletonList(errorMessageD));
         configD.visible(false);
 
         expected.put("a", configA);
@@ -343,7 +344,7 @@ public class ConfigDefTest {
     public void testValidateCannotParse() {
         Map<String, ConfigValue> expected = new HashMap<>();
         String errorMessageB = "Invalid value non_integer for configuration a: Not a number of type INT";
-        ConfigValue configA = new ConfigValue("a", null, Collections.emptyList(), Arrays.asList(errorMessageB));
+        ConfigValue configA = new ConfigValue("a", null, Collections.emptyList(), singletonList(errorMessageB));
         expected.put("a", configA);
 
         ConfigDef def = new ConfigDef().define("a", Type.INT, Importance.HIGH, "docs");
@@ -438,7 +439,7 @@ public class ConfigDefTest {
         // Creating a ConfigDef based on another should compute the correct number of configs with no parent, even
         // if the base ConfigDef has already computed its parentless configs
         final ConfigDef baseConfigDef = new ConfigDef().define("a", Type.STRING, Importance.LOW, "docs");
-        assertEquals(new HashSet<>(Arrays.asList("a")), baseConfigDef.getConfigsWithNoParent());
+        assertEquals(new HashSet<>(singletonList("a")), baseConfigDef.getConfigsWithNoParent());
 
         final ConfigDef configDef = new ConfigDef(baseConfigDef)
                 .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", singletonList("child"))
@@ -450,7 +451,7 @@ public class ConfigDefTest {
 
     private static class IntegerRecommender implements ConfigDef.Recommender {
 
-        private boolean hasParent;
+        private final boolean hasParent;
 
         public IntegerRecommender(boolean hasParent) {
             this.hasParent = hasParent;
@@ -502,7 +503,7 @@ public class ConfigDefTest {
                 .define("opt3", Type.LIST, Arrays.asList("a", "b"), Importance.LOW, "docs3")
                 .define("opt4", Type.BOOLEAN, false, Importance.LOW, null);
 
-        final String expectedRst = "" +
+        final String expectedRst =
                 "``opt2``\n" +
                 "  docs2\n" +
                 "\n" +
@@ -547,7 +548,7 @@ public class ConfigDefTest {
                         "Group Two", 0, Width.NONE, "..", singletonList("some.option"))
                 .define("poor.opt", Type.STRING, "foo", Importance.HIGH, "Doc doc doc doc.");
 
-        final String expectedRst = "" +
+        final String expectedRst =
                 "``poor.opt``\n" +
                 "  Doc doc doc doc.\n" +
                 "\n" +
@@ -684,7 +685,7 @@ public class ConfigDefTest {
         }
     }
 
-    private class NestedClass {
+    private static class NestedClass {
     }
 
     @Test

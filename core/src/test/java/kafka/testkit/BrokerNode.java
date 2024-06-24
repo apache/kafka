@@ -87,10 +87,10 @@ public class BrokerNode implements TestKitNode {
             Objects.requireNonNull(baseDirectory);
             Objects.requireNonNull(clusterId);
             if (id == -1) {
-                throw new RuntimeException("You must set the node id.");
+                throw new IllegalArgumentException("You must set the node id.");
             }
             if (numLogDirectories < 1) {
-                throw new RuntimeException("The value of numLogDirectories should be at least 1.");
+                throw new IllegalArgumentException("The value of numLogDirectories should be at least 1.");
             }
             List<String> logDataDirectories = IntStream
                 .range(0, numLogDirectories)

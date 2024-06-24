@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.security;
 
-import javax.crypto.spec.IvParameterSpec;
 import java.security.AlgorithmParameters;
 import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.InvalidParameterSpecException;
 import java.util.Collections;
 import java.util.Map;
+
+import javax.crypto.spec.IvParameterSpec;
 
 public class IvParamsEncoder implements CipherParamsEncoder {
 

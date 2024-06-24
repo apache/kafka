@@ -37,8 +37,8 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils._
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.CredentialProvider
-import org.apache.kafka.server.common.{Features, MetadataVersion}
-import org.apache.kafka.server.config.QuotaConfigs
+import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
+import org.apache.kafka.server.config.{ServerConfigs, QuotaConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
@@ -80,7 +80,7 @@ class SocketServerTest {
   TestUtils.clearYammerMetrics()
 
   private val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true, false,
-    () => new Features(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
+    () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
   var server: SocketServer = _
   val sockets = new ArrayBuffer[Socket]
 
@@ -1208,6 +1208,17 @@ class SocketServerTest {
   }
 
   @Test
+  def testServerShutdownWithoutEnable(): Unit = {
+    // The harness server has already been enabled, so it's invalid for this test.
+    shutdownServerAndMetrics(server)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(props))
+    overrideServer.shutdown()
+    assertFalse(overrideServer.testableAcceptor.isOpen)
+    overrideServer.testableSelector.waitForOperations(SelectorOperation.CloseSelector, 1)
+  }
+
+  @Test
   def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend(): Unit = {
     shutdownServerAndMetrics(server)
     val serverMetrics = new Metrics
@@ -2040,7 +2051,7 @@ class SocketServerTest {
     val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
     sslProps.put(SocketServerConfigs.LISTENERS_CONFIG, "SSL://localhost:0")
-    sslProps.put(KafkaConfig.NumNetworkThreadsProp, "1")
+    sslProps.put(ServerConfigs.NUM_NETWORK_THREADS_CONFIG, "1")
     sslProps
   }
 
@@ -2137,6 +2148,8 @@ class SocketServerTest {
     override def newProcessor(id: Int, listenerName: ListenerName, securityProtocol: SecurityProtocol): Processor = {
       new TestableProcessor(id, time, requestChannel, listenerName, securityProtocol, cfg, connectionQuotas, connectionQueueSize, isPrivilegedListener)
     }
+
+    def isOpen: Boolean = serverChannel.isOpen
   }
 
   class TestableProcessor(id: Int, time: Time, requestChannel: RequestChannel, listenerName: ListenerName, securityProtocol: SecurityProtocol, config: KafkaConfig, connectionQuotas: ConnectionQuotas, connectionQueueSize: Int, isPrivilegedListener: Boolean)
@@ -2204,9 +2217,12 @@ class SocketServerTest {
     def testableSelector: TestableSelector =
       testableProcessor.selector.asInstanceOf[TestableSelector]
 
-    def testableProcessor: TestableProcessor = {
+    def testableProcessor: TestableProcessor =
+      testableAcceptor.processors(0).asInstanceOf[TestableProcessor]
+
+    def testableAcceptor: TestableAcceptor = {
       val endpoint = this.config.dataPlaneListeners.head
-      dataPlaneAcceptors.get(endpoint).processors(0).asInstanceOf[TestableProcessor]
+      dataPlaneAcceptors.get(endpoint).asInstanceOf[TestableAcceptor]
     }
 
     def waitForChannelClose(connectionId: String, locallyClosed: Boolean): Unit = {

@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.util.Optional;
-import java.util.OptionalLong;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -31,7 +29,11 @@ import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
+
 import org.slf4j.Logger;
+
+import java.util.Optional;
+import java.util.OptionalLong;
 
 /**
  * The KRaft state machine for tracking control records in the topic partition.
@@ -39,11 +41,11 @@ import org.slf4j.Logger;
  * This type keeps track of changes to the finalized kraft.version and the sets of voters between
  * the latest snasphot and the log end offset.
  *
- * The are two actors/threads for this type. One is the KRaft driver which indirectly call a lot of
- * the public methods. The other are the callers of {@code RaftClient::createSnapshot} which
+ * There are two type of actors/threads accessing this type. One is the KRaft driver which indirectly call a lot of
+ * the public methods. The other actors/threads are the callers of {@code RaftClient.createSnapshot} which
  * indirectly call {@code voterSetAtOffset} and {@code kraftVersionAtOffset} when freezing a snapshot.
  */
-final public class KRaftControlRecordStateMachine {
+public final class KRaftControlRecordStateMachine {
     private final ReplicatedLog log;
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;
@@ -115,7 +117,7 @@ final public class KRaftControlRecordStateMachine {
     /**
      * Remove the tail of the log until the given offset.
      *
-     * @param @startOffset the start offset (inclusive)
+     * @param startOffset the start offset (inclusive)
      */
     public void truncateOldEntries(long startOffset) {
         synchronized (voterSetHistory) {
@@ -132,6 +134,15 @@ final public class KRaftControlRecordStateMachine {
     public VoterSet lastVoterSet() {
         synchronized (voterSetHistory) {
             return voterSetHistory.lastValue();
+        }
+    }
+
+    /**
+     * Returns the last kraft version.
+     */
+    public short lastKraftVersion() {
+        synchronized (kraftVersionHistory) {
+            return kraftVersionHistory.lastEntry().map(LogHistory.Entry::value).orElse((short) 0);
         }
     }
 

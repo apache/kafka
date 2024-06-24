@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
@@ -28,6 +29,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetada
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.opentest4j.AssertionFailedError;
 
 import java.nio.ByteBuffer;
@@ -102,15 +104,15 @@ public class Assertions {
     }
 
     public static void assertRecordsEquals(
-        List<Record> expectedRecords,
-        List<Record> actualRecords
+        List<CoordinatorRecord> expectedRecords,
+        List<CoordinatorRecord> actualRecords
     ) {
         try {
             assertEquals(expectedRecords.size(), actualRecords.size());
 
             for (int i = 0; i < expectedRecords.size(); i++) {
-                Record expectedRecord = expectedRecords.get(i);
-                Record actualRecord = actualRecords.get(i);
+                CoordinatorRecord expectedRecord = expectedRecords.get(i);
+                CoordinatorRecord actualRecord = actualRecords.get(i);
                 assertRecordEquals(expectedRecord, actualRecord);
             }
         } catch (AssertionFailedError e) {
@@ -122,8 +124,8 @@ public class Assertions {
     }
 
     public static void assertRecordEquals(
-        Record expected,
-        Record actual
+        CoordinatorRecord expected,
+        CoordinatorRecord actual
     ) {
         try {
             assertApiMessageAndVersionEquals(expected.key(), actual.key());
@@ -275,5 +277,30 @@ public class Assertions {
             assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()))
         );
         return assignmentMap;
+    }
+
+    public static void assertSyncGroupResponseEquals(
+        SyncGroupResponseData expected,
+        SyncGroupResponseData actual
+    ) {
+        SyncGroupResponseData expectedDuplicate = expected.duplicate();
+        SyncGroupResponseData actualDuplicate = actual.duplicate();
+
+        Arrays.asList(expectedDuplicate, actualDuplicate).forEach(duplicate -> {
+            try {
+                ConsumerPartitionAssignor.Assignment assignment =
+                    ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(duplicate.assignment()));
+                assignment.partitions().sort(
+                    Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition)
+                );
+                duplicate.setAssignment(Utils.toArray(ConsumerProtocol.serializeAssignment(
+                    assignment,
+                    ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(duplicate.assignment()))
+                )));
+            } catch (SchemaException ex) {
+                fail("Failed deserialization: " + ex.getMessage());
+            }
+        });
+        assertEquals(expectedDuplicate, actualDuplicate);
     }
 }

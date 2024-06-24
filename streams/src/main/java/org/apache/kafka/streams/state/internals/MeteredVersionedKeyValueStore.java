@@ -18,18 +18,18 @@ package org.apache.kafka.streams.state.internals;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
-import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
+
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -264,7 +264,14 @@ public class MeteredVersionedKeyValueStore<K, V>
             final QueryResult<VersionedRecordIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
             if (rawResult.isSuccess()) {
                 final MeteredMultiVersionedKeyQueryIterator<V> typedResult =
-                        new MeteredMultiVersionedKeyQueryIterator<V>(rawResult.getResult(), StoreQueryUtils.getDeserializeValue(plainValueSerdes));
+                        new MeteredMultiVersionedKeyQueryIterator<V>(
+                            rawResult.getResult(),
+                            iteratorDurationSensor,
+                            time,
+                            StoreQueryUtils.getDeserializeValue(plainValueSerdes),
+                            numOpenIterators,
+                            openIterators
+                        );
                 final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult =
                         InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 result = (QueryResult<R>) typedQueryResult;
@@ -296,11 +303,8 @@ public class MeteredVersionedKeyValueStore<K, V>
             // additionally init raw value serde
             final String storeName = super.name();
             final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-            plainValueSerdes = new StateSerdes<>(
-                changelogTopic,
-                prepareKeySerde(keySerde, new SerdeGetter(context)),
-                prepareValueSerde(plainValueSerde, new SerdeGetter(context))
-            );
+            plainValueSerdes = StoreSerdeInitializer.prepareStoreSerde(
+                context, storeName, changelogTopic, keySerde, plainValueSerde, WrappingNullableUtils::prepareValueSerde);
         }
 
         @Override
@@ -310,11 +314,8 @@ public class MeteredVersionedKeyValueStore<K, V>
             // additionally init raw value serde
             final String storeName = super.name();
             final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-            plainValueSerdes = new StateSerdes<>(
-                changelogTopic,
-                prepareKeySerde(keySerde, new SerdeGetter(context)),
-                prepareValueSerde(plainValueSerde, new SerdeGetter(context))
-            );
+            plainValueSerdes = StoreSerdeInitializer.prepareStoreSerde(
+                context, storeName, changelogTopic, keySerde, plainValueSerde, WrappingNullableUtils::prepareValueSerde);
         }
     }
 

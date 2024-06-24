@@ -21,20 +21,17 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.test.TestRecord;
-import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockMapper;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.apache.kafka.test.MockMapper;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofSeconds;
@@ -42,33 +39,19 @@ import static java.time.Duration.ofSeconds;
 /**
  * Tests all available joins of Kafka Streams DSL.
  */
-@Category({IntegrationTest.class})
-@RunWith(value = Parameterized.class)
+@Tag("integration")
+@Timeout(600)
 public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-    private KStream<Long, String> leftStream;
-    private KStream<Long, String> rightStream;
+    private static final String APP_ID = "stream-stream-join-integration-test";
 
-    public StreamStreamJoinIntegrationTest(final boolean cacheEnabled) {
-        super(cacheEnabled);
-    }
-
-    @Before
-    public void prepareTopology() throws InterruptedException {
-        super.prepareEnvironment();
-
-        appID = "stream-stream-join-integration-test";
-
-        builder = new StreamsBuilder();
-        leftStream = builder.stream(INPUT_TOPIC_LEFT);
-        rightStream = builder.stream(INPUT_TOPIC_RIGHT);
-    }
-
-    @Test
-    public void testSelfJoin() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-selfJoin");
-        STREAMS_CONFIG.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testSelfJoin(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-selfJoin");
+        streamsConfig.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -101,12 +84,17 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
         ).to(OUTPUT_TOPIC);
 
-        runSelfJoinTestWithDriver(expectedResult);
+        runSelfJoinTestWithDriver(expectedResult, streamsConfig, builder.build(streamsConfig));
     }
 
-    @Test
-    public void testInner() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInner(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -148,12 +136,17 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
         ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, streamsConfig, builder.build(streamsConfig));
     }
 
-    @Test
-    public void testInnerRepartitioned() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-repartitioned");
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerRepartitioned(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-repartitioned");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -197,12 +190,17 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
             ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, streamsConfig, builder.build(streamsConfig));
     }
 
-    @Test
-    public void testLeft() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeft(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -245,12 +243,17 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
         ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, streamsConfig, builder.build(streamsConfig));
     }
 
-    @Test
-    public void testLeftRepartitioned() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left-repartitioned");
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftRepartitioned(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-repartitioned");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -295,12 +298,17 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
             ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, streamsConfig, builder.build(streamsConfig));
     }
 
-    @Test
-    public void testOuter() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuter(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -344,12 +352,17 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
         ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, streamsConfig, builder.build(streamsConfig));
     }
 
-    @Test
-    public void testOuterRepartitioned() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterRepartitioned(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -395,12 +408,17 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
             ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, streamsConfig, builder.build(streamsConfig));
     }
 
-    @Test
-    public void testMultiInner() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-multi-inner");
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMultiInner(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        final KStream<Long, String> rightStream = builder.stream(INPUT_TOPIC_RIGHT);
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-multi-inner");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -494,6 +512,6 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
         ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
+        runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, streamsConfig, builder.build(streamsConfig));
     }
 }

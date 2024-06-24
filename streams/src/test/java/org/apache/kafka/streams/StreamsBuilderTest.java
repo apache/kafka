@@ -62,10 +62,9 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.NoopValueTransformer;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -85,14 +84,13 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+@Timeout(600)
 public class StreamsBuilderTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
 
     private static final String STREAM_TOPIC = "stream-topic";
 
@@ -106,7 +104,7 @@ public class StreamsBuilderTest {
 
     private Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    @Before
+    @BeforeEach
     public void before() {
         props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     }
@@ -1558,21 +1556,21 @@ public class StreamsBuilderTest {
 
     private static void assertNamesForOperation(final ProcessorTopology topology, final String... expected) {
         final List<ProcessorNode<?, ?, ?, ?>> processors = topology.processors();
-        assertEquals("Invalid number of expected processors", expected.length, processors.size());
+        assertEquals(expected.length, processors.size(), "Invalid number of expected processors");
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processors.get(i).name());
         }
     }
 
     private static void assertNamesForStateStore(final List<StateStore> stores, final String... expected) {
-        assertEquals("Invalid number of expected state stores", expected.length, stores.size());
+        assertEquals(expected.length, stores.size(), "Invalid number of expected state stores");
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], stores.get(i).name());
         }
     }
 
     private static void assertTypesForStateStore(final List<StateStore> stores, final Class<?>... expected) {
-        assertEquals("Invalid number of expected state stores", expected.length, stores.size());
+        assertEquals(expected.length, stores.size(), "Invalid number of expected state stores");
         for (int i = 0; i < expected.length; i++) {
             StateStore store = stores.get(i);
             while (store instanceof WrappedStateStore && !(expected[i].isInstance(store))) {

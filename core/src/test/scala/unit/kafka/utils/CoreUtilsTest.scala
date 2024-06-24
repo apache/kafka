@@ -90,19 +90,6 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testCsvList(): Unit = {
-    val emptyString:String = ""
-    val nullString:String = null
-    val emptyList = CoreUtils.parseCsvList(emptyString)
-    val emptyListFromNullString = CoreUtils.parseCsvList(nullString)
-    val emptyStringList = Seq.empty[String]
-    assertTrue(emptyList!=null)
-    assertTrue(emptyListFromNullString!=null)
-    assertTrue(emptyStringList.equals(emptyListFromNullString))
-    assertTrue(emptyStringList.equals(emptyList))
-  }
-
-  @Test
   def testInLock(): Unit = {
     val lock = new ReentrantLock()
     val result = inLock(lock) {

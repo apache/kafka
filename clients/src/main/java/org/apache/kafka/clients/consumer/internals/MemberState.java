@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.Errors;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public enum MemberState {
@@ -120,7 +121,7 @@ public enum MemberState {
 
         RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING, RECONCILING);
 
-        ACKNOWLEDGING.previousValidStates = Arrays.asList(RECONCILING);
+        ACKNOWLEDGING.previousValidStates = Collections.singletonList(RECONCILING);
 
         FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
                 PREPARE_LEAVING, LEAVING, UNSUBSCRIBED);
@@ -133,11 +134,11 @@ public enum MemberState {
         PREPARE_LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
                 ACKNOWLEDGING, UNSUBSCRIBED);
 
-        LEAVING.previousValidStates = Arrays.asList(PREPARE_LEAVING);
+        LEAVING.previousValidStates = Collections.singletonList(PREPARE_LEAVING);
 
         UNSUBSCRIBED.previousValidStates = Arrays.asList(PREPARE_LEAVING, LEAVING, FENCED);
 
-        STALE.previousValidStates = Arrays.asList(LEAVING);
+        STALE.previousValidStates = Collections.singletonList(LEAVING);
     }
 
     private List<MemberState> previousValidStates;

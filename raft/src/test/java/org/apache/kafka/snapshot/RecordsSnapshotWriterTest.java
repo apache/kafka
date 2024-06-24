@@ -17,12 +17,6 @@
 
 package org.apache.kafka.snapshot;
 
-
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
@@ -35,7 +29,15 @@ import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.raft.internals.VoterSetTest;
 import org.apache.kafka.server.common.serialization.RecordSerde;
+
 import org.junit.jupiter.api.Test;
+
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.IntStream;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -96,7 +98,9 @@ final class RecordsSnapshotWriterTest {
     void testBuilderKRaftVersion0WithVoterSet() {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100, 10);
         int maxBatchSize = 1024;
-        VoterSet voterSet = VoterSetTest.voterSet(new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3))));
+        VoterSet voterSet = VoterSetTest.voterSet(
+            new HashMap<>(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true))
+        );
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setKraftVersion((short) 0)
@@ -114,7 +118,9 @@ final class RecordsSnapshotWriterTest {
     void testKBuilderRaftVersion1WithVoterSet() {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100, 10);
         int maxBatchSize = 1024;
-        VoterSet voterSet = VoterSetTest.voterSet(new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3))));
+        VoterSet voterSet = VoterSetTest.voterSet(
+            new HashMap<>(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true))
+        );
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setKraftVersion((short) 1)

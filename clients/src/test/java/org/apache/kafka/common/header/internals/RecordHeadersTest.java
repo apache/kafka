@@ -18,6 +18,7 @@ package org.apache.kafka.common.header.internals;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -219,13 +220,7 @@ public class RecordHeadersTest {
     }
 
     private int getCount(Headers headers) {
-        int count = 0;
-        Iterator<Header> headerIterator = headers.iterator();
-        while (headerIterator.hasNext()) {
-            headerIterator.next();
-            count++;
-        }
-        return count;
+        return headers.toArray().length;
     }
     
     static void assertHeader(String key, String value, Header actual) {

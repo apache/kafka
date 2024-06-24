@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.internals.RecordsIteratorTest.TestBatch;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;

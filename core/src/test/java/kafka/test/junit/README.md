@@ -10,11 +10,11 @@ A new `@ClusterTest` annotation is introduced which allows for a test to declara
 def testSomething(): Unit = { ... }
 ```
 
-This annotation has fields for cluster type and number of brokers, as well as commonly parameterized configurations. 
+This annotation has fields for a set of cluster types and number of brokers, as well as commonly parameterized configurations. 
 Arbitrary server properties can also be provided in the annotation:
 
 ```java
-@ClusterTest(clusterType = Type.Zk, securityProtocol = "PLAINTEXT", properties = {
+@ClusterTest(types = {Type.Zk}, securityProtocol = "PLAINTEXT", properties = {
   @ClusterProperty(key = "inter.broker.protocol.version", value = "2.7-IV2"),
   @ClusterProperty(key = "socket.send.buffer.bytes", value = "10240"),
 })
@@ -42,24 +42,27 @@ annotation takes a single string value which references a static method on the t
 produce any number of test configurations using a fluent builder style API.
 
 ```java
-@ClusterTemplate("generateConfigs")
-void testSomething() { ... }
+import java.util.Arrays;
 
-static void generateConfigs(ClusterGenerator clusterGenerator) {
-  clusterGenerator.accept(ClusterConfig.defaultClusterBuilder()
-      .name("Generated Test 1")
-      .serverProperties(props1)
-      .ibp("2.7-IV1")
-      .build());
-  clusterGenerator.accept(ClusterConfig.defaultClusterBuilder()
-      .name("Generated Test 2")
-      .serverProperties(props2)
-      .ibp("2.7-IV2")
-      .build());
-  clusterGenerator.accept(ClusterConfig.defaultClusterBuilder()
-      .name("Generated Test 3")
-      .serverProperties(props3)
-      .build());
+@ClusterTemplate("generateConfigs")
+void testSomething() { ...}
+
+static List<ClusterConfig> generateConfigs() {
+  ClusterConfig config1 = ClusterConfig.defaultClusterBuilder()
+          .name("Generated Test 1")
+          .serverProperties(props1)
+          .ibp("2.7-IV1")
+          .build();
+  ClusterConfig config2 = ClusterConfig.defaultClusterBuilder()
+          .name("Generated Test 2")
+          .serverProperties(props2)
+          .ibp("2.7-IV2")
+          .build();
+  ClusterConfig config3 = ClusterConfig.defaultClusterBuilder()
+          .name("Generated Test 3")
+          .serverProperties(props3)
+          .build();
+  return Arrays.asList(config1, config2, config3);
 }
 ```
 
