@@ -2372,6 +2372,165 @@ public class SharePartitionTest {
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(10L).memberId());
     }
 
+//    @Test
+//    public void testAcquisitionLockOnReleasingMultipleRecordBatch() throws InterruptedException {
+//        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+//        MemoryRecords records = memoryRecords(10, 5);
+//
+//        CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
+//                MEMBER_ID,
+//                new FetchPartitionData(Errors.NONE, 20, 0, records,
+//                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+//        assertFalse(result.isCompletedExceptionally());
+//        assertEquals(1, result.join().size());
+//        assertNotNull(sharePartition.cachedState().get(5L).acquisitionLockTimeoutTask());
+//        assertEquals(1, sharePartition.timer().size());
+//
+//        CompletableFuture<Optional<Throwable>> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
+//        assertFalse(releaseResult.isCompletedExceptionally());
+//        assertFalse(releaseResult.join().isPresent());
+//
+//        assertEquals(5, sharePartition.nextFetchOffset());
+//        assertEquals(1, sharePartition.cachedState().size());
+//        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
+//        assertEquals(1, sharePartition.cachedState().get(5L).batchDeliveryCount());
+//        assertNull(sharePartition.cachedState().get(5L).offsetState());
+//        assertNull(sharePartition.cachedState().get(5L).acquisitionLockTimeoutTask());
+//        assertEquals(0, sharePartition.timer().size());
+//
+//        // Allowing acquisition lock to expire.
+//        Thread.sleep(200);
+//        assertEquals(5, sharePartition.nextFetchOffset());
+//        assertEquals(1, sharePartition.cachedState().size());
+//        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
+//        assertEquals(1, sharePartition.cachedState().get(5L).batchDeliveryCount());
+//        assertNull(sharePartition.cachedState().get(5L).offsetState());
+//        assertNull(sharePartition.cachedState().get(5L).acquisitionLockTimeoutTask());
+//        assertEquals(0, sharePartition.timer().size());
+//    }
+//
+//    @Test
+//    public void testAcquisitionLockOnReleasingAcknowledgedMultipleSubsetRecordBatchWithGapOffsets() throws InterruptedException {
+//        SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+//        MemoryRecords records1 = memoryRecords(2, 5);
+//        // Untracked gap of 3 offsets from 7-9.
+//        MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
+//        // Gap from 12-13 offsets.
+//        recordsBuilder.appendWithOffset(14, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+//        // Gap for 15 offset.
+//        recordsBuilder.appendWithOffset(16, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+//        // Gap from 17-19 offsets.
+//        recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+//        MemoryRecords records2 = recordsBuilder.build();
+//
+//        CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
+//                MEMBER_ID,
+//                new FetchPartitionData(Errors.NONE, 30, 0, records1,
+//                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+//        assertFalse(result.isCompletedExceptionally());
+//        assertArrayEquals(expectedAcquiredRecords(records1, 1).toArray(), result.join().toArray());
+//        assertEquals(7, sharePartition.nextFetchOffset());
+//        assertNotNull(sharePartition.cachedState().get(5L).acquisitionLockTimeoutTask());
+//        assertEquals(1, sharePartition.timer().size());
+//
+//        result = sharePartition.acquire(
+//                MEMBER_ID,
+//                new FetchPartitionData(Errors.NONE, 30, 0, records2,
+//                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+//        assertFalse(result.isCompletedExceptionally());
+//        assertArrayEquals(expectedAcquiredRecords(records2, 1).toArray(), result.join().toArray());
+//        assertEquals(21, sharePartition.nextFetchOffset());
+//        assertNotNull(sharePartition.cachedState().get(10L).acquisitionLockTimeoutTask());
+//        assertEquals(2, sharePartition.timer().size());
+//
+//        // Acknowledging over subset of both batch with subset of gap offsets.
+//        CompletableFuture<Optional<Throwable>> ackResult = sharePartition.acknowledge(
+//                MEMBER_ID,
+//                Collections.singletonList(new ShareAcknowledgementBatch(6, 18, Arrays.asList(
+//                        // TODO: NOTE - untracked gap of 3 offsets from 7-9 has no effect on acknowledgment
+//                        //  irrespective of acknowledgement type provided. While acquiring, the log start
+//                        //  offset should be used to determine such gaps.
+//                        (byte) 1, (byte) 1, (byte) 1,
+//                        (byte) 1, (byte) 1, (byte) 1,
+//                        (byte) 0, (byte) 0, (byte) 1,
+//                        (byte) 0, (byte) 1, (byte) 0,
+//                        (byte) 1))));
+//        assertFalse(ackResult.isCompletedExceptionally());
+//        assertFalse(ackResult.join().isPresent());
+//
+//        assertEquals(21, sharePartition.nextFetchOffset());
+//        assertEquals(2, sharePartition.cachedState().size());
+//
+//        CompletableFuture<Optional<Throwable>> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
+//        assertFalse(releaseResult.isCompletedExceptionally());
+//        assertFalse(releaseResult.join().isPresent());
+//
+//        // Check cached state.
+//        Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
+//        expectedOffsetStateMap.put(5L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap.put(6L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+//        assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(5L).offsetState());
+//
+//        expectedOffsetStateMap.clear();
+//        expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap.put(11L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap.put(12L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap.put(13L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap.put(15L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap.put(16L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap.put(17L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap.put(18L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+//        assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
+//
+//        // Check cached state.
+//        Map<Long, InFlightState> expectedOffsetStateMap1 = new HashMap<>();
+//        expectedOffsetStateMap1.put(5L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap1.put(6L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+//        assertEquals(expectedOffsetStateMap1, sharePartition.cachedState().get(5L).offsetState());
+//
+//        Map<Long, InFlightState> expectedOffsetStateMap2 = new HashMap<>();
+//        expectedOffsetStateMap2.put(10L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap2.put(11L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap2.put(12L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap2.put(13L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap2.put(14L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap2.put(15L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap2.put(16L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap2.put(17L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap2.put(18L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap2.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+//        expectedOffsetStateMap2.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+//        assertEquals(expectedOffsetStateMap2, sharePartition.cachedState().get(10L).offsetState());
+//
+//        assertNull(sharePartition.cachedState().get(5L).offsetState().get(5L).acquisitionLockTimeoutTask());
+//        assertNull(sharePartition.cachedState().get(5L).offsetState().get(6L).acquisitionLockTimeoutTask());
+//
+//        assertNull(sharePartition.cachedState().get(10L).offsetState().get(10L).acquisitionLockTimeoutTask());
+//        assertNull(sharePartition.cachedState().get(10L).offsetState().get(11L).acquisitionLockTimeoutTask());
+//        assertNull(sharePartition.cachedState().get(10L).offsetState().get(12L).acquisitionLockTimeoutTask());
+//        assertNull(sharePartition.cachedState().get(10L).offsetState().get(13L).acquisitionLockTimeoutTask());
+//        assertNull(sharePartition.cachedState().get(10L).offsetState().get(14L).acquisitionLockTimeoutTask());
+//        assertNull(sharePartition.cachedState().get(10L).offsetState().get(15L).acquisitionLockTimeoutTask());
+//        assertNull(sharePartition.cachedState().get(10L).offsetState().get(16L).acquisitionLockTimeoutTask());
+//        assertNull(sharePartition.cachedState().get(10L).offsetState().get(17L).acquisitionLockTimeoutTask());
+//        assertNull(sharePartition.cachedState().get(10L).offsetState().get(18L).acquisitionLockTimeoutTask());
+//        assertNull(sharePartition.cachedState().get(10L).offsetState().get(19L).acquisitionLockTimeoutTask());
+//        assertNull(sharePartition.cachedState().get(10L).offsetState().get(20L).acquisitionLockTimeoutTask());
+//
+//        assertEquals(0, sharePartition.timer().size());
+//
+//        // Allowing acquisition lock to expire. This won't change the state since the batches have been released.
+//        Thread.sleep(200);
+//        assertEquals(5, sharePartition.nextFetchOffset());
+//        // Check cached state.
+//        assertEquals(expectedOffsetStateMap1, sharePartition.cachedState().get(5L).offsetState());
+//        assertEquals(expectedOffsetStateMap2, sharePartition.cachedState().get(10L).offsetState());
+//        assertEquals(0, sharePartition.timer().size());
+//    }
+
     private MemoryRecords memoryRecords(int numOfRecords) {
         return memoryRecords(numOfRecords, 0);
     }
