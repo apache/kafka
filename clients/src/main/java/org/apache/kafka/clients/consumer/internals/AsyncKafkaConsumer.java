@@ -309,10 +309,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     interceptorList,
                     Arrays.asList(deserializers.keyDeserializer, deserializers.valueDeserializer));
             this.metadata = metadataFactory.build(config, subscriptions, logContext, clusterResourceListeners);
-            // TODO: move to NetworkClient
-            final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-            metadata.bootstrap(addresses);
-            // TODO: move to NetworkClient
             this.metadataVersionSnapshot = metadata.updateVersion();
 
             FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);

@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -85,6 +87,10 @@ public class NetworkClient implements KafkaClient {
 
     /* the selector used to perform network i/o */
     private final Selectable selector;
+
+    private AbstractConfig config;
+
+    private ConsumerMetadata metadata;
 
     private final MetadataUpdater metadataUpdater;
 
@@ -278,6 +284,63 @@ public class NetworkClient implements KafkaClient {
         } else {
             this.metadataUpdater = metadataUpdater;
         }
+        this.selector = selector;
+        this.clientId = clientId;
+        this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
+        this.connectionStates = new ClusterConnectionStates(
+                reconnectBackoffMs, reconnectBackoffMax,
+                connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, logContext, hostResolver);
+        this.socketSendBuffer = socketSendBuffer;
+        this.socketReceiveBuffer = socketReceiveBuffer;
+        this.correlation = 0;
+        this.randOffset = new Random();
+        this.defaultRequestTimeoutMs = defaultRequestTimeoutMs;
+        this.reconnectBackoffMs = reconnectBackoffMs;
+        this.time = time;
+        this.discoverBrokerVersions = discoverBrokerVersions;
+        this.apiVersions = apiVersions;
+        this.throttleTimeSensor = throttleTimeSensor;
+        this.log = logContext.logger(NetworkClient.class);
+        this.state = new AtomicReference<>(State.ACTIVE);
+        this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
+        this.metadataRecoveryStrategy = metadataRecoveryStrategy;
+    }
+
+    // TODO: my constructor
+    public NetworkClient(AbstractConfig config,
+                         MetadataUpdater metadataUpdater,
+                         Metadata metadata,
+                         Selectable selector,
+                         String clientId,
+                         int maxInFlightRequestsPerConnection,
+                         long reconnectBackoffMs,
+                         long reconnectBackoffMax,
+                         int socketSendBuffer,
+                         int socketReceiveBuffer,
+                         int defaultRequestTimeoutMs,
+                         long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
+                         Time time,
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions,
+                         Sensor throttleTimeSensor,
+                         LogContext logContext,
+                         HostResolver hostResolver,
+                         ClientTelemetrySender clientTelemetrySender,
+                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
+        /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
+         * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
+         * super constructor is invoked.
+         */
+        if (metadataUpdater == null) {
+            if (metadata == null)
+                throw new IllegalArgumentException("`metadata` must not be null");
+            this.metadataUpdater = new DefaultMetadataUpdater(metadata);
+        } else {
+            this.metadataUpdater = metadataUpdater;
+        }
+        this.metadata = (ConsumerMetadata) metadata;
+        this.config = config;
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
@@ -576,7 +639,6 @@ public class NetworkClient implements KafkaClient {
      * @param now The current time in milliseconds
      * @return The list of responses received
      */
-    // TODO: move bootstrapping logic here
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
         ensureActive();
@@ -589,6 +651,10 @@ public class NetworkClient implements KafkaClient {
             completeResponses(responses);
             return responses;
         }
+
+        // TODO: move bootstrapping logic here
+        final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
+        metadata.bootstrap(addresses);
 
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         long telemetryTimeout = telemetrySender != null ? telemetrySender.maybeUpdate(now) : Integer.MAX_VALUE;

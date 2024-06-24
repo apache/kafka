@@ -156,6 +156,57 @@ public final class ClientUtils {
         return preferredAddresses;
     }
 
+    // TODO: My method
+    public static NetworkClient createNetworkClient(AbstractConfig config,
+                                                    Metrics metrics,
+                                                    String consumerMetricGroupPrefix,
+                                                    int maxInFlightRequestsPerConnection,
+                                                    Metadata metadata,
+                                                    Time time,
+                                                    ApiVersions apiVersions,
+                                                    Sensor throttleTimeSensor,
+                                                    LogContext logContext,
+                                                    ClientTelemetrySender clientTelemetrySender) {
+        ChannelBuilder channelBuilder = null;
+        Selector selector = null;
+
+        try {
+            channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
+            selector = new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+                    metrics,
+                    time,
+                    consumerMetricGroupPrefix,
+                    channelBuilder,
+                    logContext);
+
+            return new NetworkClient(config,
+                    null,
+                    metadata,
+                    selector,
+                    config.getString(CommonClientConfigs.CLIENT_ID_CONFIG),
+                    maxInFlightRequestsPerConnection,
+                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
+                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                    config.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
+                    config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
+                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+                    config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
+                    config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
+                    time,
+                    true,
+                    apiVersions,
+                    throttleTimeSensor,
+                    logContext,
+                    new DefaultHostResolver(),
+                    clientTelemetrySender,
+                    MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)));
+        } catch (Throwable t) {
+            closeQuietly(selector, "Selector");
+            closeQuietly(channelBuilder, "ChannelBuilder");
+            throw new KafkaException("Failed to create new NetworkClient", t);
+        }
+    }
+
     public static NetworkClient createNetworkClient(AbstractConfig config,
                                                     Metrics metrics,
                                                     String metricsGroupPrefix,
