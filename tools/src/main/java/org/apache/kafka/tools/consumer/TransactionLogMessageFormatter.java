@@ -90,7 +90,6 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
                     TransactionLogKeyJsonConverter.write(transactionLogKey.get(), keyVersion));
         } else {
             addUnknownNode(json, key, keyVersion);
-            
         }
     }
 
