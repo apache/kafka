@@ -626,10 +626,10 @@ public final class RaftClientTestContext {
         channel.mockReceive(new RaftResponse.Inbound(correlationId, response, source));
     }
 
-    RaftRequest.Outbound assertSentBeginQuorumEpochRequest(int epoch, int numBeginEpochRequests) {
+    void assertSentBeginQuorumEpochRequest(int epoch, int numBeginEpochRequests, Set<Integer> destinationIds) {
         List<RaftRequest.Outbound> requests = collectBeginEpochRequests(epoch);
         assertEquals(numBeginEpochRequests, requests.size());
-        return !requests.isEmpty() ? requests.get(0) : null;
+        assertEquals(destinationIds, requests.stream().map(r -> r.destination().id()).collect(Collectors.toSet()));
     }
 
     private List<RaftResponse.Outbound> drainSentResponses(
@@ -876,7 +876,7 @@ public final class RaftClientTestContext {
         assertElectedLeader(epoch, leaderId);
     }
 
-    private List<RaftRequest.Outbound> collectBeginEpochRequests(int epoch) {
+    List<RaftRequest.Outbound> collectBeginEpochRequests(int epoch) {
         List<RaftRequest.Outbound> requests = new ArrayList<>();
         for (RaftRequest.Outbound raftRequest : channel.drainSentRequests(Optional.of(ApiKeys.BEGIN_QUORUM_EPOCH))) {
             assertInstanceOf(BeginQuorumEpochRequestData.class, raftRequest.data());

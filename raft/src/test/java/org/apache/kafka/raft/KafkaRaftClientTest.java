@@ -512,15 +512,15 @@ public class KafkaRaftClientTest {
         // begin epoch requests should be sent out every beginQuorumEpochTimeoutMs
         context.time.sleep(context.beginQuorumEpochTimeoutMs);
         context.client.poll();
-        context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), 2);
+        context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), 2, Utils.mkSet(remoteId1, remoteId2));
 
         context.time.sleep(context.beginQuorumEpochTimeoutMs / 2);
         context.client.poll();
-        context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), 0);
+        context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), 0, Utils.mkSet());
 
         context.time.sleep(context.beginQuorumEpochTimeoutMs / 2);
         context.client.poll();
-        context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), 2);
+        context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), 2, Utils.mkSet(remoteId1, remoteId2));
     }
 
     @Test
@@ -744,7 +744,7 @@ public class KafkaRaftClientTest {
 
         // Send BeginQuorumEpoch to voters
         context.client.poll();
-        context.assertSentBeginQuorumEpochRequest(1, 1);
+        context.assertSentBeginQuorumEpochRequest(1, 1, Utils.mkSet(otherNodeId));
 
         Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
@@ -788,7 +788,7 @@ public class KafkaRaftClientTest {
 
         // Send BeginQuorumEpoch to voters
         context.client.poll();
-        context.assertSentBeginQuorumEpochRequest(1, 2);
+        context.assertSentBeginQuorumEpochRequest(1, 2, Utils.mkSet(firstNodeId, secondNodeId));
 
         Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
@@ -2629,7 +2629,7 @@ public class KafkaRaftClientTest {
         context.pollUntilRequest();
 
         // We send BeginEpoch, but it gets lost and the destination finds the leader through the Fetch API
-        context.assertSentBeginQuorumEpochRequest(epoch, 1);
+        context.assertSentBeginQuorumEpochRequest(epoch, 1, Utils.mkSet(otherNodeId));
 
         context.deliverRequest(context.fetchRequest(
             epoch, otherNodeId, 0L, 0, 500));
@@ -2841,7 +2841,10 @@ public class KafkaRaftClientTest {
         context.expectAndGrantVotes(epoch);
 
         context.pollUntilRequest();
-        RaftRequest.Outbound request = context.assertSentBeginQuorumEpochRequest(epoch, 1);
+        List<RaftRequest.Outbound> requests = context.collectBeginEpochRequests(epoch);
+        assertEquals(1, requests.size());
+        RaftRequest.Outbound request = requests.get(0);
+        assertEquals(otherNodeId, request.destination().id());
         BeginQuorumEpochResponseData response = new BeginQuorumEpochResponseData()
             .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
 

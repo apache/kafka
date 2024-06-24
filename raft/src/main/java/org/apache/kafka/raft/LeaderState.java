@@ -234,12 +234,6 @@ public class LeaderState<T> implements EpochState {
         return localDirectoryId;
     }
 
-    public Set<Integer> votersExcludingLeader() {
-        Set<Integer> voters = new HashSet<>(voterStates.keySet());
-        voters.remove(localId);
-        return voters;
-    }
-
     // visible for testing
     Set<Integer> nonAcknowledgingVoters() {
         Set<Integer> nonAcknowledging = new HashSet<>();
