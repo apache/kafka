@@ -377,7 +377,7 @@ public class RequestManager {
                 state,
                 lastSendTimeMs,
                 lastFailTimeMs,
-                inFlightCorrelationId.isPresent() ? inFlightCorrelationId.getAsLong() : null
+                inFlightCorrelationId.isPresent() ? inFlightCorrelationId.getAsLong() : "undefined"
             );
         }
     }
