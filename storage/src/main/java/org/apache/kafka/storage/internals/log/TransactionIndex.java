@@ -231,7 +231,8 @@ public class TransactionIndex implements Closeable {
         }
     }
 
-    public static class TransactionIndexFile {
+    // Visible for testing
+    static class TransactionIndexFile {
         // note that the file is not created until we need it
         private volatile File file;
         // channel is reopened as long as there are reads and writes
@@ -262,7 +263,7 @@ public class TransactionIndex implements Closeable {
          * @throws IOException if any I/O error happens, but not if existing channel is closed.
          *                     In that case, it is reopened.
          */
-        public FileChannel channel() throws IOException {
+        FileChannel channel() throws IOException {
             if (channel == null) {
                 openChannel();
             } else {
@@ -275,25 +276,25 @@ public class TransactionIndex implements Closeable {
             return channel;
         }
 
-        public synchronized void updateParentDir(File parentDir) {
+        synchronized void updateParentDir(File parentDir) {
             file = new File(parentDir, file.getName());
         }
 
-        public void flush() throws IOException {
+        void flush() throws IOException {
             if (channel != null)
                 channel.force(true);
         }
 
-        public void closeChannel() throws IOException {
+        void closeChannel() throws IOException {
             if (channel != null)
                 channel.close();
         }
 
-        public Path path() {
+        Path path() {
             return file.toPath();
         }
 
-        public void renameTo(File f) throws IOException {
+        void renameTo(File f) throws IOException {
             try {
                 if (file.exists())
                     Utils.atomicMoveWithFallback(file.toPath(), f.toPath(), false);
@@ -302,16 +303,16 @@ public class TransactionIndex implements Closeable {
             }
         }
 
-        public void truncate(long position) throws IOException {
+        void truncate(long position) throws IOException {
             if (channel != null)
                 channel.truncate(position);
         }
 
-        public boolean exists() {
+        boolean exists() {
             return file.exists();
         }
 
-        public boolean deleteIfExists() throws IOException {
+        boolean deleteIfExists() throws IOException {
             closeChannel();
             return Files.deleteIfExists(path());
         }
