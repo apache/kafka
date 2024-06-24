@@ -18,6 +18,7 @@ package org.apache.kafka.streams.errors.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 
 /**
@@ -32,6 +33,7 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     private final byte[] sourceRawValue;
     private final String processorNodeId;
     private final TaskId taskId;
+    private ProcessorContext processorContext;
 
     public DefaultErrorHandlerContext(final String topic,
                                       final int partition,
@@ -49,6 +51,19 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
         this.sourceRawValue = sourceRawValue;
         this.processorNodeId = processorNodeId;
         this.taskId = taskId;
+    }
+
+    public DefaultErrorHandlerContext(final ProcessorContext processorContext,
+                                      final String topic,
+                                      final int partition,
+                                      final long offset,
+                                      final Headers headers,
+                                      final byte[] sourceRawKey,
+                                      final byte[] sourceRawValue,
+                                      final String processorNodeId,
+                                      final TaskId taskId) {
+        this(topic, partition, offset, headers, sourceRawKey, sourceRawValue, processorNodeId, taskId);
+        this.processorContext = processorContext;
     }
 
     @Override
@@ -89,5 +104,9 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     @Override
     public TaskId taskId() {
         return taskId;
+    }
+
+    public ProcessorContext processorContext() {
+        return this.processorContext;
     }
 }
