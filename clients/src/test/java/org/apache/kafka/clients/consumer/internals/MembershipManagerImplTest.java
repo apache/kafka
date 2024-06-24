@@ -99,8 +99,8 @@ public class MembershipManagerImplTest {
     private static final String MEMBER_ID = "test-member-1";
     private static final int REBALANCE_TIMEOUT = 100;
     private static final int MEMBER_EPOCH = 1;
+    private static final LogContext LOG_CONTEXT = new LogContext();
 
-    private LogContext logContext;
     private SubscriptionState subscriptionState;
     private ConsumerMetadata metadata;
     private CommitRequestManager commitRequestManager;
@@ -117,7 +117,6 @@ public class MembershipManagerImplTest {
         commitRequestManager = mock(CommitRequestManager.class);
         backgroundEventQueue = new LinkedBlockingQueue<>();
         backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
-        logContext = new LogContext();
         time = new MockTime(0);
         metrics = new Metrics(time);
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
@@ -138,7 +137,7 @@ public class MembershipManagerImplTest {
     private MembershipManagerImpl createMembershipManager(String groupInstanceId) {
         return spy(new MembershipManagerImpl(
             GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
-            subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
+            subscriptionState, commitRequestManager, metadata, LOG_CONTEXT, Optional.empty(),
             backgroundEventHandler, time, rebalanceMetricsManager));
     }
 
@@ -147,7 +146,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT,
                 Optional.ofNullable(serverAssignor), subscriptionState, commitRequestManager,
-                metadata, logContext, Optional.empty(), backgroundEventHandler, time,
+                metadata, LOG_CONTEXT, Optional.empty(), backgroundEventHandler, time,
                 rebalanceMetricsManager));
         manager.transitionToJoining();
         return manager;
@@ -172,7 +171,7 @@ public class MembershipManagerImplTest {
         // First join should register to get metadata updates
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
-                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
+                subscriptionState, commitRequestManager, metadata, LOG_CONTEXT, Optional.empty(),
                 backgroundEventHandler, time, rebalanceMetricsManager);
         manager.transitionToJoining();
         clearInvocations(metadata);
@@ -242,7 +241,7 @@ public class MembershipManagerImplTest {
     public void testTransitionToFailedWhenTryingToJoin() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(
                 GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
-                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
+                subscriptionState, commitRequestManager, metadata, LOG_CONTEXT, Optional.empty(),
                 backgroundEventHandler, time, rebalanceMetricsManager);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
