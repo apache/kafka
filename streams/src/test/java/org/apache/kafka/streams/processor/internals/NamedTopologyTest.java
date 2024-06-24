@@ -29,9 +29,9 @@ import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyS
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
@@ -54,14 +54,14 @@ public class NamedTopologyTest {
     private final NamedTopologyBuilder builder2 = streams.newNamedTopologyBuilder("topology-2");
     private final NamedTopologyBuilder builder3 = streams.newNamedTopologyBuilder("topology-3");
 
-    @Before
+    @BeforeEach
     public void setup() {
         builder1.stream("input-1");
         builder2.stream("input-2");
         builder3.stream("input-3");
     }
 
-    @After
+    @AfterEach
     public void cleanup() {
         streams.close();
     }
