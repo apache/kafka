@@ -64,12 +64,9 @@ public class FeatureCommandTest {
 
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().collect(Collectors.toList());
 
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
-
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(1)));
+                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(0)));
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_7_IV4)
@@ -80,12 +77,9 @@ public class FeatureCommandTest {
 
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().collect(Collectors.toList());
 
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
-
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.7-IV4\t", outputWithoutEpoch(features.get(1)));
+                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.7-IV4\t", outputWithoutEpoch(features.get(0)));
     }
 
     @ClusterTest(types = {Type.ZK}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
