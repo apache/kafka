@@ -1840,17 +1840,20 @@ public class SharePartitionTest {
     @Test
     public void testReleaseMultipleAcknowledgedRecordBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
-
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(5, 0),
-                Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false));
-
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(2, 5),
-                Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false));
-
+        MemoryRecords records0 = memoryRecords(5, 0);
+        MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(9, 10),
+        MemoryRecords records2 = memoryRecords(9, 10);
+
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records0,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1870,6 +1873,8 @@ public class SharePartitionTest {
     @Test
     public void testReleaseAcknowledgedMultipleSubsetRecordBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        MemoryRecords records1 = memoryRecords(2, 5);
+
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
         // Gap from 12-13 offsets.
@@ -1878,12 +1883,13 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(16, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         // Gap from 17-19 offsets.
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+        MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(2, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, recordsBuilder.build(),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1924,6 +1930,7 @@ public class SharePartitionTest {
     @Test
     public void testReleaseAcquiredRecordsWithAnotherMember() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        MemoryRecords records1 = memoryRecords(1, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
         // Gap from 12-13 offsets.
@@ -1932,11 +1939,12 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(16, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         // Gap from 17-19 offsets.
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+        MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(1, 5),
+        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, recordsBuilder.build(),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         // Acknowledging over subset of second batch with subset of gap offsets.
@@ -1995,6 +2003,7 @@ public class SharePartitionTest {
     @Test
     public void testReleaseAcquiredRecordsWithAnotherMemberAndSubsetAcknowledged() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
         // Gap from 12-13 offsets.
@@ -2003,11 +2012,12 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(16, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         // Gap from 17-19 offsets.
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+        MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(2, 5),
+        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, recordsBuilder.build(),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         // Acknowledging over subset of second batch with subset of gap offsets.
