@@ -596,6 +596,8 @@ public class StreamsConfig extends AbstractConfig {
     private static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed value. Must implement the " +
         "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
     
+    /** {@code windowed.inner.class.serde
+     * @deprecated since 3.9} */
     @Deprecated
     public static final String WINDOWED_INNER_CLASS_SERDE = "windowed.inner.class.serde";
     private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the " +
