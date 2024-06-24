@@ -17,6 +17,7 @@
 
 package org.apache.kafka.jmh.util;
 
+import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.immutable.pcollections.PCollectionsImmutableMap;
 
@@ -60,6 +61,8 @@ public class SingleWriteMultiReadBenchmark {
     private double writePercentage ;
 
     private Map<Integer, Integer> concurrentHashMap;
+    private Map<Integer, Integer> copyOnWriteMap;
+
     private int writeTimes = (int) Math.round(writePercentage * TIMES);
     private ImmutableMap<Integer, Integer> pcollectionsImmutableMap;
 
@@ -68,6 +71,7 @@ public class SingleWriteMultiReadBenchmark {
         Map<Integer, Integer> mapTemplate = IntStream.range(0, mapSize).boxed()
                 .collect(Collectors.toMap(i -> i, i -> i));
         concurrentHashMap = new ConcurrentHashMap<>(mapTemplate);
+        copyOnWriteMap = new CopyOnWriteMap<>(mapTemplate);
         pcollectionsImmutableMap = PCollectionsImmutableMap.empty();
         mapTemplate.entrySet().stream().map(s -> pcollectionsImmutableMap.updated(s.getKey(), s.getValue()));
     }
@@ -177,6 +181,60 @@ public class SingleWriteMultiReadBenchmark {
     public void testConcurrentHashMapWrite() {
         for (int i = 0; i < writeTimes; i++) {
             concurrentHashMap.put(i + mapSize, 0);
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation
+    @Group("CopyOnWriteMap")
+    @GroupThreads(10)
+    public void testCopyOnWriteMapGet(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            blackhole.consume(copyOnWriteMap.get(i % mapSize));
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation
+    @Group("CopyOnWriteMap")
+    @GroupThreads(10)
+    public void testCopyOnWriteMapRandomGet(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            blackhole.consume(copyOnWriteMap.get(ThreadLocalRandom.current().nextInt(0, mapSize + 1)));
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation
+    @Group("CopyOnWriteMap")
+    @GroupThreads(10)
+    public void testCopyOnWriteMapValues(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            for (int value : copyOnWriteMap.values()) {
+                blackhole.consume(value);
+            }
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation
+    @Group("CopyOnWriteMap")
+    @GroupThreads(10)
+    public void testCopyOnWriteMapEntry(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            for (Map.Entry<Integer, Integer> entry : copyOnWriteMap.entrySet()) {
+                blackhole.consume(entry);
+            }
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation
+    @Group("CopyOnWriteMap")
+    @GroupThreads(1)
+    public void testCopyOnWriteMapWrite() {
+        for (int i = 0; i < writeTimes; i++) {
+            copyOnWriteMap.put(i + mapSize, 0);
         }
     }
 }
