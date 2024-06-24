@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.telemetry.internals;
 
-import java.time.Duration;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
@@ -25,6 +24,7 @@ import org.apache.kafka.common.requests.AbstractRequest.Builder;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 
+import java.time.Duration;
 import java.util.Optional;
 
 /**

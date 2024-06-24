@@ -35,6 +35,7 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -44,6 +45,7 @@ import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+
 
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
@@ -208,7 +210,11 @@ public class HeartbeatRequestManager implements RequestManager {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(leaveHeartbeat));
         }
 
-        boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
+        // Case 1: The member is leaving
+        boolean heartbeatNow = membershipManager.state() == MemberState.LEAVING ||
+                // Case 2: The member state indicates it should send a heartbeat without waiting for the interval, and there is no heartbeat request currently in-flight
+                (membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight());
+
         if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
         }
@@ -258,7 +264,8 @@ public class HeartbeatRequestManager implements RequestManager {
         pollTimer.update(pollMs);
         if (pollTimer.isExpired()) {
             logger.warn("Time between subsequent calls to poll() was longer than the configured " +
-                "max.poll.interval.ms, exceeded approximately by {} ms.", pollTimer.isExpiredBy());
+                "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
+                pollTimer.isExpiredBy(), membershipManager.memberId());
             membershipManager.maybeRejoinStaleMember();
         }
         pollTimer.reset(maxPollIntervalMs);
@@ -564,7 +571,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
 
-            // SubscribedTopicNames - only sent if has changed since the last heartbeat
+            // SubscribedTopicNames - only sent if it has changed since the last heartbeat
             TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
             if (sendAllFields || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                 data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));

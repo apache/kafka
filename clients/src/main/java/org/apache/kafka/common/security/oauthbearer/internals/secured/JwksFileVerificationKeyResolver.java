@@ -17,11 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import java.io.IOException;
-import java.nio.file.Path;
-import java.security.Key;
-import java.util.List;
 import org.apache.kafka.common.utils.Utils;
+
 import org.jose4j.jwk.JsonWebKeySet;
 import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwx.JsonWebStructure;
@@ -31,6 +28,11 @@ import org.jose4j.lang.JoseException;
 import org.jose4j.lang.UnresolvableKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.security.Key;
+import java.util.List;
 
 /**
  * <code>JwksFileVerificationKeyResolver</code> is a {@link VerificationKeyResolver} implementation

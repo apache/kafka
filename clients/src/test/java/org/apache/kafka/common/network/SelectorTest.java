@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -272,7 +273,7 @@ public class SelectorTest {
         return metrics.metrics().entrySet().stream().
             filter(e -> e.getKey().description().
                 contains("The number of connections with this SSL cipher and protocol.")).
-            map(e -> e.getValue()).
+            map(Map.Entry::getValue).
             collect(Collectors.toList());
     }
 
@@ -955,7 +956,7 @@ public class SelectorTest {
         NetworkSend send = new NetworkSend("destination", new ByteBufferSend(ByteBuffer.allocate(0)));
         when(channel.maybeCompleteSend()).thenReturn(send);
         selector.write(channel);
-        assertEquals(asList(send), selector.completedSends());
+        assertEquals(Collections.singletonList(send), selector.completedSends());
     }
 
     /**

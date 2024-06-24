@@ -17,13 +17,14 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
+
+import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
-import org.junit.jupiter.api.Test;
 
 public class ThrottleTest {
     /**
@@ -70,4 +71,3 @@ public class ThrottleTest {
         assertEquals(200, time.milliseconds());
     }
 }
-

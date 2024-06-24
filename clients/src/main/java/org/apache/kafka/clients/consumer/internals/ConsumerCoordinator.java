@@ -66,6 +66,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -96,7 +97,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshC
  * This class manages the coordination process with the consumer coordinator.
  */
 public final class ConsumerCoordinator extends AbstractCoordinator {
-    private final static TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
+    private static final TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
 
     private final GroupRebalanceConfig rebalanceConfig;
     private final Logger log;

@@ -17,11 +17,12 @@
 package kafka.server
 
 import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import kafka.test.annotation.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
+import org.apache.kafka.server.common.Features
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -31,31 +32,44 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ClusterTestDefaults(types = Array(Type.KRAFT))
 @Tag("integration")
 class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-    new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
-    new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
+      new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
   def testDeleteGroupsWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
     testDeleteGroups(true)
   }
 
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
   def testDeleteGroupsWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
     testDeleteGroups(false)
   }
 
-  @ClusterTest(types = Array(Type.ZK, Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
+  @ClusterTest(
+    types = Array(Type.ZK, Type.KRAFT, Type.CO_KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+    )
+  )
   def testDeleteGroupsWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
     testDeleteGroups(false)
   }

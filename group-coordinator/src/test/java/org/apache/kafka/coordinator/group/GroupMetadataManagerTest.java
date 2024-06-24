@@ -33,9 +33,9 @@ import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
-import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
@@ -61,27 +61,29 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ExpiredTimeout;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ScheduledTimeout;
-import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupBuilder;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.consumer.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.consumer.MemberState;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.classic.ClassicGroup;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -101,11 +103,11 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
-import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
+import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
@@ -114,15 +116,15 @@ import static org.apache.kafka.coordinator.group.Assertions.assertResponseEquals
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupJoinKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupSyncKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
-import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
-import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
-import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupSyncKey;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
@@ -150,7 +152,7 @@ public class GroupMetadataManagerTest {
     public void testConsumerHeartbeatRequestValidation() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
         Exception ex;
 
@@ -240,7 +242,7 @@ public class GroupMetadataManagerTest {
     public void testMemberIdGeneration() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(MetadataImage.EMPTY)
             .build();
 
@@ -283,7 +285,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
 
         assertThrows(GroupIdNotFoundException.class, () ->
@@ -304,7 +306,7 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
+            .withConsumerGroupAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
             .build();
 
         // A first member joins to create the group.
@@ -340,7 +342,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
@@ -426,7 +428,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -435,7 +437,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )))
@@ -516,7 +518,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -540,7 +542,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )))
@@ -618,7 +620,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -663,15 +665,15 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(barTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2, 3),
                         mkTopicAssignment(barTopicId, 1)
                     )));
-                    put(memberId3, new MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 4, 5),
                         mkTopicAssignment(barTopicId, 2)
                     )));
@@ -758,7 +760,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -851,7 +853,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -897,15 +899,15 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(barTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2, 3),
                         mkTopicAssignment(barTopicId, 1)
                     )));
-                    put(memberId3, new MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 4, 5),
                         mkTopicAssignment(barTopicId, 2)
                     )));
@@ -1020,7 +1022,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -1047,12 +1049,12 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
                         mkTopicAssignment(barTopicId, 0, 1)
                     )));
                     // When the member rejoins, it gets the same assignments.
-                    put(member2RejoinId, new MemberAssignment(mkAssignment(
+                    put(member2RejoinId, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
                         mkTopicAssignment(barTopicId, 2)
                     )));
@@ -1191,7 +1193,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -1255,7 +1257,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -1348,7 +1350,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
@@ -1398,7 +1400,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .build())
@@ -1446,7 +1448,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .build())
@@ -1488,7 +1490,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
@@ -1579,7 +1581,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .build())
@@ -1625,7 +1627,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .build())
@@ -1669,7 +1671,7 @@ public class GroupMetadataManagerTest {
         // Create a context with an empty consumer group.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
                 .addRacks()
@@ -1680,7 +1682,7 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId, new MemberAssignment(mkAssignment(
+                    put(memberId, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1)
                     )));
                 }
@@ -1770,7 +1772,7 @@ public class GroupMetadataManagerTest {
         // Create a context with one consumer group containing two members.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -1816,15 +1818,15 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(barTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2, 3),
                         mkTopicAssignment(barTopicId, 2)
                     )));
-                    put(memberId3, new MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 4, 5),
                         mkTopicAssignment(barTopicId, 1)
                     )));
@@ -2205,7 +2207,7 @@ public class GroupMetadataManagerTest {
         // Create a context with one consumer group containing two members.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -2268,7 +2270,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10))
             .build();
 
@@ -2318,12 +2320,12 @@ public class GroupMetadataManagerTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        PartitionAssignor assignor = mock(PartitionAssignor.class);
+        ConsumerGroupPartitionAssignor assignor = mock(ConsumerGroupPartitionAssignor.class);
         when(assignor.name()).thenReturn("range");
         when(assignor.assign(any(), any())).thenThrow(new PartitionAssignorException("Assignment failed."));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -2357,7 +2359,7 @@ public class GroupMetadataManagerTest {
         // Create a context with one consumer group containing one member.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withConsumerGroupMetadataRefreshIntervalMs(5 * 60 * 1000)
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
@@ -2395,7 +2397,7 @@ public class GroupMetadataManagerTest {
 
         // Prepare the assignment result.
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )))
         ));
@@ -2468,7 +2470,7 @@ public class GroupMetadataManagerTest {
         // Create a context with one consumer group containing one member.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withConsumerGroupMetadataRefreshIntervalMs(5 * 60 * 1000)
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
@@ -2506,7 +2508,7 @@ public class GroupMetadataManagerTest {
 
         // Prepare the assignment result.
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )))
         ));
@@ -2592,7 +2594,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
 
         assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
@@ -2691,7 +2693,7 @@ public class GroupMetadataManagerTest {
     @Test
     public void testOnNewMetadataImageWithEmptyDelta() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .build();
 
         MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
@@ -2704,7 +2706,7 @@ public class GroupMetadataManagerTest {
     @Test
     public void testOnNewMetadataImage() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .build();
 
         // M1 in group 1 subscribes to a and b.
@@ -2800,7 +2802,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
@@ -2808,7 +2810,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )))
         ));
@@ -2875,7 +2877,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
@@ -2883,7 +2885,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )))
         ));
@@ -2939,7 +2941,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
@@ -2947,7 +2949,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )))
         ));
@@ -3021,7 +3023,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 3)
                 .addRacks()
@@ -3031,7 +3033,7 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)
                     )));
                 }
@@ -3071,10 +3073,10 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2)
                     )));
                 }
@@ -3176,7 +3178,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 3)
                 .addRacks()
@@ -3186,7 +3188,7 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)
                     )));
                 }
@@ -3226,10 +3228,10 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2)
                     )));
                 }
@@ -3313,7 +3315,7 @@ public class GroupMetadataManagerTest {
         String barTopicName = "bar";
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -8217,7 +8219,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
             .build();
 
@@ -8366,7 +8368,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupIds.get(0), epoch))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupIds.get(1), epoch)
                 .withMember(memberBuilder.build()))
@@ -8401,7 +8403,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
 
         List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(Collections.singletonList(groupId));
@@ -8429,7 +8431,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(metadataImage)
             .build();
 
@@ -9224,7 +9226,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -9233,7 +9235,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )))
@@ -9354,7 +9356,7 @@ public class GroupMetadataManagerTest {
         String classicGroupId = "classic-group-id";
         String memberId = Uuid.randomUuid().toString();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
+            .withConsumerGroupAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
             .build();
         ClassicGroup classicGroup = new ClassicGroup(
             new LogContext(),
@@ -9383,7 +9385,7 @@ public class GroupMetadataManagerTest {
         String classicGroupId = "classic-group-id";
         String memberId = Uuid.randomUuid().toString();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
+            .withConsumerGroupAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
             .build();
         ClassicGroup classicGroup = new ClassicGroup(
             new LogContext(),
@@ -9476,10 +9478,10 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(barTopicId, 0)
                     )));
                 }
@@ -9494,7 +9496,7 @@ public class GroupMetadataManagerTest {
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(metadataImage)
             .build();
 
@@ -9629,7 +9631,7 @@ public class GroupMetadataManagerTest {
 
         assertRecordsEquals(expectedRecords, result.records());
 
-        context.assertSessionTimeout(groupId, memberId1, 45000);
+        context.assertSessionTimeout(groupId, memberId1, expectedMember1.classicProtocolSessionTimeout().get());
         context.assertSessionTimeout(groupId, memberId2, 45000);
 
         // Simulate a failed replay. The context is rolled back and the group is converted back to the classic group.
@@ -9652,13 +9654,13 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(barTopicId, 0)
                     )));
-                    put(memberId3, new MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 1)
                     )));
                 }
@@ -9673,7 +9675,7 @@ public class GroupMetadataManagerTest {
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(metadataImage)
             .build();
 
@@ -9875,8 +9877,8 @@ public class GroupMetadataManagerTest {
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), joinResult.joinFuture.get().errorCode());
 
-        context.assertSessionTimeout(groupId, memberId1, 45000);
-        context.assertSessionTimeout(groupId, memberId2, 45000);
+        context.assertSessionTimeout(groupId, memberId1, expectedMember1.classicProtocolSessionTimeout().get());
+        context.assertSessionTimeout(groupId, memberId2, expectedMember2.classicProtocolSessionTimeout().get());
         context.assertSessionTimeout(groupId, memberId3, 45000);
 
         // Simulate a failed replay. The context is rolled back and the group is converted back to the classic group.
@@ -9899,13 +9901,13 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(barTopicId, 0)
                     )));
-                    put(memberId3, new MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 1)
                     )));
                 }
@@ -9920,7 +9922,7 @@ public class GroupMetadataManagerTest {
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(metadataImage)
             .build();
 
@@ -10140,8 +10142,8 @@ public class GroupMetadataManagerTest {
         assertTrue(syncResult.syncFuture.isDone());
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), syncResult.syncFuture.get().errorCode());
 
-        context.assertSessionTimeout(groupId, memberId1, 45000);
-        context.assertSessionTimeout(groupId, memberId2, 45000);
+        context.assertSessionTimeout(groupId, memberId1, expectedMember1.classicProtocolSessionTimeout().get());
+        context.assertSessionTimeout(groupId, memberId2, expectedMember2.classicProtocolSessionTimeout().get());
         context.assertSessionTimeout(groupId, memberId3, 45000);
 
         // Simulate a failed replay. The context is rolled back and the group is converted back to the classic group.
@@ -10315,7 +10317,7 @@ public class GroupMetadataManagerTest {
         // Member 1 uses the classic protocol and member 2 uses the consumer protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -10507,7 +10509,7 @@ public class GroupMetadataManagerTest {
         // Member 1 uses the classic protocol and member 2 uses the consumer protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -10697,7 +10699,7 @@ public class GroupMetadataManagerTest {
         // Member 1 uses the classic protocol and member 2 uses the consumer protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -10730,11 +10732,11 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
                         mkTopicAssignment(barTopicId, 0, 1)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5)
                     )));
                 }
@@ -10920,7 +10922,7 @@ public class GroupMetadataManagerTest {
             String memberId = Uuid.randomUuid().toString();
             MockPartitionAssignor assignor = new MockPartitionAssignor("range");
             GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-                .withAssignors(Collections.singletonList(assignor))
+                .withConsumerGroupAssignors(Collections.singletonList(assignor))
                 .withMetadataImage(new MetadataImageBuilder()
                     .addTopic(fooTopicId, fooTopicName, 2)
                     .addTopic(barTopicId, barTopicName, 1)
@@ -10970,10 +10972,10 @@ public class GroupMetadataManagerTest {
             assignor.prepareGroupAssignment(new GroupAssignment(
                 new HashMap<String, MemberAssignment>() {
                     {
-                        put(memberId, new MemberAssignment(mkAssignment(
+                        put(memberId, new MemberAssignmentImpl(mkAssignment(
                             mkTopicAssignment(fooTopicId, 0)
                         )));
-                        put(newMemberId, new MemberAssignment(mkAssignment(
+                        put(newMemberId, new MemberAssignmentImpl(mkAssignment(
                             mkTopicAssignment(barTopicId, 0)
                         )));
                     }
@@ -11059,10 +11061,10 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId, new MemberAssignment(mkAssignment(
+                    put(memberId, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0)
                     )));
-                    put(newMemberId, new MemberAssignment(mkAssignment(
+                    put(newMemberId, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 1)
                     )));
                 }
@@ -11070,7 +11072,7 @@ public class GroupMetadataManagerTest {
         ));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
                 .addRacks()
@@ -11125,7 +11127,7 @@ public class GroupMetadataManagerTest {
         String instanceId = "instance-id";
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
+            .withConsumerGroupAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
                 .addTopic(barTopicId, barTopicName, 1)
@@ -11221,7 +11223,7 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
         String instanceId = "instance-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
+            .withConsumerGroupAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
                 .addRacks()
@@ -11327,7 +11329,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
                 .addTopic(barTopicId, barTopicName, 1)
@@ -11389,11 +11391,11 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0),
                         mkTopicAssignment(zarTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(barTopicId, 0),
                         mkTopicAssignment(fooTopicId, 1)
                     )));
@@ -11557,7 +11559,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
                 .addTopic(barTopicId, barTopicName, 1)
@@ -11619,11 +11621,11 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(zarTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(barTopicId, 0)
                     )));
                 }
@@ -11799,7 +11801,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
                 .addTopic(barTopicId, barTopicName, 1)
@@ -11861,11 +11863,11 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(zarTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(barTopicId, 0)
                     )));
                 }
@@ -12183,7 +12185,8 @@ public class GroupMetadataManagerTest {
             // Consumer group with two members.
             // Member 1 uses the classic protocol and member 2 uses the consumer protocol.
             GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-                .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+                .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
+                .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
                 .withMetadataImage(new MetadataImageBuilder()
                     .addTopic(fooTopicId, fooTopicName, 6)
                     .addTopic(barTopicId, barTopicName, 3)
@@ -12220,7 +12223,8 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with a member that doesn't use the classic protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .build()))
@@ -12269,7 +12273,8 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with a static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setInstanceId(instanceId)
@@ -12307,7 +12312,8 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with a member using the classic protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setClassicMemberMetadata(
@@ -12371,7 +12377,8 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with a member using the classic protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setClassicMemberMetadata(
@@ -12414,7 +12421,8 @@ public class GroupMetadataManagerTest {
         // Consumer group with a member using the classic protocol.
         // The group epoch is greater than the member epoch.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 11)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setRebalanceTimeoutMs(10000)
@@ -12459,7 +12467,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with a member using the classic protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setClassicMemberMetadata(
@@ -12555,7 +12563,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(member1)
                 .withMember(member2)
@@ -12694,7 +12702,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with a member using the classic protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setClassicMemberMetadata(
@@ -12755,7 +12763,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with a member using the classic protocol whose member epoch is smaller than the group epoch.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setRebalanceTimeoutMs(rebalanceTimeout)
@@ -12799,6 +12807,408 @@ public class GroupMetadataManagerTest {
             ),
             timeout.result.records()
         );
+    }
+
+    @Test
+    public void testConsumerGroupMemberUsingClassicProtocolBatchLeaveGroup() {
+        String groupId = "group-id";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String memberId3 = Uuid.randomUuid().toString();
+        String instanceId2 = "instance-id-2";
+        String instanceId3 = "instance-id-3";
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocol1 = Collections.singletonList(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                    Arrays.asList(fooTopicName, barTopicName),
+                    null,
+                    Collections.singletonList(new TopicPartition(fooTopicName, 0))
+                ))))
+        );
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocol2 = Collections.singletonList(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                    Arrays.asList(fooTopicName, barTopicName),
+                    null,
+                    Collections.singletonList(new TopicPartition(fooTopicName, 1))
+                ))))
+        );
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(protocol1)
+            )
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
+            .setInstanceId(instanceId2)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(9)
+            .setPreviousMemberEpoch(8)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(protocol2)
+            )
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 1)))
+            .build();
+        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder(memberId3)
+            .setInstanceId(instanceId3)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(barTopicId, 0)))
+            .build();
+
+        // Consumer group with three members.
+        // Dynamic member 1 uses the classic protocol.
+        // Static member 2 uses the classic protocol.
+        // Static member 3 uses the consumer protocol.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 2)
+                .addTopic(barTopicId, barTopicName, 1)
+                .addRacks()
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(member2)
+                .withMember(member3)
+                .withAssignment(memberId1, mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+                .withAssignment(memberId2, mkAssignment(mkTopicAssignment(fooTopicId, 1)))
+                .withAssignment(memberId3, mkAssignment(mkTopicAssignment(barTopicId, 0)))
+                .withAssignmentEpoch(10))
+            .build();
+        context.groupMetadataManager.consumerGroup(groupId).setMetadataRefreshDeadline(Long.MAX_VALUE, 10);
+        context.replay(CoordinatorRecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+            {
+                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
+                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
+            }
+        }));
+
+        // Member 1 joins to schedule the sync timeout and the heartbeat timeout.
+        context.sendClassicGroupJoin(
+            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withMemberId(memberId1)
+                .withRebalanceTimeoutMs(member1.rebalanceTimeoutMs())
+                .withSessionTimeoutMs(member1.classicMemberMetadata().get().sessionTimeoutMs())
+                .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
+                    Arrays.asList(fooTopicName, barTopicName),
+                    Collections.singletonList(new TopicPartition(fooTopicName, 0))))
+                .build()
+        ).appendFuture.complete(null);
+        context.assertSyncTimeout(groupId, memberId1, member1.rebalanceTimeoutMs());
+        context.assertSessionTimeout(groupId, memberId1, member1.classicMemberMetadata().get().sessionTimeoutMs());
+
+        // Member 2 heartbeats to schedule the join timeout and the heartbeat timeout.
+        context.sendClassicGroupHeartbeat(
+            new HeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setGenerationId(9)
+        );
+        context.assertJoinTimeout(groupId, memberId2, member2.rebalanceTimeoutMs());
+        context.assertSessionTimeout(groupId, memberId2, member2.classicMemberMetadata().get().sessionTimeoutMs());
+
+        // Member 1 and member 2 leave the group.
+        CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> leaveResult = context.sendClassicGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(Arrays.asList(
+                    // Valid member id.
+                    new MemberIdentity()
+                        .setMemberId(memberId1),
+                    new MemberIdentity()
+                        .setGroupInstanceId(instanceId2),
+                    // Member that doesn't use the classic protocol.
+                    new MemberIdentity()
+                        .setMemberId(memberId3)
+                        .setGroupInstanceId(instanceId3),
+                    // Unknown member id.
+                    new MemberIdentity()
+                        .setMemberId("unknown-member-id"),
+                    new MemberIdentity()
+                        .setGroupInstanceId("unknown-instance-id"),
+                    // Fenced instance id.
+                    new MemberIdentity()
+                        .setMemberId("unknown-member-id")
+                        .setGroupInstanceId(instanceId3)
+                ))
+        );
+
+        assertEquals(
+            new LeaveGroupResponseData()
+                .setMembers(Arrays.asList(
+                    new LeaveGroupResponseData.MemberResponse()
+                        .setGroupInstanceId(null)
+                        .setMemberId(memberId1),
+                    new LeaveGroupResponseData.MemberResponse()
+                        .setGroupInstanceId(instanceId2)
+                        .setMemberId(memberId2),
+                    new LeaveGroupResponseData.MemberResponse()
+                        .setGroupInstanceId(instanceId3)
+                        .setMemberId(memberId3)
+                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+                    new LeaveGroupResponseData.MemberResponse()
+                        .setGroupInstanceId(null)
+                        .setMemberId("unknown-member-id")
+                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+                    new LeaveGroupResponseData.MemberResponse()
+                        .setGroupInstanceId("unknown-instance-id")
+                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+                    new LeaveGroupResponseData.MemberResponse()
+                        .setGroupInstanceId(instanceId3)
+                        .setMemberId("unknown-member-id")
+                        .setErrorCode(Errors.FENCED_INSTANCE_ID.code())
+                )),
+            leaveResult.response()
+        );
+
+        List<CoordinatorRecord> expectedRecords = Arrays.asList(
+            // Remove member 1
+            CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId1),
+            CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId1),
+            CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId1),
+            // Remove member 2.
+            CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId2),
+            CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId2),
+            CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId2),
+            // Bump the group epoch.
+            CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11)
+        );
+        assertEquals(expectedRecords, leaveResult.records());
+
+        context.assertNoSessionTimeout(groupId, memberId1);
+        context.assertNoSyncTimeout(groupId, memberId1);
+        context.assertNoSessionTimeout(groupId, memberId2);
+        context.assertNoJoinTimeout(groupId, memberId2);
+    }
+
+    @Test
+    public void testConsumerGroupMemberUsingClassicProtocolBatchLeaveGroupUpdatingSubscriptionMetadata() {
+        String groupId = "group-id";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocol = Collections.singletonList(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                    Arrays.asList(fooTopicName, barTopicName),
+                    null,
+                    Collections.singletonList(new TopicPartition(fooTopicName, 0))
+                ))))
+        );
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(protocol)
+            )
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo"))
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(barTopicId, 0)))
+            .build();
+
+        // Consumer group with two members.
+        // Member 1 uses the classic protocol and member 2 uses the consumer protocol.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 2)
+                .addTopic(barTopicId, barTopicName, 1)
+                .addRacks()
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(member2)
+                .withAssignment(memberId1, mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+                .withAssignment(memberId2, mkAssignment(mkTopicAssignment(barTopicId, 0)))
+                .withAssignmentEpoch(10))
+            .build();
+        context.groupMetadataManager.consumerGroup(groupId).setMetadataRefreshDeadline(Long.MAX_VALUE, 10);
+        context.replay(CoordinatorRecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+            {
+                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
+                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
+            }
+        }));
+
+        // Member 1 leaves the group.
+        CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> leaveResult = context.sendClassicGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(Collections.singletonList(
+                    new MemberIdentity()
+                        .setMemberId(memberId1)
+                ))
+        );
+
+        assertEquals(
+            new LeaveGroupResponseData()
+                .setMembers(Collections.singletonList(
+                    new LeaveGroupResponseData.MemberResponse()
+                        .setGroupInstanceId(null)
+                        .setMemberId(memberId1)
+                )),
+            leaveResult.response()
+        );
+
+        List<CoordinatorRecord> expectedRecords = Arrays.asList(
+            // Remove member 1
+            CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId1),
+            CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId1),
+            CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId1),
+            // Update the subscription metadata.
+            CoordinatorRecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                {
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
+                }
+            }),
+            // Bump the group epoch.
+            CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11)
+        );
+        assertEquals(expectedRecords, leaveResult.records());
+    }
+
+    @Test
+    public void testClassicGroupLeaveToConsumerGroupWithoutValidLeaveGroupMember() {
+        String groupId = "group-id";
+        String memberId = Uuid.randomUuid().toString();
+
+        // Consumer group without member using the classic protocol.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .build()))
+            .build();
+
+        // Send leave request without valid member.
+        CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> leaveResult = context.sendClassicGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(Arrays.asList(
+                    new MemberIdentity()
+                        .setMemberId("unknown-member-id"),
+                    new MemberIdentity()
+                        .setMemberId(memberId)
+                ))
+        );
+
+        assertEquals(
+            new LeaveGroupResponseData()
+                .setMembers(Arrays.asList(
+                    new LeaveGroupResponseData.MemberResponse()
+                        .setGroupInstanceId(null)
+                        .setMemberId("unknown-member-id")
+                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+                    new LeaveGroupResponseData.MemberResponse()
+                        .setGroupInstanceId(null)
+                        .setMemberId(memberId)
+                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                )),
+            leaveResult.response()
+        );
+
+        assertEquals(Collections.emptyList(), leaveResult.records());
+    }
+
+    @Test
+    public void testNoConversionWhenSizeExceedsClassicMaxGroupSize() throws Exception {
+        String groupId = "group-id";
+        String nonClassicMemberId = "1";
+
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = Collections.singletonList(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(new byte[0])
+        );
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder(nonClassicMemberId).build();
+        ConsumerGroupMember classicMember1 = new ConsumerGroupMember.Builder("2")
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols))
+            .build();
+        ConsumerGroupMember classicMember2 = new ConsumerGroupMember.Builder("3")
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols))
+            .build();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withClassicGroupMaxSize(1)
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
+            .withConsumerGroup(
+                new ConsumerGroupBuilder(groupId, 10)
+                    .withMember(member)
+                    .withMember(classicMember1)
+                    .withMember(classicMember2)
+            )
+            .build();
+
+        assertEquals(Group.GroupType.CONSUMER, context.groupMetadataManager.group(groupId).type());
+
+        context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(nonClassicMemberId)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setRebalanceTimeoutMs(5000)
+        );
+
+        assertEquals(Group.GroupType.CONSUMER, context.groupMetadataManager.group(groupId).type());
     }
 
     private static void checkJoinGroupResponse(

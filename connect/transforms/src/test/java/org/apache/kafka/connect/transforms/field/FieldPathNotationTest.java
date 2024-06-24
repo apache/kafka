@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.transforms.field;
 
 import org.apache.kafka.common.config.ConfigException;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -24,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class FieldPathNotationTest {
-    final static String[] EMPTY_PATH = new String[] {};
+    static final String[] EMPTY_PATH = new String[] {};
 
     @Test
     void shouldBuildV1WithDotsAndBacktickPair() {

@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.common.compress;
 
-import java.io.IOException;
-import java.io.OutputStream;
-
 import org.apache.kafka.common.utils.ByteUtils;
 
 import net.jpountz.lz4.LZ4Compressor;
 import net.jpountz.lz4.LZ4Factory;
 import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHashFactory;
+
+import java.io.IOException;
+import java.io.OutputStream;
 
 /**
  * A partial implementation of the v1.5.1 LZ4 Frame format.
@@ -331,10 +331,6 @@ public final class Lz4BlockOutputStream extends OutputStream {
 
         public boolean isBlockChecksumSet() {
             return blockChecksum == 1;
-        }
-
-        public boolean isBlockIndependenceSet() {
-            return blockIndependence == 1;
         }
 
         public int getVersion() {

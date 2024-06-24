@@ -26,7 +26,7 @@ public final class IsNullConditional {
     }
 
     private static class PrimitiveConditionalGenerator implements ConditionalGenerator {
-        final static PrimitiveConditionalGenerator INSTANCE = new PrimitiveConditionalGenerator();
+        static final PrimitiveConditionalGenerator INSTANCE = new PrimitiveConditionalGenerator();
 
         @Override
         public String generate(String name, boolean negated) {

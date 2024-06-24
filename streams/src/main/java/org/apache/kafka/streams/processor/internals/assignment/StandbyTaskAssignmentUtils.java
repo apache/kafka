@@ -17,11 +17,11 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.slf4j.Logger;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.Function;
 
 import static java.util.stream.Collectors.toMap;
@@ -29,20 +29,20 @@ import static java.util.stream.Collectors.toMap;
 final class StandbyTaskAssignmentUtils {
     private StandbyTaskAssignmentUtils() {}
 
-    static ConstrainedPrioritySet createLeastLoadedPrioritySetConstrainedByAssignedTask(final Map<UUID, ClientState> clients) {
+    static ConstrainedPrioritySet createLeastLoadedPrioritySetConstrainedByAssignedTask(final Map<ProcessId, ClientState> clients) {
         return new ConstrainedPrioritySet((client, t) -> !clients.get(client).hasAssignedTask(t),
                                           client -> clients.get(client).assignedTaskLoad());
     }
 
     static void pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(final int numStandbyReplicas,
-                                                                       final Map<UUID, ClientState> clients,
+                                                                       final Map<ProcessId, ClientState> clients,
                                                                        final Map<TaskId, Integer> tasksToRemainingStandbys,
                                                                        final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
                                                                        final TaskId activeTaskId,
                                                                        final Logger log) {
         int numRemainingStandbys = tasksToRemainingStandbys.get(activeTaskId);
         while (numRemainingStandbys > 0) {
-            final UUID client = standbyTaskClientsByTaskLoad.poll(activeTaskId);
+            final ProcessId client = standbyTaskClientsByTaskLoad.poll(activeTaskId);
             if (client == null) {
                 break;
             }

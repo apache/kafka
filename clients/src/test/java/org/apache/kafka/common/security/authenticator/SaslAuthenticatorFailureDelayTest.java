@@ -33,13 +33,13 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -93,7 +93,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
     public void testInvalidPasswordSaslPlain() throws Exception {
         String node = "0";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
         jaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "invalidpassword");
 
         server = createEchoServer(securityProtocol);
@@ -141,7 +141,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
     public void testClientConnectionClose() throws Exception {
         String node = "0";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
         jaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "invalidpassword");
 
         server = createEchoServer(securityProtocol);
@@ -187,7 +187,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, clientMechanism);
         saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, serverMechanisms);
         if (serverMechanisms.contains("DIGEST-MD5")) {
-            saslServerConfigs.put("digest-md5." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+            saslServerConfigs.put("digest-md5." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
                     TestDigestLoginModule.DigestServerCallbackHandler.class.getName());
         }
         return TestJaasConfig.createConfiguration(clientMechanism, serverMechanisms);

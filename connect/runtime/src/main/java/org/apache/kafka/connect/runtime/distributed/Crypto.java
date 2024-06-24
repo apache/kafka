@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import java.security.NoSuchAlgorithmException;
+
 import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
-import java.security.NoSuchAlgorithmException;
 
 /**
  * An interface to allow the dependency injection of {@link Mac} and {@link KeyGenerator} instances for testing.

@@ -94,14 +94,12 @@ public class ProduceRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=ProduceRequest")
-                    .append(", acks=").append(data.acks())
-                    .append(", timeout=").append(data.timeoutMs())
-                    .append(", partitionRecords=(").append(data.topicData().stream().flatMap(d -> d.partitionData().stream()).collect(Collectors.toList()))
-                    .append("), transactionalId='").append(data.transactionalId() != null ? data.transactionalId() : "")
-                    .append("'");
-            return bld.toString();
+            return "(type=ProduceRequest" +
+                    ", acks=" + data.acks() +
+                    ", timeout=" + data.timeoutMs() +
+                    ", partitionRecords=(" + data.topicData().stream().flatMap(d -> d.partitionData().stream()).collect(Collectors.toList()) +
+                    "), transactionalId='" + (data.transactionalId() != null ? data.transactionalId() : "") +
+                    "'";
         }
     }
 

@@ -78,12 +78,9 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.TemporaryStage;
+
 import org.slf4j.Logger;
 
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -111,6 +108,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
@@ -2229,11 +2231,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void publishConnectorTaskConfigs(String connName, List<Map<String, String>> taskProps, Callback<Void> cb) {
-        if (!taskConfigsChanged(configState, connName, taskProps)) {
+        List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
+        if (!taskConfigsChanged(configState, connName, rawTaskProps)) {
             return;
         }
 
-        List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
         if (isLeader()) {
             writeTaskConfigs(connName, rawTaskProps);
             cb.onCompletion(null, null);

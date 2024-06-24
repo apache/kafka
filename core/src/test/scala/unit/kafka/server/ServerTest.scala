@@ -17,11 +17,10 @@
 package kafka.server
 
 import java.util.Properties
-
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.MetricsContext
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -55,7 +54,7 @@ class ServerTest {
     val clusterId = Uuid.randomUuid().toString
 
     val props = new Properties()
-    props.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    props.put(ServerConfigs.BROKER_ID_CONFIG, brokerId.toString)
     props.put(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:0")
     val config = KafkaConfig.fromProps(props)
 

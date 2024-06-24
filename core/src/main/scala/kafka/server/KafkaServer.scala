@@ -30,7 +30,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.server.metadata.{OffsetTrackingListener, ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
-import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
+import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -44,7 +44,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
-import org.apache.kafka.common.{Endpoint, KafkaException, Node, TopicPartition}
+import org.apache.kafka.common.{Endpoint, Node, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
@@ -70,9 +70,9 @@ import java.net.{InetAddress, SocketTimeoutException}
 import java.nio.file.{Files, Paths}
 import java.time.Duration
 import java.util
-import java.util.{Optional, OptionalInt, OptionalLong}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
@@ -276,7 +276,7 @@ class KafkaServer(
         createCurrentControllerIdMetric()
 
         /* register broker metrics */
-        _brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(config))
+        _brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
 
         quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
         KafkaBroker.notifyClusterListeners(clusterId, kafkaMetricsReporters ++ metrics.reporters.asScala)
@@ -439,6 +439,7 @@ class KafkaServer(
             metrics,
             threadNamePrefix,
             CompletableFuture.completedFuture(quorumVoters),
+            QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
           quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
@@ -689,11 +690,7 @@ class KafkaServer(
   }
 
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
-    if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
-      if (config.logDirs.size > 1) {
-        throw new KafkaException("Tiered storage is not supported with multiple log dirs.")
-      }
-
+    if (config.remoteLogManagerConfig.isRemoteStorageSystemEnabled()) {
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).asJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
@@ -701,7 +698,7 @@ class KafkaServer(
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
           }
       },
-        brokerTopicStats))
+        brokerTopicStats, metrics))
     } else {
       None
     }
@@ -830,7 +827,8 @@ class KafkaServer(
           time,
           false,
           new ApiVersions,
-          logContext)
+          logContext,
+          MetadataRecoveryStrategy.NONE)
       }
 
       var shutdownSucceeded: Boolean = false
@@ -1084,6 +1082,13 @@ class KafkaServer(
         fatal("Fatal error during KafkaServer shutdown.", e)
         isShuttingDown.set(false)
         throw e
+    }
+  }
+
+  override def isShutdown(): Boolean = {
+    BrokerState.fromValue(brokerState.value()) match {
+      case BrokerState.SHUTTING_DOWN | BrokerState.NOT_RUNNING => true
+      case _ => false
     }
   }
 

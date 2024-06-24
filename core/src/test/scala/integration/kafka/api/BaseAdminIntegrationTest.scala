@@ -19,21 +19,22 @@ package kafka.api
 import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
-import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateTopicsOptions, CreateTopicsResult, DescribeClusterOptions, DescribeTopicsOptions, NewTopic, TopicDescription}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl.AclOperation
+import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.KafkaSecurityConfigs
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach , TestInfo, Timeout}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -69,8 +70,9 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     super.tearDown()
   }
 
-  @Test
-  def testCreateDeleteTopics(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCreateDeleteTopics(quorum: String): Unit = {
     client = createAdminClient
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
@@ -161,8 +163,9 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     waitForTopics(client, List(), topics)
   }
 
-  @Test
-  def testAuthorizedOperations(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizedOperations(quorum: String): Unit = {
     client = createAdminClient
 
     // without includeAuthorizedOperations flag
@@ -204,14 +207,14 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       })
     }
     configs.foreach { config =>
-      config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
+      config.setProperty(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "true")
       config.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
       config.setProperty(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG, "false")
-      config.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
+      config.setProperty(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
       // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
       // set for subclasses with security enabled and we don't want to overwrite it.
-      if (!config.containsKey(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG))
-        config.setProperty(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "some.invalid.pass")
+      if (!config.containsKey(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG))
+        config.setProperty(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "some.invalid.pass")
     }
   }
 

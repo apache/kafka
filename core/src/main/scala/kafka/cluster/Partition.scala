@@ -427,7 +427,7 @@ class Partition(val topicPartition: TopicPartition,
     * @param highWatermarkCheckpoints Checkpoint to load initial high watermark from
     * @return true iff the future replica is created
     */
-  def maybeCreateFutureReplica(logDir: String, highWatermarkCheckpoints: OffsetCheckpoints): Boolean = {
+  def maybeCreateFutureReplica(logDir: String, highWatermarkCheckpoints: OffsetCheckpoints, topicId: Option[Uuid] = topicId): Boolean = {
     // The writeLock is needed to make sure that while the caller checks the log directory of the
     // current replica and the existence of the future replica, no other thread can update the log directory of the
     // current replica or remove the future replica.

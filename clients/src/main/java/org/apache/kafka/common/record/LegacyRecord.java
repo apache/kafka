@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import java.util.zip.CRC32;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
@@ -27,6 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.zip.CRC32;
 
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
 
@@ -121,14 +121,6 @@ public final class LegacyRecord {
      */
     public boolean isValid() {
         return sizeInBytes() >= RECORD_OVERHEAD_V0 && checksum() == computeChecksum();
-    }
-
-    public Long wrapperRecordTimestamp() {
-        return wrapperRecordTimestamp;
-    }
-
-    public TimestampType wrapperRecordTimestampType() {
-        return wrapperRecordTimestampType;
     }
 
     /**

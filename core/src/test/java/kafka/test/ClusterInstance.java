@@ -23,6 +23,7 @@ import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.network.ListenerName;
@@ -40,7 +41,6 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 
 public interface ClusterInstance {
 
@@ -51,6 +51,11 @@ public interface ClusterInstance {
     }
 
     Map<Integer, KafkaBroker> brokers();
+
+    default Map<Integer, KafkaBroker> aliveBrokers() {
+        return brokers().entrySet().stream().filter(entry -> !entry.getValue().isShutdown())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
 
     Map<Integer, ControllerServer> controllers();
 
@@ -159,9 +164,7 @@ public interface ClusterInstance {
         Set<GroupProtocol> supportedGroupProtocols = new HashSet<>();
         supportedGroupProtocols.add(CLASSIC);
 
-        // KafkaConfig#isNewGroupCoordinatorEnabled check both NEW_GROUP_COORDINATOR_ENABLE_CONFIG and GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG
-        if (serverProperties.getOrDefault(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "").equals("true") ||
-                serverProperties.getOrDefault(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "").contains("consumer")) {
+        if (serverProperties.getOrDefault(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "").contains("consumer")) {
             supportedGroupProtocols.add(CONSUMER);
         }
 

@@ -46,6 +46,7 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTask;
 import org.apache.kafka.streams.processor.internals.Task.State;
@@ -55,21 +56,20 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 
 import org.hamcrest.Matchers;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Answers;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoJUnitRunner;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.io.File;
@@ -84,7 +84,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -110,12 +109,12 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -135,7 +134,8 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class TaskManagerTest {
 
     private final String topic1 = "topic1";
@@ -212,13 +212,10 @@ public class TaskManagerTest {
     private TopologyMetadata topologyMetadata;
     private final Time time = new MockTime();
 
-    @Rule
-    public final TemporaryFolder testFolder = new TemporaryFolder();
+    @TempDir
+    Path testFolder;
 
-    @Rule
-    public final MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
-
-    @Before
+    @BeforeEach
     public void setUp() {
         taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, null, false);
     }
@@ -239,7 +236,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = new TaskManager(
             time,
             changeLogReader,
-            UUID.randomUUID(),
+            ProcessId.randomProcessId(),
             "taskManagerTest",
             activeTaskCreator,
             standbyTaskCreator,
@@ -1953,8 +1950,8 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createTasks(taskId01Assignment)).thenReturn(singletonList(task01));
 
         final ArrayList<TaskDirectory> taskFolders = new ArrayList<>(2);
-        taskFolders.add(new TaskDirectory(testFolder.newFolder(taskId00.toString()), null));
-        taskFolders.add(new TaskDirectory(testFolder.newFolder(taskId01.toString()), null));
+        taskFolders.add(new TaskDirectory(testFolder.resolve(taskId00.toString()).toFile(), null));
+        taskFolders.add(new TaskDirectory(testFolder.resolve(taskId01.toString()).toFile(), null));
 
         when(stateDirectory.listNonEmptyTaskDirectories())
             .thenReturn(taskFolders)
@@ -4613,22 +4610,28 @@ public class TaskManagerTest {
 
     private void makeTaskFolders(final String... names) throws Exception {
         final ArrayList<TaskDirectory> taskFolders = new ArrayList<>(names.length);
-        for (int i = 0; i < names.length; ++i) {
-            taskFolders.add(new TaskDirectory(testFolder.newFolder(names[i]), null));
+        for (int i = 0; i < names.length; i++) {
+            final String name = names[i];
+            final Path path = testFolder.resolve(name).toAbsolutePath();
+            if (Files.notExists(path)) {
+                Files.createDirectories(path);
+            }
+            taskFolders.add(new TaskDirectory(path.toFile(), null));
         }
         when(stateDirectory.listNonEmptyTaskDirectories()).thenReturn(taskFolders);
     }
 
     private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, Long> offsets) throws Exception {
         final File checkpointFile = getCheckpointFile(task);
-        Files.createFile(checkpointFile.toPath());
+        final Path checkpointFilePath = checkpointFile.toPath();
+        Files.createFile(checkpointFilePath);
         new OffsetCheckpoint(checkpointFile).write(offsets);
         lenient().when(stateDirectory.checkpointFileFor(task)).thenReturn(checkpointFile);
         expectDirectoryNotEmpty(task);
     }
 
     private File getCheckpointFile(final TaskId task) {
-        return new File(new File(testFolder.getRoot(), task.toString()), StateManagerUtil.CHECKPOINT_FILE_NAME);
+        return new File(new File(testFolder.toAbsolutePath().toString(), task.toString()), StateManagerUtil.CHECKPOINT_FILE_NAME);
     }
 
     private static ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final long offset) {

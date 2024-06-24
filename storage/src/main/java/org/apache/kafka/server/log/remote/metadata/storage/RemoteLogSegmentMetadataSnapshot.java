@@ -27,8 +27,8 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
-import java.util.TreeMap;
 import java.util.Optional;
+import java.util.TreeMap;
 
 /**
  * This class represents the entry containing the metadata about a remote log segment. This is similar to

@@ -23,8 +23,9 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 import kafka.utils.TestUtils
-import kafka.server.{BaseRequestTest, KafkaConfig}
+import kafka.server.BaseRequestTest
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
@@ -33,6 +34,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.collection.mutable
@@ -66,7 +68,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
 
 
   override protected def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
+    properties.setProperty(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false") // speed up shutdown
     properties.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "3") // don't want to lose offset
     properties.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
     properties.setProperty(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100") // set small enough session timeout
@@ -89,12 +91,14 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
         s"The current assignment is ${consumer.assignment()}")
   }
 
-  def awaitNonEmptyRecords[K, V](consumer: Consumer[K, V], partition: TopicPartition): ConsumerRecords[K, V] = {
+  def awaitNonEmptyRecords[K, V](consumer: Consumer[K, V],
+                                 partition: TopicPartition,
+                                 pollTimeoutMs: Long = 100): ConsumerRecords[K, V] = {
     TestUtils.pollRecordsUntilTrue(consumer, (polledRecords: ConsumerRecords[K, V]) => {
       if (polledRecords.records(partition).asScala.nonEmpty)
         return polledRecords
       false
-    }, s"Consumer did not consume any messages for partition $partition before timeout.")
+    }, s"Consumer did not consume any messages for partition $partition before timeout.", JTestUtils.DEFAULT_MAX_WAIT_MS, pollTimeoutMs)
     throw new IllegalStateException("Should have timed out before reaching here")
   }
 

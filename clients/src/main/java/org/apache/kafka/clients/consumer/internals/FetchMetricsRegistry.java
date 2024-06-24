@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.MetricNameTemplate;
+
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-
-import org.apache.kafka.common.MetricNameTemplate;
 
 public class FetchMetricsRegistry {
 

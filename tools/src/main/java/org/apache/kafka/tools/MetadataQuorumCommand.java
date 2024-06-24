@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.QuorumInfo;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.CommandLineUtils;
+
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.ArgumentGroup;
@@ -24,12 +31,6 @@ import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.QuorumInfo;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.File;
 import java.io.IOException;

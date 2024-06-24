@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.KafkaException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,9 +113,9 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
      */
     static class CommonNameLoggingTrustManager implements X509TrustManager {
 
-        final private X509TrustManager origTm;
+        private final X509TrustManager origTm;
         final int nrOfRememberedBadCerts;
-        final private LinkedHashMap<ByteBuffer, String> previouslyRejectedClientCertChains;
+        private final LinkedHashMap<ByteBuffer, String> previouslyRejectedClientCertChains;
 
         public CommonNameLoggingTrustManager(X509TrustManager originalTrustManager, int nrOfRememberedBadCerts) {
             this.origTm = originalTrustManager;

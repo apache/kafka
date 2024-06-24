@@ -19,6 +19,7 @@ package kafka.admin;
 import kafka.cluster.Broker;
 import kafka.zk.AdminZkClient;
 import kafka.zk.KafkaZkClient;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterClientQuotasOptions;
 import org.apache.kafka.clients.admin.AlterClientQuotasResult;
@@ -50,11 +51,10 @@ import org.apache.kafka.common.utils.Sanitizer;
 import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.server.config.ZooKeeperInternals;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
 
 import java.io.File;
 import java.io.IOException;
@@ -78,6 +78,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -421,8 +424,8 @@ public class ConfigCommandTest {
     public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String...args) {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
         createOpts.checkArgs();
-        assertEquals(createOpts.entityTypes().toSeq(), ConfigCommandIntegrationTest.seq(expectedTypes));
-        assertEquals(createOpts.entityNames().toSeq(), ConfigCommandIntegrationTest.seq(expectedNames));
+        assertEquals(createOpts.entityTypes().toSeq(), seq(expectedTypes));
+        assertEquals(createOpts.entityNames().toSeq(), seq(expectedNames));
     }
 
     public void doTestOptionEntityTypeNames(boolean zkConfig) {
@@ -1710,7 +1713,7 @@ public class ConfigCommandTest {
     public void checkEntities(List<String> opts, Map<String, List<String>> expectedFetches, List<String> expectedEntityNames) {
         ConfigCommand.ConfigEntity entity = ConfigCommand.parseEntity(new ConfigCommand.ConfigCommandOptions(toArray(opts, Collections.singletonList("--describe"))));
         expectedFetches.forEach((name, values) ->
-            when(zkClient.getAllEntitiesWithConfig(name)).thenReturn(ConfigCommandIntegrationTest.seq(values)));
+            when(zkClient.getAllEntitiesWithConfig(name)).thenReturn(seq(values)));
         Seq<ConfigCommand.ConfigEntity> entities0 = entity.getAllEntities(zkClient);
         List<ConfigCommand.ConfigEntity> entities = new ArrayList<>();
         entities0.foreach(e -> {
@@ -1995,5 +1998,10 @@ public class ConfigCommandTest {
         public AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options) {
             return mock(AlterClientQuotasResult.class);
         }
+    }
+
+    @SuppressWarnings({"deprecation"})
+    private <T> Seq<T> seq(Collection<T> seq) {
+        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
     }
 }

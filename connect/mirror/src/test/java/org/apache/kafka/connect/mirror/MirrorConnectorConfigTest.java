@@ -21,17 +21,18 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.test.MockMetricsReporter;
+
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.HashMap;
 
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MirrorConnectorConfigTest {
 

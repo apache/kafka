@@ -34,10 +34,10 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{CoordinatorRecord, GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, CoordinatorRecordSerde}
-import org.apache.kafka.image.publisher.MetadataPublisher
+import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
@@ -139,7 +139,9 @@ class BrokerServer(
 
   var brokerMetadataPublisher: BrokerMetadataPublisher = _
 
-  val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault(config.unstableMetadataVersionsEnabled)
+  var brokerRegistrationTracker: BrokerRegistrationTracker = _
+
+  val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault(config.unstableFeatureVersionsEnabled)
 
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
 
@@ -184,7 +186,7 @@ class BrokerServer(
       kafkaScheduler.startup()
 
       /* register broker metrics */
-      brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(config))
+      brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
 
@@ -428,6 +430,24 @@ class BrokerServer(
         config.numIoThreads, s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
         DataPlaneAcceptor.ThreadPrefix)
 
+      // Start RemoteLogManager before initializing broker metadata publishers.
+      remoteLogManagerOpt.foreach { rlm =>
+        val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
+        if (listenerName != null) {
+          val endpoint = listenerInfo.listeners().values().stream
+            .filter(e =>
+              e.listenerName().isPresent &&
+                ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
+            )
+            .findFirst()
+            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+              listenerName, "Should be set as a listener name within valid broker listener name list: " + listenerInfo.listeners().values()))
+          rlm.onEndPointCreated(EndPoint.fromJava(endpoint))
+        }
+        rlm.startup()
+      }
+
+      metadataPublishers.add(new MetadataVersionConfigValidator(config, sharedServer.metadataPublishingFaultHandler))
       brokerMetadataPublisher = new BrokerMetadataPublisher(config,
         metadataCache,
         logManager,
@@ -461,10 +481,13 @@ class BrokerServer(
           authorizer
         ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
-        sharedServer.metadataPublishingFaultHandler,
-        lifecycleManager
+        sharedServer.metadataPublishingFaultHandler
       )
       metadataPublishers.add(brokerMetadataPublisher)
+      brokerRegistrationTracker = new BrokerRegistrationTracker(config.brokerId,
+        () => lifecycleManager.resendBrokerRegistrationUnlessZkMode())
+      metadataPublishers.add(brokerRegistrationTracker)
+
 
       // Register parts of the broker that can be reconfigured via dynamic configs.  This needs to
       // be done before we publish the dynamic configs, so that we don't miss anything.
@@ -496,23 +519,6 @@ class BrokerServer(
       // by the dynamic configuration publisher. Ironically, KafkaConfig.originals does not
       // contain the original configuration values.
       new KafkaConfig(config.originals(), true)
-
-      // Start RemoteLogManager before broker start serving the requests.
-      remoteLogManagerOpt.foreach { rlm =>
-        val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
-        if (listenerName != null) {
-          val endpoint = listenerInfo.listeners().values().stream
-            .filter(e =>
-              e.listenerName().isPresent &&
-              ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
-            )
-            .findFirst()
-            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
-              listenerName, "Should be set as a listener name within valid broker listener name list: " + listenerInfo.listeners().values()))
-          rlm.onEndPointCreated(EndPoint.fromJava(endpoint))
-        }
-        rlm.startup()
-      }
 
       // We're now ready to unfence the broker. This also allows this broker to transition
       // from RECOVERY state to RUNNING state, once the controller unfences the broker.
@@ -564,6 +570,7 @@ class BrokerServer(
       val serde = new CoordinatorRecordSerde
       val groupCoordinatorConfig = new GroupCoordinatorConfig(
         config.groupCoordinatorNumThreads,
+        config.groupCoordinatorAppendLingerMs,
         config.consumerGroupSessionTimeoutMs,
         config.consumerGroupHeartbeatIntervalMs,
         config.consumerGroupMaxSize,
@@ -613,11 +620,7 @@ class BrokerServer(
   }
 
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
-    if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
-      if (config.logDirs.size > 1) {
-        throw new KafkaException("Tiered storage is not supported with multiple log dirs.")
-      }
-
+    if (config.remoteLogManagerConfig.isRemoteStorageSystemEnabled()) {
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).asJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
@@ -625,7 +628,7 @@ class BrokerServer(
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
           }
         },
-        brokerTopicStats))
+        brokerTopicStats, metrics))
     } else {
       None
     }
@@ -728,6 +731,10 @@ class BrokerServer(
     } finally {
       maybeChangeStatus(SHUTTING_DOWN, SHUTDOWN)
     }
+  }
+
+  override def isShutdown(): Boolean = {
+    status == SHUTDOWN || status == SHUTTING_DOWN
   }
 
   override def awaitShutdown(): Unit = {

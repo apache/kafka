@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import io.swagger.v3.oas.annotations.Operation;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 
@@ -25,6 +24,8 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
+
+import io.swagger.v3.oas.annotations.Operation;
 
 @Path("/")
 @Produces(MediaType.APPLICATION_JSON)

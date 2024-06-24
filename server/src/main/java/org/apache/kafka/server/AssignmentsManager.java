@@ -17,7 +17,6 @@
 
 package org.apache.kafka.server;
 
-import com.yammer.metrics.core.Gauge;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
@@ -36,6 +35,9 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+
+import com.yammer.metrics.core.Gauge;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -126,6 +128,10 @@ public class AssignmentsManager {
         } finally {
             metricsGroup.removeMetric(QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME);
         }
+    }
+
+    public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, String reason) {
+        onAssignment(topicPartition, dirId, reason, null);
     }
 
     public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, String reason, Runnable callback) {
@@ -444,7 +450,9 @@ public class AssignmentsManager {
                     } else {
                         acknowledged.add(topicPartition);
                         Errors error = Errors.forCode(partition.errorCode());
-                        if (error != Errors.NONE) {
+                        if (error == Errors.NOT_LEADER_OR_FOLLOWER) {
+                            log.info("Dropping late directory assignment for partition {} into directory {} because this broker is no longer a replica", partition, event.dirId);
+                        } else if (error != Errors.NONE) {
                             log.error("Controller returned error {} for assignment of partition {} into directory {}",
                                     error.name(), partition, event.dirId);
                             failures.add(event);

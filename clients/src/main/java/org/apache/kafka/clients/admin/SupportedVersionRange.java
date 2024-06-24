@@ -79,4 +79,3 @@ public class SupportedVersionRange {
         return String.format("SupportedVersionRange[min_version:%d, max_version:%d]", minVersion, maxVersion);
     }
 }
-

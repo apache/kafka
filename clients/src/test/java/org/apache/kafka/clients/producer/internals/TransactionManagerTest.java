@@ -35,10 +35,10 @@ import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
@@ -79,6 +79,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -2512,7 +2513,7 @@ public class TransactionManagerTest {
         // Try to drain a message destined for tp1, it should get drained.
         Node node1 = new Node(1, "localhost", 1112);
         PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()), Optional.empty(), null, null, null);
-        MetadataSnapshot metadataCache = new MetadataSnapshot(null, Collections.singletonMap(node1.id(), node1), Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+        MetadataSnapshot metadataCache = new MetadataSnapshot(null, Collections.singletonMap(node1.id(), node1), singletonList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
         appendToAccumulator(tp1);
         Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataCache, Collections.singleton(node1),
                 Integer.MAX_VALUE,
@@ -2533,7 +2534,7 @@ public class TransactionManagerTest {
         appendToAccumulator(tp0);
         Node node1 = new Node(0, "localhost", 1111);
         PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp0, Optional.of(node1.id()), Optional.empty(), null, null, null);
-        MetadataSnapshot metadataCache = new MetadataSnapshot(null, Collections.singletonMap(node1.id(), node1), Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+        MetadataSnapshot metadataCache = new MetadataSnapshot(null, Collections.singletonMap(node1.id(), node1), singletonList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
 
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);

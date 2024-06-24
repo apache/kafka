@@ -27,7 +27,7 @@ import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
-import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
 import org.apache.kafka.storage.internals.utils.Throttler
@@ -80,7 +80,6 @@ class LogCleanerTest extends Logging {
         logs = new Pool[TopicPartition, UnifiedLog](),
         logDirFailureChannel = new LogDirFailureChannel(1),
         time = time)
-
       val metricsToVerify = new java.util.HashMap[String, java.util.List[java.util.Map[String, String]]]()
       logCleaner.cleanerManager.gaugeMetricNameWithTag.asScala.foreach { metricNameAndTags =>
         val tags = new java.util.ArrayList[java.util.Map[String, String]]()
@@ -93,7 +92,7 @@ class LogCleanerTest extends Logging {
       val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
       val numMetricsRegistered = LogCleaner.MetricNames.size
       verify(mockMetricsGroup, times(numMetricsRegistered)).newGauge(anyString(), any())
-      
+
       // verify that each metric in `LogCleaner` is removed
       LogCleaner.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
 
@@ -118,6 +117,27 @@ class LogCleanerTest extends Logging {
     } finally {
       mockMetricsGroupCtor.close()
     }
+  }
+
+  @Test
+  def testMetricsActiveAfterReconfiguration(): Unit = {
+    val logCleaner = new LogCleaner(new CleanerConfig(true),
+      logDirs = Array(TestUtils.tempDir()),
+      logs = new Pool[TopicPartition, UnifiedLog](),
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = time)
+
+    try {
+      logCleaner.startup()
+      var nonexistent = LogCleaner.MetricNames.diff(KafkaYammerMetrics.defaultRegistry.allMetrics().keySet().asScala.map(_.getName))
+      assertEquals(0, nonexistent.size, s"$nonexistent should be existent")
+
+      logCleaner.reconfigure(new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181")),
+        new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181")))
+
+      nonexistent = LogCleaner.MetricNames.diff(KafkaYammerMetrics.defaultRegistry.allMetrics().keySet().asScala.map(_.getName))
+      assertEquals(0, nonexistent.size, s"$nonexistent should be existent")
+    } finally logCleaner.shutdown()
   }
 
   /**
@@ -168,7 +188,8 @@ class LogCleanerTest extends Logging {
     val maxTransactionTimeoutMs = 5 * 60 * 1000
     val producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
     val logSegments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.recordVersion, "")
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
+      dir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, time.scheduler)
     val producerStateManager = new ProducerStateManager(topicPartition, dir,
       maxTransactionTimeoutMs, producerStateManagerConfig, time)
     val offsets = new LogLoader(

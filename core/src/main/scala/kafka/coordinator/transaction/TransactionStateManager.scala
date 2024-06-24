@@ -36,7 +36,7 @@ import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
@@ -812,7 +812,7 @@ private[transaction] case class TransactionConfig(transactionalIdExpirationMs: I
                                                   transactionLogMinInsyncReplicas: Int = TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_DEFAULT,
                                                   abortTimedOutTransactionsIntervalMs: Int = TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT,
                                                   removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManagerConfigs.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_DEFAULT,
-                                                  requestTimeoutMs: Int = Defaults.REQUEST_TIMEOUT_MS)
+                                                  requestTimeoutMs: Int = ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT)
 
 case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short) {
   override def toString: String = {

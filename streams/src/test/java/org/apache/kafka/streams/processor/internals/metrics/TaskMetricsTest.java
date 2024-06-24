@@ -18,7 +18,7 @@ package org.apache.kafka.streams.processor.internals.metrics;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
 import static org.mockito.Mockito.mock;
@@ -34,8 +34,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 public class TaskMetricsTest {
 
-    private final static String THREAD_ID = "test-thread";
-    private final static String TASK_ID = "test-task";
+    private static final String THREAD_ID = "test-thread";
+    private static final String TASK_ID = "test-task";
 
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
     private final Sensor expectedSensor = mock(Sensor.class);

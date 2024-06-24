@@ -21,6 +21,7 @@ import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -392,7 +393,7 @@ public class Metrics implements Closeable {
      * receive every value recorded with this sensor.
      * @param name The name of the sensor
      * @param config A default configuration to use for this sensor for metrics that don't have their own config
-     * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
+     * @param inactiveSensorExpirationTimeSeconds If no value is recorded on the Sensor for this duration of time,
      *                                        it is eligible for removal
      * @param parents The parent sensors
      * @param recordingLevel The recording level.
@@ -419,7 +420,7 @@ public class Metrics implements Closeable {
      * receive every value recorded with this sensor. This uses a default recording level of INFO.
      * @param name The name of the sensor
      * @param config A default configuration to use for this sensor for metrics that don't have their own config
-     * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
+     * @param inactiveSensorExpirationTimeSeconds If no value is recorded on the Sensor for this duration of time,
      *                                        it is eligible for removal
      * @param parents The parent sensors
      * @return The sensor that is created

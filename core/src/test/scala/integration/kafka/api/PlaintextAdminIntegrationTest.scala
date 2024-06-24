@@ -36,7 +36,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
-import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, TopicConfig}
+import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
@@ -46,7 +46,7 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.{KafkaSecurityConfigs, QuotaConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.jupiter.api.Assertions._
@@ -202,6 +202,21 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val results = client.describeTopics(TopicCollection.ofTopicIds(Seq(existingTopicId, nonExistingTopicId).asJava)).topicIdValues()
     assertEquals(existingTopicId, results.get(existingTopicId).get.topicId())
     assertFutureExceptionTypeEquals(results.get(nonExistingTopicId), classOf[UnknownTopicIdException])
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeTopicsWithNames(quorum: String): Unit = {
+    client = createAdminClient
+
+    val existingTopic = "existing-topic"
+    client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
+    waitForTopics(client, Seq(existingTopic), List())
+    ensureConsistentKRaftMetadata()
+
+    val existingTopicId = brokers.head.metadataCache.getTopicId(existingTopic)
+    val results = client.describeTopics(TopicCollection.ofTopicNames(Seq(existingTopic).asJava)).topicNameValues()
+    assertEquals(existingTopicId, results.get(existingTopic).get.topicId())
   }
 
   @ParameterizedTest
@@ -426,29 +441,29 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     })
     assertEquals(brokers(1).config.nonInternalValues.size + numInternalConfigsSet,
       configs.get(brokerResource1).entries.size)
-    assertEquals(brokers(1).config.brokerId.toString, configs.get(brokerResource1).get(KafkaConfig.BrokerIdProp).value)
+    assertEquals(brokers(1).config.brokerId.toString, configs.get(brokerResource1).get(ServerConfigs.BROKER_ID_CONFIG).value)
     val listenerSecurityProtocolMap = configs.get(brokerResource1).get(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)
     assertEquals(brokers(1).config.getString(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG), listenerSecurityProtocolMap.value)
     assertEquals(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, listenerSecurityProtocolMap.name)
     assertFalse(listenerSecurityProtocolMap.isDefault)
     assertFalse(listenerSecurityProtocolMap.isSensitive)
     assertFalse(listenerSecurityProtocolMap.isReadOnly)
-    val truststorePassword = configs.get(brokerResource1).get(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)
-    assertEquals(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, truststorePassword.name)
+    val truststorePassword = configs.get(brokerResource1).get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)
+    assertEquals(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, truststorePassword.name)
     assertNull(truststorePassword.value)
     assertFalse(truststorePassword.isDefault)
     assertTrue(truststorePassword.isSensitive)
     assertFalse(truststorePassword.isReadOnly)
-    val compressionType = configs.get(brokerResource1).get(KafkaConfig.CompressionTypeProp)
+    val compressionType = configs.get(brokerResource1).get(ServerConfigs.COMPRESSION_TYPE_CONFIG)
     assertEquals(brokers(1).config.compressionType, compressionType.value)
-    assertEquals(KafkaConfig.CompressionTypeProp, compressionType.name)
+    assertEquals(ServerConfigs.COMPRESSION_TYPE_CONFIG, compressionType.name)
     assertTrue(compressionType.isDefault)
     assertFalse(compressionType.isSensitive)
     assertFalse(compressionType.isReadOnly)
 
     assertEquals(brokers(2).config.nonInternalValues.size + numInternalConfigsSet,
       configs.get(brokerResource2).entries.size)
-    assertEquals(brokers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BrokerIdProp).value)
+    assertEquals(brokers(2).config.brokerId.toString, configs.get(brokerResource2).get(ServerConfigs.BROKER_ID_CONFIG).value)
     assertEquals(brokers(2).config.logCleanerThreads.toString,
       configs.get(brokerResource2).get(CleanerConfig.LOG_CLEANER_THREADS_PROP).value)
 
@@ -984,6 +999,25 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val describeResult2 = client.describeConfigs(Collections.singletonList(invalidTopic))
 
     assertTrue(assertThrows(classOf[ExecutionException], () => describeResult2.values.get(invalidTopic).get).getCause.isInstanceOf[InvalidTopicException])
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testIncludeDocumentation(quorum: String): Unit = {
+    createTopic(topic)
+    client = createAdminClient
+
+    val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    val resources = Collections.singletonList(resource)
+    val includeDocumentation = new DescribeConfigsOptions().includeDocumentation(true)
+    var describeConfigs = client.describeConfigs(resources, includeDocumentation)
+    var configEntries = describeConfigs.values().get(resource).get().entries()
+    configEntries.forEach(e => assertNotNull(e.documentation()))
+
+    val excludeDocumentation = new DescribeConfigsOptions().includeDocumentation(false)
+    describeConfigs = client.describeConfigs(resources, excludeDocumentation)
+    configEntries = describeConfigs.values().get(resource).get().entries()
+    configEntries.forEach(e => assertNull(e.documentation()))
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
@@ -2644,7 +2678,8 @@ object PlaintextAdminIntegrationTest {
 
     // Verify that topics were updated correctly
     test.ensureConsistentKRaftMetadata()
-    var describeResult = admin.describeConfigs(Seq(topicResource1, topicResource2).asJava)
+    // Intentionally include duplicate resources to test if describeConfigs can handle them correctly.
+    var describeResult = admin.describeConfigs(Seq(topicResource1, topicResource2, topicResource2).asJava)
     var configs = describeResult.all.get
 
     assertEquals(2, configs.size)
@@ -2735,7 +2770,7 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
-    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
+    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
 
     // Alter configs with validateOnly = true: first and third are invalid, second is valid
     topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "gzip")).asJava
@@ -2764,6 +2799,6 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
-    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
+    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
   }
 }

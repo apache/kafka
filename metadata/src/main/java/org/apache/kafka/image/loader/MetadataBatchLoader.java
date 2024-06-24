@@ -27,6 +27,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
+
 import org.slf4j.Logger;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;

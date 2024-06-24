@@ -18,7 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.nio.ByteBuffer;
 import java.util.Base64;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;

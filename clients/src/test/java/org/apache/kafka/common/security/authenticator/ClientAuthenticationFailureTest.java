@@ -38,12 +38,12 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -65,13 +65,13 @@ public class ClientAuthenticationFailureTest {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
 
         saslServerConfigs = new HashMap<>();
-        saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Arrays.asList("PLAIN"));
+        saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Collections.singletonList("PLAIN"));
 
         saslClientConfigs = new HashMap<>();
         saslClientConfigs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_PLAINTEXT");
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
 
-        TestJaasConfig testJaasConfig = TestJaasConfig.createConfiguration("PLAIN", Arrays.asList("PLAIN"));
+        TestJaasConfig testJaasConfig = TestJaasConfig.createConfiguration("PLAIN", Collections.singletonList("PLAIN"));
         testJaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "anotherpassword");
         server = createEchoServer(securityProtocol);
     }
