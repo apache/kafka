@@ -177,9 +177,7 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
             return false;
         }
 
-        Object emitOffsetSyncEnabled = Optional.ofNullable(this.originals().get(EMIT_OFFSET_SYNCS_ENABLED)).orElse("true");
-
-        if ("false".equals(emitOffsetSyncEnabled)) {
+        if ("false".equals(Optional.ofNullable(this.originals().get(EMIT_OFFSET_SYNCS_ENABLED)).orElse("true"))) {
             LOG.warn("MirrorCheckpointConnector can't run with " + EMIT_OFFSET_SYNCS_ENABLED + " set to false while, " +
                     EMIT_CHECKPOINTS_ENABLED  + " and/or" + SYNC_GROUP_OFFSETS_ENABLED + " set to true");
             return false;
