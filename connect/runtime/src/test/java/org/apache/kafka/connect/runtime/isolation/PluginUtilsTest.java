@@ -28,8 +28,9 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.tools.MockSinkConnector;
 import org.apache.kafka.connect.tools.MockSourceConnector;
 import org.apache.kafka.connect.transforms.Transformation;
-import org.junit.jupiter.api.Test;
+
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;

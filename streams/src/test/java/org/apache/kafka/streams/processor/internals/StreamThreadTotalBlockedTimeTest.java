@@ -28,13 +28,16 @@ import java.util.function.Supplier;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StreamThreadTotalBlockedTimeTest {
     private static final int IO_TIME_TOTAL = 1;
     private static final int IO_WAIT_TIME_TOTAL = 2;
@@ -53,10 +56,7 @@ public class StreamThreadTotalBlockedTimeTest {
 
     private StreamThreadTotalBlockedTime blockedTime;
 
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
-
-    @Before
+    @BeforeEach
     public void setup() {
         blockedTime = new StreamThreadTotalBlockedTime(consumer, restoreConsumer, producerBlocked);
         when(consumer.metrics()).thenAnswer(a -> new MetricsBuilder()

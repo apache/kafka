@@ -23,7 +23,7 @@ import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_C
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -50,9 +50,9 @@ import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 public class RocksDBVersionedStoreTest {
 
@@ -72,7 +72,7 @@ public class RocksDBVersionedStoreTest {
 
     private RocksDBVersionedStore store;
 
-    @Before
+    @BeforeEach
     public void before() {
         context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
@@ -91,7 +91,7 @@ public class RocksDBVersionedStoreTest {
         store.init((StateStoreContext) context, store);
     }
 
-    @After
+    @AfterEach
     public void after() {
         store.close();
     }

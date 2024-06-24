@@ -26,6 +26,9 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.Map;
 
+/**
+ * Task implementation for {@link MockSinkConnector}.
+ */
 public class MockSinkTask extends SinkTask {
     private static final Logger log = LoggerFactory.getLogger(MockSinkTask.class);
 

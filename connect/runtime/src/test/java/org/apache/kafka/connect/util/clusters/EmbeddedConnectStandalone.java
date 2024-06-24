@@ -19,6 +19,7 @@ package org.apache.kafka.connect.util.clusters;
 import org.apache.kafka.connect.cli.ConnectStandalone;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.test.TestUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

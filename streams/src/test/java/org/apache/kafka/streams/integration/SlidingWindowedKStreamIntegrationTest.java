@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -27,14 +24,13 @@ import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -46,28 +42,26 @@ import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
-
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
@@ -79,11 +73,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
 @SuppressWarnings({"unchecked"})
-@Category({IntegrationTest.class})
-@RunWith(Parameterized.class)
+@Tag("integration")
+@Timeout(600)
 public class SlidingWindowedKStreamIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS,
@@ -92,12 +84,12 @@ public class SlidingWindowedKStreamIntegrationTest {
         )
     );
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -108,35 +100,12 @@ public class SlidingWindowedKStreamIntegrationTest {
     private String streamOneInput;
     private String streamTwoInput;
     private String outputTopic;
-
-    @Rule
-    public TestName testName = new TestName();
-
-    @Parameter
-    public StrategyType type;
-
-    @Parameter(1)
-    public boolean withCache;
-
-    private EmitStrategy emitStrategy;
-    private boolean emitFinal;
-
     private String safeTestName;
 
-    @Parameterized.Parameters(name = "{0}_cache:{1}")
-    public static Collection<Object[]> getEmitStrategy() {
-        return asList(new Object[][] {
-            {StrategyType.ON_WINDOW_UPDATE, true},
-            {StrategyType.ON_WINDOW_UPDATE, false},
-            {StrategyType.ON_WINDOW_CLOSE, true},
-            {StrategyType.ON_WINDOW_CLOSE, false}
-        });
-    }
-
-    @Before
-    public void before() throws InterruptedException {
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws InterruptedException {
         builder = new StreamsBuilder();
-        safeTestName = safeUniqueTestName(testName);
+        safeTestName = safeUniqueTestName(testInfo);
         createTopics();
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -149,12 +118,9 @@ public class SlidingWindowedKStreamIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0); // Always process
         streamsConfiguration.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, Long.MAX_VALUE); // Don't expire changelog
-
-        emitStrategy = StrategyType.forType(type);
-        emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
     }
 
-    @After
+    @AfterEach
     public void whenShuttingDown() throws IOException {
         if (kafkaStreams != null) {
             kafkaStreams.close();
@@ -163,8 +129,9 @@ public class SlidingWindowedKStreamIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-    @Test
-    public void shouldAggregateWindowedWithNoGrace() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
+    public void shouldAggregateWindowedWithNoGrace(final StrategyType strategyType, final boolean withCache) throws Exception {
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "1", 0),  // Create [0, 10](0+1)
@@ -181,17 +148,18 @@ public class SlidingWindowedKStreamIntegrationTest {
         builder.stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(10L)))
-            .emitStrategy(emitStrategy)
+            .emitStrategy(StrategyType.forType(strategyType))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                getMaterialized()
+                getMaterialized(withCache)
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
 
         startStreams();
 
+        final boolean emitFinal = strategyType.equals(StrategyType.ON_WINDOW_CLOSE);
         final List<KeyValueTimestamp<Windowed<String>, String>> windowedMessages = receiveMessagesWithTimestamp(
             new TimeWindowedDeserializer<>(new StringDeserializer(), 10L),
             new StringDeserializer(),
@@ -227,8 +195,9 @@ public class SlidingWindowedKStreamIntegrationTest {
         assertThat(windowedMessages, is(expectResult));
     }
 
-    @Test
-    public void shouldAggregateWindowedWithGrace() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
+    public void shouldAggregateWindowedWithGrace(final StrategyType strategyType, final boolean withCache) throws Exception {
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "1", 0),  // Create [0, 10](0+1)
@@ -245,17 +214,18 @@ public class SlidingWindowedKStreamIntegrationTest {
         builder.stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10L), ofMillis(5)))
-            .emitStrategy(emitStrategy)
+            .emitStrategy(StrategyType.forType(strategyType))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                getMaterialized()
+                getMaterialized(withCache)
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
 
         startStreams();
 
+        final boolean emitFinal = strategyType.equals(StrategyType.ON_WINDOW_CLOSE);
         final List<KeyValueTimestamp<Windowed<String>, String>> windowedMessages = receiveMessagesWithTimestamp(
             new TimeWindowedDeserializer<>(new StringDeserializer(), 10L),
             new StringDeserializer(),
@@ -300,8 +270,9 @@ public class SlidingWindowedKStreamIntegrationTest {
         assertThat(windowedMessages, is(expectResult));
     }
 
-    @Test
-    public void shouldRestoreAfterJoinRestart() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
+    public void shouldRestoreAfterJoinRestart(final StrategyType strategyType, final boolean withCache) throws Exception {
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "L1", 0),
@@ -333,17 +304,18 @@ public class SlidingWindowedKStreamIntegrationTest {
 
         joinedStream.groupByKey()
             .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(10L)))
-            .emitStrategy(emitStrategy)
+            .emitStrategy(StrategyType.forType(strategyType))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                getMaterialized()
+                getMaterialized(withCache)
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
 
         startStreams();
 
+        final boolean emitFinal = strategyType.equals(StrategyType.ON_WINDOW_CLOSE);
         List<KeyValueTimestamp<Windowed<String>, String>> windowedMessages = receiveMessagesWithTimestamp(
             new TimeWindowedDeserializer<>(new StringDeserializer(), 10L),
             new StringDeserializer(),
@@ -439,7 +411,7 @@ public class SlidingWindowedKStreamIntegrationTest {
         );
     }
 
-    private Materialized getMaterialized() {
+    private Materialized getMaterialized(final boolean withCache) {
         if (withCache) {
             return Materialized.with(null, new StringSerde()).withCachingEnabled();
         }

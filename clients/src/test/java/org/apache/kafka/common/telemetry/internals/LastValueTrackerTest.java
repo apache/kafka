@@ -17,6 +17,7 @@
 package org.apache.kafka.common.telemetry.internals;
 
 import org.apache.kafka.common.telemetry.internals.LastValueTracker.InstantAndValue;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;

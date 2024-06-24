@@ -17,6 +17,9 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.network.ListenerName;
+
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
@@ -24,8 +27,6 @@ import java.net.URL;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.network.ListenerName;
 
 /**
  * <code>ConfigurationUtils</code> is a utility class to perform basic configuration-related

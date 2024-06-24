@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

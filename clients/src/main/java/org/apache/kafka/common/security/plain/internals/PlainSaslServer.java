@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.security.plain.internals;
 
+import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.security.plain.PlainAuthenticateCallback;
+
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,9 +32,6 @@ import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
-
-import org.apache.kafka.common.errors.SaslAuthenticationException;
-import org.apache.kafka.common.security.plain.PlainAuthenticateCallback;
 
 /**
  * Simple SaslServer implementation for SASL/PLAIN. In order to make this implementation
