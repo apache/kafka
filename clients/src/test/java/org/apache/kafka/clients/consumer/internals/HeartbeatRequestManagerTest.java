@@ -418,14 +418,44 @@ public class HeartbeatRequestManagerTest {
         assertEquals(0, result.unsentRequests.size());
     }
 
-    @Test
+    @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
-    public void testValidateConsumerGroupHeartbeatRequest() {
+    public void testValidateConsumerGroupHeartbeatRequest(final short version) {
+        membershipManager = new MembershipManagerImpl(
+                DEFAULT_GROUP_ID,
+                Optional.of(DEFAULT_GROUP_INSTANCE_ID),
+                0,
+                Optional.of("uniform"),
+                subscriptions,
+                mock(CommitRequestManager.class),
+                (ConsumerMetadata) metadata,
+                logContext,
+                Optional.of(mock(ClientTelemetryReporter.class)),
+                backgroundEventHandler,
+                time,
+                new Metrics()
+        );
+        membershipManager.transitionToJoining();
+
+        heartbeatState = new HeartbeatState(
+                subscriptions,
+                membershipManager,
+                DEFAULT_MAX_POLL_INTERVAL_MS
+        );
+
+        heartbeatRequestManager = createHeartbeatRequestManager(
+                coordinatorRequestManager,
+                membershipManager,
+                heartbeatState,
+                heartbeatRequestState,
+                backgroundEventHandler
+        );
+
         // The initial heartbeatInterval is set to 0, but we're testing
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
 
         List<String> subscribedTopics = Collections.singletonList("topic");
-        subscriptions.subscribe(new HashSet<>(subscribedTopics), Optional.empty());
+        when(subscriptions.subscription()).thenReturn(Collections.singleton("topic"));
 
         // Update membershipManager's memberId and memberEpoch
         ConsumerGroupHeartbeatResponse result =
@@ -441,17 +471,8 @@ public class HeartbeatRequestManagerTest {
         NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
         assertInstanceOf(Builder.class, request.requestBuilder());
 
-        ConsumerGroupHeartbeatRequest heartbeatRequest = mock(ConsumerGroupHeartbeatRequest.class);
-        ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
-        data.setRebalanceTimeoutMs(10000);
-        data.setGroupId("groupId");
-        data.setInstanceId("group-instance-id");
-        data.setMemberId("member-id");
-        data.setMemberEpoch(1);
-        data.setSubscribedTopicNames(subscribedTopics);
-        data.setServerAssignor("uniform");
-
-        when(heartbeatRequest.data()).thenReturn(data);
+        ConsumerGroupHeartbeatRequest heartbeatRequest =
+                (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
 
         assertEquals(DEFAULT_GROUP_ID, heartbeatRequest.data().groupId());
         assertEquals(DEFAULT_MEMBER_ID, heartbeatRequest.data().memberId());
@@ -655,7 +676,6 @@ public class HeartbeatRequestManagerTest {
         membershipManager.poll(time.milliseconds());
         membershipManager.onHeartbeatRequestSent();
         data = heartbeatState.buildRequestData();
-        data.setTopicPartitions(Collections.emptyList());
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
         assertEquals(DEFAULT_MEMBER_ID, data.memberId());
         assertEquals(1, data.memberEpoch());
