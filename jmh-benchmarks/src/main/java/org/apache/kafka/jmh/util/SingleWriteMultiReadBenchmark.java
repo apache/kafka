@@ -63,7 +63,7 @@ public class SingleWriteMultiReadBenchmark {
     private Map<Integer, Integer> concurrentHashMap;
     private Map<Integer, Integer> copyOnWriteMap;
 
-    private int writeTimes = (int) Math.round(writePercentage * TIMES);
+    final private int writeTimes = (int) Math.round(writePercentage * TIMES);
     private ImmutableMap<Integer, Integer> pcollectionsImmutableMap;
 
     @Setup(Level.Invocation)
@@ -73,11 +73,13 @@ public class SingleWriteMultiReadBenchmark {
         concurrentHashMap = new ConcurrentHashMap<>(mapTemplate);
         copyOnWriteMap = new CopyOnWriteMap<>(mapTemplate);
         pcollectionsImmutableMap = PCollectionsImmutableMap.empty();
-        mapTemplate.entrySet().stream().map(s -> pcollectionsImmutableMap.updated(s.getKey(), s.getValue()));
+        mapTemplate.entrySet().forEach(s ->
+                pcollectionsImmutableMap = pcollectionsImmutableMap.updated(s.getKey(), s.getValue())
+        );
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("PcollectionsImmutableMap")
     @GroupThreads(10)
     public void testPcollectionsImmutableMapGet(Blackhole blackhole) {
@@ -87,7 +89,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("PcollectionsImmutableMap")
     @GroupThreads(10)
     public void testPcollectionsImmutableMapRandomGet(Blackhole blackhole) {
@@ -97,7 +99,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("PcollectionsImmutableMap")
     @GroupThreads(10)
     public void testPcollectionsImmutableMapValues(Blackhole blackhole) {
@@ -109,7 +111,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("PcollectionsImmutableMap")
     @GroupThreads(10)
     public void testPcollectionsImmutableMapEntry(Blackhole blackhole) {
@@ -121,7 +123,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("PcollectionsImmutableMap")
     @GroupThreads(1)
     public void testPcollectionsImmutableMapWrite() {
@@ -131,7 +133,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("ConcurrentHashMap")
     @GroupThreads(10)
     public void testConcurrentHashMapGet(Blackhole blackhole) {
@@ -141,7 +143,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("ConcurrentHashMap")
     @GroupThreads(10)
     public void testConcurrentHashMapRandomGet(Blackhole blackhole) {
@@ -151,7 +153,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("ConcurrentHashMap")
     @GroupThreads(10)
     public void testConcurrentHashMapValues(Blackhole blackhole) {
@@ -163,7 +165,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("ConcurrentHashMap")
     @GroupThreads(10)
     public void testConcurrentHashMapEntry(Blackhole blackhole) {
@@ -175,7 +177,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("ConcurrentHashMap")
     @GroupThreads(1)
     public void testConcurrentHashMapWrite() {
@@ -185,7 +187,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("CopyOnWriteMap")
     @GroupThreads(10)
     public void testCopyOnWriteMapGet(Blackhole blackhole) {
@@ -195,7 +197,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("CopyOnWriteMap")
     @GroupThreads(10)
     public void testCopyOnWriteMapRandomGet(Blackhole blackhole) {
@@ -205,7 +207,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("CopyOnWriteMap")
     @GroupThreads(10)
     public void testCopyOnWriteMapValues(Blackhole blackhole) {
@@ -217,7 +219,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("CopyOnWriteMap")
     @GroupThreads(10)
     public void testCopyOnWriteMapEntry(Blackhole blackhole) {
@@ -229,7 +231,7 @@ public class SingleWriteMultiReadBenchmark {
     }
 
     @Benchmark
-    @OperationsPerInvocation
+    @OperationsPerInvocation(TIMES)
     @Group("CopyOnWriteMap")
     @GroupThreads(1)
     public void testCopyOnWriteMapWrite() {
