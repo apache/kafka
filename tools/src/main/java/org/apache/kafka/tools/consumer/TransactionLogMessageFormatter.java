@@ -31,6 +31,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 import java.util.Optional;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -46,18 +47,24 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
         Optional.ofNullable(consumerRecord.key())
             .ifPresent(key -> {
                 byte[] value = consumerRecord.value();
-                short keyVersion = ByteBuffer.wrap(key).getShort();
-                short valueVersion = ByteBuffer.wrap(value).getShort();
+                String content;
+                if (Objects.isNull(value)) {
+                    content = "NULL";
+                } else {
+                    short keyVersion = ByteBuffer.wrap(key).getShort();
+                    short valueVersion = ByteBuffer.wrap(value).getShort();
 
-                ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
-                Optional<TransactionLogKey> transactionLogKey = readToTransactionLogKey(ByteBuffer.wrap(key));
-                Optional<TransactionLogValue> transactionLogValue = readToTransactionLogValue(ByteBuffer.wrap(value));
+                    ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
+                    Optional<TransactionLogKey> transactionLogKey = readToTransactionLogKey(ByteBuffer.wrap(key));
+                    Optional<TransactionLogValue> transactionLogValue = readToTransactionLogValue(ByteBuffer.wrap(value));
 
-                settingKeyNode(json, transactionLogKey, keyVersion);
-                settingValueNode(json, transactionLogValue, valueVersion);
+                    settingKeyNode(json, transactionLogKey, keyVersion);
+                    settingValueNode(json, transactionLogValue, valueVersion);
+                    content = json.toString();
+                }
 
                 try {
-                    output.write(json.toString().getBytes(UTF_8));
+                    output.write(content.getBytes(UTF_8));
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }

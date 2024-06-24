@@ -25,6 +25,7 @@ import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -97,6 +98,24 @@ public class TransactionLogMessageFormatterTest {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             formatter.writeTo(record, new PrintStream(out));
             assertEquals(expectedOutput, out.toString());
+        }
+    }
+
+    @Test
+    public void testNullPayLoadWithTransactionLogMessage() {
+        ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer((short) 0, txnLogKey);
+
+        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
+                TOPIC, 0, 0,
+                0L, TimestampType.CREATE_TIME, 0,
+                0, keyBuffer.array(), null,
+                new RecordHeaders(), Optional.empty());
+
+        try (MessageFormatter formatter = new TransactionLogMessageFormatter()) {
+            formatter.configure(new HashMap<>());
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            formatter.writeTo(record, new PrintStream(out));
+            assertEquals("NULL", out.toString());
         }
     }
 }
