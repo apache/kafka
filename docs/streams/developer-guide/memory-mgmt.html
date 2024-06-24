@@ -151,6 +151,8 @@ props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);</code></pre>
     Serdes.Long())
   .withCachingEnabled();</code></pre>
       <p>Record caches are not supported for <a class="reference internal" href="processor-api.html#streams-developer-guide-state-store-versioned"><span class="std std-ref">versioned state stores</span></a>.</p>
+      <p>To avoid reading stale data, you can <code class="docutils literal"><span class="pre">flush()</span></code> the store before creating the iterator.
+        Note, that flushing too often can lead to performance degration if RocksDB is used, so we advice to avoid flushing manually in general.</p>
     </div>
     <div class="section" id="rocksdb">
       <span id="streams-developer-guide-memory-management-rocksdb"></span><h2><a class="toc-backref" href="#id3">RocksDB</a><a class="headerlink" href="#rocksdb" title="Permalink to this headline"></a></h2>

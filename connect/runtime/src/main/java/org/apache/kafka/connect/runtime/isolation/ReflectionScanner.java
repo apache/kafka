@@ -25,6 +25,7 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
+
 import org.reflections.Reflections;
 import org.reflections.ReflectionsException;
 import org.reflections.scanners.Scanners;

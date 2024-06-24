@@ -26,7 +26,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class KafkaStreamsAssignmentTest {
     @Test

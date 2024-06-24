@@ -505,7 +505,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
     private SubscriptionReceiveProcessorSupplier<String, String> supplier(
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder) {
 
-        return new SubscriptionReceiveProcessorSupplier<>(storeBuilder, COMBINED_KEY_SCHEMA);
+        return new SubscriptionReceiveProcessorSupplier<>(storeBuilder.name(), COMBINED_KEY_SCHEMA);
     }
 
     private StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder() {

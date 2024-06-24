@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.rest.util;
 
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
+
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.junit.jupiter.api.Test;
 

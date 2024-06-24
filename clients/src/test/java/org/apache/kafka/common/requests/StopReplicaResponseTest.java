@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicSt
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.Errors;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

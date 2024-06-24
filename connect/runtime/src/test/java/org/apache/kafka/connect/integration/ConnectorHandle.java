@@ -18,6 +18,7 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
