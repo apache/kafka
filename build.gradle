@@ -2310,6 +2310,7 @@ project(':streams') {
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
+    testImplementation libs.junitPlatformSuiteEngine // supports suite test
     testImplementation project(':group-coordinator')
 
     testRuntimeOnly project(':streams:test-utils')
