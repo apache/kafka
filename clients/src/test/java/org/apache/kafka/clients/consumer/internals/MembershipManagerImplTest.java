@@ -1155,9 +1155,8 @@ public class MembershipManagerImplTest {
         membershipManager.poll(time.milliseconds());
 
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 0));
-        HashSet<TopicPartition> expectedSet = new HashSet<>(expectedAssignment);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedSet, expectedSet);
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedAssignment, expectedAssignment);
 
         // When ack for the reconciled assignment is sent, member should go back to STABLE
         // because the first assignment that was not resolved should have been discarded
