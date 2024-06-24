@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.generated.QuorumStateData;
+import org.apache.kafka.raft.generated.QuorumStateDataJsonConverter;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.ShortNode;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.generated.QuorumStateData;
-import org.apache.kafka.raft.generated.QuorumStateDataJsonConverter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -108,7 +110,7 @@ public class FileQuorumStateStore implements QuorumStateStore {
             if (dataVersion < LOWEST_SUPPORTED_VERSION || dataVersion > HIGHEST_SUPPORTED_VERSION) {
                 throw new IllegalStateException(
                     String.format(
-                        "data_version (%d) is not within the min (%d) and max ($d) supported version",
+                        "data_version (%d) is not within the min (%d) and max (%d) supported version",
                         dataVersion,
                         LOWEST_SUPPORTED_VERSION,
                         HIGHEST_SUPPORTED_VERSION

@@ -32,8 +32,8 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
-
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -354,7 +354,7 @@ public class MemoryRecords extends AbstractRecords {
         return buffer.hashCode();
     }
 
-    public static abstract class RecordFilter {
+    public abstract static class RecordFilter {
         public final long currentTime;
         public final long deleteRetentionMs;
 

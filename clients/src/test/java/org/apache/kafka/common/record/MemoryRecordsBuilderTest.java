@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -759,7 +760,7 @@ public class MemoryRecordsBuilderTest {
             // Ignore memory usage during initialization
             if (iterations == 2)
                 startMem = memUsed;
-            else if (iterations > 2 && memUsed < (iterations - 2) * 1024)
+            else if (iterations > 2 && memUsed < (iterations - 2) * 1024L)
                 break;
         }
         assertTrue(iterations < 100, "Memory usage too high: " + memUsed);

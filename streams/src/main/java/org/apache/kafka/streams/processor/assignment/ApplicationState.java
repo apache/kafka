@@ -46,7 +46,7 @@ public interface ApplicationState {
     AssignmentConfigs assignmentConfigs();
 
     /**
-     * @return the set of all tasks in this topology which must be assigned
+     * @return a map of task ids to all tasks in this topology to be assigned
      */
     Map<TaskId, TaskInfo> allTasks();
 }

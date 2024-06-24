@@ -16,19 +16,19 @@
  */
 package org.apache.kafka.common.network;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
+import org.apache.kafka.test.TestSslUtils.SslConfigsBuilder;
+import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.kafka.test.TestSslUtils.SslConfigsBuilder;
-import org.apache.kafka.test.TestUtils;
 
 public class CertStores {
 

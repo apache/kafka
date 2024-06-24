@@ -19,30 +19,30 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.DescribeAclsResponseData;
+import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
+import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.resource.ResourceType;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.apache.kafka.common.acl.AclOperation;
-import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.message.DescribeAclsResponseData;
-import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
-import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
-import org.apache.kafka.common.resource.ResourceType;
 
 public class DescribeAclsResponse extends AbstractResponse {
 
@@ -137,15 +137,15 @@ public class DescribeAclsResponse extends AbstractResponse {
         return resources.stream().flatMap(DescribeAclsResponse::aclBindings).collect(Collectors.toList());
     }
 
-    public static List<DescribeAclsResource> aclsResources(Collection<AclBinding> acls) {
-        Map<ResourcePattern, List<AccessControlEntry>> patternToEntries = new HashMap<>();
+    public static List<DescribeAclsResource> aclsResources(Iterable<AclBinding> acls) {
+        Map<ResourcePattern, Set<AccessControlEntry>> patternToEntries = new HashMap<>();
         for (AclBinding acl : acls) {
-            patternToEntries.computeIfAbsent(acl.pattern(), v -> new ArrayList<>()).add(acl.entry());
+            patternToEntries.computeIfAbsent(acl.pattern(), v -> new HashSet<>()).add(acl.entry());
         }
         List<DescribeAclsResource> resources = new ArrayList<>(patternToEntries.size());
-        for (Entry<ResourcePattern, List<AccessControlEntry>> entry : patternToEntries.entrySet()) {
+        for (Entry<ResourcePattern, Set<AccessControlEntry>> entry : patternToEntries.entrySet()) {
             ResourcePattern key = entry.getKey();
-            List<AclDescription> aclDescriptions = new ArrayList<>();
+            List<AclDescription> aclDescriptions = new ArrayList<>(entry.getValue().size());
             for (AccessControlEntry ace : entry.getValue()) {
                 AclDescription ad = new AclDescription()
                     .setHost(ace.host())

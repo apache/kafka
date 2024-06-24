@@ -29,7 +29,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-
 public class ApiUtilsTest {
     // This is the maximum limit that Duration accepts but fails when it converts to milliseconds.
     private static final long MAX_ACCEPTABLE_DAYS_FOR_DURATION = 106751991167300L;

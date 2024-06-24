@@ -37,6 +37,7 @@ import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -40,12 +40,14 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -118,13 +120,13 @@ public class MembershipManagerImpl implements MembershipManager {
     /**
      * TopicPartition comparator based on topic name and partition id.
      */
-    final static TopicPartitionComparator TOPIC_PARTITION_COMPARATOR = new TopicPartitionComparator();
+    static final TopicPartitionComparator TOPIC_PARTITION_COMPARATOR = new TopicPartitionComparator();
 
     /**
      * TopicIdPartition comparator based on topic name and partition id (ignoring ID while sorting,
      * as this is sorted mainly for logging purposes).
      */
-    final static TopicIdPartitionComparator TOPIC_ID_PARTITION_COMPARATOR = new TopicIdPartitionComparator();
+    static final TopicIdPartitionComparator TOPIC_ID_PARTITION_COMPARATOR = new TopicIdPartitionComparator();
 
     /**
      * Group ID of the consumer group the member will be part of, provided when creating the current
@@ -361,7 +363,7 @@ public class MembershipManagerImpl implements MembershipManager {
             metricsManager.recordRebalanceStarted(time.milliseconds());
         }
 
-        log.trace("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
+        log.info("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
         this.state = nextState;
     }
 
@@ -520,12 +522,15 @@ public class MembershipManagerImpl implements MembershipManager {
     @Override
     public void transitionToFenced() {
         if (state == MemberState.PREPARE_LEAVING) {
-            log.debug("Member {} with epoch {} got fenced but it is already preparing to leave " +
+            log.info("Member {} with epoch {} got fenced but it is already preparing to leave " +
                     "the group, so it will stop sending heartbeat and won't attempt to rejoin.",
                 memberId, memberEpoch);
-            // Transition to UNSUBSCRIBED, ensuring that the member (that is not part of the
-            // group anymore from the broker point of view) will stop sending heartbeats while it
-            // completes the ongoing leaving operation.
+            // Briefly transition to LEAVING to ensure all required actions are applied even
+            // though there is no need to send a leave group heartbeat (ex. clear epoch and
+            // notify epoch listeners). Then transition to UNSUBSCRIBED, ensuring that the member
+            // (that is not part of the group anymore from the broker point of view) will stop
+            // sending heartbeats while it completes the ongoing leaving operation.
+            transitionToSendingLeaveGroup(false);
             transitionTo(MemberState.UNSUBSCRIBED);
             return;
         }
@@ -552,7 +557,7 @@ public class MembershipManagerImpl implements MembershipManager {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         " after member got fenced. Member will rejoin the group anyways.", error);
             }
-            clearSubscription();
+            clearAssignment();
             if (state == MemberState.FENCED) {
                 transitionToJoining();
             } else {
@@ -589,7 +594,7 @@ public class MembershipManagerImpl implements MembershipManager {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         "after member failed with fatal error.", error);
             }
-            clearSubscription();
+            clearAssignment();
         });
     }
 
@@ -605,7 +610,7 @@ public class MembershipManagerImpl implements MembershipManager {
     /**
      * Clear the assigned partitions in the member subscription, pending assignments and metadata cache.
      */
-    private void clearSubscription() {
+    private void clearAssignment() {
         if (subscriptions.hasAutoAssignedPartitions()) {
             subscriptions.assignFromSubscribed(Collections.emptySet());
         }
@@ -655,7 +660,7 @@ public class MembershipManagerImpl implements MembershipManager {
     public CompletableFuture<Void> leaveGroup() {
         if (isNotInGroup()) {
             if (state == MemberState.FENCED) {
-                clearSubscription();
+                clearAssignment();
                 transitionTo(MemberState.UNSUBSCRIBED);
             }
             return CompletableFuture.completedFuture(null);
@@ -664,6 +669,7 @@ public class MembershipManagerImpl implements MembershipManager {
         if (state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING) {
             // Member already leaving. No-op and return existing leave group future that will
             // complete when the ongoing leave operation completes.
+            log.debug("Leave group operation already in progress for member {}", memberId);
             return leaveGroupInProgress.get();
         }
 
@@ -673,8 +679,16 @@ public class MembershipManagerImpl implements MembershipManager {
 
         CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
+            if (error != null) {
+                log.error("Member {} callback to release assignment failed. It will proceed " +
+                    "to clear its assignment and send a leave group heartbeat", memberId, error);
+            } else {
+                log.info("Member {} completed callback to release assignment. It will proceed " +
+                    "to clear its assignment and send a leave group heartbeat", memberId);
+            }
             // Clear the subscription, no matter if the callback execution failed or succeeded.
-            clearSubscription();
+            subscriptions.unsubscribe();
+            clearAssignment();
 
             // Transition to ensure that a heartbeat request is sent out to effectively leave the
             // group (even in the case where the member had no assignment to release or when the
@@ -704,6 +718,9 @@ public class MembershipManagerImpl implements MembershipManager {
     private CompletableFuture<Void> invokeOnPartitionsRevokedOrLostToReleaseAssignment() {
         SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         droppedPartitions.addAll(subscriptions.assignedPartitions());
+
+        log.info("Member {} is triggering callbacks to release assignment {} and leave group",
+            memberId, droppedPartitions);
 
         CompletableFuture<Void> callbackResult;
         if (droppedPartitions.isEmpty()) {
@@ -764,7 +781,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * This also includes the latest member ID in the notification. If the member fails or leaves
      * the group, this will be invoked with empty epoch and member ID.
      */
-    private void notifyEpochChange(Optional<Integer> epoch, Optional<String> memberId) {
+    void notifyEpochChange(Optional<Integer> epoch, Optional<String> memberId) {
         stateUpdatesListeners.forEach(stateListener -> stateListener.onMemberEpochUpdated(epoch, memberId));
     }
 
@@ -794,8 +811,12 @@ public class MembershipManagerImpl implements MembershipManager {
             }
         } else if (state == MemberState.LEAVING) {
             if (isPollTimerExpired) {
+                log.debug("Member {} sent heartbeat to leave due to expired poll timer. It will " +
+                    "remain stale (no heartbeat) until it rejoins the group on the next consumer " +
+                    "poll.", memberId);
                 transitionToStale();
             } else {
+                log.debug("Member {} sent heartbeat to leave group.", memberId);
                 transitionToUnsubscribed();
             }
         }
@@ -875,7 +896,7 @@ public class MembershipManagerImpl implements MembershipManager {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                     " after member left group due to expired poll timer.", error);
             }
-            clearSubscription();
+            clearAssignment();
             log.debug("Member {} sent leave group heartbeat and released its assignment. It will remain " +
                 "in {} state until the poll timer is reset, and it will then rejoin the group",
                 memberId, MemberState.STALE);
@@ -939,12 +960,14 @@ public class MembershipManagerImpl implements MembershipManager {
         revokedPartitions.addAll(ownedPartitions);
         revokedPartitions.removeAll(assignedTopicPartitions);
 
-        log.info("Updating assignment with local epoch {}\n" +
+        log.info("Reconciling assignment with local epoch {}\n" +
+                        "\tMember:                                    {}\n" +
                         "\tAssigned partitions:                       {}\n" +
                         "\tCurrent owned partitions:                  {}\n" +
                         "\tAdded partitions (assigned - owned):       {}\n" +
                         "\tRevoked partitions (owned - assigned):     {}\n",
                 resolvedAssignment.localEpoch,
+                memberId,
                 assignedTopicPartitions,
                 ownedPartitions,
                 addedPartitions,
@@ -960,7 +983,7 @@ public class MembershipManagerImpl implements MembershipManager {
         // best effort to commit the offsets in the case where the epoch might have changed while
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
-        commitResult = commitRequestManager.maybeAutoCommitSyncBeforeRevocation(getExpirationTimeForTimeout(rebalanceTimeoutMs));
+        commitResult = commitRequestManager.maybeAutoCommitSyncBeforeRevocation(getDeadlineMsForTimeout(rebalanceTimeoutMs));
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((__, commitReqError) -> {
@@ -986,7 +1009,7 @@ public class MembershipManagerImpl implements MembershipManager {
         });
     }
 
-    long getExpirationTimeForTimeout(final long timeoutMs) {
+    long getDeadlineMsForTimeout(final long timeoutMs) {
         long expiration = time.milliseconds() + timeoutMs;
         if (expiration < 0) {
             return Long.MAX_VALUE;
@@ -1175,11 +1198,14 @@ public class MembershipManagerImpl implements MembershipManager {
      * request fails, this will proceed to invoke the user callbacks anyway,
      * returning a future that will complete or fail depending on the callback execution only.
      *
-     * @param revokedPartitions Partitions to revoke.
+     * @param partitionsToRevoke Partitions to revoke.
      * @return Future that will complete when the commit request and user callback completes.
      * Visible for testing
      */
-    CompletableFuture<Void> revokePartitions(Set<TopicPartition> revokedPartitions) {
+    CompletableFuture<Void> revokePartitions(Set<TopicPartition> partitionsToRevoke) {
+        // Ensure the set of partitions to revoke are still assigned
+        Set<TopicPartition> revokedPartitions = new HashSet<>(partitionsToRevoke);
+        revokedPartitions.retainAll(subscriptions.assignedPartitions());
         log.info("Revoking previously assigned partitions {}", revokedPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
 
         logPausedPartitionsBeingRevoked(revokedPartitions);

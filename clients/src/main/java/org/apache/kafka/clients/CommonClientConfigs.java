@@ -24,6 +24,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -218,6 +219,19 @@ public class CommonClientConfigs {
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
     public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
             "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
+
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG = "metadata.recovery.strategy";
+    public static final String METADATA_RECOVERY_STRATEGY_DOC = "Controls how the client recovers when none of the brokers known to it is available. " +
+            "If set to <code>none</code>, the client fails. If set to <code>rebootstrap</code>, " +
+            "the client repeats the bootstrap process using <code>bootstrap.servers</code>. " +
+            "Rebootstrapping is useful when a client communicates with brokers so infrequently " +
+            "that the set of brokers may change entirely before the client refreshes metadata. " +
+            "Metadata recovery is triggered when all last-known brokers appear unavailable simultaneously. " +
+            "Brokers appear unavailable when disconnected and no current retry attempt is in-progress. " +
+            "Consider increasing <code>reconnect.backoff.ms</code> and <code>reconnect.backoff.max.ms</code> and " +
+            "decreasing <code>socket.connection.setup.timeout.ms</code> and <code>socket.connection.setup.timeout.max.ms</code> " +
+            "for the client.";
+    public static final String DEFAULT_METADATA_RECOVERY_STRATEGY = MetadataRecoveryStrategy.NONE.name;
 
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff

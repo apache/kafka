@@ -26,7 +26,7 @@ public enum TestFeatureVersion implements FeatureVersion {
     // TEST_2 released right before MV 3.8-IVO was released, and it depends on this metadata version
     TEST_2(2, MetadataVersion.IBP_3_8_IV0, Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_7_IV0.featureLevel())),
     // TEST_3 is always bootstrapped with an unstable MV
-    TEST_3(3, MetadataVersion.IBP_4_0_IVO, Collections.emptyMap());
+    TEST_3(3, MetadataVersion.IBP_4_0_IV0, Collections.emptyMap());
 
     private final short featureLevel;
     private final MetadataVersion metadataVersionMapping;

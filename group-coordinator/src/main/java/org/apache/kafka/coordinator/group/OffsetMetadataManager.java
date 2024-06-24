@@ -22,16 +22,16 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
-import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
+import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteRequestData;
+import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
-import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
-import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
@@ -39,18 +39,19 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
-import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -62,8 +63,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
@@ -325,24 +326,13 @@ public class OffsetMetadataManager {
             }
         }
 
-        try {
-            group.validateOffsetCommit(
-                request.memberId(),
-                request.groupInstanceId(),
-                request.generationIdOrMemberEpoch(),
-                false
-            );
-        } catch (StaleMemberEpochException ex) {
-            // The STALE_MEMBER_EPOCH error is only returned for new consumer group (KIP-848). When
-            // it is, the member should be using the OffsetCommit API version >= 9. As we don't
-            // support upgrading from the old to the new protocol yet, we return UNSUPPORTED_VERSION
-            // error if an older version is used. We will revise this when the upgrade path is implemented.
-            if (context.header.apiVersion() >= 9) {
-                throw ex;
-            } else {
-                throw Errors.UNSUPPORTED_VERSION.exception();
-            }
-        }
+        group.validateOffsetCommit(
+            request.memberId(),
+            request.groupInstanceId(),
+            request.generationIdOrMemberEpoch(),
+            false,
+            context.apiVersion()
+        );
 
         return group;
     }
@@ -350,9 +340,11 @@ public class OffsetMetadataManager {
     /**
      * Validates an TxnOffsetCommit request.
      *
+     * @param context The request context.
      * @param request The actual request.
      */
     private Group validateTransactionalOffsetCommit(
+        RequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
         Group group;
@@ -375,7 +367,8 @@ public class OffsetMetadataManager {
                 request.memberId(),
                 request.groupInstanceId(),
                 request.generationId(),
-                true
+                true,
+                context.apiVersion()
             );
         } catch (StaleMemberEpochException ex) {
             throw Errors.ILLEGAL_GENERATION.exception();
@@ -530,7 +523,7 @@ public class OffsetMetadataManager {
         RequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
-        validateTransactionalOffsetCommit(request);
+        validateTransactionalOffsetCommit(context, request);
 
         final TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData();
         final List<CoordinatorRecord> records = new ArrayList<>();

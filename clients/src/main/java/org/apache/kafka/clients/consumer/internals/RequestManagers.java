@@ -25,6 +25,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -155,6 +156,7 @@ public class RequestManagers implements Closeable {
                         apiVersions);
                 final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(
                         logContext,
+                        time,
                         config);
                 HeartbeatRequestManager heartbeatRequestManager = null;
                 MembershipManager membershipManager = null;
@@ -163,7 +165,7 @@ public class RequestManagers implements Closeable {
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
                     Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
-                    coordinator = new CoordinatorRequestManager(time,
+                    coordinator = new CoordinatorRequestManager(
                             logContext,
                             retryBackoffMs,
                             retryBackoffMaxMs,

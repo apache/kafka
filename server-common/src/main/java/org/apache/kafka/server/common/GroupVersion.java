@@ -22,7 +22,7 @@ import java.util.Map;
 public enum GroupVersion implements FeatureVersion {
 
     // Version 1 enables the consumer rebalance protocol (KIP-848).
-    GV_1(1, MetadataVersion.IBP_4_0_IVO, Collections.emptyMap());
+    GV_1(1, MetadataVersion.IBP_4_0_IV0, Collections.emptyMap());
 
     public static final String FEATURE_NAME = "group.version";
 

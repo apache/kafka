@@ -36,6 +36,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Date;
 import java.util.List;
+
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
@@ -152,7 +153,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
             if (cert.getNotBefore().before(dateNow) && cert.getNotAfter().after(dateNow)) {
                 assertDoesNotThrow(() -> cert.checkValidity());
             } else {
-                assertThrows(CertificateException.class, () -> cert.checkValidity());
+                assertThrows(CertificateException.class, cert::checkValidity);
             }
             // The wrappedCert must never throw due to being expired
             assertDoesNotThrow(() -> wrappedCert.checkValidity());
@@ -592,4 +593,3 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         return certs;
     }
 }
-

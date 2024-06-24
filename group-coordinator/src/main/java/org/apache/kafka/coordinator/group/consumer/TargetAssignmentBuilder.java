@@ -18,13 +18,11 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
-import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
@@ -293,14 +291,16 @@ public class TargetAssignmentBuilder {
      * @throws PartitionAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
-        Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
 
         // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> memberSpecs.put(memberId, createAssignmentMemberSpec(
-            member,
-            targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-            topicsImage
-        )));
+        members.forEach((memberId, member) ->
+            memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
+                member,
+                targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+                topicsImage
+            ))
+        );
 
         // Update the member spec if updated or deleted members.
         updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
@@ -317,7 +317,7 @@ public class TargetAssignmentBuilder {
                     }
                 }
 
-                memberSpecs.put(memberId, createAssignmentMemberSpec(
+                memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
                     updatedMemberOrNull,
                     assignment,
                     topicsImage
@@ -341,7 +341,7 @@ public class TargetAssignmentBuilder {
                 subscriptionType,
                 invertedTargetAssignment
             ),
-            new SubscribedTopicMetadata(topicMetadataMap)
+            new SubscribedTopicDescriberImpl(topicMetadataMap)
         );
 
         // Compute delta from previous to new target assignment and create the
@@ -375,22 +375,22 @@ public class TargetAssignmentBuilder {
     ) {
         MemberAssignment newMemberAssignment = newGroupAssignment.members().get(memberId);
         if (newMemberAssignment != null) {
-            return new Assignment(newMemberAssignment.targetPartitions());
+            return new Assignment(newMemberAssignment.partitions());
         } else {
             return Assignment.EMPTY;
         }
     }
 
-    static AssignmentMemberSpec createAssignmentMemberSpec(
+    // private for testing
+    static MemberSubscriptionAndAssignmentImpl createMemberSubscriptionAndAssignment(
         ConsumerGroupMember member,
-        Assignment targetAssignment,
+        Assignment memberAssignment,
         TopicsImage topicsImage
     ) {
-        return new AssignmentMemberSpec(
-            Optional.ofNullable(member.instanceId()),
+        return new MemberSubscriptionAndAssignmentImpl(
             Optional.ofNullable(member.rackId()),
             new TopicIds(member.subscribedTopicNames(), topicsImage),
-            targetAssignment.partitions()
+            memberAssignment
         );
     }
 }

@@ -23,21 +23,21 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 
 /**
  * Wraps a priority queue of clients and returns the next valid candidate(s) based on the current task assignment
  */
 public class ConstrainedPrioritySet {
 
-    private final PriorityQueue<UUID> clientsByTaskLoad;
-    private final BiFunction<UUID, TaskId, Boolean> constraint;
-    private final Set<UUID> uniqueClients = new HashSet<>();
+    private final PriorityQueue<ProcessId> clientsByTaskLoad;
+    private final BiFunction<ProcessId, TaskId, Boolean> constraint;
+    private final Set<ProcessId> uniqueClients = new HashSet<>();
 
-    public ConstrainedPrioritySet(final BiFunction<UUID, TaskId, Boolean> constraint,
-                                  final Function<UUID, Double> weight) {
+    public ConstrainedPrioritySet(final BiFunction<ProcessId, TaskId, Boolean> constraint,
+                                  final Function<ProcessId, Double> weight) {
         this.constraint = constraint;
         clientsByTaskLoad = new PriorityQueue<>(Comparator.comparing(weight).thenComparing(clientId -> clientId));
     }
@@ -45,10 +45,10 @@ public class ConstrainedPrioritySet {
     /**
      * @return the next least loaded client that satisfies the given criteria, or null if none do
      */
-    public UUID poll(final TaskId task, final Function<UUID, Boolean> extraConstraint) {
-        final Set<UUID> invalidPolledClients = new HashSet<>();
+    public ProcessId poll(final TaskId task, final Function<ProcessId, Boolean> extraConstraint) {
+        final Set<ProcessId> invalidPolledClients = new HashSet<>();
         while (!clientsByTaskLoad.isEmpty()) {
-            final UUID candidateClient = pollNextClient();
+            final ProcessId candidateClient = pollNextClient();
             if (constraint.apply(candidateClient, task) && extraConstraint.apply(candidateClient)) {
                 // then we found the lightest, valid client
                 offerAll(invalidPolledClients);
@@ -66,17 +66,17 @@ public class ConstrainedPrioritySet {
     /**
      * @return the next least loaded client that satisfies the given criteria, or null if none do
      */
-    public UUID poll(final TaskId task) {
+    public ProcessId poll(final TaskId task) {
         return poll(task, client -> true);
     }
 
-    public void offerAll(final Collection<UUID> clients) {
-        for (final UUID client : clients) {
+    public void offerAll(final Collection<ProcessId> clients) {
+        for (final ProcessId client : clients) {
             offer(client);
         }
     }
 
-    public void offer(final UUID client) {
+    public void offer(final ProcessId client) {
         if (uniqueClients.contains(client)) {
             clientsByTaskLoad.remove(client);
         } else {
@@ -85,8 +85,8 @@ public class ConstrainedPrioritySet {
         clientsByTaskLoad.offer(client);
     }
 
-    private UUID pollNextClient() {
-        final UUID client = clientsByTaskLoad.remove();
+    private ProcessId pollNextClient() {
+        final ProcessId client = clientsByTaskLoad.remove();
         uniqueClients.remove(client);
         return client;
     }

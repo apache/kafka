@@ -37,13 +37,14 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -91,7 +92,7 @@ public class PurgeRepartitionTopicIntegrationTest {
 
     private class RepartitionTopicCreatedWithExpectedConfigs implements TestCondition {
         @Override
-        final public boolean conditionMet() {
+        public final boolean conditionMet() {
             try {
                 final Set<String> topics = adminClient.listTopics().names().get();
 

@@ -22,6 +22,7 @@ import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
 import kafka.server.metadata.KRaftMetadataCache;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -125,7 +126,6 @@ class DescribeTopicPartitionsRequestHandlerTest {
         Action expectedActions2 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true);
         Action expectedActions3 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedNonExistTopic, PatternType.LITERAL), 1, true, true);
 
-        // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
         when(authorizer.authorize(any(RequestContext.class), argThat(t ->
             t.contains(expectedActions1) || t.contains(expectedActions2) || t.contains(expectedActions3))))
             .thenAnswer(invocation -> {
@@ -328,7 +328,6 @@ class DescribeTopicPartitionsRequestHandlerTest {
         Action expectedActions1 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true);
         Action expectedActions2 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic2, PatternType.LITERAL), 1, true, true);
 
-        // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
         when(authorizer.authorize(any(RequestContext.class), argThat(t ->
             t.contains(expectedActions1) || t.contains(expectedActions2))))
             .thenAnswer(invocation -> {

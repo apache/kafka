@@ -17,17 +17,18 @@
 
 package org.apache.kafka.common.compress;
 
-import com.github.luben.zstd.BufferPool;
-import com.github.luben.zstd.RecyclingBufferPool;
-import com.github.luben.zstd.Zstd;
-import com.github.luben.zstd.ZstdInputStreamNoFinalizer;
-import com.github.luben.zstd.ZstdOutputStreamNoFinalizer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ChunkedBytesStream;
+
+import com.github.luben.zstd.BufferPool;
+import com.github.luben.zstd.RecyclingBufferPool;
+import com.github.luben.zstd.Zstd;
+import com.github.luben.zstd.ZstdInputStreamNoFinalizer;
+import com.github.luben.zstd.ZstdOutputStreamNoFinalizer;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;

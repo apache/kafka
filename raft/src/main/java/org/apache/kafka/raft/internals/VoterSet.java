@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.VotersRecord;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Utils;
+
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,13 +37,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.feature.SupportedVersionRange;
-import org.apache.kafka.common.message.VotersRecord;
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.utils.Utils;
-
 /**
  * A type for representing the set of voters for a topic partition.
  *
@@ -45,7 +45,7 @@ import org.apache.kafka.common.utils.Utils;
  * It provides functionality for converting to and from {@code VotersRecord} and for converting
  * from the static configuration.
  */
-final public class VoterSet {
+public final class VoterSet {
     private final Map<Integer, VoterNode> voters;
 
     VoterSet(Map<Integer, VoterNode> voters) {
@@ -136,6 +136,10 @@ final public class VoterSet {
      */
     public Set<Integer> voterIds() {
         return voters.keySet();
+    }
+
+    public Map<Integer, VoterNode> voters() {
+        return voters;
     }
 
     /**
@@ -248,9 +252,7 @@ final public class VoterSet {
             .collect(Collectors.toSet());
 
         if (Utils.diff(HashSet::new, thisReplicaKeys, thatReplicaKeys).size() > 1) return false;
-        if (Utils.diff(HashSet::new, thatReplicaKeys, thisReplicaKeys).size() > 1) return false;
-
-        return true;
+        return Utils.diff(HashSet::new, thatReplicaKeys, thisReplicaKeys).size() <= 1;
     }
 
     @Override
@@ -273,12 +275,12 @@ final public class VoterSet {
         return String.format("VoterSet(voters=%s)", voters);
     }
 
-    public final static class VoterNode {
+    public static final class VoterNode {
         private final ReplicaKey voterKey;
         private final Map<ListenerName, InetSocketAddress> listeners;
         private final SupportedVersionRange supportedKRaftVersion;
 
-        VoterNode(
+        public VoterNode(
             ReplicaKey voterKey,
             Map<ListenerName, InetSocketAddress> listeners,
             SupportedVersionRange supportedKRaftVersion
@@ -314,9 +316,7 @@ final public class VoterSet {
 
             if (!Objects.equals(voterKey, that.voterKey)) return false;
             if (!Objects.equals(supportedKRaftVersion, that.supportedKRaftVersion)) return false;
-            if (!Objects.equals(listeners, that.listeners)) return false;
-
-            return true;
+            return Objects.equals(listeners, that.listeners);
         }
 
         @Override

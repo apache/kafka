@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import joptsimple.OptionException;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTemplate;
 import kafka.test.junit.ClusterTestExtensions;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -35,6 +35,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.BufferedWriter;
@@ -56,6 +57,8 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import joptsimple.OptionException;
 
 import static java.time.LocalDateTime.now;
 import static java.util.Arrays.asList;

@@ -22,23 +22,21 @@ import kafka.network.SocketServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 import kafka.server.KafkaServer;
-import kafka.test.annotation.Type;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
+import kafka.test.annotation.Type;
 import kafka.utils.EmptyTestInfo;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
-import scala.Option;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
-import scala.compat.java8.OptionConverters;
 
 import java.io.File;
 import java.util.Arrays;
@@ -53,6 +51,11 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+
+import scala.Option;
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
+import scala.compat.java8.OptionConverters;
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG;

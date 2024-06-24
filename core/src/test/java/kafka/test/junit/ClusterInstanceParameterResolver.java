@@ -18,6 +18,7 @@
 package kafka.test.junit;
 
 import kafka.test.ClusterInstance;
+
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;

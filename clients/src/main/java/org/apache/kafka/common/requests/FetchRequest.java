@@ -316,20 +316,18 @@ public class FetchRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=FetchRequest").
-                    append(", replicaId=").append(replicaId).
-                    append(", maxWait=").append(maxWait).
-                    append(", minBytes=").append(minBytes).
-                    append(", maxBytes=").append(maxBytes).
-                    append(", fetchData=").append(toFetch).
-                    append(", isolationLevel=").append(isolationLevel).
-                    append(", removed=").append(removed.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", "))).
-                    append(", replaced=").append(replaced.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", "))).
-                    append(", metadata=").append(metadata).
-                    append(", rackId=").append(rackId).
-                    append(")");
-            return bld.toString();
+            return "(type=FetchRequest" +
+                    ", replicaId=" + replicaId +
+                    ", maxWait=" + maxWait +
+                    ", minBytes=" + minBytes +
+                    ", maxBytes=" + maxBytes +
+                    ", fetchData=" + toFetch +
+                    ", isolationLevel=" + isolationLevel +
+                    ", removed=" + removed.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", ")) +
+                    ", replaced=" + replaced.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", ")) +
+                    ", metadata=" + metadata +
+                    ", rackId=" + rackId +
+                    ")";
         }
     }
 

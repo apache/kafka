@@ -34,6 +34,7 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConcreteSubClassValidator;
 import org.apache.kafka.connect.util.InstantiableClassValidator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -419,7 +420,7 @@ public class ConnectorConfig extends AbstractConfig {
      * The abstract method pattern is used to cope with this.
      * @param <T> The type of plugin (either {@code Transformation} or {@code Predicate}).
      */
-    static abstract class EnrichablePlugin<T> {
+    abstract static class EnrichablePlugin<T> {
 
         private final String aliasKind;
         private final String aliasConfig;

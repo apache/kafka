@@ -27,6 +27,7 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.ConnectorUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

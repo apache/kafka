@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
@@ -23,9 +24,9 @@ import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
+import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
-import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -45,6 +46,7 @@ import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -465,7 +467,7 @@ public class KafkaRaftClientTest {
         context.client.poll();
 
         // Ensure we are still leader even after expiration of the election timeout.
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
         context.client.poll();
         context.assertElectedLeader(currentEpoch, localId);
     }
@@ -607,7 +609,7 @@ public class KafkaRaftClientTest {
             resignedEpoch, OptionalInt.of(localId));
 
         // After the election timer, we should become a candidate.
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
         context.pollUntil(context.client.quorum()::isCandidate);
         assertEquals(resignedEpoch + 1, context.currentEpoch());
         assertEquals(new LeaderAndEpoch(OptionalInt.empty(), resignedEpoch + 1),
@@ -693,7 +695,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.assertUnknownLeader(0);
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
 
         context.pollUntilRequest();
         context.assertVotedCandidate(1, localId);
@@ -737,7 +739,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.assertUnknownLeader(0);
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
 
         context.pollUntilRequest();
         context.assertVotedCandidate(1, localId);
@@ -1118,7 +1120,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
         context.assertUnknownLeader(0);
 
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
         context.pollUntilRequest();
         context.assertVotedCandidate(epoch, localId);
 
@@ -1361,7 +1363,7 @@ public class KafkaRaftClientTest {
 
         context.assertUnknownLeader(0);
 
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
         context.pollUntilRequest();
         context.assertVotedCandidate(epoch, localId);
 
@@ -2090,7 +2092,7 @@ public class KafkaRaftClientTest {
         context.assertUnknownLeader(epoch - 1);
 
         // Sleep a little to ensure that we become a candidate
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
 
         // Wait until the vote requests are inflight
         context.pollUntilRequest();
@@ -2313,6 +2315,7 @@ public class KafkaRaftClientTest {
 
         DescribeQuorumResponseData responseData = context.collectDescribeQuorumResponse();
         assertEquals(Errors.NONE, Errors.forCode(responseData.errorCode()));
+        assertEquals("", responseData.errorMessage());
 
         assertEquals(1, responseData.topics().size());
         DescribeQuorumResponseData.TopicData topicData = responseData.topics().get(0);
@@ -2322,6 +2325,7 @@ public class KafkaRaftClientTest {
         DescribeQuorumResponseData.PartitionData partitionData = topicData.partitions().get(0);
         assertEquals(context.metadataPartition.partition(), partitionData.partitionIndex());
         assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionData.errorCode()));
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.message(), partitionData.errorMessage());
     }
 
     @Test
@@ -2364,6 +2368,7 @@ public class KafkaRaftClientTest {
             Arrays.asList(
                 new ReplicaState()
                     .setReplicaId(localId)
+                    .setReplicaDirectoryId(Uuid.ZERO_UUID)
                     // As we are appending the records directly to the log,
                     // the leader end offset hasn't been updated yet.
                     .setLogEndOffset(3L)
@@ -2371,17 +2376,20 @@ public class KafkaRaftClientTest {
                     .setLastCaughtUpTimestamp(context.time.milliseconds()),
                 new ReplicaState()
                     .setReplicaId(laggingFollower)
+                    .setReplicaDirectoryId(Uuid.ZERO_UUID)
                     .setLogEndOffset(1L)
                     .setLastFetchTimestamp(laggingFollowerFetchTime)
                     .setLastCaughtUpTimestamp(laggingFollowerFetchTime),
                 new ReplicaState()
                     .setReplicaId(closeFollower)
+                    .setReplicaDirectoryId(Uuid.ZERO_UUID)
                     .setLogEndOffset(3L)
                     .setLastFetchTimestamp(closeFollowerFetchTime)
                     .setLastCaughtUpTimestamp(closeFollowerFetchTime)),
             singletonList(
                 new ReplicaState()
                     .setReplicaId(observerId)
+                    .setReplicaDirectoryId(Uuid.ZERO_UUID)
                     .setLogEndOffset(0L)
                     .setLastFetchTimestamp(observerFetchTime)
                     .setLastCaughtUpTimestamp(-1L)));
@@ -2696,7 +2704,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .appendToLog(lastEpoch, Arrays.asList("foo", "bar"))
-            .appendToLog(lastEpoch, Arrays.asList("baz"))
+            .appendToLog(lastEpoch, singletonList("baz"))
             .build();
 
         context.assertElectedLeader(epoch, otherNodeId);
@@ -2827,7 +2835,7 @@ public class KafkaRaftClientTest {
             .build();
 
         // Sleep a little to ensure that we become a candidate
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
         context.pollUntilRequest();
         context.assertVotedCandidate(epoch, localId);
 
@@ -3186,7 +3194,7 @@ public class KafkaRaftClientTest {
 
         // Timeout the election and become candidate
         int candidateEpoch = epoch + 2;
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
         context.client.poll();
         context.assertVotedCandidate(candidateEpoch, localId);
 
@@ -3232,7 +3240,7 @@ public class KafkaRaftClientTest {
         LeaderAndEpoch expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), epoch);
         assertEquals(expectedLeaderAndEpoch, secondListener.currentLeaderAndEpoch());
 
-        // Transition to follower and the expect a leader changed notification
+        // Transition to follower and then expect a leader changed notification
         context.deliverRequest(context.beginEpochRequest(epoch, otherNodeId));
         context.pollUntilResponse();
 

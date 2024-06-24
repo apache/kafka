@@ -23,7 +23,7 @@ import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import kafka.log.LogManager
-import kafka.server.{BrokerLifecycleManager, BrokerServer, KafkaConfig, ReplicaManager}
+import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
@@ -200,8 +200,7 @@ class BrokerMetadataPublisherTest {
       mock(classOf[DelegationTokenPublisher]),
       mock(classOf[AclPublisher]),
       faultHandler,
-      faultHandler,
-      mock(classOf[BrokerLifecycleManager]),
+      faultHandler
     )
 
     val image = MetadataImage.EMPTY

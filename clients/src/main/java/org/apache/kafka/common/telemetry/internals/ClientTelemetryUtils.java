@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.telemetry.internals;
 
-import io.opentelemetry.proto.metrics.v1.MetricsData;
-
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -28,8 +26,10 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -42,13 +42,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 
+import io.opentelemetry.proto.metrics.v1.MetricsData;
+
 public class ClientTelemetryUtils {
 
-    private final static Logger log = LoggerFactory.getLogger(ClientTelemetryUtils.class);
+    private static final Logger log = LoggerFactory.getLogger(ClientTelemetryUtils.class);
 
-    public final static Predicate<? super MetricKeyable> SELECTOR_NO_METRICS = k -> false;
+    public static final Predicate<? super MetricKeyable> SELECTOR_NO_METRICS = k -> false;
 
-    public final static Predicate<? super MetricKeyable> SELECTOR_ALL_METRICS = k -> true;
+    public static final Predicate<? super MetricKeyable> SELECTOR_ALL_METRICS = k -> true;
 
     /**
      * Examine the response data and handle different error code accordingly:

@@ -17,7 +17,8 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -25,8 +26,8 @@ import java.util.Collections;
 
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class ConnectProtocolCompatibilityTest {
     private static final String LEADER = "leader";

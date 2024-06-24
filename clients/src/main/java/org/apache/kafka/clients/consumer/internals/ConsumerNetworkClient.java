@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -139,7 +140,7 @@ public class ConsumerNetworkClient implements Closeable {
     public Node leastLoadedNode() {
         lock.lock();
         try {
-            return client.leastLoadedNode(time.milliseconds());
+            return client.leastLoadedNode(time.milliseconds()).node();
         } finally {
             lock.unlock();
         }
