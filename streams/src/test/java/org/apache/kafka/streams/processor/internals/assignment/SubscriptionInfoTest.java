@@ -21,7 +21,7 @@ import java.util.Map;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -52,10 +52,10 @@ import static org.apache.kafka.streams.processor.internals.assignment.Subscripti
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.anEmptyMap;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class SubscriptionInfoTest {
     private static final Set<TaskId> ACTIVE_TASKS = new HashSet<>(Arrays.asList(
@@ -310,12 +310,12 @@ public class SubscriptionInfoTest {
             buffer.rewind();
             final SubscriptionInfo decoded = SubscriptionInfo.decode(buffer);
             final String message = "for version: " + version;
-            assertEquals(message, version, decoded.version());
-            assertEquals(message, LATEST_SUPPORTED_VERSION, decoded.latestSupportedVersion());
-            assertEquals(message, PID_1, decoded.processId());
-            assertEquals(message, ACTIVE_TASKS, decoded.prevTasks());
-            assertEquals(message, STANDBY_TASKS, decoded.standbyTasks());
-            assertEquals(message, "localhost:80", decoded.userEndPoint());
+            assertEquals(version, decoded.version(), message);
+            assertEquals(LATEST_SUPPORTED_VERSION, decoded.latestSupportedVersion(), message);
+            assertEquals(PID_1, decoded.processId(), message);
+            assertEquals(ACTIVE_TASKS, decoded.prevTasks(), message);
+            assertEquals(STANDBY_TASKS, decoded.standbyTasks(), message);
+            assertEquals("localhost:80", decoded.userEndPoint(), message);
         }
     }
 
