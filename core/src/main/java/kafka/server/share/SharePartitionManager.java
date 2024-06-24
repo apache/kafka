@@ -361,7 +361,8 @@ public class SharePartitionManager implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        // TODO: Provide Implementation
+        this.timer.close();
+        this.persister.stop();
     }
 
     private ShareSessionKey shareSessionKey(String groupId, Uuid memberId) {
@@ -558,6 +559,11 @@ public class SharePartitionManager implements AutoCloseable {
             topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
             Optional.empty(), true);
         return timestampAndOffset.isEmpty() ? (long) 0 : timestampAndOffset.get().offset;
+    }
+
+    // Visible for testing.
+    Timer timer() {
+        return timer;
     }
 
     /**
