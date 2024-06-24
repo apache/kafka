@@ -296,7 +296,11 @@ public class MirrorSourceTask extends SourceTask {
             if (this == o) return true;
             if (!(o instanceof PartitionState)) return false;
             PartitionState that = (PartitionState) o;
-            return previousUpstreamOffset == that.previousUpstreamOffset && previousDownstreamOffset == that.previousDownstreamOffset && lastSyncDownstreamOffset == that.lastSyncDownstreamOffset && maxOffsetLag == that.maxOffsetLag && shouldSyncOffsets == that.shouldSyncOffsets;
+            return previousUpstreamOffset == that.previousUpstreamOffset &&
+                    previousDownstreamOffset == that.previousDownstreamOffset &&
+                    lastSyncDownstreamOffset == that.lastSyncDownstreamOffset &&
+                    maxOffsetLag == that.maxOffsetLag &&
+                    shouldSyncOffsets == that.shouldSyncOffsets;
         }
 
         @Override

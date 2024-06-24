@@ -171,17 +171,15 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     }
 
     public boolean validate() {
-        Boolean emitCheckpointsValue = this.getBoolean(EMIT_CHECKPOINTS_ENABLED);
-        Boolean syncGroupOffsetsValue = this.getBoolean(SYNC_GROUP_OFFSETS_ENABLED);
-
-        if (!emitCheckpointsValue && !syncGroupOffsetsValue) {
+        if (!this.getBoolean(EMIT_CHECKPOINTS_ENABLED) && !this.getBoolean(SYNC_GROUP_OFFSETS_ENABLED)) {
             LOG.warn("MirrorCheckpointConnector can't run without both " + SYNC_GROUP_OFFSETS_ENABLED + ", " +
                     EMIT_CHECKPOINTS_ENABLED + " set to false");
             return false;
         }
 
-        boolean requireOffsetSyncs = emitCheckpointsValue || syncGroupOffsetsValue;
-        if (!"true".equals(Optional.ofNullable(this.originals().get(EMIT_OFFSET_SYNCS_ENABLED)).orElse("true")) & requireOffsetSyncs) {
+        Object emitOffsetSyncEnabled = Optional.ofNullable(this.originals().get(EMIT_OFFSET_SYNCS_ENABLED)).orElse("true");
+
+        if ("false".equals(emitOffsetSyncEnabled)) {
             LOG.warn("MirrorCheckpointConnector can't run with " + EMIT_OFFSET_SYNCS_ENABLED + " set to false while, " +
                     EMIT_CHECKPOINTS_ENABLED  + " and/or" + SYNC_GROUP_OFFSETS_ENABLED + " set to true");
             return false;

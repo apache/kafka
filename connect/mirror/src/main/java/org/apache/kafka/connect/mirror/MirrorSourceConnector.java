@@ -244,7 +244,7 @@ public class MirrorSourceConnector extends SourceConnector {
         boolean offsetSyncsConfigured = configValues.stream()
                 .anyMatch(conf -> conf.name().startsWith(OFFSET_SYNCS_CLIENT_ROLE_PREFIX) || conf.name().startsWith(OFFSET_SYNCS_TOPIC_CONFIG_PREFIX));
 
-        if ("false".equals(props.get(EXACTLY_ONCE_SUPPORT_CONFIG)) && offsetSyncsConfigured) {
+        if ("false".equals(props.get(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED)) && offsetSyncsConfigured) {
             ConfigValue emitOffsetSyncs = configValues.stream().filter(prop -> MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED.equals(prop.name()))
                     .findAny()
                     .orElseGet(() -> {
