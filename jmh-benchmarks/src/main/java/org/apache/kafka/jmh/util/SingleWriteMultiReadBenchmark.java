@@ -38,6 +38,7 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -58,6 +59,7 @@ public class SingleWriteMultiReadBenchmark {
     @Param({"0.1"})
     private double writePercentage ;
 
+    private Map<Integer, Integer> concurrentHashMap;
     private int writeTimes = (int) Math.round(writePercentage * TIMES);
     private ImmutableMap<Integer, Integer> pcollectionsImmutableMap;
 
@@ -65,6 +67,7 @@ public class SingleWriteMultiReadBenchmark {
     public void setup() {
         Map<Integer, Integer> mapTemplate = IntStream.range(0, mapSize).boxed()
                 .collect(Collectors.toMap(i -> i, i -> i));
+        concurrentHashMap = new ConcurrentHashMap<>(mapTemplate);
         pcollectionsImmutableMap = PCollectionsImmutableMap.empty();
         mapTemplate.entrySet().stream().map(s -> pcollectionsImmutableMap.updated(s.getKey(), s.getValue()));
     }
@@ -120,6 +123,60 @@ public class SingleWriteMultiReadBenchmark {
     public void testPcollectionsImmutableMapWrite() {
         for (int i = 0; i < writeTimes; i++) {
             pcollectionsImmutableMap = pcollectionsImmutableMap.updated(i + mapSize, 0);
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation
+    @Group("ConcurrentHashMap")
+    @GroupThreads(10)
+    public void testConcurrentHashMapGet(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            blackhole.consume(concurrentHashMap.get(i % mapSize));
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation
+    @Group("ConcurrentHashMap")
+    @GroupThreads(10)
+    public void testConcurrentHashMapRandomGet(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            blackhole.consume(concurrentHashMap.get(ThreadLocalRandom.current().nextInt(0, mapSize + 1)));
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation
+    @Group("ConcurrentHashMap")
+    @GroupThreads(10)
+    public void testConcurrentHashMapValues(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            for (int value : concurrentHashMap.values()) {
+                blackhole.consume(value);
+            }
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation
+    @Group("ConcurrentHashMap")
+    @GroupThreads(10)
+    public void testConcurrentHashMapEntry(Blackhole blackhole) {
+        for (int i = 0; i < TIMES; i++) {
+            for (Map.Entry<Integer, Integer> entry : concurrentHashMap.entrySet()) {
+                blackhole.consume(entry);
+            }
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation
+    @Group("ConcurrentHashMap")
+    @GroupThreads(1)
+    public void testConcurrentHashMapWrite() {
+        for (int i = 0; i < writeTimes; i++) {
+            concurrentHashMap.put(i + mapSize, 0);
         }
     }
 }
