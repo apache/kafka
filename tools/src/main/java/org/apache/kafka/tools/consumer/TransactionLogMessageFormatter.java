@@ -58,7 +58,6 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
 
                     try {
                         output.write(json.toString().getBytes(UTF_8));
-                        System.out.println(json);
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
