@@ -66,6 +66,20 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
@@ -779,6 +793,55 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.replay(
                     (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
                     (ConsumerGroupCurrentMemberAssignmentValue) messageOrNull(value)
+                );
+                break;
+
+            case 9:
+                groupMetadataManager.replay(
+                    (StreamsGroupMetadataKey) key.message(),
+                    (StreamsGroupMetadataValue) messageOrNull(value)
+                );
+                break;
+
+            case 10:
+                groupMetadataManager.replay(
+                    (StreamsGroupPartitionMetadataKey) key.message(),
+                    (StreamsGroupPartitionMetadataValue) messageOrNull(value)
+                );
+                break;
+
+            case 11:
+                groupMetadataManager.replay(
+                    (StreamsGroupMemberMetadataKey) key.message(),
+                    (StreamsGroupMemberMetadataValue) messageOrNull(value)
+                );
+                break;
+
+            case 12:
+                groupMetadataManager.replay(
+                    (StreamsGroupTargetAssignmentMetadataKey) key.message(),
+                    (StreamsGroupTargetAssignmentMetadataValue) messageOrNull(value)
+                );
+                break;
+
+            case 13:
+                groupMetadataManager.replay(
+                    (StreamsGroupTargetAssignmentMemberKey) key.message(),
+                    (StreamsGroupTargetAssignmentMemberValue) messageOrNull(value)
+                );
+                break;
+
+            case 14:
+                groupMetadataManager.replay(
+                    (StreamsGroupCurrentMemberAssignmentKey) key.message(),
+                    (StreamsGroupCurrentMemberAssignmentValue) messageOrNull(value)
+                );
+                break;
+
+            case 15:
+                groupMetadataManager.replay(
+                    (StreamsGroupTopologyKey) key.message(),
+                    (StreamsGroupTopologyValue) messageOrNull(value)
                 );
                 break;
 
