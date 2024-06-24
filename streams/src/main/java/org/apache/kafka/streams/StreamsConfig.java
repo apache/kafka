@@ -833,14 +833,6 @@ public class StreamsConfig extends AbstractConfig {
     private static final String TASK_ASSIGNOR_CLASS_DOC = "A task assignor class or class name implementing the <code>" +
                                                           TaskAssignor.class.getName() + "</code> interface. Defaults to the <code>HighAvailabilityTaskAssignor</code> class.";
 
-    /**
-     * {@code topology.optimization}
-     * @deprecated since 2.7; use {@link #TOPOLOGY_OPTIMIZATION_CONFIG} instead
-     */
-    @Deprecated
-    public static final String TOPOLOGY_OPTIMIZATION = TOPOLOGY_OPTIMIZATION_CONFIG;
-
-
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
         new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
