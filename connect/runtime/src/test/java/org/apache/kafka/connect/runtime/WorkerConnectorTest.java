@@ -137,7 +137,8 @@ public class WorkerConnectorTest {
         verifyCleanShutdown(true);
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testInitializeAndStopFailure() {
         RuntimeException exception1 = new RuntimeException();
         RuntimeException exception2 = new RuntimeException();
@@ -390,7 +391,8 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(onStateChange);
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
     public void testStartupAndStopFailure() {
         RuntimeException exception1 = new RuntimeException();
         RuntimeException exception2 = new RuntimeException();
