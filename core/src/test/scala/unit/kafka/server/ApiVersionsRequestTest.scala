@@ -131,6 +131,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
     assertEquals(ApiKeys.API_VERSIONS.latestVersion(), apiVersion.maxVersion())
   }
 
+  // Use the latest production MV for this test
   @ClusterTemplate("testApiVersionsRequestValidationV0Template")
   @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_3_8_IV0, serverProperties = Array(
       new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
