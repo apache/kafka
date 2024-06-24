@@ -63,6 +63,8 @@ public class LogValidator {
         void recordInvalidChecksums();
 
         void recordNoKeyCompactedTopic();
+        // Visible for test
+        Long meterCount(String metricName);
     }
 
     public static class ValidationResult {

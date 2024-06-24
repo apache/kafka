@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import com.yammer.metrics.core.MetricName
+import com.yammer.metrics.core.{Meter, MetricName}
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.LocalLog.nextOption
 import kafka.log.remote.RemoteLogManager
@@ -36,7 +36,7 @@ import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPar
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
-import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
@@ -2335,6 +2335,14 @@ object UnifiedLog extends Logging {
 
       def recordNoKeyCompactedTopic(): Unit =
         allTopicsStats.noKeyCompactedTopicRecordsPerSec.mark()
+
+      def meterCount(metricName: String): java.lang.Long = {
+        java.lang.Long.valueOf(KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+          .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
+          .values
+          .headOption
+          .map(_.asInstanceOf[Meter].count).get)
+      }
     }
   }
 
