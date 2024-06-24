@@ -58,12 +58,12 @@ public class SingleWriteMultiReadBenchmark {
     private int mapSize;
 
     @Param({"0.1"})
-    private double writePercentage ;
+    private double writePercentage;
 
     private Map<Integer, Integer> concurrentHashMap;
     private Map<Integer, Integer> copyOnWriteMap;
 
-    final private int writeTimes = (int) Math.round(writePercentage * TIMES);
+    private int writeTimes;
     private ImmutableMap<Integer, Integer> pcollectionsImmutableMap;
 
     @Setup(Level.Invocation)
@@ -76,6 +76,7 @@ public class SingleWriteMultiReadBenchmark {
         mapTemplate.entrySet().forEach(s ->
                 pcollectionsImmutableMap = pcollectionsImmutableMap.updated(s.getKey(), s.getValue())
         );
+        writeTimes = (int) Math.round(writePercentage * TIMES);
     }
 
     @Benchmark
