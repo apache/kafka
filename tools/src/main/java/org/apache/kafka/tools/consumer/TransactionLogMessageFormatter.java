@@ -30,7 +30,6 @@ import org.apache.kafka.coordinator.transaction.generated.TransactionLogValueJso
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
-import java.util.Objects;
 import java.util.Optional;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -44,63 +43,64 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
         Optional.ofNullable(consumerRecord.key())
-                .ifPresent(key -> {
-                    short keyVersion = ByteBuffer.wrap(key).getShort();
-                    byte[] value = consumerRecord.value();
-                    short valueVersion = ByteBuffer.wrap(value).getShort();
+            .ifPresent(key -> {
+                byte[] value = consumerRecord.value();
+                short keyVersion = ByteBuffer.wrap(key).getShort();
+                short valueVersion = ByteBuffer.wrap(value).getShort();
 
-                    TransactionLogKey transactionLogKey = readToTransactionLogKey(ByteBuffer.wrap(key));
-                    TransactionLogValue transactionLogValue = readToTransactionLogValue(ByteBuffer.wrap(value));
-                    ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
+                ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
+                Optional<TransactionLogKey> transactionLogKey = readToTransactionLogKey(ByteBuffer.wrap(key));
+                Optional<TransactionLogValue> transactionLogValue = readToTransactionLogValue(ByteBuffer.wrap(value));
 
-                    settingKeyNode(json, transactionLogKey, keyVersion);
-                    settingValueNode(json, transactionLogValue, valueVersion);
+                settingKeyNode(json, transactionLogKey, keyVersion);
+                settingValueNode(json, transactionLogValue, valueVersion);
 
-                    try {
-                        output.write(json.toString().getBytes(UTF_8));
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+                try {
+                    output.write(json.toString().getBytes(UTF_8));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
     }
 
-    private TransactionLogKey readToTransactionLogKey(ByteBuffer byteBuffer) {
+    private Optional<TransactionLogKey> readToTransactionLogKey(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= TransactionLogKey.LOWEST_SUPPORTED_VERSION
                 && version <= TransactionLogKey.HIGHEST_SUPPORTED_VERSION) {
-            return new TransactionLogKey(new ByteBufferAccessor(byteBuffer), version);
+            return Optional.of(new TransactionLogKey(new ByteBufferAccessor(byteBuffer), version));
         } else {
-            return null;
+            return Optional.empty();
         }
     }
 
-    private TransactionLogValue readToTransactionLogValue(ByteBuffer byteBuffer) {
+    private Optional<TransactionLogValue> readToTransactionLogValue(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION
                 && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
-            return new TransactionLogValue(new ByteBufferAccessor(byteBuffer), version);
+            return Optional.of(new TransactionLogValue(new ByteBufferAccessor(byteBuffer), version));
         } else {
-            return null;
+            return Optional.empty();
         }
     }
 
-    private void settingKeyNode(ObjectNode json, TransactionLogKey transactionLogKey, short keyVersion) {
+    private void settingKeyNode(ObjectNode json, Optional<TransactionLogKey> transactionLogKey, short keyVersion) {
         String key = "key";
-        if (Objects.isNull(transactionLogKey)) {
-            addUnknownNode(json, key, keyVersion);
-        } else {
+        if (transactionLogKey.isPresent()) {
             addDataNode(json, key, keyVersion,
-                    TransactionLogKeyJsonConverter.write(transactionLogKey, keyVersion));
+                    TransactionLogKeyJsonConverter.write(transactionLogKey.get(), keyVersion));
+        } else {
+            addUnknownNode(json, key, keyVersion);
+            
         }
     }
 
-    private void settingValueNode(ObjectNode json, TransactionLogValue transactionLogValue, short valueVersion) {
+    private void settingValueNode(ObjectNode json, Optional<TransactionLogValue> transactionLogValue, short valueVersion) {
         String value = "value";
-        if (Objects.isNull(transactionLogValue)) {
-            addUnknownNode(json, value, valueVersion);
-        } else {
+        if (transactionLogValue.isPresent()) {
             addDataNode(json, value, valueVersion,
-                    TransactionLogValueJsonConverter.write(transactionLogValue, valueVersion));
+                    TransactionLogValueJsonConverter.write(transactionLogValue.get(), valueVersion));
+        } else {
+            addUnknownNode(json, value, valueVersion);
         }
     }
 
