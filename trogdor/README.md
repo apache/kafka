@@ -15,8 +15,9 @@ Running ZooKeeper:
 ```
 Running Kafka:
 
-    ./bin/kafka-server-start.sh ./config/server.properties &> /tmp/kafka.log &
-
+```
+./bin/kafka-server-start.sh ./config/server.properties &> /tmp/kafka.log &
+```
 Then, we want to run a Trogdor Agent, plus a Trogdor Coordinator.
 
 To run the Trogdor Agent:
