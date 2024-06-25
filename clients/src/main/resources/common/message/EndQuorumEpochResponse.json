@@ -45,7 +45,7 @@
         { "name": "NodeId", "type": "int32", "versions": "1+",
           "mapKey": true, "entityType": "brokerId", "about": "The ID of the associated node" },
         { "name": "Host", "type": "string", "versions": "1+", "about": "The node's hostname" },
-        { "name": "Port", "type": "int32", "versions": "1+", "about": "The node's port" }
+        { "name": "Port", "type": "uint16", "versions": "1+", "about": "The node's port" }
       ]
     }
   ]

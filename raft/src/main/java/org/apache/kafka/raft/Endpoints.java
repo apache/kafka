@@ -36,7 +36,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 public final class Endpoints {
-    Map<ListenerName, InetSocketAddress> endpoints;
+    private final Map<ListenerName, InetSocketAddress> endpoints;
 
     private Endpoints(Map<ListenerName, InetSocketAddress> endpoints) {
         this.endpoints = endpoints;
