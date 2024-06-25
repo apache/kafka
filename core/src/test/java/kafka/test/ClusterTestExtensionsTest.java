@@ -185,12 +185,12 @@ public class ClusterTestExtensionsTest implements BeforeAllCallback, AfterAllCal
         @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, disksPerBroker = 2),
     })
     public void testClusterTestWithDisksPerBroker() throws ExecutionException, InterruptedException {
-        try (Admin admin = clusterInstance.createAdminClient()) {
-            DescribeLogDirsResult result = admin.describeLogDirs(clusterInstance.brokerIds());
-            result.allDescriptions().get().forEach((brokerId, logDirDescriptionMap) -> {
-                Assertions.assertEquals(clusterInstance.config().numDisksPerBroker(), logDirDescriptionMap.size());
-            });
-        }
+        Admin admin = clusterInstance.createAdminClient();
+
+        DescribeLogDirsResult result = admin.describeLogDirs(clusterInstance.brokerIds());
+        result.allDescriptions().get().forEach((brokerId, logDirDescriptionMap) -> {
+            Assertions.assertEquals(clusterInstance.config().numDisksPerBroker(), logDirDescriptionMap.size());
+        });
     }
 
     @ClusterTest(autoStart = AutoStart.NO)
