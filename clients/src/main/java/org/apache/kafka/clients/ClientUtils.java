@@ -198,7 +198,6 @@ public final class ClientUtils {
                     apiVersions,
                     throttleTimeSensor,
                     logContext,
-                    new DefaultHostResolver(),
                     clientTelemetrySender,
                     MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)));
         } catch (Throwable t) {

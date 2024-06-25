@@ -813,8 +813,10 @@ class KafkaServer(
           logContext
         )
         new NetworkClient(
-          selector,
+          config,
           metadataUpdater,
+          null,
+          selector,
           config.brokerId.toString,
           1,
           0,
@@ -827,7 +829,9 @@ class KafkaServer(
           time,
           false,
           new ApiVersions,
+          null,
           logContext,
+          null,
           MetadataRecoveryStrategy.NONE)
       }
 

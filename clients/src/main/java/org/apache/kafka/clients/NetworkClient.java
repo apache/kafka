@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -326,7 +327,6 @@ public class NetworkClient implements KafkaClient {
                          ApiVersions apiVersions,
                          Sensor throttleTimeSensor,
                          LogContext logContext,
-                         HostResolver hostResolver,
                          ClientTelemetrySender clientTelemetrySender,
                          MetadataRecoveryStrategy metadataRecoveryStrategy) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
@@ -340,6 +340,7 @@ public class NetworkClient implements KafkaClient {
         } else {
             this.metadataUpdater = metadataUpdater;
         }
+        HostResolver hostResolver = new DefaultHostResolver();
         this.metadata = (ConsumerMetadata) metadata;
         this.config = config;
         this.selector = selector;
@@ -362,6 +363,9 @@ public class NetworkClient implements KafkaClient {
         this.state = new AtomicReference<>(State.ACTIVE);
         this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
+        if (config == null) {
+            log.error("Config passed is null");
+        }
     }
 
     /**
@@ -654,8 +658,8 @@ public class NetworkClient implements KafkaClient {
         }
 
         // TODO: move bootstrapping logic here
-        final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-        metadata.bootstrap(addresses);
+        //final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
+        //metadata.bootstrap(addresses);
 
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         long telemetryTimeout = telemetrySender != null ? telemetrySender.maybeUpdate(now) : Integer.MAX_VALUE;

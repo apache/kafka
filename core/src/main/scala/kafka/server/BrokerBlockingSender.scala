@@ -82,8 +82,10 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       logContext
     )
     val networkClient = new NetworkClient(
-      selector,
+      brokerConfig,
       new ManualMetadataUpdater(),
+      null,
+      selector,
       clientId,
       1,
       0,
@@ -96,7 +98,9 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       time,
       false,
       new ApiVersions,
+      null,
       logContext,
+      null,
       MetadataRecoveryStrategy.NONE
     )
     (networkClient, reconfigurableChannelBuilder)
