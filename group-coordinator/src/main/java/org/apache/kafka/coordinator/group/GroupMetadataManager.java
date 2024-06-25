@@ -1540,8 +1540,8 @@ public class GroupMetadataManager {
         throwIfConsumerGroupIsFull(group, memberId);
         throwIfClassicProtocolIsNotSupported(group, memberId, request.protocolType(), protocols);
 
-        if (instanceId == null && isUnknownMember && JoinGroupRequest.requiresKnownMemberId(context.apiVersion())) {
-            // A dynamic member required a member id joins the group. Send back a response to call for another
+        if (JoinGroupRequest.requiresKnownMemberId(request, context.apiVersion())) {
+            // A dynamic member requiring a member id joins the group. Send back a response to call for another
             // join group request with allocated member id.
             responseFuture.complete(new JoinGroupResponseData()
                 .setMemberId(memberId)
