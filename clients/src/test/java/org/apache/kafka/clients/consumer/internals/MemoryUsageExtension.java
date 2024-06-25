@@ -24,9 +24,13 @@ public class MemoryUsageExtension implements BeforeAllCallback, AfterAllCallback
     private long memoryBefore;
     private long memoryAfter;
 
+    private long timeBefore;
+    private long timeAfter;
+
     @Override
     public void beforeAll(ExtensionContext context) {
         System.out.println("Starting test: " + context.getDisplayName());
+        timeBefore = System.nanoTime();
         memoryBefore = getUsedMemory();
         System.out.println("Memory before: " + memoryBefore + " bytes");
     }
@@ -34,9 +38,11 @@ public class MemoryUsageExtension implements BeforeAllCallback, AfterAllCallback
     @Override
     public void afterAll(ExtensionContext context) {
         memoryAfter = getUsedMemory();
+        timeAfter = System.nanoTime();
         System.out.println("Memory after tests: " + memoryAfter + " bytes");
         long memoryUsed = memoryAfter - memoryBefore;
         System.out.println("Total memory used by tests: " + memoryUsed + " bytes");
+        System.out.println("Total time taken by tests: " + (timeAfter - timeBefore) / 1e9f + " s");
     }
 
     private long getUsedMemory() {
