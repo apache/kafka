@@ -173,7 +173,7 @@ public class StreamsGroup implements Group {
     /**
      * The Streams topology.
      */
-    private final StreamsTopology topology;
+    private StreamsTopology topology;
 
     /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with the group epoch at the time of setting it.
@@ -245,6 +245,10 @@ public class StreamsGroup implements Group {
 
     public StreamsTopology topology() {
         return topology;
+    }
+
+    public void setTopology(StreamsTopology topology) {
+        this.topology = topology;
     }
 
     /**

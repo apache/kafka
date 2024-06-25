@@ -108,6 +108,7 @@ import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
+import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
@@ -2573,12 +2574,24 @@ public class GroupMetadataManager {
         StreamsGroupTopologyKey key,
         StreamsGroupTopologyValue value
     ) {
-
-        // TODO: Insert the topology information to the in-memory representation. Needs the notion
-        //       of a Streams group
         String groupId = key.groupId();
         StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, value != null);
-//        streamsGroup.setTopology(value);
+        Set<String> oldSubscribedTopicNames = new HashSet<>(streamsGroup.subscriptionMetadata().keySet());
+        if (value != null) {
+            StreamsTopology topology = StreamsTopology.fromRecord(value);
+            streamsGroup.setTopology(topology);
+            Set<String> newSubscribedTopicNames = new HashSet<>();
+            topology.subtopologies().forEach(
+                (subtopologyId, subtopology) -> {
+                    newSubscribedTopicNames.addAll(subtopology.sourceTopics());
+                    newSubscribedTopicNames.addAll(subtopology.repartitionSourceTopics().stream()
+                        .map(StreamsGroupTopologyValue.TopicInfo::name).collect(Collectors.toSet()));
+                }
+            );
+            updateGroupsByTopics(groupId, oldSubscribedTopicNames, newSubscribedTopicNames);
+        } else {
+            updateGroupsByTopics(groupId, oldSubscribedTopicNames, Collections.emptySet());
+        }
     }
 
     /**
