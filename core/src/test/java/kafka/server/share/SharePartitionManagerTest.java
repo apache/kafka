@@ -46,12 +46,11 @@ import org.apache.kafka.server.share.ShareSessionKey;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
-import org.apache.kafka.server.util.timer.TimerTask;
+import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.storage.internals.log.FetchIsolation;
 import org.apache.kafka.storage.internals.log.FetchParams;
 import org.apache.kafka.storage.internals.log.FetchPartitionData;
 
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1226,31 +1225,16 @@ public class SharePartitionManagerTest {
 
     @Test
     public void testCloseSharePartitionManager() throws Exception {
-        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder().build();
+        Timer timer = Mockito.mock(SystemTimerReaper.class);
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder().
+                withTimer(timer).build();
 
-        List<Integer> mockList = new ArrayList<>();
-        sharePartitionManager.timer().add(createTimerTask(mockList));
-        // Allowing first timer task to expire. The timer task will add an element to mockList.
-        TestUtils.waitForCondition(
-                () -> mockList.size() == 1,
-                DEFAULT_MAX_WAIT_TIMER_TASK_TIMEOUT_MS,
-                () -> "Timer task never got timed out.");
-
-        sharePartitionManager.timer().add(createTimerTask(mockList));
+        // Verify that 0 calls are made to timer.close().
+        Mockito.verify(timer, times(0)).close();
         // Closing the sharePartitionManager closes timer object in sharePartitionManager.
         sharePartitionManager.close();
-        // Allowing second timer task to expire. It won't be able to add an element to mockList.
-        Thread.sleep(DEFAULT_MAX_WAIT_TIMER_TASK_TIMEOUT_MS);
-        assertEquals(1, mockList.size());
-    }
-
-    private TimerTask createTimerTask(List<Integer> mockList) {
-        return new TimerTask(100) {
-            @Override
-            public void run() {
-                mockList.add(0);
-            }
-        };
+        // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close().
+        Mockito.verify(timer, times(1)).close();
     }
 
     private ShareFetchResponseData.PartitionData noErrorShareFetchResponse() {
@@ -1319,6 +1303,7 @@ public class SharePartitionManagerTest {
         private ShareSessionCache cache = new ShareSessionCache(10, 1000);
         private Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         private Persister persister = NoOpShareStatePersister.getInstance();
+        private Timer timer = new MockTimer();
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -1345,12 +1330,17 @@ public class SharePartitionManagerTest {
             return this;
         }
 
+        private SharePartitionManagerBuilder withTimer(Timer timer) {
+            this.timer = timer;
+            return this;
+        }
+
         public static SharePartitionManagerBuilder builder() {
             return new SharePartitionManagerBuilder();
         }
 
         public SharePartitionManager build() {
-            return new SharePartitionManager(replicaManager, time, cache, partitionCacheMap, RECORD_LOCK_DURATION_MS, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, persister);
+            return new SharePartitionManager(replicaManager, time, cache, partitionCacheMap, RECORD_LOCK_DURATION_MS, timer, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, persister);
         }
     }
 }
