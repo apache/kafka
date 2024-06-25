@@ -586,11 +586,6 @@ public class SharePartitionManager implements AutoCloseable {
         return timestampAndOffset.isEmpty() ? (long) 0 : timestampAndOffset.get().offset;
     }
 
-    // Visible for testing.
-    Timer timer() {
-        return timer;
-    }
-
     /**
      * The SharePartitionKey is used to uniquely identify a share partition. The key is made up of the
      * share group id, the topic id and the partition id. The key is used to store the SharePartition
