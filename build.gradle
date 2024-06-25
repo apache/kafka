@@ -482,7 +482,10 @@ subprojects {
 
     exclude testsToExclude
 
-    useJUnitPlatform()
+    useJUnitPlatform {
+      includeTags "integration"
+      includeEngines "junit-jupiter"
+    }
 
     retry {
       maxRetries = userMaxTestRetries
@@ -509,11 +512,6 @@ subprojects {
 
     exclude testsToExclude
 
-    useJUnitPlatform {
-      includeTags "integration"
-      includeEngines "junit-jupiter"
-    }
-
     retry {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
@@ -536,11 +534,6 @@ subprojects {
     logTestStdout.rehydrate(delegate, owner, this)()
 
     exclude testsToExclude
-
-    useJUnitPlatform {
-      excludeTags "integration"
-      includeEngines "junit-jupiter"
-    }
 
     retry {
       maxRetries = userMaxTestRetries
