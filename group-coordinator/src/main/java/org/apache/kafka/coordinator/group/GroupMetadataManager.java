@@ -2578,7 +2578,7 @@ public class GroupMetadataManager {
         //       of a Streams group
         String groupId = key.groupId();
         StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, value != null);
-        streamsGroup.setTopology(value);
+//        streamsGroup.setTopology(value);
     }
 
     /**
@@ -2915,7 +2915,7 @@ public class GroupMetadataManager {
         String memberId = key.memberId();
 
         StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, value != null);
-        Set<String> oldSubscribedTopicNames = new HashSet<>(streamsGroup.subscribedTopicNames().keySet());
+        Set<String> oldSubscribedTopicNames = new HashSet<>(streamsGroup.subscriptionMetadata().keySet());
 
         if (value != null) {
             StreamsGroupMember oldMember = streamsGroup.getOrMaybeCreateMember(memberId, true);
@@ -2935,7 +2935,9 @@ public class GroupMetadataManager {
             streamsGroup.removeMember(memberId);
         }
 
-        updateGroupsByTopics(groupId, oldSubscribedTopicNames, streamsGroup.subscribedTopicNames().keySet());
+        // ToDo: this is probably a no-op for a streams group since the subscribed topics do not change
+        // between group members.
+        updateGroupsByTopics(groupId, oldSubscribedTopicNames, streamsGroup.subscriptionMetadata().keySet());
     }
 
     /**
