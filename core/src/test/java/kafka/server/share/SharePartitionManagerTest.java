@@ -99,7 +99,6 @@ public class SharePartitionManagerTest {
     private static final int MAX_DELIVERY_COUNT = 5;
     private static final short MAX_IN_FLIGHT_MESSAGES = 200;
     private static final int PARTITION_MAX_BYTES = 40000;
-    private static final int DEFAULT_MAX_WAIT_TIMER_TASK_TIMEOUT_MS = 200;
 
     private static Timer mockTimer;
 
