@@ -420,7 +420,10 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_7_IV4)) {
+        if (this.isAtLeast(IBP_4_0_IV0)) {
+            // KAFKA-17018 will change this to IBP_3_9_IVX when it is available
+            return 17;
+        } else if (this.isAtLeast(IBP_3_7_IV4)) {
             return 16;
         } else if (this.isAtLeast(IBP_3_5_IV1)) {
             return 15;

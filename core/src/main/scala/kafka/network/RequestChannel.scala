@@ -463,7 +463,7 @@ class RequestChannel(val queueSize: Int,
     }
   }
 
-  /** Get the next request or block until specified time has elapsed 
+  /** Get the next request or block until specified time has elapsed
    *  Check the callback queue and execute first if present since these
    *  requests have already waited in line. */
   def receiveRequest(timeout: Long): RequestChannel.BaseRequest = {
