@@ -259,6 +259,9 @@ public class ApiVersionsResponse extends AbstractResponse {
         final long finalizedFeaturesEpoch,
         final boolean zkMigrationEnabled
     ) {
+        // Older versions do not support 0 version in SupportedVersionRange. If an older broker receives a response with a zero version, it will fail with
+        // IllegalArgumentException. In order to not block upgrades, filter out features with 0 versions from the response.
+        // Future versions will bump the ApiVersionsRequest to handle this case and return features with version 0, but that version bump is not in 3.8.
         Features<SupportedVersionRange> backwardsCompatibleFeatures = Features.supportedFeatures(latestSupportedFeatures.features().entrySet()
             .stream().filter(entry -> {
                 SupportedVersionRange supportedVersionRange = entry.getValue();
