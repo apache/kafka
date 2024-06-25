@@ -509,18 +509,8 @@ subprojects {
 
     exclude testsToExclude
 
-    if (project.name == 'streams') {
-      useJUnitPlatform {
-        includeTags "integration"
-        includeTags "org.apache.kafka.test.IntegrationTest"
-        // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
-        // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
-        includeEngines "junit-vintage", "junit-jupiter"
-      }
-    } else {
-      useJUnitPlatform {
-        includeTags "integration"
-      }
+    useJUnitPlatform {
+      includeTags "integration"
     }
 
     retry {
@@ -546,18 +536,8 @@ subprojects {
 
     exclude testsToExclude
 
-    if (project.name == 'streams') {
-      useJUnitPlatform {
-        excludeTags "integration"
-        excludeTags "org.apache.kafka.test.IntegrationTest"
-        // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
-        // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
-        includeEngines "junit-vintage", "junit-jupiter"
-      }
-    } else {
-      useJUnitPlatform {
-        excludeTags "integration"
-      }
+    useJUnitPlatform {
+      excludeTags "integration"
     }
 
     retry {
@@ -2305,7 +2285,6 @@ project(':streams') {
     testImplementation project(':server')
     testImplementation libs.reload4j
     testImplementation libs.junitJupiter
-    testImplementation libs.junitVintageEngine
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore

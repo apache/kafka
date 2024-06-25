@@ -63,7 +63,6 @@ import org.apache.kafka.test.TestUtils;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Option;
@@ -228,21 +227,6 @@ public class IntegrationTestUtils {
         }
     }
 
-    /**
-     * Gives a test name that is safe to be used in application ids, topic names, etc.
-     * The name is safe even for parameterized methods.
-     * Used by tests not yet migrated from JUnit 4.
-     */
-    public static String safeUniqueTestName(final TestName testName) {
-        final String methodName = testName.getMethodName();
-        return safeUniqueTestName(methodName);
-    }
-
-    /**
-     * Same as @see IntegrationTestUtils#safeUniqueTestName except it accepts a TestInfo passed in by
-     * JUnit 5 instead of a TestName from JUnit 4.
-     * Used by tests migrated to JUnit 5.
-     */
     public static String safeUniqueTestName(final TestInfo testInfo) {
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("unknownMethodName");
         return safeUniqueTestName(methodName);
