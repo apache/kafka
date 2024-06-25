@@ -60,7 +60,6 @@
   "validVersions": "0-17",
   "deprecatedVersions": "0-3",
   "flexibleVersions": "12+",
-  "latestVersionUnstable": true,
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",
       "taggedVersions": "12+", "tag": 0, "ignorable": true,

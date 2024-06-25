@@ -135,21 +135,6 @@ class ReplicaFetcherThreadTest {
       ApiKeys.LIST_OFFSETS.latestVersion(true),
       testingVersion.listOffsetRequestVersion
     )
-
-    // Check stable version
-    val productionVersion = MetadataVersion.latestProduction
-    assertEquals(
-      ApiKeys.FETCH.latestVersion(false),
-      productionVersion.fetchRequestVersion
-    )
-    assertEquals(
-      ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(false),
-      productionVersion.offsetForLeaderEpochRequestVersion
-    )
-    assertEquals(
-      ApiKeys.LIST_OFFSETS.latestVersion(false),
-      productionVersion.listOffsetRequestVersion
-    )
   }
 
   @Test
