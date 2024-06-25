@@ -1117,7 +1117,7 @@ public class GroupMetadataManagerTest {
             rejoinResult.response()
         );
 
-        ConsumerGroupMember expectedInitialRejoinedMember = new ConsumerGroupMember.Builder(member2RejoinId)
+        ConsumerGroupMember expectedCopiedMember = new ConsumerGroupMember.Builder(member2RejoinId)
             .setState(MemberState.STABLE)
             .setMemberEpoch(0)
             .setInstanceId(memberId2)
@@ -1154,11 +1154,11 @@ public class GroupMetadataManagerTest {
             CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId2),
 
             // The previous member is replaced by the new one.
-            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedInitialRejoinedMember),
+            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedCopiedMember),
             CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, member2RejoinId, mkAssignment(
                 mkTopicAssignment(fooTopicId, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 2))),
-            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedInitialRejoinedMember),
+            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedCopiedMember),
 
             // The new member is updated.
             CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedRejoinedMember)
@@ -11290,7 +11290,7 @@ public class GroupMetadataManagerTest {
         String newMemberId = joinResult.joinFuture.get().memberId();
         assertNotEquals("", newMemberId);
 
-        ConsumerGroupMember expectedInitialMember = new ConsumerGroupMember.Builder(newMemberId)
+        ConsumerGroupMember expectedCopiedMember = new ConsumerGroupMember.Builder(newMemberId)
             .setMemberEpoch(0)
             .setPreviousMemberEpoch(-1)
             .setInstanceId(instanceId)
@@ -11325,9 +11325,9 @@ public class GroupMetadataManagerTest {
             CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId),
 
             // Replace the old static member by the new static member.
-            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedInitialMember),
+            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedCopiedMember),
             CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, newMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1))),
-            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedInitialMember),
+            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedCopiedMember),
 
             // Updated the new static member.
             CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
