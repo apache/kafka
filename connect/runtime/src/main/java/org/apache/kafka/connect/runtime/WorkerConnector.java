@@ -308,8 +308,8 @@ public class WorkerConnector implements Runnable {
                                     + " as the connector has been scheduled for shutdown"),
                         null);
             }
-            // We need to call stop() when the connector has failed,
-            // for the connector to release its resources.
+            // Call stop() when the connector has failed, for the connector
+            // to release its resources.
             if (state == State.STARTED || state == State.FAILED)
                 connector.stop();
             this.state = State.STOPPED;
