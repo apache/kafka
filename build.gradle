@@ -511,6 +511,7 @@ subprojects {
 
     useJUnitPlatform {
       includeTags "integration"
+      includeEngines "junit-jupiter"
     }
 
     retry {
@@ -538,6 +539,7 @@ subprojects {
 
     useJUnitPlatform {
       excludeTags "integration"
+      includeEngines "junit-jupiter"
     }
 
     retry {
