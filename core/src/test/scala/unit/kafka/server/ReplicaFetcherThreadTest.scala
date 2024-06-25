@@ -127,9 +127,9 @@ class ReplicaFetcherThreadTest {
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
 
-    assertEquals(ApiKeys.FETCH.latestVersion, config.interBrokerProtocolVersion.fetchRequestVersion())
-    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, config.interBrokerProtocolVersion.offsetForLeaderEpochRequestVersion)
-    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, config.interBrokerProtocolVersion.listOffsetRequestVersion)
+    assertEquals(ApiKeys.FETCH.latestVersion(false), config.interBrokerProtocolVersion.fetchRequestVersion())
+    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(false), config.interBrokerProtocolVersion.offsetForLeaderEpochRequestVersion)
+    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion(false), config.interBrokerProtocolVersion.listOffsetRequestVersion)
   }
 
   @Test
