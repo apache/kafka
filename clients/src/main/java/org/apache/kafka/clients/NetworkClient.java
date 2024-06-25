@@ -658,8 +658,8 @@ public class NetworkClient implements KafkaClient {
         }
 
         // TODO: move bootstrapping logic here
-        //final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-        //metadata.bootstrap(addresses);
+        final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
+        metadata.bootstrap(addresses);
 
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         long telemetryTimeout = telemetrySender != null ? telemetrySender.maybeUpdate(now) : Integer.MAX_VALUE;
