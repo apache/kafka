@@ -33,6 +33,11 @@ import java.util.function.Supplier;
 
 public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics {
     /**
+     * Indicates that the records were not yet written to the log.
+     */
+    public static long NOT_WRITTEN = -1L;
+
+    /**
      * The metrics group.
      */
     public static final String METRICS_GROUP = "group-coordinator-metrics";
@@ -201,6 +206,16 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
 
     @Override
     public void recordEventQueueProcessingTime(long durationMs) { }
+
+    @Override
+    public void recordEventPurgatoryTime(long purgatoryTimeMs, long writeTimeMs) {
+        if (writeTimeMs != NOT_WRITTEN) {
+            // Only record the purgatory time if records were actually appended to the log.
+        }
+    }
+
+    @Override
+    public void recordFlushTime(long durationMs) { }
 
     @Override
     public void recordThreadIdleTime(long idleTimeMs) {

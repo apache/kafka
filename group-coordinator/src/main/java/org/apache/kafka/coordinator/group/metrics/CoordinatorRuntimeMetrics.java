@@ -54,6 +54,21 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
     void recordEventQueueProcessingTime(long durationMs);
 
     /**
+     * Record the event purgatory time.
+     *
+     * @param purgatoryTimeMs    The time the event was completed.
+     * @param writeTimeMs        The time the records were written to the log.
+     */
+    void recordEventPurgatoryTime(long purgatoryTimeMs, long writeTimeMs);
+
+    /**
+     * Record the flush time.
+     *
+     * @param durationMs The flush time in milliseconds.
+     */
+    void recordFlushTime(long durationMs);
+
+    /**
      * Record the thread idle time.
      * @param idleTimeMs The idle time in milliseconds.
      */

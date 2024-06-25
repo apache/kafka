@@ -70,6 +70,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics.NOT_WRITTEN;
+
 /**
  * The CoordinatorRuntime provides a framework to implement coordinators such as the group coordinator
  * or the transaction coordinator.
@@ -743,6 +745,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private void flushCurrentBatch() {
             if (currentBatch != null) {
                 try {
+                    long flushStartMs = time.milliseconds();
                     // Write the records to the log and update the last written offset.
                     long offset = partitionWriter.append(
                         tp,
@@ -771,6 +774,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     for (DeferredEvent event : currentBatch.deferredEvents) {
                         deferredEventQueue.add(offset, event);
                     }
+                    runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
 
                     // Free up the current batch.
                     freeCurrentBatch();
@@ -1174,6 +1178,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private final long createdTimeMs;
 
         /**
+         * The time the records were appended to the log.
+         */
+        private long writeTimeMs;
+
+        /**
          * Constructor.
          *
          * @param name                  The operation name.
@@ -1231,6 +1240,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.future = new CompletableFuture<>();
             this.createdTimeMs = time.milliseconds();
             this.writeTimeout = writeTimeout;
+            this.writeTimeMs = NOT_WRITTEN;
         }
 
         /**
@@ -1267,6 +1277,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     if (!future.isDone()) {
                         operationTimeout = new OperationTimeout(tp, this, writeTimeout.toMillis());
                         timer.add(operationTimeout);
+                        writeTimeMs = time.milliseconds();
                     }
                 });
             } catch (Throwable t) {
@@ -1282,6 +1293,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         @Override
         public void complete(Throwable exception) {
+            final long purgatoryTimeMs = time.milliseconds();
             CompletableFuture<Void> appendFuture = result != null ? result.appendFuture() : null;
 
             if (exception == null) {
@@ -1296,6 +1308,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 operationTimeout.cancel();
                 operationTimeout = null;
             }
+            runtimeMetrics.recordEventPurgatoryTime(purgatoryTimeMs, writeTimeMs);
         }
 
         @Override
@@ -1498,6 +1511,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         private final long createdTimeMs;
 
+        /**
+         * The time the records were appended to the log.
+         */
+        private long writeTimeMs;
+
         CoordinatorCompleteTransactionEvent(
             String name,
             TopicPartition tp,
@@ -1516,6 +1534,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.writeTimeout = writeTimeout;
             this.future = new CompletableFuture<>();
             this.createdTimeMs = time.milliseconds();
+            this.writeTimeMs = NOT_WRITTEN;
         }
 
         /**
@@ -1545,6 +1564,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     if (!future.isDone()) {
                         operationTimeout = new OperationTimeout(tp, this, writeTimeout.toMillis());
                         timer.add(operationTimeout);
+                        writeTimeMs = time.milliseconds();
                     }
                 });
             } catch (Throwable t) {
@@ -1560,6 +1580,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         @Override
         public void complete(Throwable exception) {
+            final long purgatoryTimeMs = time.milliseconds();
             if (exception == null) {
                 future.complete(null);
             } else {
@@ -1570,6 +1591,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 operationTimeout.cancel();
                 operationTimeout = null;
             }
+            runtimeMetrics.recordEventPurgatoryTime(purgatoryTimeMs, writeTimeMs);
         }
 
         @Override
