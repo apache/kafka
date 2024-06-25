@@ -185,8 +185,18 @@ public class StreamsGroupMember {
             return this;
         }
 
+        public Builder maybeUpdateProcessId(Optional<String> processId) {
+            this.processId = processId.orElse(this.processId);
+            return this;
+        }
+        
         public Builder setHostInfo(StreamsGroupMemberMetadataValue.HostInfo hostInfo) {
             this.hostInfo = hostInfo;
+            return this;
+        }
+
+        public Builder maybeUpdateHostInfo(Optional<StreamsGroupMemberMetadataValue.HostInfo> hostInfo) {
+            this.hostInfo = hostInfo.orElse(this.hostInfo);
             return this;
         }
 
@@ -195,13 +205,28 @@ public class StreamsGroupMember {
             return this;
         }
 
+        public Builder maybeUpdateClientTags(Optional<Map<String, String>> clientTags) {
+            this.clientTags = clientTags.orElse(this.clientTags);
+            return this;
+        }
+
         public Builder setUserData(byte[] userData) {
             this.userData = userData;
             return this;
         }
 
+        public Builder maybeUpdateUserData(Optional<byte[]> userData) {
+            this.userData = userData.orElse(this.userData);
+            return this;
+        }
+
         public Builder setAssignmentConfigs(Map<String, String> assignmentConfigs) {
             this.assignmentConfigs = assignmentConfigs;
+            return this;
+        }
+
+        public Builder maybeUpdateAssignmentConfigs(Optional<Map<String, String>> assignmentConfigs) {
+            this.assignmentConfigs = assignmentConfigs.orElse(this.assignmentConfigs);
             return this;
         }
 

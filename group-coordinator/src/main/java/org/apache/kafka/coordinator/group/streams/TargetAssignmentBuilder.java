@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
 
@@ -147,13 +148,11 @@ public class TargetAssignmentBuilder {
     public TargetAssignmentBuilder(
         String groupId,
         int groupEpoch,
-        TaskAssignor assignor,
-        StreamsTopology topology
+        TaskAssignor assignor
     ) {
         this.groupId = Objects.requireNonNull(groupId);
         this.groupEpoch = groupEpoch;
         this.assignor = Objects.requireNonNull(assignor);
-        this.topology = Objects.requireNonNull(topology);
     }
 
     /**
@@ -222,6 +221,20 @@ public class TargetAssignmentBuilder {
     }
 
     /**
+     * Adds the topology image.
+     *
+     * @param topology The topology.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withTopology(
+        StreamsTopology topology
+    ) {
+        this.topology = topology;
+        return this;
+    }
+
+
+    /**
      * Adds or updates a member. This is useful when the updated member is not yet materialized in memory.
      *
      * @param memberId The member id.
@@ -288,13 +301,18 @@ public class TargetAssignmentBuilder {
         });
 
         // Compute the assignment.
-        GroupAssignment newGroupAssignment = assignor.assign(
-            new GroupSpecImpl(
-                Collections.unmodifiableMap(memberSpecs),
-                new ArrayList<>(topology.subtopologies().keySet())
-            ),
-            new TopologyMetadata(subscriptionMetadata, topology)
-        );
+        GroupAssignment newGroupAssignment;
+        if (topology != null) {
+            newGroupAssignment = assignor.assign(
+                new GroupSpecImpl(
+                    Collections.unmodifiableMap(memberSpecs),
+                    new ArrayList<>(topology.subtopologies().keySet())
+                ),
+                new TopologyMetadata(subscriptionMetadata, topology)
+            );
+        } else {
+            newGroupAssignment = new GroupAssignment(memberSpecs.keySet().stream().collect(Collectors.toMap(x -> x, x -> MemberAssignment.empty())));
+        }
 
         // Compute delta from previous to new target assignment and create the
         // relevant records.

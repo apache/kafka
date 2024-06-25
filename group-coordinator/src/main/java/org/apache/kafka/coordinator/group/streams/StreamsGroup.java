@@ -724,7 +724,13 @@ public class StreamsGroup implements Group {
         TopicsImage topicsImage,
         ClusterImage clusterImage
     ) {
-        Set<String> subscribedTopicNames = topology.topicSubscription();
+        Set<String> subscribedTopicNames;
+
+        if (topology != null) {
+            subscribedTopicNames = topology.topicSubscription();
+        } else {
+            subscribedTopicNames = Collections.emptySet();
+        }
 
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
@@ -952,6 +958,7 @@ public class StreamsGroup implements Group {
         }
 
         state.set(newState);
+        metrics.onStreamsGroupStateTransition(previousState, newState);
     }
 
     /**

@@ -222,8 +222,9 @@ public class TargetAssignmentBuilderTest {
 
             // Create and populate the assignment builder.
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder builder = new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
-                groupId, groupEpoch, assignor, topology)
+                groupId, groupEpoch, assignor)
                 .withMembers(members)
+                .withTopology(topology)
                 .withStaticMembers(staticMembers)
                 .withSubscriptionMetadata(subscriptionMetadata)
                 .withTargetAssignment(targetAssignment)

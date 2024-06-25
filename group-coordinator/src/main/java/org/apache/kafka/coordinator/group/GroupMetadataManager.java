@@ -150,6 +150,7 @@ import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEA
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupEpochRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupMemberRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
@@ -934,8 +935,7 @@ public class GroupMetadataManager {
         if (group == null) {
             StreamsGroup streamsGroup = new StreamsGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, streamsGroup);
-            // TODO: Metrics
-            //metrics.onStreamsGroupStateTransition(null, streamsGroup.state());
+            metrics.onStreamsGroupStateTransition(null, streamsGroup.state());
             return streamsGroup;
         } else {
             if (group.type() == STREAMS) {
@@ -1174,6 +1174,10 @@ public class GroupMetadataManager {
                 case CONSUMER:
                     ConsumerGroup consumerGroup = (ConsumerGroup) group;
                     metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
+                    break;
+                case STREAMS:
+                    StreamsGroup streamsGroup = (StreamsGroup) group;
+                    metrics.onStreamsGroupStateTransition(streamsGroup.state(), null);
                     break;
                 case CLASSIC:
                     ClassicGroup classicGroup = (ClassicGroup) group;
@@ -1840,12 +1844,6 @@ public class GroupMetadataManager {
         final StreamsGroup group = getOrMaybeCreateStreamsGroup(groupId, createIfNotExists, records);
         throwIfStreamsGroupIsFull(group, memberId);
 
-        if (group.topology() == null) {
-            // The group has not been initialized yet.
-            // TODO: WIP
-
-        }
-
         // Get or create the member.
         if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
         StreamsGroupMember member;
@@ -1904,22 +1902,38 @@ public class GroupMetadataManager {
             .maybeUpdateTopologyHash(Optional.ofNullable(topologyHash))
             .setClientId(clientId)
             .setClientHost(clientHost)
+            .maybeUpdateProcessId(Optional.ofNullable(processId))
+            .maybeUpdateClientTags(Optional.ofNullable(clientTags).map(x -> x.stream().collect(Collectors.toMap(KeyValue::key, KeyValue::value))))
+            .maybeUpdateUserData(Optional.ofNullable(userData))
+            .maybeUpdateAssignmentConfigs(Optional.ofNullable(assignmentConfigs).map(x -> x.stream().collect(Collectors.toMap(KeyValue::key, KeyValue::value))))
+            .maybeUpdateHostInfo(Optional.ofNullable(hostInfo).map(x -> new StreamsGroupMemberMetadataValue.HostInfo().setHost(x.host()).setPort(x.port())))
             .build();
 
         int groupEpoch = group.groupEpoch();
         Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
 
-        if (group.hasMetadataExpired(currentTimeMs)) {
+        boolean bumpGroupEpoch = hasStreamsMemberMetadataChanged(
+            groupId,
+            member,
+            updatedMember,
+            records
+        );
+
+        if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated when the refresh deadline has been reached.
             subscriptionMetadata = group.computeSubscriptionMetadata(
                 metadataImage.topics(),
                 metadataImage.cluster()
             );
 
-            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+            if (subscriptionMetadata.equals(group.subscriptionMetadata())) {
                 log.info("[GroupId {}] Computed new partition metadata: {}.",
                     groupId, subscriptionMetadata);
+                bumpGroupEpoch = true;
                 records.add(newStreamsGroupPartitionMetadataRecord(groupId, subscriptionMetadata));
+            }
+
+            if (bumpGroupEpoch) {
                 groupEpoch += 1;
                 records.add(newStreamsGroupEpochRecord(groupId, groupEpoch));
                 log.info("[GroupId {}] Bumped streams group epoch to {}.", groupId, groupEpoch);
@@ -1962,10 +1976,15 @@ public class GroupMetadataManager {
 
         scheduleStreamsGroupSessionTimeout(groupId, memberId);
 
+        if (group.topology() == null) {
+            log.info("Asking member {} at {} to initialize the topology", memberId, clientHost);
+        }
+
         // Prepare the response.
         StreamsHeartbeatResponseData response = new StreamsHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
+            .setShouldInitializeTopology(group.topology() == null)
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs);
 
         // The assignment is only provided in the following cases:
@@ -1981,6 +2000,8 @@ public class GroupMetadataManager {
             response.setStandbyTasks(createStreamsHeartbeatResponseTaskIds(updatedMember.assignedStandbyTasks()));
             response.setWarmupTasks(createStreamsHeartbeatResponseTaskIds(updatedMember.assignedWarmupTasks()));
         }
+
+        log.info("Writing records {}", records);
 
         return new CoordinatorResult<>(records, response);
     }
@@ -2489,6 +2510,37 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Creates the member subscription record if the updatedMember is different from
+     * the old member. Returns true if the subscribedTopicNames/subscribedTopicRegex
+     * has changed.
+     *
+     * @param groupId       The group id.
+     * @param member        The old member.
+     * @param updatedMember The updated member.
+     * @param records       The list to accumulate any new records.
+     * @return A boolean indicating whether the group epoch should be bumped
+     *         following this change
+     */
+    private boolean hasStreamsMemberMetadataChanged(
+        String groupId,
+        StreamsGroupMember member,
+        StreamsGroupMember updatedMember,
+        List<CoordinatorRecord> records
+    ) {
+        String memberId = updatedMember.memberId();
+        if (!updatedMember.equals(member)) {
+            records.add(newStreamsGroupMemberRecord(groupId, updatedMember));
+
+            if (updatedMember.topologyHash() != member.topologyHash()) {
+                log.info("[GroupId {}] Member {} updated its topology hash to: {}.",
+                    groupId, memberId, updatedMember.topologyHash());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Reconciles the current assignment of the member towards the target assignment if needed.
      *
      * @param groupId               The group id.
@@ -2711,11 +2763,12 @@ public class GroupMetadataManager {
         String preferredServerAssignor = group.computePreferredServerAssignor(
             member,
             updatedMember
-        ).orElse(defaultAssignor.name());
+        ).orElse(defaultTaskAssignor.name());
         try {
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
-                new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(group.groupId(), groupEpoch, taskAssignors.get(preferredServerAssignor), group.topology())
+                new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(group.groupId(), groupEpoch, taskAssignors.get(preferredServerAssignor))
                     .withMembers(group.members())
+                    .withTopology(group.topology())
                     .withStaticMembers(group.staticMembers())
                     .withSubscriptionMetadata(subscriptionMetadata)
                     .withTargetAssignment(group.targetAssignment())
