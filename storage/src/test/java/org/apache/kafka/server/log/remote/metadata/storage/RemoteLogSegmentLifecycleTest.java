@@ -96,7 +96,7 @@ public class RemoteLogSegmentLifecycleTest {
             leaderEpochSegment0.put(2, 80L);
             RemoteLogSegmentId segmentId0 = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
             RemoteLogSegmentMetadata metadataSegment0 = new RemoteLogSegmentMetadata(segmentId0, 0L,
-                    100L, -1L, brokerId0, time.milliseconds(), segSize, leaderEpochSegment0);
+                    100L, -1L, brokerId0, time.milliseconds(), segSize, leaderEpochSegment0, 0);
             metadataManager.addRemoteLogSegmentMetadata(metadataSegment0).get();
             verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(metadataSegment0);
 
@@ -225,7 +225,7 @@ public class RemoteLogSegmentLifecycleTest {
             throws RemoteStorageException, ExecutionException, InterruptedException {
         RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
         RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, startOffset, endOffset,
-                -1L, brokerId0, time.milliseconds(), segSize, segmentLeaderEpochs);
+                -1L, brokerId0, time.milliseconds(), segSize, segmentLeaderEpochs, 0);
         metadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
         verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(segmentMetadata);
 
@@ -260,7 +260,7 @@ public class RemoteLogSegmentLifecycleTest {
             // segments.
             RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
             RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 0L, 50L,
-                    -1L, brokerId0, time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                    -1L, brokerId0, time.milliseconds(), segSize, Collections.singletonMap(0, 0L), 0);
             metadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
             verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(segmentMetadata);
 
