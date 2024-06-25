@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
@@ -306,6 +307,15 @@ public class RecordCollectorImpl implements RecordCollector {
             sendException.set(new TaskMigratedException(errorMessage, exception));
         } else {
             if (exception instanceof RetriableException) {
+                if (exception instanceof TimeoutException && exception.getCause() != null) {
+                    if (exception.getCause() instanceof UnknownTopicOrPartitionException) {
+                        if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
+                            errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
+                            sendException.set(new StreamsException(errorMessage, exception));
+                            return;
+                        }
+                    }
+                }
                 errorMessage += "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\nConsider overwriting `max.block.ms` and /or " +
