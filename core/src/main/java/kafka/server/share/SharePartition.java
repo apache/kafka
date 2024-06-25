@@ -570,13 +570,16 @@ public class SharePartition {
                 }
 
                 if (inFlightBatch.offsetState() != null) {
-                    throwable = releaseAcquiredRecordsForPerOffsetBatch(memberId, inFlightBatch, recordState, updatedStates, stateBatches);
-                    if (throwable != null)
+                    Optional<Throwable> releaseAcquiredRecordsThrowable = releaseAcquiredRecordsForPerOffsetBatch(memberId, inFlightBatch, recordState, updatedStates, stateBatches);
+                    if (releaseAcquiredRecordsThrowable.isPresent()) {
+                        throwable = releaseAcquiredRecordsThrowable.get();
                         break;
+                    }
                     continue;
                 }
-                throwable = releaseAcquiredRecordsForCompleteBatch(memberId, inFlightBatch, recordState, updatedStates, stateBatches);
-                if (throwable != null) {
+                Optional<Throwable> releaseAcquiredRecordsThrowable = releaseAcquiredRecordsForCompleteBatch(memberId, inFlightBatch, recordState, updatedStates, stateBatches);
+                if (releaseAcquiredRecordsThrowable.isPresent()) {
+                    throwable = releaseAcquiredRecordsThrowable.get();
                     break;
                 }
             }
@@ -590,11 +593,11 @@ public class SharePartition {
         return CompletableFuture.completedFuture(Optional.ofNullable(throwable));
     }
 
-    private Throwable releaseAcquiredRecordsForPerOffsetBatch(String memberId,
-                                                              InFlightBatch inFlightBatch,
-                                                              RecordState recordState,
-                                                              List<InFlightState> updatedStates,
-                                                              List<PersisterStateBatch> stateBatches) {
+    private Optional<Throwable> releaseAcquiredRecordsForPerOffsetBatch(String memberId,
+                                                                        InFlightBatch inFlightBatch,
+                                                                        RecordState recordState,
+                                                                        List<InFlightState> updatedStates,
+                                                                        List<PersisterStateBatch> stateBatches) {
 
         log.trace("Offset tracked batch record found, batch: {} for the share partition: {}-{}", inFlightBatch,
                 groupId, topicIdPartition);
@@ -604,7 +607,7 @@ public class SharePartition {
             if (!offsetState.getValue().memberId().equals(memberId) && !offsetState.getValue().memberId().equals(EMPTY_MEMBER_ID)) {
                 log.debug("Member {} is not the owner of offset: {} in batch: {} for the share"
                         + " partition: {}-{}. Skipping offset.", memberId, offsetState.getKey(), inFlightBatch, groupId, topicIdPartition);
-                return null;
+                return Optional.empty();
             }
             if (offsetState.getValue().state == RecordState.ACQUIRED) {
                 InFlightState updateResult = offsetState.getValue().startStateTransition(
@@ -617,7 +620,7 @@ public class SharePartition {
                     log.debug("Unable to release records from acquired state for the offset: {} in batch: {}"
                                     + " for the share partition: {}-{}", offsetState.getKey(),
                             inFlightBatch, groupId, topicIdPartition);
-                    return new InvalidRecordStateException("Unable to release acquired records for the offset");
+                    return Optional.of(new InvalidRecordStateException("Unable to release acquired records for the offset"));
                 }
 
                 // Successfully updated the state of the offset.
@@ -632,20 +635,20 @@ public class SharePartition {
                 }
             }
         }
-        return null;
+        return Optional.empty();
     }
 
-    private Throwable releaseAcquiredRecordsForCompleteBatch(String memberId,
-                                                             InFlightBatch inFlightBatch,
-                                                             RecordState recordState,
-                                                             List<InFlightState> updatedStates,
-                                                             List<PersisterStateBatch> stateBatches) {
+    private Optional<Throwable> releaseAcquiredRecordsForCompleteBatch(String memberId,
+                                                                       InFlightBatch inFlightBatch,
+                                                                       RecordState recordState,
+                                                                       List<InFlightState> updatedStates,
+                                                                       List<PersisterStateBatch> stateBatches) {
 
         // Check if member id is the owner of the batch.
         if (!inFlightBatch.batchMemberId().equals(memberId) && !inFlightBatch.batchMemberId().equals(EMPTY_MEMBER_ID)) {
             log.debug("Member {} is not the owner of batch record {} for share partition: {}-{}. Skipping batch.",
                     memberId, inFlightBatch, groupId, topicIdPartition);
-            return null;
+            return Optional.empty();
         }
 
         // Change the state of complete batch since the same state exists for the entire inFlight batch.
@@ -662,7 +665,7 @@ public class SharePartition {
             if (updateResult == null) {
                 log.debug("Unable to release records from acquired state for the batch: {}"
                         + " for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
-                return new InvalidRecordStateException("Unable to release acquired records for the batch");
+                return Optional.of(new InvalidRecordStateException("Unable to release acquired records for the batch"));
             }
 
             // Successfully updated the state of the batch.
@@ -676,7 +679,7 @@ public class SharePartition {
                 findNextFetchOffset.set(true);
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
