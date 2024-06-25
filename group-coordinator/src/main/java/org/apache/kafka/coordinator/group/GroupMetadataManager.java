@@ -1368,21 +1368,23 @@ public class GroupMetadataManager {
         if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
         final ConsumerGroupMember member;
         if (instanceId == null) {
-            member = getOrMaybeCreateDynamicConsumerGroupMember(
+            member = getOrMaybeSubscribeDynamicConsumerGroupMember(
                 group,
                 memberId,
                 memberEpoch,
                 ownedTopicPartitions,
-                createIfNotExists
+                createIfNotExists,
+                false
             );
         } else {
-            member = getOrMaybeCreateStaticConsumerGroupMember(
+            member = getOrMaybeSubscribeStaticConsumerGroupMember(
                 group,
                 memberId,
                 memberEpoch,
                 instanceId,
                 ownedTopicPartitions,
                 createIfNotExists,
+                false,
                 records
             );
         }
@@ -1553,21 +1555,23 @@ public class GroupMetadataManager {
         // Get or create the member.
         final ConsumerGroupMember member;
         if (instanceId == null) {
-            member = getOrMaybeCreateDynamicConsumerGroupMember(
+            member = getOrMaybeSubscribeDynamicConsumerGroupMember(
                 group,
                 memberId,
                 -1,
                 Collections.emptyList(),
+                true,
                 true
             );
         } else {
-            member = getOrMaybeCreateStaticConsumerGroupMember(
+            member = getOrMaybeSubscribeStaticConsumerGroupMember(
                 group,
                 memberId,
                 -1,
                 instanceId,
                 Collections.emptyList(),
                 isUnknownMember,
+                true,
                 records
             );
         }
@@ -1698,35 +1702,38 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Gets or creates a new dynamic consumer group member.
+     * Gets or subscribes a new dynamic consumer group member.
      *
      * @param group                 The consumer group.
      * @param memberId              The member id.
      * @param memberEpoch           The member epoch.
      * @param ownedTopicPartitions  The owned partitions reported by the member.
      * @param createIfNotExists     Whether the member should be created or not.
+     * @param useClassicProtocol    Whether the member uses the classic protocol.
      *
      * @return The existing consumer group member or a new one.
      */
-    private ConsumerGroupMember getOrMaybeCreateDynamicConsumerGroupMember(
+    private ConsumerGroupMember getOrMaybeSubscribeDynamicConsumerGroupMember(
         ConsumerGroup group,
         String memberId,
         int memberEpoch,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
-        boolean createIfNotExists
+        boolean createIfNotExists,
+        boolean useClassicProtocol
     ) {
         ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
-        if (memberEpoch >= 0) {
+        if (!useClassicProtocol) {
             throwIfMemberEpochIsInvalid(member, memberEpoch, ownedTopicPartitions);
         }
         if (createIfNotExists) {
-            log.info("[GroupId {}] Member {} joins the consumer group.", group.groupId(), memberId);
+            log.info("[GroupId {}] Member {} joins the consumer group using the {} protocol.",
+                group.groupId(), memberId, useClassicProtocol ? "classic" : "consumer");
         }
         return member;
     }
 
     /**
-     * Gets or creates a static consumer group member. This method also replaces the
+     * Gets or subscribes a static consumer group member. This method also replaces the
      * previous static member if allowed.
      *
      * @param group                 The consumer group.
@@ -1735,18 +1742,20 @@ public class GroupMetadataManager {
      * @param instanceId            The instance id.
      * @param ownedTopicPartitions  The owned partitions reported by the member.
      * @param createIfNotExists     Whether the member should be created or not.
+     * @param useClassicProtocol    Whether the member uses the classic protocol.
      * @param records               The list to accumulate records created to replace
      *                              the previous static member.
      *                              
      * @return The existing consumer group member or a new one.
      */
-    private ConsumerGroupMember getOrMaybeCreateStaticConsumerGroupMember(
+    private ConsumerGroupMember getOrMaybeSubscribeStaticConsumerGroupMember(
         ConsumerGroup group,
         String memberId,
         int memberEpoch,
         String instanceId,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
         boolean createIfNotExists,
+        boolean useClassicProtocol,
         List<CoordinatorRecord> records
     ) {
         ConsumerGroupMember existingStaticMemberOrNull = group.staticMember(instanceId);
@@ -1756,11 +1765,11 @@ public class GroupMetadataManager {
             if (existingStaticMemberOrNull == null) {
                 // New static member.
                 ConsumerGroupMember newMember = group.getOrMaybeCreateMember(memberId, true);
-                log.info("[GroupId {}] Static member {} with instance id {} joins the consumer group.",
-                    group.groupId(), memberId, instanceId);
+                log.info("[GroupId {}] Static member {} with instance id {} joins the consumer group using the {} protocol.",
+                    group.groupId(), memberId, instanceId, useClassicProtocol ? "classic" : "consumer");
                 return newMember;
             } else {
-                if (memberEpoch >= 0) {
+                if (!useClassicProtocol) {
                     // Static member rejoins with a different member id so it should replace
                     // the previous instance iff the previous member had sent a leave group.
                     throwIfInstanceIdIsUnreleased(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
@@ -1775,16 +1784,16 @@ public class GroupMetadataManager {
                 // Generate the records to replace the member.
                 replaceMember(records, group, existingStaticMemberOrNull, newMember);
 
-                log.info("[GroupId {}] Static member with unknown member id and instance id {} re-joins the consumer group. " +
-                    "Created a new member {} to replace the existing member {}.",
-                    group.groupId(), instanceId, memberId, existingStaticMemberOrNull.memberId());
+                log.info("[GroupId {}] Static member with unknown member id and instance id {} re-joins the consumer group " +
+                    "using the {} protocol. Created a new member {} to replace the existing member {}.",
+                    group.groupId(), instanceId, memberId, useClassicProtocol ? "classic" : "consumer", existingStaticMemberOrNull.memberId());
 
                 return newMember;
             }
         } else {
             throwIfStaticMemberIsUnknown(existingStaticMemberOrNull, instanceId);
             throwIfInstanceIdIsFenced(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
-            if (memberEpoch >= 0) {
+            if (!useClassicProtocol) {
                 throwIfMemberEpochIsInvalid(existingStaticMemberOrNull, memberEpoch, ownedTopicPartitions);
             }
             return existingStaticMemberOrNull;
