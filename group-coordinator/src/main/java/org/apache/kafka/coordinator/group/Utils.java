@@ -20,10 +20,12 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -33,6 +35,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class Utils {
     private Utils() {}
@@ -173,5 +176,19 @@ public class Utils {
             }
         }
         return res;
+    }
+
+    /**
+     * Creates a map of topic id and partition set from a list of consumer group TopicPartitions.
+     *
+     * @param topicPartitionsList   The list of TopicPartitions.
+     * @return a map of topic id and partition set.
+     */
+    public static Map<Uuid, Set<Integer>> assignmentFromTopicPartitions(
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitionsList
+    ) {
+        return topicPartitionsList.stream().collect(Collectors.toMap(
+            ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
+            topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
     }
 }

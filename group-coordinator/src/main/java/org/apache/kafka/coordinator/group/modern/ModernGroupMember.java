@@ -212,12 +212,4 @@ public abstract class ModernGroupMember {
     ) {
         return !member1.assignedPartitions().equals(member2.assignedPartitions());
     }
-
-    public static Map<Uuid, Set<Integer>> assignmentFromTopicPartitions(
-        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitionsList
-    ) {
-        return topicPartitionsList.stream().collect(Collectors.toMap(
-            ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
-            topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
-    }
 }

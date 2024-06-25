@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.modern.MemberState;
@@ -215,8 +216,8 @@ public class ConsumerGroupMember extends ModernGroupMember {
             setMemberEpoch(record.memberEpoch());
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
-            setAssignedPartitions(assignmentFromTopicPartitions(record.assignedPartitions()));
-            setPartitionsPendingRevocation(assignmentFromTopicPartitions(record.partitionsPendingRevocation()));
+            setAssignedPartitions(Utils.assignmentFromTopicPartitions(record.assignedPartitions()));
+            setPartitionsPendingRevocation(Utils.assignmentFromTopicPartitions(record.partitionsPendingRevocation()));
             return this;
         }
 
