@@ -1402,7 +1402,7 @@ public class KafkaProducerTest {
         }
     }
     @Test
-    public void testFlushAndCommitTransactionWithRecordTooLargeException() throws Exception {
+    public void testCommitTransactionWithClearErrorOptionWithRecordTooLargeException() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
@@ -1426,9 +1426,10 @@ public class KafkaProducerTest {
 
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
+
             TestUtils.assertFutureError(producer.send(largeRecord), RecordTooLargeException.class);
             producer.flush();
-            assertDoesNotThrow(producer::commitTransaction);
+            assertDoesNotThrow(() -> producer.commitTransaction(KafkaProducer.CommitOption.CLEAR_SEND_ERRORS));
         }
     }
 
@@ -1470,7 +1471,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testFlushAndCommitTransactionWithMetadataTimeoutForMissingTopic() throws Exception {
+    public void testCommitTransactionWithClearErrorOptionWithMetadataTimeoutForMissingTopic() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -1503,7 +1504,7 @@ public class KafkaProducerTest {
 
             TestUtils.assertFutureError(producer.send(record), TimeoutException.class);
             producer.flush();
-            assertDoesNotThrow(producer::commitTransaction);
+            assertDoesNotThrow(() -> producer.commitTransaction(KafkaProducer.CommitOption.CLEAR_SEND_ERRORS));
         }
     }
 
@@ -1545,7 +1546,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testFlushAndCommitTransactionWithMetadataTimeoutForPartitionOutOfRange() throws Exception {
+    public void testCommitTransactionWithClearErrorOptionWithMetadataTimeoutForPartitionOutOfRange() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -1578,7 +1579,7 @@ public class KafkaProducerTest {
 
             TestUtils.assertFutureError(producer.send(record), TimeoutException.class);
             producer.flush();
-            assertDoesNotThrow(producer::commitTransaction);
+            assertDoesNotThrow(() -> producer.commitTransaction(KafkaProducer.CommitOption.CLEAR_SEND_ERRORS));
         }
     }
 
@@ -1622,7 +1623,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testFlushAndCommitTransactionWithSendToInvalidTopic() throws Exception {
+    public void testCommitTransactionWithClearErrorOptionWithSendToInvalidTopic() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
@@ -1650,14 +1651,14 @@ public class KafkaProducerTest {
                 topicMetadata);
         client.prepareMetadataUpdate(updateResponse);
 
-        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions();
             producer.beginTransaction();
 
             TestUtils.assertFutureError(producer.send(record), InvalidTopicException.class);
             producer.flush();
-            assertDoesNotThrow(producer::commitTransaction);
+            assertDoesNotThrow(() -> producer.commitTransaction(KafkaProducer.CommitOption.CLEAR_SEND_ERRORS));
         }
     }
 

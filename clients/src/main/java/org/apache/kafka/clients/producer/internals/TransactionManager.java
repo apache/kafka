@@ -662,10 +662,14 @@ public class TransactionManager {
             transitionToFatalError(exception);
         } else if (isTransactional()) {
             if (canBumpEpoch() && !isCompleting()) {
-                prevEpochBumpRequired = epochBumpRequired;
+                if (currentState != State.ABORTABLE_ERROR) {
+                    prevEpochBumpRequired = epochBumpRequired;
+                }
                 epochBumpRequired = true;
             }
-            prevState = currentState;
+            if (currentState != State.ABORTABLE_ERROR) {
+                prevState = currentState;
+            }
             transitionToAbortableError(exception);
         }
     }

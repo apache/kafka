@@ -792,9 +792,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * <p>
      * Further, if any of the {@link #send(ProducerRecord)} calls which were part of the transaction hit irrecoverable
      * errors, this method will throw the last received exception immediately and the transaction will not be committed.
-     * It should be noted that if <code>flush()</code> is called explicitly beforehand, this method will NOT throw any
-     * exception related to the {@link #send(ProducerRecord)} calls. Since <code>flush()</code> clears the last received
-     * exception and transits the transaction out of error state.
      * So all {@link #send(ProducerRecord)} calls in a transaction must succeed in order for this method to succeed.
      * <p>
      * If the transaction is committed successfully and this method returns without throwing an exception, it is guaranteed
@@ -830,6 +827,35 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
         producerMetrics.recordCommitTxn(time.nanoseconds() - commitStart);
+    }
+
+    /**
+     * This method should only be called if there are no pending writes, i.e., only after calling {@link #flush()}.
+     * If there are any errors in sending messages to topics, these errors can be cleared by passing {@link CommitOption#CLEAR_SEND_ERRORS},
+     * allowing the transaction to be committed even in case of data loss.
+     * <p>
+     * If this method is used while there are pending sends, the send errors cannot be cleared.
+     *
+     * @param option The method option
+     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
+     *         transactional.id is not authorized. See the exception for more details
+     * @throws org.apache.kafka.common.errors.InvalidProducerEpochException if the producer has attempted to produce with an old epoch
+     *         to the partition leader. See the exception for more details
+     * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
+     *         other unexpected error
+     * @throws TimeoutException if the time taken for committing the transaction has surpassed <code>max.block.ms</code>.
+     * @throws InterruptException if the thread is interrupted while blocked
+     */
+    public void commitTransaction(CommitOption option) throws ProducerFencedException {
+        throwIfNoTransactionManager();
+        if (!accumulator.hasIncomplete() && option == CommitOption.CLEAR_SEND_ERRORS) {
+            transactionManager.maybeClearLastError();
+        }
+        commitTransaction();
     }
 
     /**
@@ -1223,7 +1249,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * of <code>flush()</code> is that any previously sent record will have completed (e.g. <code>Future.isDone() == true</code>).
      * A request is considered completed when it is successfully acknowledged
      * according to the <code>acks</code> configuration you have specified or else it results in an error.
-     * Additionally, this method clears the last exception in the transaction and transits the transaction out of error state.
      * <p>
      * Other threads can continue sending records while one thread is blocked waiting for a flush call to complete,
      * however no guarantee is made about the completion of records sent after the flush call begins.
@@ -1261,9 +1286,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.sender.wakeup();
         try {
             this.accumulator.awaitFlushCompletion();
-            if (transactionManager != null) {
-                transactionManager.maybeClearLastError();
-            }
         } catch (InterruptedException e) {
             throw new InterruptException("Flush interrupted.", e);
         } finally {
@@ -1598,5 +1620,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             return topicPartition;
         }
+    }
+
+    public enum CommitOption {
+        /**
+         * Commits the ongoing transaction, flushing any unsent records before actually committing
+         * the transaction. If any of the records sent in this transaction hit unrecoverable errors,
+         * the transaction will not be committed.
+         */
+        NONE,
+        /**
+         * Commits the ongoing transaction, first clearing any errors from records already sent in
+         * this transaction. If there are any unsent records flushed by this operation which hit
+         * unrecoverable errors, these errors will not be cleared and the transaction will not be
+         * committed.
+         * <p>
+         * To ensure there are no unsent records, you must call {@link #flush()} before
+         * committing the transaction.
+         */
+        CLEAR_SEND_ERRORS
     }
 }
