@@ -18,11 +18,14 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Immutable topology metadata.
@@ -44,6 +47,13 @@ public class StreamsTopology {
 
     public Map<String, Subtopology> subtopologies() {
         return subtopologies;
+    }
+
+    public Set<String> topicSubscription() {
+        return subtopologies.values().stream()
+            .flatMap(x -> Stream.concat(x.sourceTopics().stream(), x.repartitionSourceTopics().stream().map(
+                TopicInfo::name))).collect(
+                Collectors.toSet());
     }
 
     public static StreamsTopology fromRecord(

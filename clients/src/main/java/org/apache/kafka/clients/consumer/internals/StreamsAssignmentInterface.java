@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -100,14 +101,20 @@ public class StreamsAssignmentInterface {
         this.taskLags = taskLags;
     }
 
-    public final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>();
+    public final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>(
+        new Assignment(
+            new HashSet<>(),
+            new HashSet<>(),
+            new HashSet<>()
+        )
+    );
 
     public final AtomicReference<Assignment> targetAssignment = new AtomicReference<>();
 
     /**
      * List of partitions available on each host. Updated by the streams protocol client.
      */
-    public final AtomicReference<Map<HostInfo, List<TopicPartition>>> partitionsByHost = new AtomicReference<>();
+    public final AtomicReference<Map<HostInfo, List<TopicPartition>>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
 
     public static class HostInfo {
 
@@ -168,6 +175,15 @@ public class StreamsAssignmentInterface {
 
         public Assignment copy() {
             return new Assignment(activeTasks, standbyTasks, warmupTasks);
+        }
+
+        @Override
+        public String toString() {
+            return "Assignment{" +
+                "activeTasks=" + activeTasks +
+                ", standbyTasks=" + standbyTasks +
+                ", warmupTasks=" + warmupTasks +
+                '}';
         }
     }
 

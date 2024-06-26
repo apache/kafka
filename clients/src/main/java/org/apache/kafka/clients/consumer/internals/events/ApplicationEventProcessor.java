@@ -200,11 +200,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * it is already a member.
      */
     private void process(final SubscriptionChangeEvent ignored) {
-        if (!requestManagers.heartbeatRequestManager.isPresent()) {
+        if (!requestManagers.membershipManager.isPresent()) {
             log.warn("Group membership manager not present when processing a subscribe event");
             return;
         }
-        MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
+        MembershipManager membershipManager = requestManagers.membershipManager.get();
         membershipManager.onSubscriptionUpdated();
     }
 
@@ -217,12 +217,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      *              the group is sent out.
      */
     private void process(final UnsubscribeEvent event) {
-        if (!requestManagers.heartbeatRequestManager.isPresent()) {
+        if (!requestManagers.membershipManager.isPresent()) {
             KafkaException error = new KafkaException("Group membership manager not present when processing an unsubscribe event");
             event.future().completeExceptionally(error);
             return;
         }
-        MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
+        MembershipManager membershipManager = requestManagers.membershipManager.get();
         CompletableFuture<Void> future = membershipManager.leaveGroup();
         future.whenComplete(complete(event.future()));
     }
@@ -250,14 +250,14 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
-        if (!requestManagers.heartbeatRequestManager.isPresent()) {
+        if (!requestManagers.membershipManager.isPresent()) {
             log.warn(
                 "An internal error occurred; the group membership manager was not present, so the notification of the {} callback execution could not be sent",
                 event.methodName()
             );
             return;
         }
-        MembershipManager manager = requestManagers.heartbeatRequestManager.get().membershipManager();
+        MembershipManager manager = requestManagers.membershipManager.get();
         manager.consumerRebalanceListenerCallbackCompleted(event);
     }
 
@@ -269,12 +269,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final LeaveOnCloseEvent event) {
-        if (!requestManagers.heartbeatRequestManager.isPresent()) {
+        if (!requestManagers.membershipManager.isPresent()) {
             event.future().complete(null);
             return;
         }
         MembershipManager membershipManager =
-            Objects.requireNonNull(requestManagers.heartbeatRequestManager.get().membershipManager(), "Expecting " +
+            Objects.requireNonNull(requestManagers.membershipManager.get(), "Expecting " +
                 "membership manager to be non-null");
         log.debug("Leaving group before closing");
         CompletableFuture<Void> future = membershipManager.leaveGroup();

@@ -40,7 +40,7 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkAssignment;
@@ -222,12 +222,12 @@ public class TargetAssignmentBuilderTest {
 
             // Create and populate the assignment builder.
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder builder = new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
-                groupId, groupEpoch, assignor, topology)
+                groupId, groupEpoch, assignor)
                 .withMembers(members)
+                .withTopology(topology)
                 .withStaticMembers(staticMembers)
                 .withSubscriptionMetadata(subscriptionMetadata)
                 .withTargetAssignment(targetAssignment)
-                .withInvertedTargetAssignment(invertedTargetAssignment)
                 .withTopicsImage(topicsImage);
 
             // Add the updated members or delete the deleted members.
@@ -306,7 +306,7 @@ public class TargetAssignmentBuilderTest {
         );
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
-        assertEquals(Collections.singletonList(newTargetAssignmentEpochRecord(
+        assertEquals(Collections.singletonList(newStreamsTargetAssignmentEpochRecord(
             "my-group",
             20
         )), result.records());
@@ -345,7 +345,7 @@ public class TargetAssignmentBuilderTest {
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(Collections.singletonList(newTargetAssignmentEpochRecord(
+        assertEquals(Collections.singletonList(newStreamsTargetAssignmentEpochRecord(
             "my-group",
             20
         )), result.records());
@@ -408,7 +408,7 @@ public class TargetAssignmentBuilderTest {
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 2));
 
-        assertEquals(newTargetAssignmentEpochRecord(
+        assertEquals(newStreamsTargetAssignmentEpochRecord(
             "my-group",
             20
         ), result.records().get(2));
@@ -482,7 +482,7 @@ public class TargetAssignmentBuilderTest {
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 3));
 
-        assertEquals(newTargetAssignmentEpochRecord(
+        assertEquals(newStreamsTargetAssignmentEpochRecord(
             "my-group",
             20
         ), result.records().get(3));
@@ -568,7 +568,7 @@ public class TargetAssignmentBuilderTest {
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 3));
 
-        assertEquals(newTargetAssignmentEpochRecord(
+        assertEquals(newStreamsTargetAssignmentEpochRecord(
             "my-group",
             20
         ), result.records().get(3));
@@ -646,7 +646,7 @@ public class TargetAssignmentBuilderTest {
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 2));
 
-        assertEquals(newTargetAssignmentEpochRecord(
+        assertEquals(newStreamsTargetAssignmentEpochRecord(
             "my-group",
             20
         ), result.records().get(2));
@@ -720,7 +720,7 @@ public class TargetAssignmentBuilderTest {
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 2));
 
-        assertEquals(newTargetAssignmentEpochRecord(
+        assertEquals(newStreamsTargetAssignmentEpochRecord(
             "my-group",
             20
         ), result.records().get(2));
@@ -796,7 +796,7 @@ public class TargetAssignmentBuilderTest {
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 1));
 
-        assertEquals(newTargetAssignmentEpochRecord(
+        assertEquals(newStreamsTargetAssignmentEpochRecord(
             "my-group",
             20
         ), result.records().get(1));

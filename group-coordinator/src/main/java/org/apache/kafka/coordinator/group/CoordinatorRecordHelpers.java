@@ -152,6 +152,7 @@ public class CoordinatorRecordHelpers {
                     .setTopologyHash(member.topologyHash())
                     .setProcessId(member.processId())
                     .setHostInfo(member.hostInfo())
+                    .setAssignor(member.assignor().orElse(null))
                     .setClientTags(member.clientTags().entrySet().stream().map(e ->
                         new StreamsGroupMemberMetadataValue.KeyValue()
                             .setKey(e.getKey())
@@ -175,7 +176,7 @@ public class CoordinatorRecordHelpers {
      * @param memberId The streams group member id.
      * @return The record.
      */
-    public static CoordinatorRecord newStreamsMemberSubscriptionTombstoneRecord(
+    public static CoordinatorRecord newStreamsGroupMemberTombstoneRecord(
         String groupId,
         String memberId
     ) {
@@ -260,7 +261,7 @@ public class CoordinatorRecordHelpers {
      * @param newSubscriptionMetadata The subscription metadata.
      * @return The record.
      */
-    public static CoordinatorRecord newStreamsGroupSubscriptionMetadataRecord(
+    public static CoordinatorRecord newStreamsGroupPartitionMetadataRecord(
         String groupId,
         Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> newSubscriptionMetadata
     ) {
@@ -303,7 +304,7 @@ public class CoordinatorRecordHelpers {
      * @param groupId The streams group id.
      * @return The record.
      */
-    public static CoordinatorRecord newStreamsGroupSubscriptionMetadataTombstoneRecord(
+    public static CoordinatorRecord newStreamsGroupPartitionMetadataTombstoneRecord(
         String groupId
     ) {
         return new CoordinatorRecord(
@@ -920,17 +921,17 @@ public class CoordinatorRecordHelpers {
         subtopologies.forEach(subtopology -> {
             List<StreamsGroupTopologyValue.TopicInfo> repartitionSourceTopics = subtopology.repartitionSourceTopics().stream()
                 .map(topicInfo -> {
-                    List<StreamsGroupTopologyValue.TopicConfig> topicConfigs = topicInfo.topicConfigs().stream()
+                    List<StreamsGroupTopologyValue.TopicConfig> topicConfigs =  topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
                         .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
-                        .collect(Collectors.toList());
+                        .collect(Collectors.toList()) : null;
                     return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs)
                         .setPartitions(topicInfo.partitions());
                 }).collect(Collectors.toList());
 
             List<StreamsGroupTopologyValue.TopicInfo> stateChangelogTopics = subtopology.stateChangelogTopics().stream().map(topicInfo -> {
-                List<StreamsGroupTopologyValue.TopicConfig> topicConfigs = topicInfo.topicConfigs().stream()
+                List<StreamsGroupTopologyValue.TopicConfig> topicConfigs = topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
                     .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
-                    .collect(Collectors.toList());
+                    .collect(Collectors.toList()) : null;
                 return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs);
             }).collect(Collectors.toList());
 
