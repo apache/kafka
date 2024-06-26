@@ -16,20 +16,18 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.util.Locale;
 import java.util.stream.Stream;
 
 import kafka.api.IntegrationTestHarness;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -48,12 +46,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest extends IntegrationTestHarness {
-
-    @BeforeEach
-    public void setUp(TestInfo testInfo) {
-        serverConfig().setProperty(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, "true");
-        super.setUp(testInfo);
-    }
 
     @Override
     public int brokerCount() {
@@ -139,11 +131,11 @@ public class SmokeTestDriverIntegrationTest extends IntegrationTestHarness {
         int numClientsCreated = 0;
         final ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
-        for (String topic: SmokeTestDriver.topics()) {
+        for (final String topic: SmokeTestDriver.topics()) {
             deleteTopic(topic, listenerName());
         }
 
-        for (String topic: new String[]{
+        for (final String topic: new String[]{
             "SmokeTest-KSTREAM-REDUCE-STATE-STORE-0000000020-changelog",
             "SmokeTest-minStoreName-changelog",
             "SmokeTest-cntByCnt-repartition",
@@ -185,7 +177,7 @@ public class SmokeTestDriverIntegrationTest extends IntegrationTestHarness {
         // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
         if (consumerProtocolEnabled) {
-            props.put(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_PROTOCOL_CONFIG), GroupProtocol.CONSUMER.name().toLowerCase());
+            props.put(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_PROTOCOL_CONFIG), GroupProtocol.CONSUMER.name().toLowerCase(Locale.getDefault()));
         }
 
         // cycle out Streams instances as long as the test is running.
