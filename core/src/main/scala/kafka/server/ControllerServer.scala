@@ -187,9 +187,10 @@ class ControllerServer(
         credentialProvider,
         apiVersionManager)
 
-      val listenerInfo = ListenerInfo.create(config.controllerListeners.map(_.toJava).asJava).
-        withWildcardHostnamesResolved().
-        withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
+      val listenerInfo = ListenerInfo
+        .create(config.effectiveAdvertisedControllerListeners.map(_.toJava).asJava)
+        .withWildcardHostnamesResolved()
+        .withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
       socketServerFirstBoundPortFuture.complete(listenerInfo.firstListener().port())
 
       val endpointReadyFutures = {
@@ -203,7 +204,7 @@ class ControllerServer(
             config.earlyStartListeners.map(_.value()).asJava))
       }
 
-      sharedServer.startForController()
+      sharedServer.startForController(listenerInfo)
 
       createTopicPolicy = Option(config.
         getConfiguredInstance(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, classOf[CreateTopicPolicy]))

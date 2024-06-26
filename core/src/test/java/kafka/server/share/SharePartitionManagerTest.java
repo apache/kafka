@@ -43,6 +43,7 @@ import org.apache.kafka.server.group.share.NoOpShareStatePersister;
 import org.apache.kafka.server.group.share.Persister;
 import org.apache.kafka.server.share.ShareSessionCache;
 import org.apache.kafka.server.share.ShareSessionKey;
+import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
@@ -1221,6 +1222,23 @@ public class SharePartitionManagerTest {
             any(), any(), any(ReplicaQuota.class), any());
     }
 
+    @Test
+    public void testCloseSharePartitionManager() throws Exception {
+        Timer timer = Mockito.mock(SystemTimerReaper.class);
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withTimer(timer).withShareGroupPersister(persister).build();
+
+        // Verify that 0 calls are made to timer.close() and persister.stop().
+        Mockito.verify(timer, times(0)).close();
+        Mockito.verify(persister, times(0)).stop();
+        // Closing the sharePartitionManager closes timer object in sharePartitionManager.
+        sharePartitionManager.close();
+        // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close() and persister.stop().
+        Mockito.verify(timer, times(1)).close();
+        Mockito.verify(persister, times(1)).stop();
+    }
+
     private ShareFetchResponseData.PartitionData noErrorShareFetchResponse() {
         return new ShareFetchResponseData.PartitionData().setPartitionIndex(0);
     }
@@ -1287,6 +1305,7 @@ public class SharePartitionManagerTest {
         private ShareSessionCache cache = new ShareSessionCache(10, 1000);
         private Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         private Persister persister = NoOpShareStatePersister.getInstance();
+        private Timer timer = new MockTimer();
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -1313,12 +1332,17 @@ public class SharePartitionManagerTest {
             return this;
         }
 
+        private SharePartitionManagerBuilder withTimer(Timer timer) {
+            this.timer = timer;
+            return this;
+        }
+
         public static SharePartitionManagerBuilder builder() {
             return new SharePartitionManagerBuilder();
         }
 
         public SharePartitionManager build() {
-            return new SharePartitionManager(replicaManager, time, cache, partitionCacheMap, RECORD_LOCK_DURATION_MS, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, persister);
+            return new SharePartitionManager(replicaManager, time, cache, partitionCacheMap, RECORD_LOCK_DURATION_MS, timer, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, persister);
         }
     }
 }
