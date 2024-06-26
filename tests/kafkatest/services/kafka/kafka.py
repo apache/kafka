@@ -204,7 +204,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  controller_num_nodes_override=0,
                  allow_zk_with_kraft=False,
                  quorum_info_provider=None,
-                 use_new_coordinator=None
+                 use_new_coordinator=None,
+                 consumer_group_migration_policy=None
                  ):
         """
         :param context: test context
@@ -266,6 +267,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param bool allow_zk_with_kraft: if True, then allow a KRaft broker or controller to also use ZooKeeper
         :param quorum_info_provider: A function that takes this KafkaService as an argument and returns a ServiceQuorumInfo. If this is None, then the ServiceQuorumInfo is generated from the test context
         :param use_new_coordinator: When true, use the new implementation of the group coordinator as per KIP-848. If this is None, the default existing group coordinator is used.
+        :param consumer_group_migration_policy: "The config that enables converting the non-empty classic group using the consumer embedded protocol to the non-empty consumer group using the consumer group protocol and vice versa.
         """
 
         self.zk = zk
@@ -291,6 +293,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         
         # Assign the determined value.
         self.use_new_coordinator = use_new_coordinator
+
+        # Set consumer_group_migration_policy based on context and arguments.
+        if consumer_group_migration_policy is None:
+            if context.injected_args is not None:
+                consumer_group_migration_policy = context.injected_args.get('consumer_group_migration_policy')
+            if consumer_group_migration_policy is None:
+                consumer_group_migration_policy = context.globals.get('consumer_group_migration_policy', 'disabled')
+        self.consumer_group_migration_policy = consumer_group_migration_policy
 
         if num_nodes < 1:
             raise Exception("Must set a positive number of nodes: %i" % num_nodes)
@@ -430,7 +440,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 config_property.NODE_ID: self.idx(node),
                 config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE: use_new_coordinator,
                 config_property.NEW_GROUP_COORDINATOR_ENABLE: use_new_coordinator,
-                config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS: rebalance_protocols
+                config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS: rebalance_protocols,
+                config_property.CONSUMER_GROUP_MIGRATION_POLICY: consumer_group_migration_policy
             }
             kraft_broker_plus_zk_configs = kraft_broker_configs.copy()
             kraft_broker_plus_zk_configs.update(zk_broker_configs)
@@ -792,6 +803,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             override_configs[config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE] = 'true'
             override_configs[config_property.NEW_GROUP_COORDINATOR_ENABLE] = 'true'
             override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = 'classic,consumer'
+            override_configs[config_property.CONSUMER_GROUP_MIGRATION_POLICY] = self.consumer_group_migration_policy
     
         for prop in self.server_prop_overrides:
             override_configs[prop[0]] = prop[1]
