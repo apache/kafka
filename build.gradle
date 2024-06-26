@@ -483,7 +483,7 @@ subprojects {
     exclude testsToExclude
 
     useJUnitPlatform {
-      includeEngines "junit-jupiter"
+      includeEngines 'junit-jupiter'
     }
 
     retry {
@@ -513,6 +513,7 @@ subprojects {
 
     useJUnitPlatform {
       includeTags "integration"
+      includeEngines 'junit-jupiter'
     }
 
     retry {
@@ -540,6 +541,7 @@ subprojects {
 
     useJUnitPlatform {
       excludeTags "integration"
+      includeEngines 'junit-jupiter'
     }
 
     retry {
@@ -2005,12 +2007,6 @@ project(':storage') {
     dependsOn createVersionFile
     from("$buildDir") {
       include "kafka/$buildVersionFileName"
-    }
-  }
-
-  test {
-    useJUnitPlatform {
-      includeEngines 'junit-jupiter'
     }
   }
 
