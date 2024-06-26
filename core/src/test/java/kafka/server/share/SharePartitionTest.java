@@ -2525,7 +2525,7 @@ public class SharePartitionTest {
         assertEquals(20, sharePartition.startOffset());
         assertEquals(36, sharePartition.endOffset());
 
-        // For cached state corresponding to entry 2, the batch state will be ACKNOWLEDGED, hence it will be cleared as part of acknowledgment().
+        // For cached state corresponding to entry 2, the batch state will be ACKNOWLEDGED, hence it will be cleared as part of acknowledgment.
         assertEquals(6, sharePartition.cachedState().size());
 
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(7L).batchMemberId());
@@ -2574,7 +2574,7 @@ public class SharePartitionTest {
         assertEquals(11, sharePartition.endOffset());
         assertEquals(2, sharePartition.cachedState().size());
 
-        // Checked cached offset state map.
+        // Check cached offset state map.
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
         expectedOffsetStateMap.put(7L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(8L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
@@ -2589,7 +2589,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(7L).offsetState().get(10L).acquisitionLockTimeoutTask());
         assertNotNull(sharePartition.cachedState().get(7L).offsetState().get(11L).acquisitionLockTimeoutTask());
 
-        // Checked cached offset state map.
+        // Check cached offset state map.
         expectedOffsetStateMap = new HashMap<>();
         expectedOffsetStateMap.put(2L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
         expectedOffsetStateMap.put(3L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
@@ -2725,7 +2725,7 @@ public class SharePartitionTest {
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(2L).batchMemberId());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(2L).batchState());
 
-        // Checked cached offset state map.
+        // Check cached offset state map.
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
         expectedOffsetStateMap.put(7L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(8L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
@@ -2773,7 +2773,7 @@ public class SharePartitionTest {
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(2L).batchMemberId());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(2L).batchState());
 
-        // Checked cached offset state map.
+        // Check cached offset state map.
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
         expectedOffsetStateMap.put(7L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(8L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
@@ -2807,7 +2807,7 @@ public class SharePartitionTest {
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(2L).batchMemberId());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(2L).batchState());
 
-        // Checked cached offset state map.
+        // Check cached offset state map.
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
         expectedOffsetStateMap.put(7L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(8L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
@@ -2842,7 +2842,7 @@ public class SharePartitionTest {
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(2L).batchMemberId());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(2L).batchState());
 
-        // Checked cached offset state map.
+        // Check cached offset state map.
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
         expectedOffsetStateMap.put(7L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(8L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
@@ -2876,7 +2876,7 @@ public class SharePartitionTest {
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(2L).batchMemberId());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(2L).batchState());
 
-        // Checked cached offset state map.
+        // Check cached offset state map.
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
         expectedOffsetStateMap.put(7L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(8L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
@@ -3362,7 +3362,7 @@ public class SharePartitionTest {
         assertEquals(14, sharePartition.endOffset());
         assertEquals(2, sharePartition.cachedState().size());
 
-        // Checked cached state map.
+        // Check cached state map.
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(2L).batchMemberId());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(2L).batchState());
 
@@ -3386,7 +3386,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(2L).batchState());
         assertNotNull(sharePartition.cachedState().get(2L).batchAcquisitionLockTimeoutTask());
 
-        // Checked cached offset state map.
+        // Check cached offset state map.
         Map<Long, InFlightState>  expectedOffsetStateMap = new HashMap<>();
         expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
         expectedOffsetStateMap.put(11L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
@@ -3478,7 +3478,7 @@ public class SharePartitionTest {
         assertEquals(7, sharePartition.endOffset());
         assertEquals(1, sharePartition.cachedState().size());
 
-        // Checked cached state map.
+        // Check cached state map.
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(2L).batchMemberId());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(2L).batchState());
         assertNotNull(sharePartition.cachedState().get(2L).batchAcquisitionLockTimeoutTask());
@@ -3528,7 +3528,7 @@ public class SharePartitionTest {
         assertEquals(3, sharePartition.endOffset());
         assertEquals(1, sharePartition.cachedState().size());
 
-        // Checked cached state map.
+        // Check cached state map.
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(1L).batchMemberId());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(1L).batchState());
         assertNotNull(sharePartition.cachedState().get(1L).batchAcquisitionLockTimeoutTask());

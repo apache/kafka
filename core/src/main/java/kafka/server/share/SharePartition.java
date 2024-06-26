@@ -758,10 +758,10 @@ public class SharePartition {
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
                     isAnyOffsetArchived = isAnyOffsetArchived || archivePerOffsetBatchRecords(inFlightBatch, startOffset(), logStartOffset - 1);
-                } else {
-                    // The in-flight batch is a full match hence change the state of the complete batch.
-                    isAnyBatchArchived = isAnyBatchArchived || archiveCompleteBatch(inFlightBatch);
+                    continue;
                 }
+                // The in-flight batch is a full match hence change the state of the complete batch.
+                isAnyBatchArchived = isAnyBatchArchived || archiveCompleteBatch(inFlightBatch);
             }
             return isAnyOffsetArchived || isAnyBatchArchived;
         } finally {
