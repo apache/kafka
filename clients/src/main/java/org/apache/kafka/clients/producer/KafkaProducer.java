@@ -990,7 +990,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         // intercept the record, which can be potentially modified; this method does not throw exceptions
         ProducerRecord<K, V> interceptedRecord = this.interceptors.onSend(record);
-        return doSend(interceptedRecord, callback);
+        return doSend(interceptedRecord, callback, TxnSendOption.NONE);
+    }
+
+    @Override
+    public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback, TxnSendOption option) {
+        // intercept the record, which can be potentially modified; this method does not throw exceptions
+        ProducerRecord<K, V> interceptedRecord = this.interceptors.onSend(record);
+        return doSend(interceptedRecord, callback, option);
     }
 
     // Verify that this producer instance has not been closed. This method throws IllegalStateException if the producer
@@ -1012,7 +1019,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Implementation of asynchronously send a record to a topic.
      */
-    private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
+    private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback, TxnSendOption option) {
+        if (option == TxnSendOption.IGNORE_SEND_ERRORS) {
+            throwIfNoTransactionManager();
+        }
         // Append callback takes care of the following:
         //  - call interceptors and user callback on completion
         //  - remember partition that is calculated in RecordAccumulator.append
@@ -1109,7 +1119,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             this.errors.record();
             this.interceptors.onSendError(record, appendCallbacks.topicPartition(), e);
-            if (transactionManager != null) {
+            if (transactionManager != null && option == TxnSendOption.NONE) {
                 transactionManager.maybeTransitionToErrorState(e);
             }
             return new FutureFailure(e);
@@ -1485,7 +1495,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private void throwIfNoTransactionManager() {
         if (transactionManager == null)
-            throw new IllegalStateException("Cannot use transactional methods without enabling transactions " +
+            throw new IllegalStateException("Cannot use transactional methods/properties without enabling transactions " +
                     "by setting the " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " configuration property");
     }
 
@@ -1600,5 +1610,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             return topicPartition;
         }
+    }
+
+    public enum TxnSendOption {
+        NONE,
+        IGNORE_SEND_ERRORS;
     }
 }
