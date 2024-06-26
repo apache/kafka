@@ -483,7 +483,6 @@ subprojects {
     exclude testsToExclude
 
     useJUnitPlatform {
-      includeTags "integration"
       includeEngines "junit-jupiter"
     }
 
@@ -501,6 +500,9 @@ subprojects {
     maxHeapSize = "2560m"
     jvmArgs = defaultJvmArgs
 
+    useJUnitPlatform {
+      includeTags "integration"
+    }
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -524,6 +526,10 @@ subprojects {
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
+
+    useJUnitPlatform {
+      excludeTags "integration"
+    }
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
