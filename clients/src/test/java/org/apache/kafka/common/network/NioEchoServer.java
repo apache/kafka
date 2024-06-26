@@ -279,9 +279,7 @@ public class NioEchoServer extends Thread {
     }
 
     private String id(SocketChannel channel) {
-        String connectionId = ConnectionIdHelper.generateConnectionId(channel.socket(), nextConnectionIndex.getAndIncrement());
-        nextConnectionIndex.compareAndSet(Integer.MAX_VALUE, 0);
-        return connectionId;
+        return Utils.generateConnectionId(channel.socket(), nextConnectionIndex.getAndIncrement());
     }
 
     private KafkaChannel channel(String id) {

@@ -36,6 +36,7 @@ import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
+import java.net.Socket;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -1665,6 +1666,22 @@ public final class Utils {
         configDefs.forEach(configDef -> configDef.configKeys().values().forEach(all::define));
         return all;
     }
+
+    /**
+     * Generates a unique connection ID for the given socket.
+     *
+     * @param socket The socket for which the connection ID is to be generated.
+     * @param nextConnectionIndex The index to be used in the connection ID to ensure uniqueness.
+     * @return A string representing the unique connection ID.
+     */
+    public static String generateConnectionId(Socket socket, int nextConnectionIndex) {
+        String localHost = socket.getLocalAddress().getHostAddress();
+        int localPort = socket.getLocalPort();
+        String remoteHost = socket.getInetAddress().getHostAddress();
+        int remotePort = socket.getPort();
+        return localHost + ":" + localPort + "-" + remoteHost + ":" + remotePort + "-" + nextConnectionIndex;
+    }
+
     /**
      * A runnable that can throw checked exception.
      */
