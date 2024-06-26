@@ -155,7 +155,7 @@ public class SharePartitionManager implements AutoCloseable {
         );
     }
 
-    SharePartitionManager(
+    private SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
         ShareSessionCache cache,
@@ -174,6 +174,31 @@ public class SharePartitionManager implements AutoCloseable {
         this.recordLockDurationMs = recordLockDurationMs;
         this.timer = new SystemTimerReaper("share-group-lock-timeout-reaper",
             new SystemTimer("share-group-lock-timeout"));
+        this.maxDeliveryCount = maxDeliveryCount;
+        this.maxInFlightMessages = maxInFlightMessages;
+        this.persister = persister;
+    }
+
+    // Visible for testing.
+    SharePartitionManager(
+            ReplicaManager replicaManager,
+            Time time,
+            ShareSessionCache cache,
+            Map<SharePartitionKey, SharePartition> partitionCacheMap,
+            int recordLockDurationMs,
+            Timer timer,
+            int maxDeliveryCount,
+            int maxInFlightMessages,
+            Persister persister
+    ) {
+        this.replicaManager = replicaManager;
+        this.time = time;
+        this.cache = cache;
+        this.partitionCacheMap = partitionCacheMap;
+        this.fetchQueue = new ConcurrentLinkedQueue<>();
+        this.processFetchQueueLock = new AtomicBoolean(false);
+        this.recordLockDurationMs = recordLockDurationMs;
+        this.timer = timer;
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
@@ -361,7 +386,8 @@ public class SharePartitionManager implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        // TODO: Provide Implementation
+        this.timer.close();
+        this.persister.stop();
     }
 
     private ShareSessionKey shareSessionKey(String groupId, Uuid memberId) {
