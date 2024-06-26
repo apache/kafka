@@ -237,7 +237,7 @@ object TestUtils extends Logging {
     listenerName: ListenerName
   ): String = {
     brokers.map { s =>
-      val listener = s.config.effectiveAdvertisedListeners.find(_.listenerName == listenerName).getOrElse(
+      val listener = s.config.effectiveAdvertisedBrokerListeners.find(_.listenerName == listenerName).getOrElse(
         sys.error(s"Could not find listener with name ${listenerName.value}"))
       formatAddress(listener.host, s.boundPort(listenerName))
     }.mkString(",")
