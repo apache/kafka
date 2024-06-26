@@ -500,6 +500,7 @@ subprojects {
     maxHeapSize = "2560m"
     jvmArgs = defaultJvmArgs
 
+
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
