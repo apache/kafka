@@ -17,7 +17,10 @@
 
 package org.apache.kafka.common.network;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.test.TestSslUtils;
+
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -27,9 +30,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.test.TestSslUtils;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class Tls12SelectorTest extends SslSelectorTest {
 

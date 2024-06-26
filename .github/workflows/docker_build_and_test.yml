@@ -32,9 +32,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Set up Python 3.10
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: "3.10"
     - name: Install dependencies
@@ -55,13 +55,13 @@ jobs:
         exit-code: '1'
     - name: Upload test report
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: report_${{ github.event.inputs.image_type }}.html
         path: docker/test/report_${{ github.event.inputs.image_type }}.html
     - name: Upload CVE scan report
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: scan_report_${{ github.event.inputs.image_type }}.txt
         path: scan_report_${{ github.event.inputs.image_type }}.txt

@@ -17,8 +17,8 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.provider.FileConfigProvider;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.provider.FileConfigProvider;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.data.Struct;
@@ -30,8 +30,8 @@ import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -41,21 +41,21 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TemporaryFolder;
-import org.junit.rules.TestRule;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -91,23 +91,23 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERV
 import static org.apache.kafka.connect.runtime.WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_STORAGE_PREFIX;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
-import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.connect.util.clusters.ConnectAssertions.CONNECTOR_SETUP_DURATION_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test simple operations on the workers of a Connect cluster.
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class ConnectWorkerIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ConnectWorkerIntegrationTest.class);
 
@@ -124,14 +124,9 @@ public class ConnectWorkerIntegrationTest {
     private Map<String, String> workerProps;
     private Properties brokerProps;
 
-    @Rule
-    public TestRule watcher = ConnectIntegrationTestUtils.newTestWatcher(log);
-
-    @Rule
-    public TemporaryFolder tmp = new TemporaryFolder();
-
-    @Before
-    public void setup() {
+    @BeforeEach
+    public void setup(TestInfo testInfo) {
+        log.info("Starting test {}", testInfo.getDisplayName());
         // setup Connect worker properties
         workerProps = new HashMap<>();
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(OFFSET_COMMIT_INTERVAL_MS));
@@ -150,8 +145,9 @@ public class ConnectWorkerIntegrationTest {
                 .maskExitProcedures(true); // true is the default, setting here as example
     }
 
-    @After
-    public void close() {
+    @AfterEach
+    public void close(TestInfo testInfo) {
+        log.info("Finished test {}", testInfo.getDisplayName());
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
     }
@@ -268,9 +264,9 @@ public class ConnectWorkerIntegrationTest {
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
         // Wait for the connector to be stopped
-        assertTrue("Failed to stop connector and tasks after coordinator failure within "
-                        + CONNECTOR_SETUP_DURATION_MS + "ms",
-                stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+        assertTrue(stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS),
+                "Failed to stop connector and tasks after coordinator failure within "
+                        + CONNECTOR_SETUP_DURATION_MS + "ms");
 
         StartAndStopLatch startLatch = connectorHandle.expectedStarts(1, false);
         connect.kafka().startOnlyKafkaOnSamePorts();
@@ -288,9 +284,9 @@ public class ConnectWorkerIntegrationTest {
                 "Connector tasks did not start in time.");
 
         // Expect that the connector has started again
-        assertTrue("Failed to stop connector and tasks after coordinator failure within "
-                        + CONNECTOR_SETUP_DURATION_MS + "ms",
-                startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+        assertTrue(startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS),
+                "Failed to stop connector and tasks after coordinator failure within "
+                        + CONNECTOR_SETUP_DURATION_MS + "ms");
     }
 
     /**
@@ -358,7 +354,7 @@ public class ConnectWorkerIntegrationTest {
         StartAndStopLatch stopCounter = connector.expectedStops(1);
         connect.deleteConnector(CONNECTOR_NAME);
 
-        assertTrue("Connector and all tasks were not stopped in time", stopCounter.await(1, TimeUnit.MINUTES));
+        assertTrue(stopCounter.await(1, TimeUnit.MINUTES), "Connector and all tasks were not stopped in time");
     }
 
     /**
@@ -927,8 +923,8 @@ public class ConnectWorkerIntegrationTest {
                         assertEquals(INTERNAL_SERVER_ERROR.getStatusCode(), restException.statusCode());
                         assertNotNull(restException.getMessage());
                         assertTrue(
-                                "Message '" + restException.getMessage() + "' does not match expected format",
-                                restException.getMessage().contains("Request timed out. The worker is currently " + expectedStageDescription)
+                                restException.getMessage().contains("Request timed out. The worker is currently " + expectedStageDescription),
+                                "Message '" + restException.getMessage() + "' does not match expected format"
                         );
 
                         return true;
@@ -1166,8 +1162,8 @@ public class ConnectWorkerIntegrationTest {
         final TopicPartition connectorTopicPartition = new TopicPartition(connectorTopic, 0);
         final long initialEndOffset = connect.kafka().endOffset(connectorTopicPartition);
         assertTrue(
-                "Source connector should have published at least one record to Kafka",
-                initialEndOffset > 0
+                initialEndOffset > 0,
+                "Source connector should have published at least one record to Kafka"
         );
 
         connectorHandle.expectedCommits(NUM_TASKS * 2);
@@ -1187,9 +1183,9 @@ public class ConnectWorkerIntegrationTest {
         // See if any new records got written to the old topic
         final long nextEndOffset = connect.kafka().endOffset(connectorTopicPartition);
         assertEquals(
-                "No new records should have been written to the older topic",
                 initialEndOffset,
-                nextEndOffset
+                nextEndOffset,
+                "No new records should have been written to the older topic"
         );
     }
 
@@ -1203,7 +1199,7 @@ public class ConnectWorkerIntegrationTest {
      * an invalid config provider reference, it will still be possible to reconfigure the connector.
      */
     @Test
-    public void testReconfigureConnectorWithFailingTaskConfigs() throws Exception {
+    public void testReconfigureConnectorWithFailingTaskConfigs(@TempDir Path tmp) throws Exception {
         final int offsetCommitIntervalMs = 100;
         workerProps.put(CONFIG_PROVIDERS_CONFIG, "file");
         workerProps.put(CONFIG_PROVIDERS_CONFIG + ".file.class", FileConfigProvider.class.getName());
@@ -1219,7 +1215,7 @@ public class ConnectWorkerIntegrationTest {
         final String firstConnectorTopic = "connector-topic-1";
         connect.kafka().createTopic(firstConnectorTopic);
 
-        final File secretsFile = tmp.newFile("test-secrets");
+        final File secretsFile = tmp.resolve("test-secrets").toFile();
         final Properties secrets = new Properties();
         final String throughputSecretKey = "secret-throughput";
         secrets.put(throughputSecretKey, "10");
@@ -1244,7 +1240,7 @@ public class ConnectWorkerIntegrationTest {
         connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
 
         // Delete the secrets file, which should render the old task configs invalid
-        assertTrue("Failed to delete secrets file", secretsFile.delete());
+        assertTrue(secretsFile.delete(), "Failed to delete secrets file");
 
         // Use a start latch here instead of assertConnectorAndExactlyNumTasksAreRunning
         // since failure to reconfigure the tasks (which may occur if the bug this test was written
@@ -1260,8 +1256,8 @@ public class ConnectWorkerIntegrationTest {
         connectorConfig.put(TOPIC_CONFIG, secondConnectorTopic);
         connect.configureConnector(CONNECTOR_NAME, connectorConfig);
         assertTrue(
-                "Connector tasks were not restarted in time",
-                restarts.await(10, TimeUnit.SECONDS)
+                restarts.await(10, TimeUnit.SECONDS),
+                "Connector tasks were not restarted in time"
         );
 
         // Wait for at least one task to commit offsets after being restarted
@@ -1270,9 +1266,9 @@ public class ConnectWorkerIntegrationTest {
 
         final long endOffset = connect.kafka().endOffset(new TopicPartition(secondConnectorTopic, 0));
         assertTrue(
+                endOffset > 0,
                 "Source connector should have published at least one record to new Kafka topic "
-                    + "after being reconfigured",
-                endOffset > 0
+                        + "after being reconfigured"
         );
     }
 
@@ -1307,9 +1303,9 @@ public class ConnectWorkerIntegrationTest {
                 "Connector did not start or task did not fail in time"
         );
         assertEquals(
-                "Connector should not have any committed offsets when only task fails on first record",
                 new ConnectorOffsets(Collections.emptyList()),
-                connect.connectorOffsets(CONNECTOR_NAME)
+                connect.connectorOffsets(CONNECTOR_NAME),
+                "Connector should not have any committed offsets when only task fails on first record"
         );
 
         // Reconfigure the connector to use the string converter, which should not cause any more task failures

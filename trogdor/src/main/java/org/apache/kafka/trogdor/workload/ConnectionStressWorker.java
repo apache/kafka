@@ -64,7 +64,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ConnectionStressWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ConnectionStressWorker.class);
-    private static final Time TIME = Time.SYSTEM;
 
     private static final int THROTTLE_PERIOD_MS = 100;
 
@@ -109,7 +108,7 @@ public class ConnectionStressWorker implements TaskWorker {
         synchronized (ConnectionStressWorker.this) {
             this.totalConnections = 0;
             this.totalFailedConnections = 0;
-            this.startTimeMs = TIME.milliseconds();
+            this.startTimeMs = Time.SYSTEM.milliseconds();
         }
         this.statusUpdaterExecutor = Executors.newScheduledThreadPool(1,
             ThreadUtils.createThreadFactory("StatusUpdaterWorkerThread%d", false));
@@ -164,10 +163,10 @@ public class ConnectionStressWorker implements TaskWorker {
                 List<Node> nodes = updater.fetchNodes();
                 Node targetNode = nodes.get(ThreadLocalRandom.current().nextInt(nodes.size()));
                 // channelBuilder will be closed as part of Selector.close()
-                ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(conf, TIME, logContext);
+                ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(conf, Time.SYSTEM, logContext);
                 try (Metrics metrics = new Metrics()) {
                     try (Selector selector = new Selector(conf.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                        metrics, TIME, "", channelBuilder, logContext)) {
+                        metrics, Time.SYSTEM, "", channelBuilder, logContext)) {
                         try (NetworkClient client = new NetworkClient(selector,
                             updater,
                             "ConnectionStressWorker",
@@ -179,12 +178,12 @@ public class ConnectionStressWorker implements TaskWorker {
                             1000,
                             10 * 1000,
                             127 * 1000,
-                            TIME,
+                            Time.SYSTEM,
                             false,
                             new ApiVersions(),
                             logContext,
                             MetadataRecoveryStrategy.NONE)) {
-                            NetworkClientUtils.awaitReady(client, targetNode, TIME, 500);
+                            NetworkClientUtils.awaitReady(client, targetNode, Time.SYSTEM, 500);
                         }
                     }
                 }

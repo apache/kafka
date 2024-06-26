@@ -24,10 +24,11 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.core.IsSame.sameInstance;
@@ -37,17 +38,17 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class TransformerSupplierAdapterTest {
 
-    @Mock
-    private ProcessorContext context;
-    @Mock
-    private Transformer<String, String, KeyValue<Integer, Integer>> transformer;
-    @Mock
-    private TransformerSupplier<String, String, KeyValue<Integer, Integer>> transformerSupplier;
-    @Mock
-    private Set<StoreBuilder<?>> stores;
+    private ProcessorContext context = mock(ProcessorContext.class);
+    @SuppressWarnings("unchecked")
+    private Transformer<String, String, KeyValue<Integer, Integer>> transformer = mock(Transformer.class);
+    @SuppressWarnings("unchecked")
+    private TransformerSupplier<String, String, KeyValue<Integer, Integer>> transformerSupplier = mock(TransformerSupplier.class);
+    @SuppressWarnings("unchecked")
+    private Set<StoreBuilder<?>> stores = mock(Set.class);
 
     final String key = "Hello";
     final String value = "World";

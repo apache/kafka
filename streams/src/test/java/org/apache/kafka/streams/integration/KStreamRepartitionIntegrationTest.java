@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
@@ -40,33 +41,29 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -80,63 +77,41 @@ import static org.apache.kafka.streams.KafkaStreams.State.ERROR;
 import static org.apache.kafka.streams.KafkaStreams.State.REBALANCING;
 import static org.apache.kafka.streams.KafkaStreams.State.RUNNING;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(value = Parameterized.class)
-@Category({IntegrationTest.class})
 @SuppressWarnings("deprecation")
+@Tag("integration")
+@Timeout(600)
 public class KStreamRepartitionIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
 
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
-
 
     private String topicB;
     private String inputTopic;
     private String outputTopic;
     private String applicationId;
-
     private String safeTestName;
-
-    private Properties streamsConfiguration;
     private List<KafkaStreams> kafkaStreamsInstances;
+    private final File testFolder = TestUtils.tempDirectory();
 
-    @Parameter
-    public String topologyOptimization;
-
-    @Parameters(name = "Optimization = {0}")
-    public static Collection<?> topologyOptimization() {
-        return Arrays.asList(new String[][]{
-            {StreamsConfig.OPTIMIZE},
-            {StreamsConfig.NO_OPTIMIZATION}
-        });
-    }
-
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
-    public void before() throws InterruptedException {
-        streamsConfiguration = new Properties();
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws InterruptedException {
         kafkaStreamsInstances = new ArrayList<>();
-
-        safeTestName = safeUniqueTestName(testName);
-
+        safeTestName = safeUniqueTestName(testInfo);
         topicB = "topic-b-" + safeTestName;
         inputTopic = "input-topic-" + safeTestName;
         outputTopic = "output-topic-" + safeTestName;
@@ -144,28 +119,33 @@ public class KStreamRepartitionIntegrationTest {
 
         CLUSTER.createTopic(inputTopic, 4, 1);
         CLUSTER.createTopic(outputTopic, 1, 1);
+    }
 
+    private Properties createStreamsConfig(final String topologyOptimization) {
+        final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getPath());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, topologyOptimization);
+        return streamsConfiguration;
     }
 
-    @After
+    @AfterEach
     public void whenShuttingDown() throws IOException {
         kafkaStreamsInstances.stream()
                              .filter(Objects::nonNull)
                              .forEach(KafkaStreams::close);
 
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+        Utils.delete(testFolder);
     }
 
-    @Test
-    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationDoNotMatchSourceTopicWhenJoining() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationDoNotMatchSourceTopicWhenJoining(final String topologyOptimization) throws InterruptedException {
         final int topicBNumberOfPartitions = 6;
         final String inputTopicRepartitionName = "join-repartition-test";
         final AtomicReference<Throwable> expectedThrowable = new AtomicReference<>();
@@ -184,12 +164,13 @@ public class KStreamRepartitionIntegrationTest {
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
                .repartition(inputTopicRepartitioned)
-               .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
+               .join(topicBStream, (value1, value2) -> value2, JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofSeconds(10)))
                .to(outputTopic);
 
+        final Properties streamsConfiguration = createStreamsConfig(topologyOptimization);
         builder.build(streamsConfiguration);
 
-        startStreams(builder, REBALANCING, ERROR, (t, e) -> expectedThrowable.set(e));
+        startStreams(builder, REBALANCING, ERROR, streamsConfiguration, (t, e) -> expectedThrowable.set(e));
 
         final String expectedMsg = String.format("Number of partitions [%s] of repartition topic [%s] " +
                                                  "doesn't match number of partitions [%s] of the source topic.",
@@ -200,8 +181,9 @@ public class KStreamRepartitionIntegrationTest {
         assertTrue(expectedThrowable.get().getMessage().contains(expectedMsg));
     }
 
-    @Test
-    public void shouldDeductNumberOfPartitionsFromRepartitionOperation() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldDeductNumberOfPartitionsFromRepartitionOperation(final String topologyOptimization) throws Exception {
         final String topicBMapperName = "topic-b-mapper";
         final int topicBNumberOfPartitions = 6;
         final String inputTopicRepartitionName = "join-repartition-test";
@@ -234,9 +216,10 @@ public class KStreamRepartitionIntegrationTest {
                .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
                .to(outputTopic);
 
+        final Properties streamsConfiguration = createStreamsConfig(topologyOptimization);
         builder.build(streamsConfiguration);
 
-        startStreams(builder);
+        startStreams(builder, streamsConfiguration);
 
         assertEquals(inputTopicRepartitionedNumOfPartitions,
                      getNumberOfPartitionsForTopic(toRepartitionTopicName(inputTopicRepartitionName)));
@@ -251,8 +234,9 @@ public class KStreamRepartitionIntegrationTest {
         );
     }
 
-    @Test
-    public void shouldDoProperJoiningWhenNumberOfPartitionsAreValidWhenUsingRepartitionOperation() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldDoProperJoiningWhenNumberOfPartitionsAreValidWhenUsingRepartitionOperation(final String topologyOptimization) throws Exception {
         final String topicBRepartitionedName = "topic-b-scale-up";
         final String inputTopicRepartitionedName = "input-topic-scale-up";
 
@@ -290,7 +274,7 @@ public class KStreamRepartitionIntegrationTest {
                .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
                .to(outputTopic);
 
-        startStreams(builder);
+        startStreams(builder, createStreamsConfig(topologyOptimization));
 
         assertEquals(4, getNumberOfPartitionsForTopic(toRepartitionTopicName(topicBRepartitionedName)));
         assertEquals(4, getNumberOfPartitionsForTopic(toRepartitionTopicName(inputTopicRepartitionedName)));
@@ -302,8 +286,9 @@ public class KStreamRepartitionIntegrationTest {
         );
     }
 
-    @Test
-    public void shouldRepartitionToMultiplePartitions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldRepartitionToMultiplePartitions(final String topologyOptimization) throws Exception {
         final String repartitionName = "broadcasting-partitioner-test";
         final long timestamp = System.currentTimeMillis();
         final AtomicInteger partitionerInvocation = new AtomicInteger(0);
@@ -351,7 +336,7 @@ public class KStreamRepartitionIntegrationTest {
             .repartition(repartitioned)
             .to(broadcastingOutputTopic);
 
-        startStreams(builder);
+        startStreams(builder, createStreamsConfig(topologyOptimization));
 
         final String topic = toRepartitionTopicName(repartitionName);
 
@@ -376,8 +361,9 @@ public class KStreamRepartitionIntegrationTest {
     }
 
 
-    @Test
-    public void shouldUseStreamPartitionerForRepartitionOperation() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldUseStreamPartitionerForRepartitionOperation(final String topologyOptimization) throws Exception {
         final int partition = 1;
         final String repartitionName = "partitioner-test";
         final long timestamp = System.currentTimeMillis();
@@ -403,7 +389,7 @@ public class KStreamRepartitionIntegrationTest {
                .repartition(repartitioned)
                .to(outputTopic);
 
-        startStreams(builder);
+        startStreams(builder, createStreamsConfig(topologyOptimization));
 
         final String topic = toRepartitionTopicName(repartitionName);
 
@@ -417,8 +403,9 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(expectedRecords.size(), partitionerInvocation.get());
     }
 
-    @Test
-    public void shouldPerformSelectKeyWithRepartitionOperation() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldPerformSelectKeyWithRepartitionOperation(final String topologyOptimization) throws Exception {
         final long timestamp = System.currentTimeMillis();
 
         sendEvents(
@@ -436,7 +423,7 @@ public class KStreamRepartitionIntegrationTest {
                .repartition()
                .to(outputTopic);
 
-        startStreams(builder);
+        startStreams(builder, createStreamsConfig(topologyOptimization));
 
         validateReceivedMessages(
             new IntegerDeserializer(),
@@ -452,8 +439,9 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(1, countOccurrencesInTopology(topology, "Sink: .*-repartition.*"));
     }
 
-    @Test
-    public void shouldCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed(final String topologyOptimization) throws Exception {
         final String repartitionName = "dummy";
         final long timestamp = System.currentTimeMillis();
 
@@ -471,7 +459,7 @@ public class KStreamRepartitionIntegrationTest {
                .repartition(Repartitioned.as(repartitionName))
                .to(outputTopic);
 
-        startStreams(builder);
+        startStreams(builder, createStreamsConfig(topologyOptimization));
 
         validateReceivedMessages(
             new IntegerDeserializer(),
@@ -488,8 +476,9 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(1, countOccurrencesInTopology(topology, "Sink: .*dummy-repartition.*"));
     }
 
-    @Test
-    public void shouldPerformKeySelectOperationWhenRepartitionOperationIsUsedWithKeySelector() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldPerformKeySelectOperationWhenRepartitionOperationIsUsedWithKeySelector(final String topologyOptimization) throws Exception {
         final String repartitionedName = "new-key";
         final long timestamp = System.currentTimeMillis();
 
@@ -514,7 +503,7 @@ public class KStreamRepartitionIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        startStreams(builder);
+        startStreams(builder, createStreamsConfig(topologyOptimization));
 
         validateReceivedMessages(
             new StringDeserializer(),
@@ -533,8 +522,9 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(1, countOccurrencesInTopology(topology, "<-- " + repartitionedName + "\n"));
     }
 
-    @Test
-    public void shouldCreateRepartitionTopicWithSpecifiedNumberOfPartitions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldCreateRepartitionTopicWithSpecifiedNumberOfPartitions(final String topologyOptimization) throws Exception {
         final String repartitionName = "new-partitions";
         final long timestamp = System.currentTimeMillis();
 
@@ -555,7 +545,7 @@ public class KStreamRepartitionIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        startStreams(builder);
+        startStreams(builder, createStreamsConfig(topologyOptimization));
 
         validateReceivedMessages(
             new IntegerDeserializer(),
@@ -572,8 +562,9 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(2, getNumberOfPartitionsForTopic(repartitionTopicName));
     }
 
-    @Test
-    public void shouldInheritRepartitionTopicPartitionNumberFromUpstreamTopicWhenNumberOfPartitionsIsNotSpecified() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldInheritRepartitionTopicPartitionNumberFromUpstreamTopicWhenNumberOfPartitionsIsNotSpecified(final String topologyOptimization) throws Exception {
         final String repartitionName = "new-topic";
         final long timestamp = System.currentTimeMillis();
 
@@ -594,7 +585,7 @@ public class KStreamRepartitionIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        startStreams(builder);
+        startStreams(builder, createStreamsConfig(topologyOptimization));
 
         validateReceivedMessages(
             new IntegerDeserializer(),
@@ -611,8 +602,9 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(4, getNumberOfPartitionsForTopic(repartitionTopicName));
     }
 
-    @Test
-    public void shouldCreateOnlyOneRepartitionTopicWhenRepartitionIsFollowedByGroupByKey() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldCreateOnlyOneRepartitionTopicWhenRepartitionIsFollowedByGroupByKey(final String topologyOptimization) throws Exception {
         final String repartitionName = "new-partitions";
         final long timestamp = System.currentTimeMillis();
 
@@ -639,7 +631,7 @@ public class KStreamRepartitionIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        startStreams(builder);
+        startStreams(builder, createStreamsConfig(topologyOptimization));
 
         final String topology = builder.build().describe().toString();
 
@@ -656,8 +648,9 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(1, countOccurrencesInTopology(topology, "Sink: .*-repartition"));
     }
 
-    @Test
-    public void shouldGenerateRepartitionTopicWhenNameIsNotSpecified() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldGenerateRepartitionTopicWhenNameIsNotSpecified(final String topologyOptimization) throws Exception {
         final long timestamp = System.currentTimeMillis();
 
         sendEvents(
@@ -675,7 +668,7 @@ public class KStreamRepartitionIntegrationTest {
                .repartition(Repartitioned.with(Serdes.String(), Serdes.String()))
                .to(outputTopic);
 
-        startStreams(builder);
+        startStreams(builder, createStreamsConfig(topologyOptimization));
 
         validateReceivedMessages(
             new StringDeserializer(),
@@ -691,8 +684,9 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(1, countOccurrencesInTopology(topology, "Sink: .*-repartition"));
     }
 
-    @Test
-    public void shouldGoThroughRebalancingCorrectly() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldGoThroughRebalancingCorrectly(final String topologyOptimization) throws Exception {
         final String repartitionName = "rebalancing-test";
         final long timestamp = System.currentTimeMillis();
 
@@ -719,7 +713,8 @@ public class KStreamRepartitionIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        startStreams(builder);
+        final Properties streamsConfiguration = createStreamsConfig(topologyOptimization);
+        startStreams(builder, streamsConfiguration);
         final Properties streamsToCloseConfigs = new Properties();
         streamsToCloseConfigs.putAll(streamsConfiguration);
         streamsToCloseConfigs.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + "-2");
@@ -804,13 +799,13 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     private void sendEvents(final long timestamp,
-                            final List<KeyValue<Integer, String>> events) throws Exception {
+                            final List<KeyValue<Integer, String>> events) {
         sendEvents(inputTopic, timestamp, events);
     }
 
     private void sendEvents(final String topic,
                             final long timestamp,
-                            final List<KeyValue<Integer, String>> events) throws Exception {
+                            final List<KeyValue<Integer, String>> events) {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             topic,
             events,
@@ -824,19 +819,8 @@ public class KStreamRepartitionIntegrationTest {
         );
     }
 
-    private KafkaStreams startStreams(final StreamsBuilder builder) throws InterruptedException {
-        return startStreams(builder, REBALANCING, RUNNING, streamsConfiguration, null);
-    }
-
     private KafkaStreams startStreams(final StreamsBuilder builder, final Properties streamsConfiguration) throws InterruptedException {
         return startStreams(builder, REBALANCING, RUNNING, streamsConfiguration, null);
-    }
-
-    private KafkaStreams startStreams(final StreamsBuilder builder,
-                                      final State expectedOldState,
-                                      final State expectedNewState,
-                                      final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) throws InterruptedException {
-        return startStreams(builder, expectedOldState, expectedNewState, streamsConfiguration, uncaughtExceptionHandler);
     }
 
     private KafkaStreams startStreams(final StreamsBuilder builder,
@@ -889,8 +873,6 @@ public class KStreamRepartitionIntegrationTest {
                                                  final Deserializer<V> valueSerializer,
                                                  final List<KeyValue<K, V>> expectedRecords,
                                                  final String outputTopic) throws Exception {
-
-        final String safeTestName = safeUniqueTestName(testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);

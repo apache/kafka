@@ -19,16 +19,17 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.junit.ClusterTestExtensions;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -42,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("integration")
 public class TopicBasedRemoteLogMetadataManagerRestartTest {
 
-    private final Time time = new SystemTime();
+    private final Time time = Time.SYSTEM;
     private final String logDir = TestUtils.tempDirectory("_rlmm_segs_").getAbsolutePath();
     private final ClusterInstance clusterInstance;
 

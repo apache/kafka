@@ -17,9 +17,10 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.connect.util.LoggingContext.Scope;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -27,10 +28,10 @@ import org.slf4j.MDC;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LoggingContextTest {
 
@@ -47,7 +48,7 @@ public class LoggingContextTest {
 
     private Map<String, String> mdc;
 
-    @Before
+    @BeforeEach
     public void setup() {
         mdc = new HashMap<>();
         Map<String, String> existing = MDC.getCopyOfContextMap();
@@ -58,7 +59,7 @@ public class LoggingContextTest {
         MDC.put(EXTRA_KEY2, EXTRA_VALUE2);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         MDC.clear();
         MDC.setContextMap(mdc);
@@ -176,20 +177,20 @@ public class LoggingContextTest {
         String context = MDC.get(LoggingContext.CONNECTOR_CONTEXT);
         if (context != null) {
             assertEquals(
-                "Context should begin with connector name when the connector name is non-null",
                 connectorName != null,
-                context.startsWith("[" + connectorName)
+                context.startsWith("[" + connectorName),
+                "Context should begin with connector name when the connector name is non-null"
             );
             if (scope != null) {
-                assertTrue("Context should contain the scope", context.contains(scope.toString()));
+                assertTrue(context.contains(scope.toString()), "Context should contain the scope");
             }
             if (taskId != null) {
-                assertTrue("Context should contain the taskId", context.contains(taskId.toString()));
+                assertTrue(context.contains(taskId.toString()), "Context should contain the taskId");
             }
         } else {
-            assertNull("No logging context found, expected null connector name", connectorName);
-            assertNull("No logging context found, expected null task ID", taskId);
-            assertNull("No logging context found, expected null scope", scope);
+            assertNull(connectorName, "No logging context found, expected null connector name");
+            assertNull(taskId, "No logging context found, expected null task ID");
+            assertNull(scope, "No logging context found, expected null scope");
         }
     }
 

@@ -1085,6 +1085,13 @@ class KafkaServer(
     }
   }
 
+  override def isShutdown(): Boolean = {
+    BrokerState.fromValue(brokerState.value()) match {
+      case BrokerState.SHUTTING_DOWN | BrokerState.NOT_RUNNING => true
+      case _ => false
+    }
+  }
+
   /**
    * After calling shutdown(), use this API to wait until the shutdown is complete
    */

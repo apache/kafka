@@ -44,6 +44,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -1105,6 +1106,44 @@ public class CommitRequestManagerTest {
             res = commitRequestManager.poll(time.milliseconds());
             assertEquals(0, res.unsentRequests.size());
         }
+    }
+
+    @Test
+    public void testLastEpochSentOnCommit() {
+        // Enable auto-commit but with very long interval to avoid triggering auto-commits on the
+        // interval and just test the auto-commits triggered before revocation
+        CommitRequestManager commitRequestManager = create(true, Integer.MAX_VALUE);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        TopicPartition tp = new TopicPartition("topic", 1);
+        subscriptionState.assignFromUser(singleton(tp));
+        subscriptionState.seek(tp, 100);
+
+        // Send auto commit to revoke partitions, expected to be retried on STALE_MEMBER_EPOCH
+        // with the latest epochs received (using long deadline to avoid expiring the request
+        // while retrying with the new epochs)
+        commitRequestManager.maybeAutoCommitSyncBeforeRevocation(Long.MAX_VALUE);
+
+        int initialEpoch = 1;
+        String memberId = "member1";
+        commitRequestManager.onMemberEpochUpdated(Optional.of(initialEpoch), Optional.of(memberId));
+
+        // Send request with epoch 1
+        completeOffsetCommitRequestWithError(commitRequestManager, Errors.STALE_MEMBER_EPOCH);
+        assertEquals(initialEpoch, commitRequestManager.lastEpochSentOnCommit().orElse(null));
+
+        // Receive new epoch. Last epoch sent should change only when sending out the next request
+        commitRequestManager.onMemberEpochUpdated(Optional.of(initialEpoch + 1), Optional.of(memberId));
+        assertEquals(initialEpoch, commitRequestManager.lastEpochSentOnCommit().get());
+        time.sleep(retryBackoffMs);
+        completeOffsetCommitRequestWithError(commitRequestManager, Errors.STALE_MEMBER_EPOCH);
+        assertEquals(initialEpoch + 1, commitRequestManager.lastEpochSentOnCommit().orElse(null));
+
+        // Receive empty epochs
+        commitRequestManager.onMemberEpochUpdated(Optional.empty(), Optional.empty());
+        time.sleep(retryBackoffMs * 2);
+        completeOffsetCommitRequestWithError(commitRequestManager, Errors.STALE_MEMBER_EPOCH);
+        assertFalse(commitRequestManager.lastEpochSentOnCommit().isPresent());
     }
 
     @Test

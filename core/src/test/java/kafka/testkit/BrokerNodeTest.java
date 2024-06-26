@@ -18,6 +18,7 @@
 package kafka.testkit;
 
 import org.apache.kafka.common.Uuid;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

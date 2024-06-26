@@ -23,11 +23,11 @@ import org.apache.kafka.connect.transforms.predicates.HasHeaderKey;
 import org.apache.kafka.connect.transforms.predicates.RecordIsTombstone;
 import org.apache.kafka.connect.transforms.predicates.TopicNameMatches;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,13 +49,13 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * An integration test for connectors with transformations
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class TransformationIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(TransformationIntegrationTest.class);
@@ -73,7 +73,7 @@ public class TransformationIntegrationTest {
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
 
-    @Before
+    @BeforeEach
     public void setup() {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
@@ -100,7 +100,7 @@ public class TransformationIntegrationTest {
         connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
     }
 
-    @After
+    @AfterEach
     public void close() {
         // delete connector handle
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
@@ -159,10 +159,16 @@ public class TransformationIntegrationTest {
         }
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
-        assertEquals("Unexpected number of records consumed", numFooRecords,
-                connect.kafka().consume(numFooRecords, RECORD_TRANSFER_DURATION_MS, fooTopic).count());
-        assertEquals("Unexpected number of records consumed", numBarRecords,
-                connect.kafka().consume(numBarRecords, RECORD_TRANSFER_DURATION_MS, barTopic).count());
+        assertEquals(
+                numFooRecords,
+                connect.kafka().consume(numFooRecords, RECORD_TRANSFER_DURATION_MS, fooTopic).count(),
+                "Unexpected number of records consumed"
+        );
+        assertEquals(
+                numBarRecords,
+                connect.kafka().consume(numBarRecords, RECORD_TRANSFER_DURATION_MS, barTopic).count(),
+                "Unexpected number of records consumed"
+        );
 
         // wait for the connector tasks to consume all records.
         connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
@@ -239,8 +245,11 @@ public class TransformationIntegrationTest {
         }
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
-        assertEquals("Unexpected number of records consumed", numRecords,
-                connect.kafka().consume(numRecords, RECORD_TRANSFER_DURATION_MS, topic).count());
+        assertEquals(
+                numRecords,
+                connect.kafka().consume(numRecords, RECORD_TRANSFER_DURATION_MS, topic).count(),
+                "Unexpected number of records consumed"
+        );
 
         // wait for the connector tasks to consume all records.
         connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
@@ -305,8 +314,7 @@ public class TransformationIntegrationTest {
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         for (ConsumerRecord<byte[], byte[]> record : connect.kafka().consume(1, RECORD_TRANSFER_DURATION_MS, "test-topic")) {
-            assertNotNull("Expected header to exist",
-                    record.headers().lastHeader("header-8"));
+            assertNotNull(record.headers().lastHeader("header-8"), "Expected header to exist");
         }
 
         // delete connector

@@ -16,29 +16,29 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+import org.apache.kafka.connect.util.clusters.WorkerHandle;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
-import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.connect.util.clusters.WorkerHandle;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Integration test for the creation of internal topics.
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class InternalTopicsIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(InternalTopicsIntegrationTest.class);
@@ -47,13 +47,13 @@ public class InternalTopicsIntegrationTest {
     Map<String, String> workerProps = new HashMap<>();
     Properties brokerProps = new Properties();
 
-    @Before
+    @BeforeEach
     public void setup() {
         // setup Kafka broker properties
         brokerProps.put("auto.create.topics.enable", String.valueOf(false));
     }
 
-    @After
+    @AfterEach
     public void close() {
         // stop all Connect, Kafka and Zk threads.
         connect.stop();

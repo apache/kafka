@@ -20,9 +20,10 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.Utils;
 
+import java.util.Set;
+
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
-import java.util.Set;
 
 public class SslConfigs {
     /*

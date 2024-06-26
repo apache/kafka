@@ -70,4 +70,3 @@ public class PushTelemetryResponse  extends AbstractResponse {
                 new ByteBufferAccessor(buffer), version));
     }
 }
-

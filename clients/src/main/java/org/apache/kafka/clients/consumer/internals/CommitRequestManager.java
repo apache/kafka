@@ -45,6 +45,7 @@ import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -86,6 +87,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final boolean throwOnFetchStableOffsetUnsupported;
     final PendingRequests pendingRequests;
     private boolean closing = false;
+
+    /**
+     * Last member epoch sent in a commit request. Empty if no epoch was included in the last
+     * request. Used for logging.
+     */
+    private Optional<Integer> lastEpochSentOnCommit;
 
     /**
      *  Latest member ID and epoch received via the {@link #onMemberEpochUpdated(Optional, Optional)},
@@ -156,6 +163,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.memberInfo = new MemberInfo();
         this.metricsManager = new OffsetCommitMetricsManager(metrics);
         this.offsetCommitCallbackInvoker = offsetCommitCallbackInvoker;
+        this.lastEpochSentOnCommit = Optional.empty();
     }
 
     /**
@@ -330,7 +338,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         log.debug("Auto-commit sync before revocation failed because topic or partition were deleted");
                         result.completeExceptionally(error);
                     } else {
-                        // Make sure the auto-commit is retries with the latest offsets
+                        // Make sure the auto-commit is retried with the latest offsets
+                        log.debug("Member {} will retry auto-commit of latest offsets after receiving retriable error {}",
+                            memberInfo.memberId.orElse("undefined"),
+                            error.getMessage());
                         requestAttempt.offsets = subscriptions.allConsumed();
                         requestAttempt.resetFuture();
                         autoCommitSyncBeforeRevocationWithRetries(requestAttempt, result);
@@ -568,6 +579,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     @Override
     public void onMemberEpochUpdated(Optional<Integer> memberEpoch, Optional<String> memberId) {
+        if (!memberEpoch.isPresent() && memberInfo.memberEpoch.isPresent()) {
+            log.info("Member {} won't include member id and epoch in following offset " +
+                "commit/fetch requests because it has left the group.", memberInfo.memberId.orElse("unknown"));
+        }
         memberInfo.memberId = memberId;
         memberInfo.memberEpoch = memberEpoch;
     }
@@ -680,6 +695,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             }
             if (memberInfo.memberEpoch.isPresent()) {
                 data = data.setGenerationIdOrMemberEpoch(memberInfo.memberEpoch.get());
+                lastEpochSentOnCommit = memberInfo.memberEpoch;
+            } else {
+                lastEpochSentOnCommit = Optional.empty();
             }
 
             OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
@@ -741,6 +759,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                             "failed with unknown member ID. " + error.message()));
                         return;
                     } else if (error == Errors.STALE_MEMBER_EPOCH) {
+                        log.error("OffsetCommit failed for member {} with stale member epoch error. Last epoch sent: {}",
+                            memberInfo.memberId.orElse("undefined"),
+                            lastEpochSentOnCommit.isPresent() ? lastEpochSentOnCommit.get() : "undefined");
                         future.completeExceptionally(error.exception());
                         return;
                     } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
@@ -783,6 +804,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 log.warn("OffsetCommit request to remove not found in the outbound buffer: {}", this);
             }
         }
+    }
+
+    // Visible for testing
+    Optional<Integer> lastEpochSentOnCommit() {
+        return lastEpochSentOnCommit;
     }
 
     /**
