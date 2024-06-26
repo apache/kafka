@@ -22,6 +22,7 @@ import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
 import kafka.server.metadata.KRaftMetadataCache;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.errors.InvalidRequestException;

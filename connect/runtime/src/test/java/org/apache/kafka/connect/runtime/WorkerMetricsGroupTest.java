@@ -18,19 +18,19 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.CompoundStat;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.HashMap;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -38,7 +38,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class WorkerMetricsGroupTest {
     private final String connector = "org.FakeConnector";
     private final ConnectorTaskId task = new ConnectorTaskId(connector, 0);
@@ -62,7 +63,7 @@ public class WorkerMetricsGroupTest {
     @Mock private ConnectMetrics.MetricGroup metricGroup;
     @Mock private MetricName metricName;
 
-    @Before
+    @BeforeEach
     public void setup() {
         // We don't expect metricGroup.metricName to be invoked with null in practice,
         // but it's easier to test this way, and should have no impact
@@ -86,8 +87,6 @@ public class WorkerMetricsGroupTest {
     private Sensor mockSensor(ConnectMetrics.MetricGroup metricGroup, String name) {
         Sensor sensor = mock(Sensor.class);
         when(metricGroup.sensor(name)).thenReturn(sensor);
-        when(sensor.add(any(CompoundStat.class))).thenReturn(true);
-        when(sensor.add(any(MetricName.class), any(CumulativeSum.class))).thenReturn(true);
         return sensor;
     }
     

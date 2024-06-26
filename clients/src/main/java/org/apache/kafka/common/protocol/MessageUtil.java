@@ -17,9 +17,10 @@
 
 package org.apache.kafka.common.protocol;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.utils.Utils;
+
+import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;

@@ -36,9 +36,9 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -75,13 +75,13 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class StateDirectoryTest {
 
@@ -108,12 +108,12 @@ public class StateDirectoryTest {
         appDir = new File(stateDir, applicationId);
     }
 
-    @Before
+    @BeforeEach
     public void before() throws IOException {
         initializeStateDirectory(true, false);
     }
 
-    @After
+    @AfterEach
     public void cleanup() throws IOException {
         Utils.delete(stateDir);
     }
@@ -463,14 +463,14 @@ public class StateDirectoryTest {
         thread.start();
         lockLatch.await(5, TimeUnit.SECONDS);
 
-        assertNull("should not have had an exception on other thread", exceptionOnThread.get());
+        assertNull(exceptionOnThread.get(), "should not have had an exception on other thread");
         directory.unlock(taskId);
         assertFalse(directory.lock(taskId));
 
         unlockLatch.countDown();
         thread.join(30000);
 
-        assertNull("should not have had an exception on other thread", exceptionOnThread.get());
+        assertNull(exceptionOnThread.get(), "should not have had an exception on other thread");
         assertTrue(directory.lock(taskId));
     }
 

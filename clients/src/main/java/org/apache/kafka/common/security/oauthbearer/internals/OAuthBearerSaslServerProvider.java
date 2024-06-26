@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals;
 
-import java.security.Provider;
-import java.security.Security;
-
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslServer.OAuthBearerSaslServerFactory;
+
+import java.security.Provider;
+import java.security.Security;
 
 public class OAuthBearerSaslServerProvider extends Provider {
     private static final long serialVersionUID = 1L;

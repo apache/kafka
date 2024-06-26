@@ -17,12 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Set;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.MalformedClaimException;
 import org.jose4j.jwt.NumericDate;
@@ -34,6 +30,12 @@ import org.jose4j.jwt.consumer.JwtContext;
 import org.jose4j.keys.resolvers.VerificationKeyResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Set;
+
+import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
 
 /**
  * ValidatorAccessTokenValidator is an implementation of {@link AccessTokenValidator} that is used

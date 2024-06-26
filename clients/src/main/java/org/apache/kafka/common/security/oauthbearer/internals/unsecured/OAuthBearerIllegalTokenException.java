@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.KafkaException;
+
+import java.util.Objects;
 
 /**
  * Exception thrown when token validation fails due to a problem with the token

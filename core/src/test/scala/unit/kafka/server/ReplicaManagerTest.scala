@@ -4104,7 +4104,7 @@ class ReplicaManagerTest {
     val mockLog = mock(classOf[UnifiedLog])
     val brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
     val remoteLogManager = new RemoteLogManager(
-      config,
+      config.remoteLogManagerConfig,
       0,
       TestUtils.tempRelativeDir("data").getAbsolutePath,
       "clusterId",
@@ -4210,7 +4210,7 @@ class ReplicaManagerTest {
     val dummyLog = mock(classOf[UnifiedLog])
     val brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
     val remoteLogManager = new RemoteLogManager(
-      config,
+      config.remoteLogManagerConfig,
       0,
       TestUtils.tempRelativeDir("data").getAbsolutePath,
       "clusterId",

@@ -17,9 +17,6 @@
 package org.apache.kafka.common.security.scram.internals;
 
 
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
@@ -27,6 +24,9 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;

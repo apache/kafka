@@ -23,10 +23,11 @@ import org.apache.kafka.connect.transforms.predicates.HasHeaderKey;
 import org.apache.kafka.connect.transforms.predicates.RecordIsTombstone;
 import org.apache.kafka.connect.transforms.predicates.TopicNameMatches;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,7 +73,7 @@ public class TransformationIntegrationTest {
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
 
-    @Before
+    @BeforeEach
     public void setup() {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
@@ -99,7 +100,7 @@ public class TransformationIntegrationTest {
         connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
     }
 
-    @After
+    @AfterEach
     public void close() {
         // delete connector handle
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);

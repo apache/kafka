@@ -25,55 +25,40 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * Tests all available joins of Kafka Streams DSL.
  */
-@Category({IntegrationTest.class})
-@RunWith(value = Parameterized.class)
+@Tag("integration")
+@Timeout(600)
 public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegrationTest {
-
     private static final String STORE_NAME = "table-store";
+    private static final String APP_ID = "stream-table-join-integration-test";
+    private static final Joined<Long, String, String> JOINED =
+            Joined.with(Serdes.Long(), Serdes.String(), Serdes.String(), "Grace", Duration.ofMillis(2));
 
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-    private KStream<Long, String> leftStream;
-    private KTable<Long, String> rightTable;
-    private Joined<Long, String, String> joined;
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerWithVersionedStore(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.as(
+                Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
 
-    public StreamTableJoinWithGraceIntegrationTest(final boolean cacheEnabled) {
-        super(cacheEnabled);
-    }
-
-    @Before
-    public void prepareTopology() throws InterruptedException {
-        super.prepareEnvironment();
-        appID = "stream-table-join-integration-test";
-        builder = new StreamsBuilder();
-        joined = Joined.with(Serdes.Long(), Serdes.String(), Serdes.String(), "Grace", Duration.ofMillis(2));
-    }
-    
-    @Test
-    public void testInnerWithVersionedStore() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
-
-        leftStream = builder.stream(INPUT_TOPIC_LEFT);
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.as(
-            Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
-        leftStream.join(rightTable, valueJoiner, joined).to(OUTPUT_TOPIC);
+        leftStream.join(rightTable, valueJoiner, JOINED).to(OUTPUT_TOPIC);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -101,17 +86,19 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
             null
         );
 
-        runTestWithDriver(input, expectedResult);
+        runTestWithDriver(input, expectedResult, streamsConfig, builder.build(streamsConfig));
     }
 
-    @Test
-    public void testLeftWithVersionedStore() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
-
-        leftStream = builder.stream(INPUT_TOPIC_LEFT);
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.as(
-            Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
-        leftStream.leftJoin(rightTable, valueJoiner, joined).to(OUTPUT_TOPIC);
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftWithVersionedStore(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.as(
+                Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
+        leftStream.leftJoin(rightTable, valueJoiner, JOINED).to(OUTPUT_TOPIC);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -139,6 +126,6 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
             null
         );
 
-        runTestWithDriver(input, expectedResult);
+        runTestWithDriver(input, expectedResult, streamsConfig, builder.build(streamsConfig));
     }
 }

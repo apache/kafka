@@ -1170,8 +1170,19 @@ class KafkaApisTest extends Logging {
     testFindCoordinatorWithTopicCreation(CoordinatorType.TRANSACTION, hasEnoughLiveBrokers = false, version = 3)
   }
 
+  @Test
+  def testFindCoordinatorTooOldForShareStateTopic(): Unit = {
+    testFindCoordinatorWithTopicCreation(CoordinatorType.SHARE, checkAutoCreateTopic = false, version = 5)
+  }
+
+  @Test
+  def testFindCoordinatorNoShareCoordinatorForShareStateTopic(): Unit = {
+    testFindCoordinatorWithTopicCreation(CoordinatorType.SHARE, checkAutoCreateTopic = false)
+  }
+
   private def testFindCoordinatorWithTopicCreation(coordinatorType: CoordinatorType,
                                                    hasEnoughLiveBrokers: Boolean = true,
+                                                   checkAutoCreateTopic: Boolean = true,
                                                    version: Short = ApiKeys.FIND_COORDINATOR.latestVersion): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
 
@@ -1202,6 +1213,10 @@ class KafkaApisTest extends Logging {
           authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.TRANSACTIONAL_ID,
             groupId, AuthorizationResult.ALLOWED)
           Topic.TRANSACTION_STATE_TOPIC_NAME
+        case CoordinatorType.SHARE =>
+          authorizeResource(authorizer, AclOperation.CLUSTER_ACTION, ResourceType.CLUSTER,
+            Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED)
+          Topic.SHARE_GROUP_STATE_TOPIC_NAME
         case _ =>
           throw new IllegalStateException(s"Unknown coordinator type $coordinatorType")
       }
@@ -1227,13 +1242,18 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleFindCoordinatorRequest(request)
 
     val response = verifyNoThrottling[FindCoordinatorResponse](request)
-    if (version >= 4) {
+    if (coordinatorType == CoordinatorType.SHARE && version < 6) {
+      assertEquals(Errors.INVALID_REQUEST.code, response.data.coordinators.get(0).errorCode)
+    } else if (version >= 4) {
       assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code, response.data.coordinators.get(0).errorCode)
       assertEquals(groupId, response.data.coordinators.get(0).key)
     } else {
       assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code, response.data.errorCode)
+      assertTrue(capturedRequest.getValue.isEmpty)
     }
-    assertTrue(capturedRequest.getValue.isEmpty)
+    if (checkAutoCreateTopic) {
+      assertTrue(capturedRequest.getValue.isEmpty)
+    }
   }
 
   @Test
