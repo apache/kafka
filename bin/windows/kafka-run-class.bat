@@ -116,7 +116,11 @@ IF ["%LOG_DIR%"] EQU [""] (
 
 rem Log4j settings
 IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
-	set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%BASE_DIR%/config/tools-log4j.properties
+	if exist %~dp0../../etc/kafka/tools-log4j.properties (
+		set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%~dp0../../etc/kafka/tools-log4j.properties
+	) else (
+		set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%BASE_DIR%/config/tools-log4j.properties
+	)
 ) ELSE (
   rem create logs directory
   IF not exist "%LOG_DIR%" (
