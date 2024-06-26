@@ -176,7 +176,7 @@ public class StreamsGroup implements Group {
     /**
      * The Streams topology.
      */
-    private StreamsTopology topology;
+    private TimelineObject<Optional<StreamsTopology>> topology;
 
     /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with the group epoch at the time of setting it.
@@ -209,7 +209,7 @@ public class StreamsGroup implements Group {
         this.currentStandbyTasksEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentWarmupTasksEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
-        this.topology = null; // TODO
+        this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
     }
 
     /**
@@ -247,11 +247,11 @@ public class StreamsGroup implements Group {
     }
 
     public StreamsTopology topology() {
-        return topology;
+        return topology.get().orElse(null);
     }
 
     public void setTopology(StreamsTopology topology) {
-        this.topology = topology;
+        this.topology.set(Optional.of(topology));
     }
 
     /**
@@ -724,13 +724,7 @@ public class StreamsGroup implements Group {
         TopicsImage topicsImage,
         ClusterImage clusterImage
     ) {
-        Set<String> subscribedTopicNames;
-
-        if (topology != null) {
-            subscribedTopicNames = topology.topicSubscription();
-        } else {
-            subscribedTopicNames = Collections.emptySet();
-        }
+        Set<String> subscribedTopicNames = topology.get().map(StreamsTopology::topicSubscription).orElse(Collections.emptySet());
 
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
@@ -897,7 +891,7 @@ public class StreamsGroup implements Group {
         records.add(CoordinatorRecordHelpers.newStreamsTargetAssignmentEpochTombstoneRecord(groupId()));
 
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newStreamsMemberSubscriptionTombstoneRecord(groupId(), memberId))
+            records.add(CoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId(), memberId))
         );
 
         records.add(CoordinatorRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord(groupId()));
@@ -1194,7 +1188,7 @@ public class StreamsGroup implements Group {
     }
 
     public void setTopology(final StreamsGroupTopologyValue topology) {
-        this.topology = new StreamsTopology(topology.topologyHash(), topology.topology().stream().collect(Collectors.toMap(
-            Subtopology::subtopology, x -> x)));
+        this.topology.set(Optional.of(new StreamsTopology(topology.topologyHash(), topology.topology().stream().collect(Collectors.toMap(
+            Subtopology::subtopology, x -> x)))));
     }
 }

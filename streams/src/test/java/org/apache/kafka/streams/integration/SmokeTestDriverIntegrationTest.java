@@ -22,11 +22,14 @@ import kafka.api.IntegrationTestHarness;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -45,6 +48,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest extends IntegrationTestHarness {
+
+    @BeforeEach
+    public void setUp(TestInfo testInfo) {
+        serverConfig().setProperty(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, "true");
+        super.setUp(testInfo);
+    }
 
     @Override
     public int brokerCount() {
@@ -132,6 +141,35 @@ public class SmokeTestDriverIntegrationTest extends IntegrationTestHarness {
 
         for (String topic: SmokeTestDriver.topics()) {
             deleteTopic(topic, listenerName());
+        }
+
+        for (String topic: new String[]{
+            "SmokeTest-KSTREAM-REDUCE-STATE-STORE-0000000020-changelog",
+            "SmokeTest-minStoreName-changelog",
+            "SmokeTest-cntByCnt-repartition",
+            "SmokeTest-KTABLE-SUPPRESS-STATE-STORE-0000000011-changelog",
+            "SmokeTest-sum-STATE-STORE-0000000050-changelog",
+            "SmokeTest-uwin-cnt-changelog",
+            "SmokeTest-maxStoreName-changelog",
+            "SmokeTest-cntStoreName-changelog",
+            "SmokeTest-KTABLE-SUPPRESS-STATE-STORE-0000000027-changelog",
+            "SmokeTest-win-sum-changelog",
+            "SmokeTest-uwin-max-changelog",
+            "SmokeTest-uwin-min-changelog",
+            "SmokeTest-cntByCnt-changelog",
+            "data",
+            "echo",
+            "max",
+            "min", "min-suppressed", "min-raw",
+            "dif",
+            "sum",
+            "sws-raw", "sws-suppressed",
+            "cnt",
+            "avg",
+            "tagg",
+            "fk"
+        }) {
+            createTopic(topic, 3, 1, new Properties(), listenerName(), new Properties());
         }
 
         final String bootstrapServers = bootstrapServers(listenerName());

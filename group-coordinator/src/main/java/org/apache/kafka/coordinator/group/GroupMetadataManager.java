@@ -149,10 +149,13 @@ import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEA
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsCurrentAssignmentRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsCurrentAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupMemberRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newCurrentAssignmentRecord;
@@ -180,6 +183,7 @@ import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasA
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedStandbyTasksChanged;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedWarmupTasksChanged;
 
+
 /**
  * The GroupMetadataManager manages the metadata of all classic and consumer groups. It holds
  * the hard and the soft state of the groups. This class has two kinds of methods:
@@ -189,9 +193,8 @@ import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasA
  * 2) The replay methods which apply records to the hard state. Those are used in the request
  *    handling as well as during the initial loading of the records from the partitions.
  */
-@SuppressWarnings("JavaNCSS")
+@SuppressWarnings("javancss")
 public class GroupMetadataManager {
-
 
     public static class Builder {
         private LogContext logContext = null;
@@ -791,6 +794,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null || (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records))) {
+            log.info("Creating streams group {}", groupId);
             return new StreamsGroup(snapshotRegistry, groupId, metrics);
         } else {
             if (group.type() == STREAMS) {
@@ -933,6 +937,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
+            log.info("Reading persisted streams group {}", groupId);
             StreamsGroup streamsGroup = new StreamsGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, streamsGroup);
             metrics.onStreamsGroupStateTransition(null, streamsGroup.state());
@@ -1877,7 +1882,7 @@ public class GroupMetadataManager {
                         .setAssignedWarmupTasks(member.assignedWarmupTasks());
                     // Remove the member without canceling its timers in case the change is reverted. If the
                     // change is not reverted, the group validation will fail and the timer will do nothing.
-                    removeMember(records, groupId, member.memberId());
+                    removeStreamsMember(records, groupId, member.memberId());
                     log.info("[GroupId {}] Static member with unknown member id and instance id {} re-joins the streams group. " +
                         "Created a new member {} to replace the existing member {}.", groupId, instanceId, memberId, member.memberId());
                 }
@@ -1926,7 +1931,7 @@ public class GroupMetadataManager {
                 metadataImage.cluster()
             );
 
-            if (subscriptionMetadata.equals(group.subscriptionMetadata())) {
+            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
                 log.info("[GroupId {}] Computed new partition metadata: {}.",
                     groupId, subscriptionMetadata);
                 bumpGroupEpoch = true;
@@ -2000,8 +2005,6 @@ public class GroupMetadataManager {
             response.setStandbyTasks(createStreamsHeartbeatResponseTaskIds(updatedMember.assignedStandbyTasks()));
             response.setWarmupTasks(createStreamsHeartbeatResponseTaskIds(updatedMember.assignedWarmupTasks()));
         }
-
-        log.info("Writing records {}", records);
 
         return new CoordinatorResult<>(records, response);
     }
@@ -2234,9 +2237,10 @@ public class GroupMetadataManager {
         throws ApiException {
         final List<CoordinatorRecord> records = new ArrayList<>();
 
-        // TODO: Throw if group does not exist or is not a streams group. Needs model of
-        //       similar to  final StreamsGroup group = getOrMaybeCreateStreamsGroup(groupId, createIfNotExists, records);
-        //                   throwIfNull(group);
+        log.info("Initializing topology for group {} to {}", groupId, subtopologies);
+
+        final StreamsGroup group = getOrMaybeCreateStreamsGroup(groupId, false, records);
+        throwIfNull(group, "group does not exist");
 
         // TODO: For the POC, only check if internal topics exist
         Set<String> missingTopics = new HashSet<>();
@@ -2998,15 +3002,28 @@ public class GroupMetadataManager {
         T response
     ) {
         List<CoordinatorRecord> records = new ArrayList<>();
-        removeMember(records, group.groupId(), member.memberId());
+        removeStreamsMember(records, group.groupId(), member.memberId());
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newGroupEpochRecord(group.groupId(), groupEpoch));
+        records.add(newStreamsGroupEpochRecord(group.groupId(), groupEpoch));
 
         cancelTimers(group.groupId(), member.memberId());
 
         return new CoordinatorResult<>(records, response);
+    }
+
+    /**
+     * Write tombstones for the member. The order matters here.
+     *
+     * @param records       The list of records to append the member assignment tombstone records.
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void removeStreamsMember(List<CoordinatorRecord> records, String groupId, String memberId) {
+        records.add(newStreamsCurrentAssignmentTombstoneRecord(groupId, memberId));
+        records.add(newStreamsTargetAssignmentTombstoneRecord(groupId, memberId));
+        records.add(newStreamsGroupMemberTombstoneRecord(groupId, memberId));
     }
 
     /**
@@ -4067,6 +4084,23 @@ public class GroupMetadataManager {
     public void onLoaded() {
         groups.forEach((groupId, group) -> {
             switch (group.type()) {
+                case STREAMS:
+                    StreamsGroup streamsGroup = (StreamsGroup) group;
+                    log.info("Loaded streams group {} with {} members.", groupId, streamsGroup.members().size());
+                    streamsGroup.members().forEach((memberId, member) -> {
+                        log.debug("Loaded member {} in streams group {}.", memberId, groupId);
+                        scheduleStreamsGroupSessionTimeout(groupId, memberId);
+                        if (member.state() == org.apache.kafka.coordinator.group.streams.MemberState.UNREVOKED_TASKS) {
+                            scheduleStreamsGroupRebalanceTimeout(
+                                groupId,
+                                member.memberId(),
+                                member.memberEpoch(),
+                                member.rebalanceTimeoutMs()
+                            );
+                        }
+                    });
+                    break;
+
                 case CONSUMER:
                     ConsumerGroup consumerGroup = (ConsumerGroup) group;
                     log.info("Loaded consumer group {} with {} members.", groupId, consumerGroup.members().size());
@@ -4114,6 +4148,11 @@ public class GroupMetadataManager {
     public void onUnloaded() {
         groups.values().forEach(group -> {
             switch (group.type()) {
+                case STREAMS:
+                    StreamsGroup streamsGroup = (StreamsGroup) group;
+                    log.info("[GroupId={}] Unloaded group metadata for group epoch {}.",
+                        streamsGroup.groupId(), streamsGroup.groupEpoch());
+                    break;
                 case CONSUMER:
                     ConsumerGroup consumerGroup = (ConsumerGroup) group;
                     log.info("[GroupId={}] Unloaded group metadata for group epoch {}.",

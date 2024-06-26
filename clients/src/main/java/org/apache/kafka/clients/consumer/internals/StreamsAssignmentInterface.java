@@ -176,6 +176,15 @@ public class StreamsAssignmentInterface {
         public Assignment copy() {
             return new Assignment(activeTasks, standbyTasks, warmupTasks);
         }
+
+        @Override
+        public String toString() {
+            return "Assignment{" +
+                "activeTasks=" + activeTasks +
+                ", standbyTasks=" + standbyTasks +
+                ", warmupTasks=" + warmupTasks +
+                '}';
+        }
     }
 
     public static class TopicInfo {

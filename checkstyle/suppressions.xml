@@ -361,4 +361,8 @@
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
               files="(ReplicaFetcherThreadBenchmark).java"/>
 
+    <!-- group coordinator -->
+    <suppress checks="JavaNCSS"
+              files="GroupMetadataManager.java"/>
+
 </suppressions>

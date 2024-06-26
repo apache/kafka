@@ -35,7 +35,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsTargetAssignmentEpochRecord;
 
 /**
  * Build a new Target Assignment based on the provided parameters. As a result, it yields the records that must be persisted to the log and
@@ -350,7 +350,7 @@ public class TargetAssignmentBuilder {
         });
 
         // Bump the target assignment epoch.
-        records.add(newTargetAssignmentEpochRecord(groupId, groupEpoch));
+        records.add(newStreamsTargetAssignmentEpochRecord(groupId, groupEpoch));
 
         return new TargetAssignmentResult(records, newTargetAssignment);
     }
