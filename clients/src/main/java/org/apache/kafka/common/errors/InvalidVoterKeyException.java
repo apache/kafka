@@ -14,12 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.protocol.ApiMessage;
+public class InvalidVoterKeyException extends ApiException {
 
-public interface RaftMessage {
-    int correlationId();
+    private static final long serialVersionUID = 1;
 
-    ApiMessage data();
+    public InvalidVoterKeyException(String s) {
+        super(s);
+    }
+
+    public InvalidVoterKeyException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
 }
