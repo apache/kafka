@@ -2326,7 +2326,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             VoterSet lastVoterSet = partitionState.lastVoterSet();
             timeUntilNextBeginQuorumSend = maybeSendRequests(
                 currentTimeMs,
-                lastVoterSet.voterNodes(lastVoterSet.voterIds().stream().filter(id -> id != state.localReplicaKey().id()), channel.listenerName()),
+                lastVoterSet.voterNodes(lastVoterSet.voterIds().stream().filter(id -> id != quorum.localIdOrThrow()), channel.listenerName()),
                 this::buildBeginQuorumEpochRequest
             );
             state.resetBeginQuorumEpochTimer(currentTimeMs);

@@ -238,10 +238,6 @@ public class LeaderState<T> implements EpochState {
         return this.grantingVoters;
     }
 
-    public ReplicaKey localReplicaKey() {
-        return this.localReplicaKey;
-    }
-
     // visible for testing
     Set<Integer> nonAcknowledgingVoters() {
         Set<Integer> nonAcknowledging = new HashSet<>();
