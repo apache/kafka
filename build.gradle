@@ -500,10 +500,6 @@ subprojects {
     maxHeapSize = "2560m"
     jvmArgs = defaultJvmArgs
 
-    useJUnitPlatform {
-      includeTags "integration"
-    }
-
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
@@ -513,6 +509,10 @@ subprojects {
     logTestStdout.rehydrate(delegate, owner, this)()
 
     exclude testsToExclude
+
+    useJUnitPlatform {
+      includeTags "integration"
+    }
 
     retry {
       maxRetries = userMaxTestRetries
@@ -527,10 +527,6 @@ subprojects {
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
 
-    useJUnitPlatform {
-      excludeTags "integration"
-    }
-
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
@@ -540,6 +536,10 @@ subprojects {
     logTestStdout.rehydrate(delegate, owner, this)()
 
     exclude testsToExclude
+
+    useJUnitPlatform {
+      excludeTags "integration"
+    }
 
     retry {
       maxRetries = userMaxTestRetries
