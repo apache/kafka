@@ -626,9 +626,9 @@ public final class RaftClientTestContext {
         channel.mockReceive(new RaftResponse.Inbound(correlationId, response, source));
     }
 
-    void assertSentBeginQuorumEpochRequest(int epoch, int numBeginEpochRequests, Set<Integer> destinationIds) {
+    void assertSentBeginQuorumEpochRequest(int epoch, Set<Integer> destinationIds) {
         List<RaftRequest.Outbound> requests = collectBeginEpochRequests(epoch);
-        assertEquals(numBeginEpochRequests, requests.size());
+        assertEquals(destinationIds.size(), requests.size());
         assertEquals(destinationIds, requests.stream().map(r -> r.destination().id()).collect(Collectors.toSet()));
     }
 

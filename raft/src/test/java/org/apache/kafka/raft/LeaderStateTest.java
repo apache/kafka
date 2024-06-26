@@ -877,9 +877,8 @@ public class LeaderStateTest {
         assertEquals(0, state.timeUntilBeginQuorumEpochTimerExpires(time.milliseconds()));
 
         time.sleep(5);
-        long resetTime = time.milliseconds();
-        state.resetBeginQuorumEpochTimer(resetTime);
-        assertEquals(beginQuorumEpochTimeoutMs, state.timeUntilBeginQuorumEpochTimerExpires(resetTime));
+        state.resetBeginQuorumEpochTimer(time.milliseconds());
+        assertEquals(beginQuorumEpochTimeoutMs, state.timeUntilBeginQuorumEpochTimerExpires(time.milliseconds()));
 
         time.sleep(5);
         assertEquals(beginQuorumEpochTimeoutMs - 5, state.timeUntilBeginQuorumEpochTimerExpires(time.milliseconds()));
