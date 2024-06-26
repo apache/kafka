@@ -439,8 +439,9 @@ class SocketServerTest {
   @Test
   def testDisabledRequestIsRejected(): Unit = {
     val correlationId = 57
-    val header = new RequestHeader(ApiKeys.VOTE, 0, "", correlationId)
-    val request = new VoteRequest.Builder(new VoteRequestData()).build()
+    val version: Short = 0
+    val header = new RequestHeader(ApiKeys.VOTE, version, "", correlationId)
+    val request = new VoteRequest.Builder(new VoteRequestData()).build(version)
     val serializedBytes = Utils.toArray(request.serializeWithHeader(header))
 
     val socket = connect()

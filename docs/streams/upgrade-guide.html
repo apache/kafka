@@ -133,12 +133,44 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
-    <h4><a id="streams_api_changes_380" href="#streams_api_changes_380">Streams API changes in 3.8.0</a></h3>
+    <h3><a id="streams_api_changes_380" href="#streams_api_changes_380">Streams API changes in 3.8.0</a></h3>
+
+    <p>
+        Kafka Streams now supports customizable task assignment strategies via the <code>task.assignor.class</code>
+        configuration. The configuration can be set to the fully qualified class name of a custom task assignor
+        implementation that has to extend the new
+        <code>org.apache.kafka.streams.processor.assignment.TaskAssignor</code> interface.
+
+        The new configuration also allows users to bring back the behavior of the old task assignor
+        <code>StickyTaskAssignor</code> that was used before the introduction of the
+        <code>HighAvailabilityTaskAssignor</code>. If no custom task assignor is configured, the default task assignor
+        <code>HighAvailabilityTaskAssignor</code> is used.
+
+        If you were using the <code>internal.task.assignor.class</code> config, you should switch to using the new
+        <code>task.assignor.class</code> config instead, as the internal config will be removed in a future release.
+        If you were previously plugging in the <code>StickyTaskAssignor</code> via the legacy
+        <code>internal.task.assignor.class</code> config, you will need to make sure that you are importing
+        the new <code>org.apache.kafka.streams.processor.assignment.StickTaskAssignor</code> when you switch
+        over to the new <code>task.assignor.class</code> config, which is a version of the <code>StickyTaskAssignor</code>
+        that implements the new public <code>TaskAssignor</code> interface.
+
+        For more details, see the public interface section of
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-924%3A+customizable+task+assignment+for+Streams">KIP-924</a>.
+    </p>
+
     <p>
         The Processor API now support so-called read-only state stores, added via 
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-813%3A+Shareable+State+Stores">KIP-813</a>.
-	These stores don't have a dedicated changelog topic, but use their source topic for fault-tolerance,
-	simlar to <code>KTables</code> with source-topic optimization enabled.
+        These stores don't have a dedicated changelog topic, but use their source topic for fault-tolerance,
+        similar to <code>KTables</code> with source-topic optimization enabled.
+    </p>
+
+    <p>
+        To improve detection of leaked state store iterators, we added new store-level metrics to track the number and
+        age of open iterators. The new metrics are <code>num-open-iterators</code>, <code>iterator-duration-avg</code>,
+        <code>iterator-duration-max</code> and <code>oldest-iterator-open-since-ms</code>. These metrics are available
+        for all state stores, including RocksDB, in-memory, and custom stores. More details can be found in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-989%3A+Improved+StateStore+Iterator+metrics+for+detecting+leaks">KIP-989</a>.
     </p>
 
     <h3><a id="streams_api_changes_370" href="#streams_api_changes_370">Streams API changes in 3.7.0</a></h3>
