@@ -568,26 +568,7 @@ class BrokerServer(
     if (config.isNewGroupCoordinatorEnabled) {
       val time = Time.SYSTEM
       val serde = new CoordinatorRecordSerde
-      val groupCoordinatorConfig = new GroupCoordinatorConfig(
-        config.groupCoordinatorNumThreads,
-        config.groupCoordinatorAppendLingerMs,
-        config.consumerGroupSessionTimeoutMs,
-        config.consumerGroupHeartbeatIntervalMs,
-        config.consumerGroupMaxSize,
-        config.consumerGroupAssignors,
-        config.offsetsTopicSegmentBytes,
-        config.offsetMetadataMaxSize,
-        config.groupMaxSize,
-        config.groupInitialRebalanceDelay,
-        GroupCoordinatorConfig.CLASSIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS,
-        config.groupMinSessionTimeoutMs,
-        config.groupMaxSessionTimeoutMs,
-        config.offsetsRetentionCheckIntervalMs,
-        config.offsetsRetentionMinutes * 60 * 1000L,
-        config.offsetCommitTimeoutMs,
-        config.consumerGroupMigrationPolicy,
-        config.offsetsTopicCompressionType
-      )
+      val groupCoordinatorConfig = new GroupCoordinatorConfig(config)
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",
         new SystemTimer("group-coordinator")
