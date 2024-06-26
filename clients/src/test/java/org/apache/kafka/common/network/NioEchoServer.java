@@ -53,7 +53,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -90,7 +90,7 @@ public class NioEchoServer extends Thread {
     private volatile boolean closeKafkaChannels;
     private final DelegationTokenCache tokenCache;
     private final Time time;
-    private final AtomicLong idGenerator = new AtomicLong();
+    private final AtomicInteger nextConnectionIndex = new AtomicInteger();
 
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
                          String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache, Time time) throws Exception {
@@ -228,8 +228,7 @@ public class NioEchoServer extends Thread {
                 selector.poll(100);
                 synchronized (newChannels) {
                     for (SocketChannel socketChannel : newChannels) {
-                        String id = id();
-                        selector.register(id, socketChannel);
+                        selector.register(id(socketChannel), socketChannel);
                         socketChannels.add(socketChannel);
                     }
                     newChannels.clear();
@@ -279,8 +278,10 @@ public class NioEchoServer extends Thread {
         return false;
     }
 
-    private String id() {
-        return "connection-" + idGenerator.getAndIncrement();
+    private String id(SocketChannel channel) {
+        String connectionId = ConnectionIdHelper.generateConnectionId(channel.socket(), nextConnectionIndex.getAndIncrement());
+        nextConnectionIndex.compareAndSet(Integer.MAX_VALUE, 0);
+        return connectionId;
     }
 
     private KafkaChannel channel(String id) {
