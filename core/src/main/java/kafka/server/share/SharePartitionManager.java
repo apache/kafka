@@ -428,6 +428,26 @@ public class SharePartitionManager implements AutoCloseable {
         return cachedTopicIdPartitions;
     }
 
+    /**
+     * The acknowledgeShareSessionCacheUpdate method is used to update the share session cache before acknowledgements are handled
+     * either as part of shareFetch request or shareAcknowledge request
+     * @param groupId The group id in the request.
+     * @param memberId The member id of the client in the request.
+     * @param reqEpoch The request epoch.
+     */
+    public void acknowledgeShareSessionCacheUpdate(String groupId, Uuid memberId, int reqEpoch) {
+        // If the request is a Final Fetch Request, the share session would have already been deleted from cache, i.e. there is no need to update the cache
+        if (reqEpoch == ShareFetchMetadata.FINAL_EPOCH) {
+            return;
+        }
+        ShareSession shareSession = cache.get(new ShareSessionKey(groupId, memberId));
+        // Update the session's position in the cache for both piggybacked (to guard against the entry disappearing
+        // from the cache between the ack and the fetch) and standalone acknowledgments.
+        cache.touch(shareSession, time.milliseconds());
+        // If acknowledgement is piggybacked on fetch, newContext function takes care of updating the share session epoch
+        // and share session cache. However, if the acknowledgement is standalone, the updates are handled in the if block
+    }
+
     @Override
     public void close() throws Exception {
         this.timer.close();

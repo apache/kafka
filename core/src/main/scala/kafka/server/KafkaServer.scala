@@ -589,6 +589,7 @@ class KafkaServer(
           authorizer = authorizer,
           quotas = quotaManagers,
           fetchManager = fetchManager,
+          sharePartitionManagerOption = None,
           brokerTopicStats = brokerTopicStats,
           clusterId = clusterId,
           time = time,

@@ -53,6 +53,9 @@ public interface ClientMetadata {
 
 
     class DefaultClientMetadata implements ClientMetadata {
+
+        public static final String DEFAULT_RACK_ID = "";
+
         private final String rackId;
         private final String clientId;
         private final InetAddress clientAddress;
