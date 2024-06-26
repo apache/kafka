@@ -1515,7 +1515,11 @@ public class KafkaStreams implements AutoCloseable {
             stateDirectory.close();
             // passing in `timeoutMs` here is a quick fix to avoid blocking forever
             // cf https://issues.apache.org/jira/browse/KAFKA-7996
-            adminClient.close(Duration.ofMillis(timeoutMs));
+            if (timeoutMs >= 0) {
+                adminClient.close(Duration.ofMillis(timeoutMs));
+            } else {
+                adminClient.close();
+            }
 
             streamsMetrics.removeAllClientLevelSensorsAndMetrics();
             metrics.close();
