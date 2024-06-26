@@ -64,7 +64,7 @@ public class CandidateState implements EpochState {
         int electionTimeoutMs,
         LogContext logContext
     ) {
-        if (!voters.isVoter(ReplicaKey.of(localId, Optional.of(localDirectoryId)))) {
+        if (!voters.isVoter(ReplicaKey.of(localId, localDirectoryId))) {
             throw new IllegalArgumentException(
                 String.format(
                     "Local replica (%d, %s) must be in the set of voters %s",
@@ -247,7 +247,7 @@ public class CandidateState implements EpochState {
     public ElectionState election() {
         return ElectionState.withVotedCandidate(
             epoch,
-            ReplicaKey.of(localId, Optional.of(localDirectoryId)),
+            ReplicaKey.of(localId, localDirectoryId),
             voteStates.keySet()
         );
     }
@@ -255,6 +255,11 @@ public class CandidateState implements EpochState {
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public Endpoints leaderEndpoints() {
+        return Endpoints.empty();
     }
 
     @Override
