@@ -193,6 +193,12 @@ do
   fi
 done
 
+# CONFLUENT: classpath addition for releases with LSB-style layout
+CLASSPATH="$CLASSPATH":"$base_dir/share/java/kafka/*"
+
+# classpath for telemetry
+CLASSPATH="$CLASSPATH":"$base_dir/share/java/confluent-telemetry/*"
+
 for file in "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
   if should_include_file "$file"; then
@@ -228,7 +234,15 @@ fi
 # Log4j settings
 if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   # Log to console. This is a tool.
-  LOG4J_DIR="$base_dir/config/tools-log4j.properties"
+  LOG4J_CONFIG_NORMAL_INSTALL="/etc/kafka/tools-log4j.properties"
+  LOG4J_CONFIG_ZIP_INSTALL="$base_dir/etc/kafka/tools-log4j.properties"
+  if [ -e "$LOG4J_CONFIG_NORMAL_INSTALL" ]; then # Normal install layout
+    LOG4J_DIR="${LOG4J_CONFIG_NORMAL_INSTALL}"
+  elif [ -e "${LOG4J_CONFIG_ZIP_INSTALL}" ]; then # Simple zip file layout
+    LOG4J_DIR="${LOG4J_CONFIG_ZIP_INSTALL}"
+  else # Fallback to normal default
+    LOG4J_DIR="$base_dir/config/tools-log4j.properties"
+  fi
   # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
   (( WINDOWS_OS_FORMAT )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
   KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
