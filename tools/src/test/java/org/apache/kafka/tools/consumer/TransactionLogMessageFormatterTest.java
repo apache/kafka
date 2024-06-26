@@ -33,11 +33,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import static java.util.Collections.emptyList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TransactionLogMessageFormatterTest {
@@ -57,7 +57,7 @@ public class TransactionLogMessageFormatterTest {
                 .setTransactionStartTimestampMs(750L)
                 .setTransactionLastUpdateTimestampMs(1000L)
                 .setTransactionTimeoutMs(500)
-                .setTransactionPartitions(Collections.emptyList());
+                .setTransactionPartitions(emptyList());
     }
 
     private static Stream<Arguments> parameters() {
@@ -86,36 +86,40 @@ public class TransactionLogMessageFormatterTest {
     public void testTransactionLogMessageFormatter(short keyVersion, short valueVersion, String expectedOutput) {
         ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(keyVersion, txnLogKey);
         ByteBuffer valueBuffer = MessageUtil.toVersionPrefixedByteBuffer(valueVersion, txnLogValue);
+        ConsumerRecord<byte[], byte[]> record = createRecord(keyBuffer.array(), valueBuffer.array());
 
-        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
-                TOPIC, 0, 0,
-                0L, TimestampType.CREATE_TIME, 0,
-                0, keyBuffer.array(), valueBuffer.array(),
-                new RecordHeaders(), Optional.empty());
-
-        try (MessageFormatter formatter = new TransactionLogMessageFormatter()) {
-            formatter.configure(new HashMap<>());
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            formatter.writeTo(record, new PrintStream(out));
-            assertEquals(expectedOutput, out.toString());
-        }
+        assertPrintContent(expectedOutput, record);
     }
 
     @Test
     public void testNullPayLoadWithTransactionLogMessage() {
         ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer((short) 0, txnLogKey);
+        ConsumerRecord<byte[], byte[]> record = createRecord(keyBuffer.array(), null);
 
-        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
+        assertPrintContent("NULL", record);
+    }
+
+    @Test
+    public void testNullKeyWithTransactionLogMessage() {
+        ConsumerRecord<byte[], byte[]> record = createRecord(null, null);
+        
+        assertPrintContent("", record);
+    }
+
+    private static ConsumerRecord<byte[], byte[]> createRecord(byte[] keyBuffer, byte[] valueBuffer) {
+        return new ConsumerRecord<>(
                 TOPIC, 0, 0,
                 0L, TimestampType.CREATE_TIME, 0,
-                0, keyBuffer.array(), null,
+                0, keyBuffer, valueBuffer,
                 new RecordHeaders(), Optional.empty());
+    }
 
+    private void assertPrintContent(String expectedOutput, ConsumerRecord<byte[], byte[]> record) {
         try (MessageFormatter formatter = new TransactionLogMessageFormatter()) {
             formatter.configure(new HashMap<>());
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             formatter.writeTo(record, new PrintStream(out));
-            assertEquals("NULL", out.toString());
+            assertEquals(expectedOutput, out.toString());
         }
     }
 }

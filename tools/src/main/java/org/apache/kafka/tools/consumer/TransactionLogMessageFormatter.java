@@ -44,31 +44,33 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
 
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
-        Optional.ofNullable(consumerRecord.key())
-            .ifPresent(key -> {
-                byte[] value = consumerRecord.value();
-                String content;
-                if (Objects.isNull(value)) {
-                    content = "NULL";
-                } else {
-                    short keyVersion = ByteBuffer.wrap(key).getShort();
-                    short valueVersion = ByteBuffer.wrap(value).getShort();
+        ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
+        String content;
+        
+        byte[] key = consumerRecord.key();
+        if (Objects.nonNull(key)) {
+            short keyVersion = ByteBuffer.wrap(key).getShort();
+            Optional<TransactionLogKey> transactionLogKey = readToTransactionLogKey(ByteBuffer.wrap(key));
+            settingKeyNode(json, transactionLogKey, keyVersion);
+        } else {
+            return;
+        }
 
-                    ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
-                    Optional<TransactionLogKey> transactionLogKey = readToTransactionLogKey(ByteBuffer.wrap(key));
-                    Optional<TransactionLogValue> transactionLogValue = readToTransactionLogValue(ByteBuffer.wrap(value));
-
-                    settingKeyNode(json, transactionLogKey, keyVersion);
-                    settingValueNode(json, transactionLogValue, valueVersion);
-                    content = json.toString();
-                }
-
-                try {
-                    output.write(content.getBytes(UTF_8));
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            });
+        byte[] value = consumerRecord.value();
+        if (Objects.nonNull(value)) {
+            short valueVersion = ByteBuffer.wrap(value).getShort();
+            Optional<TransactionLogValue> transactionLogValue = readToTransactionLogValue(ByteBuffer.wrap(value));
+            settingValueNode(json, transactionLogValue, valueVersion);
+            content = json.toString();
+        } else {
+            content = "NULL";
+        }
+        
+        try {
+            output.write(content.getBytes(UTF_8));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private Optional<TransactionLogKey> readToTransactionLogKey(ByteBuffer byteBuffer) {
