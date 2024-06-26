@@ -204,10 +204,10 @@ public class CandidateStateTest {
             voterSetWithLocal(IntStream.of(1, 2, 3))
         );
 
-        assertFalse(state.canGrantVote(ReplicaKey.of(0, Optional.empty()), isLogUpToDate));
-        assertFalse(state.canGrantVote(ReplicaKey.of(1, Optional.empty()), isLogUpToDate));
-        assertFalse(state.canGrantVote(ReplicaKey.of(2, Optional.empty()), isLogUpToDate));
-        assertFalse(state.canGrantVote(ReplicaKey.of(3, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(0, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
     }
 
     @Test
@@ -230,6 +230,15 @@ public class CandidateStateTest {
             IllegalArgumentException.class,
             () -> newCandidateState(VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true)))
         );
+    }
+
+    @Test
+    void testLeaderEndpoints() {
+        CandidateState state = newCandidateState(
+            voterSetWithLocal(IntStream.of(1, 2, 3))
+        );
+
+        assertEquals(Endpoints.empty(), state.leaderEndpoints());
     }
 
     private VoterSet voterSetWithLocal(IntStream remoteVoters) {
