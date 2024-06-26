@@ -250,13 +250,39 @@ public class SharePartitionManager implements AutoCloseable {
         String groupId,
         Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics
     ) {
-        log.trace("Acknowledge request for topicIdPartitions: {} with groupId: {}",
+        log.debug("Acknowledge request for topicIdPartitions: {} with groupId: {}",
             acknowledgeTopics.keySet(), groupId);
+        Map<TopicIdPartition, CompletableFuture<Errors>> futures = new HashMap<>();
+        acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
+            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
+            if (sharePartition != null) {
+                synchronized (sharePartition) {
+                    CompletableFuture<Errors> future = sharePartition.acknowledge(memberId, acknowledgePartitionBatches).thenApply(throwable -> {
+                        if (throwable.isPresent()) {
+                            return Errors.forException(throwable.get());
+                        } else {
+                            return Errors.NONE;
+                        }
 
-        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> future = new CompletableFuture<>();
-        future.completeExceptionally(new UnsupportedOperationException("Not implemented yet"));
+                    });
+                    futures.put(topicIdPartition, future);
+                }
+            } else {
+                futures.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            }
+        });
 
-        return future;
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+            futures.values().toArray(new CompletableFuture[0]));
+        return allFutures.thenApply(v -> {
+            Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
+            futures.forEach((topicIdPartition, future) -> {
+                result.put(topicIdPartition, new ShareAcknowledgeResponseData.PartitionData()
+                    .setPartitionIndex(topicIdPartition.partition())
+                    .setErrorCode(future.join().code()));
+            });
+            return result;
+        });
     }
 
     /**

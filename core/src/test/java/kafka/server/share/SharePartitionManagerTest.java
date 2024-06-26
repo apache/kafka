@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.group.share.NoOpShareStatePersister;
 import org.apache.kafka.server.group.share.Persister;
+import org.apache.kafka.server.share.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.ShareSessionCache;
 import org.apache.kafka.server.share.ShareSessionKey;
 import org.apache.kafka.server.util.timer.MockTimer;
@@ -1362,6 +1363,180 @@ public class SharePartitionManagerTest {
                 sharePartitionManager.releaseAcquiredRecords(groupId, memberId, Collections.emptyList());
         Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
         assertEquals(0, result.size());
+    }
+
+    @Test
+    public void testAcknowledgeSuccess() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo1", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo2", 2));
+        TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo3", 4));
+
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        when(sp1.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+        when(sp2.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(
+                Optional.of(new InvalidRequestException("Batch record not found. The base offset is not found in the cache."))
+        ));
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp2), sp2);
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withPartitionCacheMap(partitionCacheMap).build();
+        acknowledgeTopics.put(tp1, Arrays.asList(
+                new ShareAcknowledgementBatch(12, 20, Collections.singletonList((byte) 1)),
+                new ShareAcknowledgementBatch(24, 56, Collections.singletonList((byte) 1))
+        ));
+        acknowledgeTopics.put(tp2, Arrays.asList(
+                new ShareAcknowledgementBatch(5, 17, Collections.singletonList((byte) 3)),
+                new ShareAcknowledgementBatch(19, 26, Collections.singletonList((byte) 1))
+        ));
+        acknowledgeTopics.put(tp3, Arrays.asList(
+                new ShareAcknowledgementBatch(45, 60, Collections.singletonList((byte) 2)),
+                new ShareAcknowledgementBatch(67, 82, Collections.singletonList((byte) 2))
+        ));
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
+                sharePartitionManager.acknowledge(memberId, groupId, acknowledgeTopics);
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
+        assertEquals(3, result.size());
+        assertTrue(result.containsKey(tp1));
+        assertTrue(result.containsKey(tp2));
+        assertTrue(result.containsKey(tp3));
+        assertEquals(0, result.get(tp1).partitionIndex());
+        assertEquals(Errors.NONE.code(), result.get(tp1).errorCode());
+        assertEquals(2, result.get(tp2).partitionIndex());
+        assertEquals(Errors.INVALID_REQUEST.code(), result.get(tp2).errorCode());
+        assertEquals(4, result.get(tp3).partitionIndex());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp3).errorCode());
+    }
+
+    @Test
+    public void testAcknowledgeIncorrectGroupId() {
+        String groupId = "grp";
+        String groupId2 = "grp2";
+        String memberId = Uuid.randomUuid().toString();
+
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo1", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo2", 2));
+        TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo3", 4));
+
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        when(sp1.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+        when(sp2.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(
+                Optional.of(new InvalidRequestException("Batch record not found. The base offset is not found in the cache."))
+        ));
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp2), sp2);
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withPartitionCacheMap(partitionCacheMap).build();
+
+        acknowledgeTopics.put(tp1, Arrays.asList(
+                new ShareAcknowledgementBatch(12, 20, Collections.singletonList((byte) 1)),
+                new ShareAcknowledgementBatch(24, 56, Collections.singletonList((byte) 1))
+        ));
+        acknowledgeTopics.put(tp2, Arrays.asList(
+                new ShareAcknowledgementBatch(5, 17, Collections.singletonList((byte) 3)),
+                new ShareAcknowledgementBatch(19, 26, Collections.singletonList((byte) 1))
+        ));
+        acknowledgeTopics.put(tp3, Arrays.asList(
+                new ShareAcknowledgementBatch(45, 60, Collections.singletonList((byte) 2)),
+                new ShareAcknowledgementBatch(67, 82, Collections.singletonList((byte) 2))
+        ));
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
+                sharePartitionManager.acknowledge(memberId, groupId2, acknowledgeTopics);
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
+        assertEquals(3, result.size());
+        assertTrue(result.containsKey(tp1));
+        assertTrue(result.containsKey(tp2));
+        assertTrue(result.containsKey(tp3));
+        assertEquals(0, result.get(tp1).partitionIndex());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp1).errorCode());
+        assertEquals(2, result.get(tp2).partitionIndex());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp2).errorCode());
+        assertEquals(4, result.get(tp3).partitionIndex());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp3).errorCode());
+    }
+
+    @Test
+    public void testAcknowledgeIncorrectMemberId() {
+        String groupId = "grp";
+        String memberId2 = Uuid.randomUuid().toString();
+
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo1", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo2", 2));
+
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        when(sp1.acknowledge(ArgumentMatchers.eq(memberId2), any())).thenReturn(CompletableFuture.completedFuture(
+                Optional.of(new InvalidRequestException("Member is not the owner of batch record"))
+        ));
+        when(sp2.acknowledge(ArgumentMatchers.eq(memberId2), any())).thenReturn(CompletableFuture.completedFuture(
+                Optional.of(new InvalidRequestException("Member is not the owner of batch record"))
+        ));
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp2), sp2);
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withPartitionCacheMap(partitionCacheMap).build();
+
+        acknowledgeTopics.put(tp1, Arrays.asList(
+                new ShareAcknowledgementBatch(12, 20, Collections.singletonList((byte) 1)),
+                new ShareAcknowledgementBatch(24, 56, Collections.singletonList((byte) 1))
+        ));
+        acknowledgeTopics.put(tp2, Arrays.asList(
+                new ShareAcknowledgementBatch(5, 17, Collections.singletonList((byte) 3)),
+                new ShareAcknowledgementBatch(19, 26, Collections.singletonList((byte) 1))
+        ));
+
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
+                sharePartitionManager.acknowledge(memberId2, groupId, acknowledgeTopics);
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
+        assertEquals(2, result.size());
+        assertTrue(result.containsKey(tp1));
+        assertTrue(result.containsKey(tp2));
+        assertEquals(0, result.get(tp1).partitionIndex());
+        assertEquals(Errors.INVALID_REQUEST.code(), result.get(tp1).errorCode());
+        assertEquals(2, result.get(tp2).partitionIndex());
+        assertEquals(Errors.INVALID_REQUEST.code(), result.get(tp2).errorCode());
+    }
+
+    @Test
+    public void testAcknowledgeEmptyPartitionCacheMap() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+
+        TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo4", 3));
+
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        when(sp1.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+        when(sp2.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(
+                Optional.of(new InvalidRequestException("Batch record not found. The base offset is not found in the cache."))
+        ));
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder().build();
+        acknowledgeTopics.put(tp, Arrays.asList(
+                new ShareAcknowledgementBatch(78, 90, Collections.singletonList((byte) 2)),
+                new ShareAcknowledgementBatch(94, 99, Collections.singletonList((byte) 2))
+        ));
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
+                sharePartitionManager.acknowledge(memberId, groupId, acknowledgeTopics);
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
+        assertEquals(1, result.size());
+        assertTrue(result.containsKey(tp));
+        assertEquals(3, result.get(tp).partitionIndex());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp).errorCode());
     }
 
     private ShareFetchResponseData.PartitionData noErrorShareFetchResponse() {
