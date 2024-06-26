@@ -3201,9 +3201,11 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
  </table>
 
  <h5 class="anchor-heading"><a id="kafka_streams_store_monitoring" class="anchor-link"></a><a href="#kafka_streams_store_monitoring">State Store Metrics</a></h5>
-All of the following metrics have a recording level of <code>debug</code>, except for the record-e2e-latency-* metrics which have a recording level <code>trace</code>.
-Note that the <code>store-scope</code> value is specified in <code>StoreSupplier#metricsScope()</code> for user's customized state stores;
-for built-in state stores, currently we have:
+All the following metrics have a recording level of <code>debug</code>, except for the <code>record-e2e-latency-*</code>
+metrics which have a recording level <code>trace</code> and <code>num-open-iterators</code> which has recording level
+<code>info</code>.
+Note that the <code>store-scope</code> value is specified in <code>StoreSupplier#metricsScope()</code> for user's
+customized state stores; for built-in state stores, currently we have:
   <ul>
     <li><code>in-memory-state</code></li>
     <li><code>in-memory-lru-state</code></li>
@@ -3406,6 +3408,26 @@ for built-in state stores, currently we have:
       <tr>
         <td>record-e2e-latency-min</td>
         <td>The minimum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>num-open-iterators</td>
+        <td>The current number of iterators on the store that have been created, but not yet closed.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>iterator-duration-avg</td>
+        <td>The average time spent between creating an iterator and closing it, in nanoseconds.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>iterator-duration-max</td>
+        <td>The maximum time spent between creating an iterator and closing it, in nanoseconds.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>oldest-iterator-open-since-ms</td>
+        <td>The UNIX timestamp the oldest still open iterator was created, in milliseconds.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
     </tbody>
