@@ -760,7 +760,7 @@ public class KafkaRaftClientTest {
         context.deliverResponse(
             request.correlationId(),
             request.destination(),
-            context.voteResponse(true, Optional.empty(), 1)
+            context.voteResponse(true, OptionalInt.empty(), 1)
         );
 
         // Become leader after receiving the vote
@@ -804,7 +804,7 @@ public class KafkaRaftClientTest {
         context.deliverResponse(
             request.correlationId(),
             request.destination(),
-            context.voteResponse(true, Optional.empty(), 1)
+            context.voteResponse(true, OptionalInt.empty(), 1)
         );
 
         // Become leader after receiving the vote
@@ -1242,7 +1242,7 @@ public class KafkaRaftClientTest {
         context.deliverResponse(
             request.correlationId(),
             request.destination(),
-            context.voteResponse(true, Optional.empty(), 1)
+            context.voteResponse(true, OptionalInt.empty(), 1)
         );
         context.client.poll();
         context.assertVotedCandidate(epoch, localId);
@@ -1251,7 +1251,7 @@ public class KafkaRaftClientTest {
         context.deliverResponse(
             retryRequest.correlationId(),
             retryRequest.destination(),
-            context.voteResponse(true, Optional.empty(), 1)
+            context.voteResponse(true, OptionalInt.empty(), 1)
         );
         context.client.poll();
         context.assertElectedLeader(epoch, localId);
@@ -1506,7 +1506,7 @@ public class KafkaRaftClientTest {
         context.deliverResponse(
             request.correlationId(),
             request.destination(),
-            context.voteResponse(false, Optional.empty(), 1)
+            context.voteResponse(false, OptionalInt.empty(), 1)
         );
 
         context.client.poll();
@@ -2403,14 +2403,14 @@ public class KafkaRaftClientTest {
         context.assertElectedLeader(epoch, voter3);
 
         // The vote requests now return and should be ignored
-        VoteResponseData voteResponse1 = context.voteResponse(false, Optional.empty(), epoch);
+        VoteResponseData voteResponse1 = context.voteResponse(false, OptionalInt.empty(), epoch);
         context.deliverResponse(
             voteRequests.get(0).correlationId(),
             voteRequests.get(0).destination(),
             voteResponse1
         );
 
-        VoteResponseData voteResponse2 = context.voteResponse(false, Optional.of(voter3), epoch);
+        VoteResponseData voteResponse2 = context.voteResponse(false, OptionalInt.of(voter3), epoch);
         context.deliverResponse(
             voteRequests.get(1).correlationId(),
             voteRequests.get(1).destination(),

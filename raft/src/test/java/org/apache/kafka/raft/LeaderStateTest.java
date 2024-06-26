@@ -122,16 +122,16 @@ public class LeaderStateTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testFollowerAcknowledgement(boolean withDirectoryId) {
-        int node1 = 1;
-        int node2 = 2;
+        ReplicaKey node1 = replicaKey(1, withDirectoryId);
+        ReplicaKey node2 = replicaKey(2, withDirectoryId);
         LeaderState<?> state = newLeaderState(
-            localWithRemoteVoterSet(IntStream.of(node1, node2), withDirectoryId),
+            localWithRemoteVoterSet(Stream.of(node1, node2), withDirectoryId),
             0L
         );
         assertEquals(mkSet(node1, node2), state.nonAcknowledgingVoters());
-        state.addAcknowledgementFrom(node1);
+        state.addAcknowledgementFrom(node1.id());
         assertEquals(singleton(node2), state.nonAcknowledgingVoters());
-        state.addAcknowledgementFrom(node2);
+        state.addAcknowledgementFrom(node2.id());
         assertEquals(emptySet(), state.nonAcknowledgingVoters());
     }
 
@@ -187,7 +187,7 @@ public class LeaderStateTest {
 
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateLocalState(new LogOffsetMetadata(10L), voters));
-        assertEquals(mkSet(nodeKey1.id(), nodeKey2.id()), state.nonAcknowledgingVoters());
+        assertEquals(mkSet(nodeKey1, nodeKey2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
 
         // Node 1 falls behind
@@ -366,7 +366,7 @@ public class LeaderStateTest {
         LeaderState<?> state = newLeaderState(voters, 10L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(13L), voters));
-        assertEquals(singleton(otherNodeKey.id()), state.nonAcknowledgingVoters());
+        assertEquals(singleton(otherNodeKey), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(otherNodeKey, 0, new LogOffsetMetadata(10L)));
         assertEquals(emptySet(), state.nonAcknowledgingVoters());
@@ -387,10 +387,10 @@ public class LeaderStateTest {
         LeaderState<?> state = newLeaderState(voters, 10L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), voters));
-        assertEquals(mkSet(nodeKey1.id(), nodeKey2.id()), state.nonAcknowledgingVoters());
+        assertEquals(mkSet(nodeKey1, nodeKey2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(10L)));
-        assertEquals(singleton(nodeKey2.id()), state.nonAcknowledgingVoters());
+        assertEquals(singleton(nodeKey2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(10L)));
         assertEquals(emptySet(), state.nonAcknowledgingVoters());
@@ -573,7 +573,7 @@ public class LeaderStateTest {
 
         // Leader should not be included; the follower with larger offset should be prioritized.
         assertEquals(
-            Arrays.asList(nodeKey2.id(), nodeKey1.id()),
+            Arrays.asList(nodeKey2, nodeKey1),
             state.nonLeaderVotersByDescendingFetchOffset()
         );
     }

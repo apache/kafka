@@ -224,11 +224,11 @@ public class LeaderState<T> implements EpochState {
         return this.grantingVoters;
     }
 
-    public Set<Integer> nonAcknowledgingVoters() {
-        Set<Integer> nonAcknowledging = new HashSet<>();
+    public Set<ReplicaKey> nonAcknowledgingVoters() {
+        Set<ReplicaKey> nonAcknowledging = new HashSet<>();
         for (ReplicaState state : voterStates.values()) {
             if (!state.hasAcknowledgedLeader)
-                nonAcknowledging.add(state.replicaKey.id());
+                nonAcknowledging.add(state.replicaKey);
         }
         return nonAcknowledging;
     }
@@ -389,10 +389,10 @@ public class LeaderState<T> implements EpochState {
         return isVoter(state.replicaKey) && maybeUpdateHighWatermark();
     }
 
-    public List<Integer> nonLeaderVotersByDescendingFetchOffset() {
+    public List<ReplicaKey> nonLeaderVotersByDescendingFetchOffset() {
         return followersByDescendingFetchOffset()
             .filter(state -> !state.matchesKey(localReplicaKey))
-            .map(state -> state.replicaKey.id())
+            .map(state -> state.replicaKey)
             .collect(Collectors.toList());
     }
 

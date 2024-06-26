@@ -96,6 +96,7 @@ public class FollowerState implements EpochState {
     }
 
     public Node leaderNode(ListenerName listener) {
+        // TODO
         /* KAFKA-16529 is going to change this so that the leader is not required to be in the set
          * of voters. In other words, don't throw an IllegalStateException if the leader is not in
          * the set of voters.

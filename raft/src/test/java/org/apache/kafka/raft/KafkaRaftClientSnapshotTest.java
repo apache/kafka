@@ -1177,10 +1177,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1248,10 +1248,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1284,10 +1284,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         snapshotRequest = context.assertSentFetchSnapshotRequest();
         request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1351,10 +1351,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1409,10 +1409,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1466,10 +1466,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1523,10 +1523,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1555,10 +1555,10 @@ public final class KafkaRaftClientSnapshotTest {
         // Follower should resend the fetch snapshot request
         snapshotRequest = context.assertSentFetchSnapshotRequest();
         request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1590,10 +1590,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1637,10 +1637,10 @@ public final class KafkaRaftClientSnapshotTest {
 
         snapshotRequest = context.assertSentFetchSnapshotRequest();
         request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1701,10 +1701,10 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());

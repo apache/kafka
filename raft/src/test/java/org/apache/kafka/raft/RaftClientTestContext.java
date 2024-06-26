@@ -459,7 +459,7 @@ public final class RaftClientTestContext {
             log.lastFetchedEpoch(), log.endOffset().offset);
 
         for (RaftRequest.Outbound request : voteRequests) {
-            VoteResponseData voteResponse = voteResponse(true, Optional.empty(), epoch);
+            VoteResponseData voteResponse = voteResponse(true, OptionalInt.empty(), epoch);
             deliverResponse(request.correlationId(), request.destination(), voteResponse);
         }
 
@@ -622,6 +622,7 @@ public final class RaftClientTestContext {
             Endpoints expectedLeaderEndpoints = voters.listeners(leaderId.getAsInt());
             Endpoints responseEndpoints = Endpoints.fromVoteResponse(
                 channel.listenerName(),
+                leaderId.getAsInt(),
                 response.nodeEndpoints()
             );
             assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -713,6 +714,7 @@ public final class RaftClientTestContext {
                 Endpoints expectedLeaderEndpoints = voters.listeners(leaderId);
                 Endpoints responseEndpoints = Endpoints.fromBeginQuorumEpochResponse(
                     channel.listenerName(),
+                    leaderId,
                     response.nodeEndpoints()
                 );
                 assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -743,6 +745,7 @@ public final class RaftClientTestContext {
             Endpoints expectedLeaderEndpoints = voters.listeners(leaderId.getAsInt());
             Endpoints responseEndpoints = Endpoints.fromBeginQuorumEpochResponse(
                 channel.listenerName(),
+                leaderId.getAsInt(),
                 response.nodeEndpoints()
             );
             assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -780,6 +783,7 @@ public final class RaftClientTestContext {
                 Endpoints expectedLeaderEndpoints = voters.listeners(leaderId);
                 Endpoints responseEndpoints = Endpoints.fromEndQuorumEpochResponse(
                     channel.listenerName(),
+                    leaderId,
                     response.nodeEndpoints()
                 );
                 assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -810,6 +814,7 @@ public final class RaftClientTestContext {
             Endpoints expectedLeaderEndpoints = voters.listeners(leaderId.getAsInt());
             Endpoints responseEndpoints = Endpoints.fromEndQuorumEpochResponse(
                 channel.listenerName(),
+                leaderId.getAsInt(),
                 response.nodeEndpoints()
             );
             assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -854,6 +859,7 @@ public final class RaftClientTestContext {
             Endpoints expectedLeaderEndpoints = voters.listeners(leaderId);
             Endpoints responseEndpoints = Endpoints.fromFetchResponse(
                 channel.listenerName(),
+                leaderId,
                 response.nodeEndpoints()
             );
             assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -943,6 +949,7 @@ public final class RaftClientTestContext {
             Endpoints expectedLeaderEndpoints = voters.listeners(leaderId);
             Endpoints responseEndpoints = Endpoints.fromFetchSnapshotResponse(
                 channel.listenerName(),
+                leaderId,
                 response.nodeEndpoints()
             );
             assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -1033,7 +1040,7 @@ public final class RaftClientTestContext {
             Errors.NONE,
             epoch,
             leaderId.orElse(-1),
-            Endpoints.empty() // KAFKA-16529 will fix this
+            leaderId.isPresent() ? voters.listeners(leaderId.getAsInt()) : Endpoints.empty()
         );
     }
 
@@ -1102,7 +1109,7 @@ public final class RaftClientTestContext {
             Errors.NONE,
             epoch,
             leaderId,
-            Endpoints.empty() // KAFKA-16529 will fix this
+            voters.listeners(leaderId)
         );
     }
 
@@ -1161,7 +1168,7 @@ public final class RaftClientTestContext {
         );
     }
 
-    VoteResponseData voteResponse(boolean voteGranted, Optional<Integer> leaderId, int epoch) {
+    VoteResponseData voteResponse(boolean voteGranted, OptionalInt leaderId, int epoch) {
         return RaftUtil.singletonVoteResponse(
             channel.listenerName(),
             voteRpcVersion(),
@@ -1171,7 +1178,7 @@ public final class RaftClientTestContext {
             epoch,
             leaderId.orElse(-1),
             voteGranted,
-            Endpoints.empty() // KAFKA-16529 will fix this
+            leaderId.isPresent() ? voters.listeners(leaderId.getAsInt()) : Endpoints.empty()
         );
     }
 
@@ -1308,7 +1315,7 @@ public final class RaftClientTestContext {
             metadataTopicId,
             Errors.NONE,
             leaderId,
-            Endpoints.empty(), // KAFKA-16529 will fix this
+            voters.listeners(leaderId),
             partitionData -> {
                 partitionData
                     .setRecords(records)
@@ -1336,7 +1343,7 @@ public final class RaftClientTestContext {
             metadataTopicId,
             Errors.NONE,
             leaderId,
-            Endpoints.empty(), // KAFKA-16529 will fix this
+            voters.listeners(leaderId),
             partitionData -> {
                 partitionData.setHighWatermark(highWatermark);
 
@@ -1364,7 +1371,7 @@ public final class RaftClientTestContext {
             metadataTopicId,
             Errors.NONE,
             leaderId,
-            Endpoints.empty(), // KAFKA-16529 will fix this
+            voters.listeners(leaderId),
             partitionData -> {
                 partitionData.setHighWatermark(highWatermark);
 
@@ -1388,7 +1395,7 @@ public final class RaftClientTestContext {
             fetchSnapshotRpcVersion(),
             metadataPartition,
             leaderId,
-            Endpoints.empty(), // KAFKA-16529 will fix this
+            voters.listeners(leaderId),
             operator
         );
     }
