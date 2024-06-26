@@ -382,21 +382,21 @@ object ConfigCommand extends Logging {
         adminClient.incrementalAlterConfigs(Map(configResource -> alterEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
       case ConfigType.BROKER =>
-        val oldConfig = getResourceConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = false, describeAll = false)
-          .map { entry => (entry.name, entry) }.toMap
-
-        // fail the command if any of the configs to be deleted does not exist
-        val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
-        if (invalidConfigs.nonEmpty)
-          throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
-
-        val newEntries = oldConfig ++ configsToBeAdded -- configsToBeDeleted
-        val sensitiveEntries = newEntries.filter(_._2.value == null)
-        if (sensitiveEntries.nonEmpty)
-          throw new InvalidConfigurationException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
-        val newConfig = new JConfig(newEntries.asJava.values)
-
         entityNames.foreach { entityName =>
+          val oldConfig = getResourceConfig(adminClient, entityTypeHead, entityName, includeSynonyms = false, describeAll = false)
+            .map { entry => (entry.name, entry) }.toMap
+
+          // fail the command if any of the configs to be deleted does not exist
+          val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
+          if (invalidConfigs.nonEmpty)
+            throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+
+          val newEntries = oldConfig ++ configsToBeAdded -- configsToBeDeleted
+          val sensitiveEntries = newEntries.filter(_._2.value == null)
+          if (sensitiveEntries.nonEmpty)
+            throw new InvalidConfigurationException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
+          val newConfig = new JConfig(newEntries.asJava.values)
+
           val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityName)
           val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
           adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
