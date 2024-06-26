@@ -1455,8 +1455,8 @@ public class GroupMetadataManager {
             group.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
         }
 
-        // 2. Update the target assignment if the group epoch is larger than the target assignment epoch or a static member
-        // replaces an existing static member. The delta between the existing and the new target assignment is persisted to the partition.
+        // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The delta between
+        // the existing and the new target assignment is persisted to the partition.
         final int targetAssignmentEpoch;
         final Assignment targetAssignment;
 
@@ -1646,8 +1646,8 @@ public class GroupMetadataManager {
             group.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
         }
 
-        // 2. Update the target assignment if the group epoch is larger than the target assignment epoch or a static member
-        // replaces an existing static member. The delta between the existing and the new target assignment is persisted to the partition.
+        // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The delta between
+        // the existing and the new target assignment is persisted to the partition.
         final int targetAssignmentEpoch;
         final Assignment targetAssignment;
 
@@ -1778,7 +1778,7 @@ public class GroupMetadataManager {
                 // Copy the member but with its new member id.
                 ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(existingStaticMemberOrNull, memberId)
                     .setMemberEpoch(0)
-                    .setPreviousMemberEpoch(-1)
+                    .setPreviousMemberEpoch(0)
                     .build();
 
                 // Generate the records to replace the member.

@@ -540,8 +540,9 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Returns the target assignment of the member or the target assignment
-     * associated to the instance id if it does not exist.
+     * Returns the target assignment associated to the provided member id if
+     * the instance id is null; otherwise returns the target assignment associated
+     * to the instance id.
      *
      * @param memberId      The member id.
      * @param instanceId    The instance id.
