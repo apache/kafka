@@ -1249,8 +1249,7 @@ public class MembershipManagerImplTest {
 
         // Assignment should have been reconciled.
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 1));
-        HashSet<TopicPartition> expectedSet = new HashSet<>(expectedAssignment);
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedSet, expectedSet);
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedAssignment, expectedAssignment);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
     }
