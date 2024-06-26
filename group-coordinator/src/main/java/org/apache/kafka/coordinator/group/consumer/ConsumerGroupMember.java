@@ -432,7 +432,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
     /**
      * @return A boolean indicating whether the member uses the classic protocol.
      */
-    @Override
     public boolean useClassicProtocol() {
         return classicMemberMetadata != null;
     }

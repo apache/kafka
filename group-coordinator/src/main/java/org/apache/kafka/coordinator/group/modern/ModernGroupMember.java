@@ -17,14 +17,9 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Abstract member common for group members.
@@ -194,13 +189,6 @@ public abstract class ModernGroupMember {
      */
     public Map<Uuid, Set<Integer>> assignedPartitions() {
         return assignedPartitions;
-    }
-
-    /**
-     * @return A boolean indicating whether the member uses the classic protocol, default is false.
-     */
-    public boolean useClassicProtocol() {
-        return false;
     }
 
     /**

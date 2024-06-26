@@ -17,14 +17,8 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.IllegalGenerationException;
-import org.apache.kafka.common.errors.StaleMemberEpochException;
-import org.apache.kafka.common.errors.UnknownMemberIdException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
-import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
@@ -489,120 +483,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      */
     public DeadlineAndEpoch metadataRefreshDeadline() {
         return metadataRefreshDeadline;
-    }
-
-    /**
-     * Validates the OffsetCommit request.
-     *
-     * @param memberId          The member id.
-     * @param groupInstanceId   The group instance id.
-     * @param memberEpoch       The member epoch.
-     * @param isTransactional   Whether the offset commit is transactional or not. It has no
-     *                          impact when a consumer group is used.
-     * @param apiVersion        The api version.
-     * @throws UnknownMemberIdException     If the member is not found.
-     * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
-     *                                      member epoch doesn't match the actual member epoch.
-     * @throws IllegalGenerationException   If the member uses the classic protocol and the provided
-     *                                      generation id is not equal to the member epoch.
-     */
-    @Override
-    public void validateOffsetCommit(
-        String memberId,
-        String groupInstanceId,
-        int memberEpoch,
-        boolean isTransactional,
-        short apiVersion
-    ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
-        // When the member epoch is -1, the request comes from either the admin client
-        // or a consumer which does not use the group management facility. In this case,
-        // the request can commit offsets if the group is empty.
-        if (memberEpoch < 0 && members().isEmpty()) return;
-
-        final T member = getOrMaybeCreateMember(memberId, false);
-
-        // If the commit is not transactional and the member uses the new consumer protocol (KIP-848),
-        // the member should be using the OffsetCommit API version >= 9.
-        if (!isTransactional && !member.useClassicProtocol() && apiVersion < 9) {
-            throw new UnsupportedVersionException("OffsetCommit version 9 or above must be used " +
-                "by members using the modern group protocol");
-        }
-
-        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
-    }
-
-    /**
-     * Validates the OffsetFetch request.
-     *
-     * @param memberId              The member id for consumer groups.
-     * @param memberEpoch           The member epoch for consumer groups.
-     * @param lastCommittedOffset   The last committed offsets in the timeline.
-     * @throws UnknownMemberIdException     If the member is not found.
-     * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
-     *                                      member epoch doesn't match the actual member epoch.
-     * @throws IllegalGenerationException   If the member uses the classic protocol and the provided
-     *                                      generation id is not equal to the member epoch.
-     */
-    @Override
-    public void validateOffsetFetch(
-        String memberId,
-        int memberEpoch,
-        long lastCommittedOffset
-    ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
-        // When the member id is null and the member epoch is -1, the request either comes
-        // from the admin client or from a client which does not provide them. In this case,
-        // the fetch request is accepted.
-        if (memberId == null && memberEpoch < 0) return;
-
-        final T member = members.get(memberId, lastCommittedOffset);
-        if (member == null) {
-            throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
-                memberId, groupId));
-        }
-        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
-    }
-
-    /**
-     * Validates the OffsetDelete request.
-     */
-    @Override
-    public void validateOffsetDelete() {
-        // Do nothing.
-    }
-
-    /**
-     * See {@link org.apache.kafka.coordinator.group.OffsetExpirationCondition}
-     *
-     * @return The offset expiration condition for the group or Empty if no such condition exists.
-     */
-    @Override
-    public Optional<OffsetExpirationCondition> offsetExpirationCondition() {
-        return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
-    }
-
-    /**
-     * Throws an exception if the received member epoch does not match the expected member epoch.
-     *
-     * @param receivedMemberEpoch   The received member epoch or generation id.
-     * @param expectedMemberEpoch   The expected member epoch.
-     * @param useClassicProtocol    The boolean indicating whether the checked member uses the classic protocol.
-     * @throws StaleMemberEpochException    if the member with unmatched member epoch uses the consumer protocol.
-     * @throws IllegalGenerationException   if the member with unmatched generation id uses the classic protocol.
-     */
-    private void validateMemberEpoch(
-        int receivedMemberEpoch,
-        int expectedMemberEpoch,
-        boolean useClassicProtocol
-    ) throws StaleMemberEpochException, IllegalGenerationException {
-        if (receivedMemberEpoch != expectedMemberEpoch) {
-            if (useClassicProtocol) {
-                throw new IllegalGenerationException(String.format("The received generation id %d does not match " +
-                    "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
-            } else {
-                throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
-                    + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
-            }
-        }
     }
 
     /**
