@@ -936,10 +936,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
 
-      def createResponse(throttleTimeMs: Int, fetchResponse: FetchResponse): FetchResponse = {
+      def createResponse(throttleTimeMs: Int, unconvertedFetchResponse: FetchResponse): FetchResponse = {
         // Down-convert messages for each partition if required
         val convertedData = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
-        fetchResponse.data().responses().forEach { topicResponse =>
+        unconvertedFetchResponse.data().responses().forEach { topicResponse =>
           topicResponse.partitions().forEach { unconvertedPartitionData =>
             val tp = new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic, unconvertedPartitionData.partitionIndex()))
             val error = Errors.forCode(unconvertedPartitionData.errorCode)
@@ -952,7 +952,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         // Prepare fetch response from converted data
         val response =
-          FetchResponse.of(fetchResponse.error, throttleTimeMs, fetchResponse.sessionId, convertedData, nodeEndpoints.values.toList.asJava)
+          FetchResponse.of(unconvertedFetchResponse.error, throttleTimeMs, unconvertedFetchResponse.sessionId, convertedData, nodeEndpoints.values.toList.asJava)
         // record the bytes out metrics only when the response is being sent
         response.data.responses.forEach { topicResponse =>
           topicResponse.partitions.forEach { data =>
@@ -1001,7 +1001,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize, timeMs)
 
         val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
-        if (maxThrottleTimeMs > 0) {
+        val unconvertedFetchResponse = if (maxThrottleTimeMs > 0) {
           request.apiThrottleTimeMs = maxThrottleTimeMs
           // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
           // from the fetch quota because we are going to return an empty response.
@@ -1012,18 +1012,18 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestHelper.throttle(quotas.request, request, requestThrottleTimeMs)
           }
           // If throttling is required, return an empty response.
-          val unconvertedFetchResponse = fetchContext.getThrottledResponse(maxThrottleTimeMs)
-          requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs, unconvertedFetchResponse), Some(updateConversionStats))
+          fetchContext.getThrottledResponse(maxThrottleTimeMs)
         } else {
           // Get the actual response. This will update the fetch context.
           val unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
           val responsePartitionsSize = unconvertedFetchResponse.data().responses().stream().mapToInt(_.partitions().size()).sum()
           trace(s"Sending Fetch response with partitions.size=$responsePartitionsSize, " +
             s"metadata=${unconvertedFetchResponse.sessionId}")
-
-          // Send the response immediately.
-          requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs, unconvertedFetchResponse), Some(updateConversionStats))
+          unconvertedFetchResponse
         }
+
+        // Send the response immediately.
+        requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs, unconvertedFetchResponse), Some(updateConversionStats))
       }
     }
 
