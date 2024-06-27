@@ -3600,25 +3600,6 @@ public class SharePartitionTest {
         Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
     }
 
-//    private void acquireRecords(SharePartition sharePartition, String memberId, int totalRecords, long startOffset) {
-//        sharePartition.acquire(memberId, new FetchPartitionData(Errors.NONE, 20, 0,
-//                memoryRecords(totalRecords, startOffset), Optional.empty(), OptionalLong.empty(),
-//                Optional.empty(), OptionalInt.empty(), false));
-//    }
-//
-//    private void assertInFlightBatch(SharePartition sharePartition, long batchStartOffset, RecordState state, String memberId) {
-//        SharePartition.InFlightBatch inFlightBatch = sharePartition.cachedState().get(batchStartOffset);
-//        assertEquals(state, inFlightBatch.batchState());
-//        assertEquals(memberId, inFlightBatch.batchMemberId());
-//    }
-//
-//    private void assertInFlightBatch(SharePartition sharePartition, long batchStartOffset, RecordState state, String memberId, int deliveryCount) {
-//        SharePartition.InFlightBatch inFlightBatch = sharePartition.cachedState().get(batchStartOffset);
-//        assertEquals(state, inFlightBatch.batchState());
-//        assertEquals(memberId, inFlightBatch.batchMemberId());
-//        assertEquals(deliveryCount, inFlightBatch.batchDeliveryCount());
-//    }
-
     private static class SharePartitionBuilder {
 
         private int acquisitionLockTimeoutMs = 30000;
