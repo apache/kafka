@@ -207,7 +207,7 @@ public class LogValidatorTest {
         assertEquals(metricsKeySet.stream()
                 .filter(metric -> metric.getMBeanName().endsWith("InvalidMagicNumberRecordsPerSec"))
                 .count(), 1);
-        assertTrue(kafka.utils.TestUtils.meterCount("InvalidMagicNumberRecordsPerSec") > 0);
+        assertTrue(meterCount("InvalidMagicNumberRecordsPerSec") > 0);
     }
 
     @Test
@@ -1473,7 +1473,7 @@ public class LogValidatorTest {
                 PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ));
         assertEquals(metricsKeySet.stream().filter(m -> m.getMBeanName().endsWith(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec())).count(), 1);
-        assertTrue(kafka.utils.TestUtils$.MODULE$.meterCount(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec()) > 0);
+        assertTrue(meterCount(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec()) > 0);
     }
 
     @Test
@@ -2068,5 +2068,11 @@ public class LogValidatorTest {
             assertTrue(tempBytes > 0, "Temp bytes not updated");
         else
             assertEquals(0, tempBytes);
+    }
+
+    private Long meterCount(String metricName) {
+        return KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream().filter(
+                s -> s.getKey().getMBeanName().endsWith(metricName)
+        ).count();
     }
 }
