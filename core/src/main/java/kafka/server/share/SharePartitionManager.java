@@ -250,23 +250,19 @@ public class SharePartitionManager implements AutoCloseable {
         String groupId,
         Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics
     ) {
-        log.debug("Acknowledge request for topicIdPartitions: {} with groupId: {}",
+        log.trace("Acknowledge request for topicIdPartitions: {} with groupId: {}",
             acknowledgeTopics.keySet(), groupId);
         Map<TopicIdPartition, CompletableFuture<Errors>> futures = new HashMap<>();
         acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
             SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
             if (sharePartition != null) {
-                synchronized (sharePartition) {
-                    CompletableFuture<Errors> future = sharePartition.acknowledge(memberId, acknowledgePartitionBatches).thenApply(throwable -> {
-                        if (throwable.isPresent()) {
-                            return Errors.forException(throwable.get());
-                        } else {
-                            return Errors.NONE;
-                        }
-
-                    });
-                    futures.put(topicIdPartition, future);
-                }
+                CompletableFuture<Errors> future = sharePartition.acknowledge(memberId, acknowledgePartitionBatches).thenApply(throwable -> {
+                    if (throwable.isPresent()) {
+                        return Errors.forException(throwable.get());
+                    }
+                    return Errors.NONE;
+                });
+                futures.put(topicIdPartition, future);
             } else {
                 futures.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION));
             }
