@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
+import org.apache.kafka.coordinator.group.modern.MemberState;
 
 import org.junit.jupiter.api.Test;
 

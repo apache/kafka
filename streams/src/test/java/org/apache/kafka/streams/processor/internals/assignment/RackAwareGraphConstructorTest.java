@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static java.util.Collections.emptySet;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedTasks;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomClientState;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTaskTopicPartitionMap;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTasksForTopicGroup;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -35,13 +35,14 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
-import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import static java.util.Collections.emptySet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomClientState;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTaskTopicPartitionMap;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTasksForTopicGroup;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RackAwareGraphConstructorTest {
     private static final String MIN_COST = "min_cost";

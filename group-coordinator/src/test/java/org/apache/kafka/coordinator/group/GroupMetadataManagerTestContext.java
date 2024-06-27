@@ -50,7 +50,6 @@ import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAss
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupBuilder;
-import org.apache.kafka.coordinator.group.consumer.MemberState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -66,6 +65,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -929,7 +929,7 @@ public class GroupMetadataManagerTestContext {
         assertEquals(Errors.NONE.code(), followerJoinResult.joinFuture.get().errorCode());
         assertEquals(1, leaderJoinResult.joinFuture.get().generationId());
         assertEquals(1, followerJoinResult.joinFuture.get().generationId());
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(1, group.generationId());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
@@ -979,7 +979,7 @@ public class GroupMetadataManagerTestContext {
         assertEquals(Errors.NONE.code(), followerSyncResult.syncFuture.get().errorCode());
         assertTrue(group.isInState(STABLE));
 
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(1, group.generationId());
 
         return new RebalanceResult(
@@ -1094,7 +1094,7 @@ public class GroupMetadataManagerTestContext {
         assertTrue(followerJoinResult.records.isEmpty());
         assertFalse(followerJoinResult.joinFuture.isDone());
         assertTrue(group.isInState(PREPARING_REBALANCE));
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(1, group.numPendingJoinMembers());
 
         return new PendingMemberGroupResult(
@@ -1131,7 +1131,7 @@ public class GroupMetadataManagerTestContext {
         assertEquals(expectedRecords, timeouts.get(timeoutsSize - 1).result.records());
         assertNoOrEmptyResult(timeouts.subList(0, timeoutsSize - 1));
         assertTrue(group.isInState(EMPTY));
-        assertEquals(0, group.size());
+        assertEquals(0, group.numMembers());
     }
 
     public CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> sendClassicGroupHeartbeat(
@@ -1250,7 +1250,7 @@ public class GroupMetadataManagerTestContext {
             return null;
         }).collect(Collectors.toList());
 
-        assertEquals(numMembers, group.size());
+        assertEquals(numMembers, group.numMembers());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
         return joinResponses;

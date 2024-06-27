@@ -27,9 +27,9 @@ import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorC
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import java.util.Objects;
-import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import static org.apache.kafka.streams.processor.internals.RecordQueue.UNKNOWN;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;

@@ -26,11 +26,12 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Supplier;
@@ -40,23 +41,23 @@ import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTIT
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_DOC;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_DOC;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_DOC;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DEFAULT;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DOC;
-import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC;
+import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_DOC;
+import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
+import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_DOC;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_DOC;
-import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
-import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
 
 /**

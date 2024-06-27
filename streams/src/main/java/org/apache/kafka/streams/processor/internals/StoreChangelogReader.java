@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+
 import org.slf4j.Logger;
 
 import java.time.Duration;

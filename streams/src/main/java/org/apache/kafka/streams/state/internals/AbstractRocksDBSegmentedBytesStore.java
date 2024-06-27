@@ -34,6 +34,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
+
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;

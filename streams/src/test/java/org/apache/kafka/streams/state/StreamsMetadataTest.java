@@ -20,6 +20,7 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsMetadata;
 import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
