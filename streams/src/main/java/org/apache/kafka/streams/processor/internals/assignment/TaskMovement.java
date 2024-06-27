@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -29,7 +30,6 @@ import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
 
 import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;

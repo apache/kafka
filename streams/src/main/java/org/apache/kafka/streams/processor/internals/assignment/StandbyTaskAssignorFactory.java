@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 
 import java.util.Collections;
 import java.util.Map;
-import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 class StandbyTaskAssignorFactory {
     private StandbyTaskAssignorFactory() {}

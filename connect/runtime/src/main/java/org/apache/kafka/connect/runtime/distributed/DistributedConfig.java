@@ -25,10 +25,10 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.crypto.KeyGenerator;
 import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
@@ -45,9 +45,11 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import javax.crypto.KeyGenerator;
+
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
-import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 import static org.apache.kafka.common.utils.Utils.enumOptions;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_VALIDATOR;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_VALIDATOR;

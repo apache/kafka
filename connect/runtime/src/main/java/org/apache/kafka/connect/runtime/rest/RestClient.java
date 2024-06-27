@@ -17,13 +17,15 @@
 
 package org.apache.kafka.connect.runtime.rest;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
@@ -35,9 +37,6 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.crypto.SecretKey;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -45,6 +44,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+
+import javax.crypto.SecretKey;
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.Response;
 
 /**
  * Client for outbound REST requests to other members of a Connect cluster

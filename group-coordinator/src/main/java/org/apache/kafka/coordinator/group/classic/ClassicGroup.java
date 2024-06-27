@@ -321,12 +321,10 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * To identify whether the given member id is part of this group.
-     *
-     * @param memberId the given member id.
      * @return true if the member is part of this group, false otherwise.
      */
-    public boolean hasMemberId(String memberId) {
+    @Override
+    public boolean hasMember(String memberId) {
         return members.containsKey(memberId);
     }
 
@@ -343,7 +341,8 @@ public class ClassicGroup implements Group {
     /**
      * @return the total number of members in this group.
      */
-    public int size() {
+    @Override
+    public int numMembers() {
         return members.size();
     }
 
@@ -611,7 +610,7 @@ public class ClassicGroup implements Group {
      *         false otherwise.
      */
     public boolean addPendingMember(String memberId) {
-        if (hasMemberId(memberId)) {
+        if (hasMember(memberId)) {
             throw new IllegalStateException("Attempt to add pending member " + memberId +
                 " which is already a stable member of the group.");
         }
@@ -633,7 +632,7 @@ public class ClassicGroup implements Group {
      *         false otherwise.
      */
     public boolean addPendingSyncMember(String memberId) {
-        if (!hasMemberId(memberId)) {
+        if (!hasMember(memberId)) {
             throw new IllegalStateException("Attempt to add pending sync member " + memberId +
                 " which is already a stable member of the group.");
         }
@@ -648,7 +647,7 @@ public class ClassicGroup implements Group {
      * @return true if the group did store this member, false otherwise.
      */
     public boolean removePendingSyncMember(String memberId) {
-        if (!hasMemberId(memberId)) {
+        if (!hasMember(memberId)) {
             throw new IllegalStateException("Attempt to add pending member " + memberId +
                 " which is already a stable member of the group.");
         }
@@ -808,7 +807,7 @@ public class ClassicGroup implements Group {
             }
         }
 
-        if (!hasMemberId(memberId)) {
+        if (!hasMember(memberId)) {
             throw Errors.UNKNOWN_MEMBER_ID.exception();
         }
     }

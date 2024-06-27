@@ -679,7 +679,7 @@ class ControllerApis(
   private def handleRaftRequest(request: RequestChannel.Request,
                                 buildResponse: ApiMessage => AbstractResponse): CompletableFuture[Unit] = {
     val requestBody = request.body[AbstractRequest]
-    val future = raftManager.handleRequest(request.header, requestBody.data, time.milliseconds())
+    val future = raftManager.handleRequest(request.context, request.header, requestBody.data, time.milliseconds())
     future.handle[Unit] { (responseData, exception) =>
       val response = if (exception != null) {
         requestBody.getErrorResponse(exception)
@@ -926,7 +926,7 @@ class ControllerApis(
         CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
           Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, owner, requester))
       CompletableFuture.completedFuture[Unit](())
-    } else if (!owner.equals(requester) && 
+    } else if (!owner.equals(requester) &&
       !authHelper.authorize(request.context, CREATE_TOKENS, USER, owner.toString)) {
       // Requester is always allowed to create token for self
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>

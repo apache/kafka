@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

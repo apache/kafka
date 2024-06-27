@@ -305,6 +305,7 @@ object TestUtils extends Logging {
 
     val props = new Properties
     props.put(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true")
+    props.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
     if (zkConnect == null) {
       props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
       props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)

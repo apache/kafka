@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

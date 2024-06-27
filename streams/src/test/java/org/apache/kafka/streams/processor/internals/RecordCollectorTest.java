@@ -57,12 +57,15 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockClientSupplier;
+
 import org.apache.log4j.Level;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -89,16 +92,17 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RecordCollectorTest {
 
     private final LogContext logContext = new LogContext("test ");
@@ -143,7 +147,7 @@ public class RecordCollectorTest {
 
     private RecordCollectorImpl collector;
 
-    @Before
+    @BeforeEach
     public void setup() {
         final MockClientSupplier clientSupplier = new MockClientSupplier();
         clientSupplier.setCluster(cluster);
@@ -183,7 +187,7 @@ public class RecordCollectorTest {
         );
     }
 
-    @After
+    @AfterEach
     public void cleanup() {
         collector.closeClean();
     }
@@ -1326,11 +1330,9 @@ public class RecordCollectorTest {
             for (final String error : messages) {
                 errorMessage.append("\n - ").append(error);
             }
-            assertTrue(
-                errorMessage.toString(),
-                messages.get(messages.size() - 1)
-                    .endsWith("Exception handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.")
-            );
+            assertTrue(messages.get(messages.size() - 1)
+                    .endsWith("Exception handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded."),
+                errorMessage.toString());
         }
 
         final Metric metric = streamsMetrics.metrics().get(new MetricName(

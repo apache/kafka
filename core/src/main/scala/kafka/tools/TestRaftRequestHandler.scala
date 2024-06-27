@@ -94,6 +94,7 @@ class TestRaftRequestHandler(
     val requestBody = request.body[AbstractRequest]
 
     val future = raftManager.handleRequest(
+      request.context,
       request.header,
       requestBody.data,
       time.milliseconds()
