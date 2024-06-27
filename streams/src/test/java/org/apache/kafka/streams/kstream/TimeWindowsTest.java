@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

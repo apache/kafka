@@ -22,8 +22,8 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.concurrent.atomic.LongAdder;
 import java.util.Set;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 
 class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V>, MeteredIterator {

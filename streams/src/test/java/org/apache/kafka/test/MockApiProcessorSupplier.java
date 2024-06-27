@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.PunctuationType;
 
 import java.util.ArrayList;
 import java.util.List;

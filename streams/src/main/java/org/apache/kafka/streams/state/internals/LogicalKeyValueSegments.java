@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * A {@link Segments} implementation which uses a single underlying RocksDB instance.

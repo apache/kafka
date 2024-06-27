@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import kafka.server.KafkaServer;
+import kafka.server.MetadataCache;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -60,12 +63,9 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
-import kafka.server.KafkaServer;
-import kafka.server.MetadataCache;
 import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.Option;
 
 import java.io.File;
 import java.io.IOException;
@@ -96,6 +96,8 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
+
+import scala.Option;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.sleep;

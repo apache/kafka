@@ -140,5 +140,3 @@ public interface StreamsMetrics {
      */
     void removeSensor(final Sensor sensor);
 }
-
-
