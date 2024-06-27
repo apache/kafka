@@ -71,10 +71,8 @@ public class NetworkUtils {
 
         String clientId = prefix + "-client-" + config.nodeId();
         return new NetworkClient(
-            config,
-            new ManualMetadataUpdater(),
-            null,
             selector,
+            new ManualMetadataUpdater(),
             clientId,
             1,
             50,
@@ -87,9 +85,7 @@ public class NetworkUtils {
             time,
             true,
             new ApiVersions(),
-            null,
             logContext,
-            null,
             MetadataRecoveryStrategy.NONE
         );
     }

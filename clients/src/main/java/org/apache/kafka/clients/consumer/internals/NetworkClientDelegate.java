@@ -412,39 +412,21 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final FetchMetricsManager fetchMetricsManager,
                                                            final ClientTelemetrySender clientTelemetrySender,
                                                            final BackgroundEventHandler backgroundEventHandler) {
-        //TODO: my method
         return new CachedSupplier<NetworkClientDelegate>() {
             @Override
             protected NetworkClientDelegate create() {
                 KafkaClient client = ClientUtils.createNetworkClient(config,
                         metrics,
                         CONSUMER_METRIC_GROUP_PREFIX,
+                        logContext,
+                        apiVersions,
+                        time,
                         CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
                         metadata,
-                        time,
-                        apiVersions,
                         fetchMetricsManager.throttleTimeSensor(),
-                        logContext,
                         clientTelemetrySender);
                 return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler);
             }
         };
-
-//        return new CachedSupplier<NetworkClientDelegate>() {
-//            @Override
-//            protected NetworkClientDelegate create() {
-//                KafkaClient client = ClientUtils.createNetworkClient(config,
-//                        metrics,
-//                        CONSUMER_METRIC_GROUP_PREFIX,
-//                        logContext,
-//                        apiVersions,
-//                        time,
-//                        CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
-//                        metadata,
-//                        fetchMetricsManager.throttleTimeSensor(),
-//                        clientTelemetrySender);
-//                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler);
-//            }
-//        };
     }
 }

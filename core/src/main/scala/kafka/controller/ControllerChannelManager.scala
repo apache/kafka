@@ -150,10 +150,8 @@ class ControllerChannelManager(controllerEpoch: () => Int,
         logContext
       )
       val networkClient = new NetworkClient(
-        config,
-        new ManualMetadataUpdater(Seq(brokerNode).asJava),
-        null,
         selector,
+        new ManualMetadataUpdater(Seq(brokerNode).asJava),
         config.brokerId.toString,
         1,
         0,
@@ -166,9 +164,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
         time,
         false,
         new ApiVersions,
-        null,
         logContext,
-        null,
         MetadataRecoveryStrategy.NONE
       )
       (networkClient, reconfigurableChannelBuilder)

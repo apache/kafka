@@ -296,10 +296,8 @@ object BrokerApiVersionsCommand {
         logContext)
 
       val networkClient = new NetworkClient(
-        config,
-        null,
-        metadata,
         selector,
+        metadata,
         clientId,
         DefaultMaxInFlightRequestsPerConnection,
         DefaultReconnectBackoffMs,
@@ -312,9 +310,7 @@ object BrokerApiVersionsCommand {
         time,
         true,
         new ApiVersions,
-        null,
         logContext,
-        null,
         MetadataRecoveryStrategy.NONE)
 
       val highLevelClient = new ConsumerNetworkClient(

@@ -302,10 +302,8 @@ class KafkaRaftManager[T](
     val discoverBrokerVersions = true
 
     val networkClient = new NetworkClient(
-      config,
-      new ManualMetadataUpdater(),
-      null,
       selector,
+      new ManualMetadataUpdater(),
       clientId,
       maxInflightRequestsPerConnection,
       reconnectBackoffMs,
@@ -318,9 +316,7 @@ class KafkaRaftManager[T](
       time,
       discoverBrokerVersions,
       apiVersions,
-      null,
       logContext,
-      null,
       MetadataRecoveryStrategy.NONE
     )
 

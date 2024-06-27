@@ -53,42 +53,35 @@ public final class ClientUtils {
     private ClientUtils() {
     }
 
-    /*
-     * This method takes the bootstrap server urls and client dns lookup and passes them on
-     */
     public static List<InetSocketAddress> parseAndValidateAddresses(AbstractConfig config) {
         List<String> urls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
         String clientDnsLookupConfig = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG);
         return parseAndValidateAddresses(urls, clientDnsLookupConfig);
     }
 
-    /*
-     * This method simply passes along the variables from the method above
-     */
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, String clientDnsLookupConfig) {
         return parseAndValidateAddresses(urls, ClientDnsLookup.forConfig(clientDnsLookupConfig));
     }
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
-        List<InetSocketAddress> addresses = new ArrayList<>(); // Create a list to store addresses
-        for (String url : urls) { // Iterating over the list of urls passed as a parameter
-            if (url != null && !url.isEmpty()) { // If url is not null AND not empty
+        List<InetSocketAddress> addresses = new ArrayList<>();
+        for (String url : urls) {
+            if (url != null && !url.isEmpty()) {
                 try {
-                    String host = getHost(url);  // Get host from the url
-                    Integer port = getPort(url); // Get port from the url
-                    if (host == null || port == null) // If either is NULL, throw config exception
+                    String host = getHost(url);
+                    Integer port = getPort(url);
+                    if (host == null || port == null)
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
-                    // If clientDnsLookup equals the resolve server
                     if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
-                        InetAddress[] inetAddresses = InetAddress.getAllByName(host); // Gets inetAddresses according to the host
-                        for (InetAddress inetAddress : inetAddresses) { // Iterate over inetAddresses
+                        InetAddress[] inetAddresses = InetAddress.getAllByName(host);
+                        for (InetAddress inetAddress : inetAddresses) {
                             String resolvedCanonicalName = inetAddress.getCanonicalHostName();
-                            InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port); // Full address instantiation
-                            if (address.isUnresolved()) { // If not immediately available, warn
+                            InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
+                            if (address.isUnresolved()) {
                                 log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname {} failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, resolvedCanonicalName, host);
                             } else {
-                                addresses.add(address); // If available, add it to addresses
+                                addresses.add(address);
                             }
                         }
                     } else {
@@ -155,56 +148,6 @@ public final class ClientUtils {
             }
         }
         return preferredAddresses;
-    }
-
-    // TODO: My method
-    public static NetworkClient createNetworkClient(AbstractConfig config,
-                                                    Metrics metrics,
-                                                    String consumerMetricGroupPrefix,
-                                                    int maxInFlightRequestsPerConnection,
-                                                    Metadata metadata,
-                                                    Time time,
-                                                    ApiVersions apiVersions,
-                                                    Sensor throttleTimeSensor,
-                                                    LogContext logContext,
-                                                    ClientTelemetrySender clientTelemetrySender) {
-        ChannelBuilder channelBuilder = null;
-        Selector selector = null;
-
-        try {
-            channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
-            selector = new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                    metrics,
-                    time,
-                    consumerMetricGroupPrefix,
-                    channelBuilder,
-                    logContext);
-
-            return new NetworkClient(config,
-                    null,
-                    metadata,
-                    selector,
-                    config.getString(CommonClientConfigs.CLIENT_ID_CONFIG),
-                    maxInFlightRequestsPerConnection,
-                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
-                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                    config.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
-                    config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
-                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
-                    config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
-                    config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                    time,
-                    true,
-                    apiVersions,
-                    throttleTimeSensor,
-                    logContext,
-                    clientTelemetrySender,
-                    MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)));
-        } catch (Throwable t) {
-            closeQuietly(selector, "Selector");
-            closeQuietly(channelBuilder, "ChannelBuilder");
-            throw new KafkaException("Failed to create new NetworkClient", t);
-        }
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
