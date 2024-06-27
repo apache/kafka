@@ -19,10 +19,7 @@ package org.apache.kafka.tools;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
@@ -61,15 +58,9 @@ public class FeatureCommandTest {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe"))
         );
-
-        List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().collect(Collectors.toList());
-
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
-
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(1)));
+                "SupportedMaxVersion: 3.8-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(commandOutput));
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_7_IV4)
@@ -77,15 +68,9 @@ public class FeatureCommandTest {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-controller", cluster.bootstrapControllers(), "describe"))
         );
-
-        List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().collect(Collectors.toList());
-
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
-
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.7-IV4\t", outputWithoutEpoch(features.get(1)));
+                "SupportedMaxVersion: 3.8-IV0\tFinalizedVersionLevel: 3.7-IV4\t", outputWithoutEpoch(commandOutput));
     }
 
     @ClusterTest(types = {Type.ZK}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
@@ -144,7 +129,7 @@ public class FeatureCommandTest {
         );
         // Change expected message to reflect possible MetadataVersion range 1-N (N increases when adding a new version)
         assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
-                "metadata.version. Local controller 3000 only supports versions 1-21", commandOutput);
+                "metadata.version. Local controller 3000 only supports versions 1-20", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),

@@ -74,7 +74,7 @@ public class QuorumFeaturesTest {
         for (Features feature : Features.PRODUCTION_FEATURES) {
             expectedFeatures.put(feature.featureName(), VersionRange.of(
                 0,
-                feature.defaultValue(MetadataVersion.latestTesting())
+                feature.defaultValue(MetadataVersion.LATEST_PRODUCTION)
             ));
         }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));
