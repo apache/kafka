@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.List;
-import java.util.Objects;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes.ByteArraySerde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -39,6 +37,9 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
+
+import java.util.List;
+import java.util.Objects;
 
 /**
  * Adapts from {@link VersionedKeyValueStore} (user-friendly versioned store interface) to

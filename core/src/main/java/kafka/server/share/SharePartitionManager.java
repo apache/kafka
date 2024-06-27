@@ -155,7 +155,7 @@ public class SharePartitionManager implements AutoCloseable {
         );
     }
 
-    SharePartitionManager(
+    private SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
         ShareSessionCache cache,
@@ -174,6 +174,31 @@ public class SharePartitionManager implements AutoCloseable {
         this.recordLockDurationMs = recordLockDurationMs;
         this.timer = new SystemTimerReaper("share-group-lock-timeout-reaper",
             new SystemTimer("share-group-lock-timeout"));
+        this.maxDeliveryCount = maxDeliveryCount;
+        this.maxInFlightMessages = maxInFlightMessages;
+        this.persister = persister;
+    }
+
+    // Visible for testing.
+    SharePartitionManager(
+            ReplicaManager replicaManager,
+            Time time,
+            ShareSessionCache cache,
+            Map<SharePartitionKey, SharePartition> partitionCacheMap,
+            int recordLockDurationMs,
+            Timer timer,
+            int maxDeliveryCount,
+            int maxInFlightMessages,
+            Persister persister
+    ) {
+        this.replicaManager = replicaManager;
+        this.time = time;
+        this.cache = cache;
+        this.partitionCacheMap = partitionCacheMap;
+        this.fetchQueue = new ConcurrentLinkedQueue<>();
+        this.processFetchQueueLock = new AtomicBoolean(false);
+        this.recordLockDurationMs = recordLockDurationMs;
+        this.timer = timer;
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
@@ -251,11 +276,32 @@ public class SharePartitionManager implements AutoCloseable {
     ) {
         log.trace("Release acquired records request for topicIdPartitions: {} with groupId: {}",
             topicIdPartitions, groupId);
+        Map<TopicIdPartition, CompletableFuture<Errors>> futuresMap = new HashMap<>();
+        topicIdPartitions.forEach(topicIdPartition -> {
+            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
+            if (sharePartition == null) {
+                log.error("No share partition found for groupId {} topicPartition {} while releasing acquired topic partitions", groupId, topicIdPartition);
+                futuresMap.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            } else {
+                CompletableFuture<Errors> future = sharePartition.releaseAcquiredRecords(memberId).thenApply(throwable -> {
+                    if (throwable.isPresent()) {
+                        return Errors.forException(throwable.get());
+                    }
+                    return Errors.NONE;
+                });
+                futuresMap.put(topicIdPartition, future);
+            }
+        });
 
-        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> future = new CompletableFuture<>();
-        future.completeExceptionally(new UnsupportedOperationException("Not implemented yet"));
-
-        return future;
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+                futuresMap.values().toArray(new CompletableFuture[futuresMap.size()]));
+        return allFutures.thenApply(v -> {
+            Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
+            futuresMap.forEach((topicIdPartition, future) -> result.put(topicIdPartition, new ShareAcknowledgeResponseData.PartitionData()
+                    .setPartitionIndex(topicIdPartition.partition())
+                    .setErrorCode(future.join().code())));
+            return result;
+        });
     }
 
     /**
@@ -361,7 +407,8 @@ public class SharePartitionManager implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        // TODO: Provide Implementation
+        this.timer.close();
+        this.persister.stop();
     }
 
     private ShareSessionKey shareSessionKey(String groupId, Uuid memberId) {

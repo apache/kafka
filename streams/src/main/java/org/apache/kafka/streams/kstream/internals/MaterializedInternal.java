@@ -16,17 +16,17 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.Optional;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.StoreSupplier;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 
 public class MaterializedInternal<K, V, S extends StateStore> extends Materialized<K, V, S> {
 

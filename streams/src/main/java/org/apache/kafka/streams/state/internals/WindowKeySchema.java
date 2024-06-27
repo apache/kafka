@@ -23,6 +23,7 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.StateSerdes;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

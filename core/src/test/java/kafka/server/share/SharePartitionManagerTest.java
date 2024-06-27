@@ -23,9 +23,11 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidShareSessionEpochException;
 import org.apache.kafka.common.errors.ShareSessionNotFoundException;
+import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -43,6 +45,7 @@ import org.apache.kafka.server.group.share.NoOpShareStatePersister;
 import org.apache.kafka.server.group.share.Persister;
 import org.apache.kafka.server.share.ShareSessionCache;
 import org.apache.kafka.server.share.ShareSessionKey;
+import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
@@ -54,6 +57,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
@@ -1221,6 +1225,145 @@ public class SharePartitionManagerTest {
             any(), any(), any(ReplicaQuota.class), any());
     }
 
+    @Test
+    public void testCloseSharePartitionManager() throws Exception {
+        Timer timer = Mockito.mock(SystemTimerReaper.class);
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withTimer(timer).withShareGroupPersister(persister).build();
+
+        // Verify that 0 calls are made to timer.close() and persister.stop().
+        Mockito.verify(timer, times(0)).close();
+        Mockito.verify(persister, times(0)).stop();
+        // Closing the sharePartitionManager closes timer object in sharePartitionManager.
+        sharePartitionManager.close();
+        // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close() and persister.stop().
+        Mockito.verify(timer, times(1)).close();
+        Mockito.verify(persister, times(1)).stop();
+    }
+
+    @Test
+    public void testReleaseAcquiredRecordsSuccess() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 2));
+        TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("baz", 4));
+
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        when(sp1.releaseAcquiredRecords(ArgumentMatchers.eq(memberId))).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+        when(sp2.releaseAcquiredRecords(ArgumentMatchers.eq(memberId))).thenReturn(CompletableFuture.completedFuture(
+                Optional.of(new InvalidRecordStateException("Unable to release acquired records for the batch"))
+        ));
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp2), sp2);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withPartitionCacheMap(partitionCacheMap).build();
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
+                sharePartitionManager.releaseAcquiredRecords(groupId, memberId, Arrays.asList(tp1, tp2, tp3));
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
+        assertEquals(3, result.size());
+        assertTrue(result.containsKey(tp1));
+        assertTrue(result.containsKey(tp2));
+        assertTrue(result.containsKey(tp3));
+        assertEquals(0, result.get(tp1).partitionIndex());
+        assertEquals(Errors.NONE.code(), result.get(tp1).errorCode());
+        assertEquals(2, result.get(tp2).partitionIndex());
+        assertEquals(Errors.INVALID_RECORD_STATE.code(), result.get(tp2).errorCode());
+        // tp3 was not a part of partitionCacheMap.
+        assertEquals(4, result.get(tp3).partitionIndex());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp3).errorCode());
+    }
+
+    @Test
+    public void testReleaseAcquiredRecordsWithIncorrectGroupId() {
+        String memberId = Uuid.randomUuid().toString();
+
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+
+        SharePartition sp1 = mock(SharePartition.class);
+        when(sp1.releaseAcquiredRecords(ArgumentMatchers.eq(memberId))).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey("grp", tp1), sp1);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withPartitionCacheMap(partitionCacheMap).build();
+
+        // Calling releaseAcquiredRecords with incorrect groupId.
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
+                sharePartitionManager.releaseAcquiredRecords("grp-2", memberId, Collections.singletonList(tp1));
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
+        assertEquals(1, result.size());
+        assertTrue(result.containsKey(tp1));
+        assertEquals(0, result.get(tp1).partitionIndex());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp1).errorCode());
+    }
+
+    @Test
+    public void testReleaseAcquiredRecordsWithIncorrectMemberId() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 2));
+
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        // When incorrect memberId is passed, releaseAcquiredRecords should return an empty Optional.
+        when(sp1.releaseAcquiredRecords(ArgumentMatchers.eq(memberId))).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+        // When incorrect memberId is passed, releaseAcquiredRecords should return an empty Optional.
+        when(sp2.releaseAcquiredRecords(ArgumentMatchers.eq(memberId))).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp2), sp2);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withPartitionCacheMap(partitionCacheMap).build();
+
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
+                sharePartitionManager.releaseAcquiredRecords(groupId, memberId, Arrays.asList(tp1, tp2));
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
+        assertEquals(2, result.size());
+        assertTrue(result.containsKey(tp1));
+        assertTrue(result.containsKey(tp2));
+        assertEquals(0, result.get(tp1).partitionIndex());
+        assertEquals(Errors.NONE.code(), result.get(tp1).errorCode());
+        assertEquals(2, result.get(tp2).partitionIndex());
+        assertEquals(Errors.NONE.code(), result.get(tp2).errorCode());
+    }
+
+    @Test
+    public void testReleaseAcquiredRecordsWithEmptyTopicPartitions() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 2));
+
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        when(sp1.releaseAcquiredRecords(ArgumentMatchers.eq(memberId))).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+        when(sp2.releaseAcquiredRecords(ArgumentMatchers.eq(memberId))).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp2), sp2);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withPartitionCacheMap(partitionCacheMap).build();
+
+        // Pass an empty list of TopicIdPartitions to releaseAcquiredRecords. This should return an empty map.
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
+                sharePartitionManager.releaseAcquiredRecords(groupId, memberId, Collections.emptyList());
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
+        assertEquals(0, result.size());
+    }
+
     private ShareFetchResponseData.PartitionData noErrorShareFetchResponse() {
         return new ShareFetchResponseData.PartitionData().setPartitionIndex(0);
     }
@@ -1287,6 +1430,7 @@ public class SharePartitionManagerTest {
         private ShareSessionCache cache = new ShareSessionCache(10, 1000);
         private Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         private Persister persister = NoOpShareStatePersister.getInstance();
+        private Timer timer = new MockTimer();
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -1313,12 +1457,17 @@ public class SharePartitionManagerTest {
             return this;
         }
 
+        private SharePartitionManagerBuilder withTimer(Timer timer) {
+            this.timer = timer;
+            return this;
+        }
+
         public static SharePartitionManagerBuilder builder() {
             return new SharePartitionManagerBuilder();
         }
 
         public SharePartitionManager build() {
-            return new SharePartitionManager(replicaManager, time, cache, partitionCacheMap, RECORD_LOCK_DURATION_MS, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, persister);
+            return new SharePartitionManager(replicaManager, time, cache, partitionCacheMap, RECORD_LOCK_DURATION_MS, timer, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, persister);
         }
     }
 }
