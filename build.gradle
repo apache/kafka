@@ -200,7 +200,6 @@ def determineCommitId() {
 }
 
 
-def excludedSpotlessModules = [':streams']
 
 
 apply from: file('wrapper.gradle')
@@ -482,7 +481,9 @@ subprojects {
 
     exclude testsToExclude
 
-    useJUnitPlatform()
+    useJUnitPlatform {
+      includeEngines 'junit-jupiter'
+    }
 
     retry {
       maxRetries = userMaxTestRetries
@@ -509,18 +510,9 @@ subprojects {
 
     exclude testsToExclude
 
-    if (project.name == 'streams') {
-      useJUnitPlatform {
-        includeTags "integration"
-        includeTags "org.apache.kafka.test.IntegrationTest"
-        // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
-        // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
-        includeEngines "junit-vintage", "junit-jupiter"
-      }
-    } else {
-      useJUnitPlatform {
-        includeTags "integration"
-      }
+    useJUnitPlatform {
+      includeTags "integration"
+      includeEngines 'junit-jupiter'
     }
 
     retry {
@@ -546,18 +538,9 @@ subprojects {
 
     exclude testsToExclude
 
-    if (project.name == 'streams') {
-      useJUnitPlatform {
-        excludeTags "integration"
-        excludeTags "org.apache.kafka.test.IntegrationTest"
-        // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
-        // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
-        includeEngines "junit-vintage", "junit-jupiter"
-      }
-    } else {
-      useJUnitPlatform {
-        excludeTags "integration"
-      }
+    useJUnitPlatform {
+      excludeTags "integration"
+      includeEngines 'junit-jupiter'
     }
 
     retry {
@@ -774,7 +757,7 @@ subprojects {
   //  the task `removeUnusedImports` is implemented by google-java-format, 
   //  and unfortunately the google-java-format version used by spotless 6.14.0 can't work with JDK 21. 
   //  Hence, we apply spotless tasks only if the env is either JDK11 or JDK17
-  if ((JavaVersion.current().isJava11() || (JavaVersion.current() == JavaVersion.VERSION_17)) && project.path !in excludedSpotlessModules) {
+  if ((JavaVersion.current().isJava11() || (JavaVersion.current() == JavaVersion.VERSION_17))) {
     apply plugin: 'com.diffplug.spotless'
     spotless {
       java {
@@ -2026,12 +2009,6 @@ project(':storage') {
     }
   }
 
-  test {
-    useJUnitPlatform {
-      includeEngines 'junit-jupiter'
-    }
-  }
-
   clean.doFirst {
     delete "$buildDir/kafka/"
   }
@@ -2305,7 +2282,6 @@ project(':streams') {
     testImplementation project(':server')
     testImplementation libs.reload4j
     testImplementation libs.junitJupiter
-    testImplementation libs.junitVintageEngine
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore

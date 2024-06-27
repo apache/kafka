@@ -21,11 +21,11 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
 
 import java.nio.ByteBuffer;
 import java.util.List;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
 
 import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 

@@ -21,11 +21,11 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import java.time.Duration;
 import java.util.Objects;
 
+import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.kstream.Windows.DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD;
 import static org.apache.kafka.streams.kstream.Windows.NO_GRACE_PERIOD;
-import static java.time.Duration.ofMillis;
 
 /**
  * A session based window specification used for aggregating events into sessions.
