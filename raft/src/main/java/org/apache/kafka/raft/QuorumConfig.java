@@ -47,7 +47,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
  * controller should be able to transition from standby to active without reloading all of
  * the metadata. The standby is a "hot" standby, not a "cold" one.
  */
-public class QuorumConfig extends AbstractConfig {
+public class QuorumConfig {
 
     private static final String QUORUM_PREFIX = "controller.quorum.";
 
@@ -99,6 +99,12 @@ public class QuorumConfig extends AbstractConfig {
     public static final String QUORUM_RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
     public static final int DEFAULT_QUORUM_RETRY_BACKOFF_MS = 20;
 
+    private final AbstractConfig config;
+
+    public QuorumConfig(AbstractConfig config) {
+        this.config = config;
+    }
+
     public static ConfigDef configDef() {
         return new ConfigDef()
             .define(QUORUM_VOTERS_CONFIG, LIST, DEFAULT_QUORUM_VOTERS, new ControllerQuorumVotersValidator(), HIGH, QUORUM_VOTERS_DOC)
@@ -111,34 +117,28 @@ public class QuorumConfig extends AbstractConfig {
             .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, null, LOW, QUORUM_RETRY_BACKOFF_MS_DOC);
     }
 
-    public QuorumConfig(
-            Map<?, ?> props
-    ) {
-        super(configDef(), props);
-    }
-
     public int requestTimeoutMs() {
-        return getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG);
+        return config.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG);
     }
 
     public int retryBackoffMs() {
-        return getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG);
+        return config.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG);
     }
 
     public int electionTimeoutMs() {
-        return getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG);
+        return config.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG);
     }
 
     public int electionBackoffMaxMs() {
-        return getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
+        return config.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
     }
 
     public int fetchTimeoutMs() {
-        return getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
+        return config.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
     }
 
     public int appendLingerMs() {
-        return getInt(QUORUM_LINGER_MS_CONFIG);
+        return config.getInt(QUORUM_LINGER_MS_CONFIG);
     }
 
     private static Integer parseVoterId(String idString) {

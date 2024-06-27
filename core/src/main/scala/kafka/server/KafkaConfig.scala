@@ -676,6 +676,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val quorumLingerMs = getInt(QuorumConfig.QUORUM_LINGER_MS_CONFIG)
   val quorumRequestTimeoutMs = getInt(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG)
   val quorumRetryBackoffMs = getInt(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
+  private val _quorumConfig = new QuorumConfig(this)
+  def quorumConfig = _quorumConfig
 
   /** Internal Configurations **/
   val unstableApiVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG)
