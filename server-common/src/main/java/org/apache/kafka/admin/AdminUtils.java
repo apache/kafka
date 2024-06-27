@@ -130,7 +130,7 @@ public class AdminUtils {
             return assignReplicasToBrokersRackUnaware(nPartitions, replicationFactor, brokerMetadatas.stream().map(b -> b.id).collect(Collectors.toList()), fixedStartIndex,
                 startPartitionId);
         else {
-            if (brokerMetadatas.stream().anyMatch(b -> b.rack.isEmpty()))
+            if (brokerMetadatas.stream().anyMatch(b -> !b.rack.isPresent()))
                 throw new AdminOperationException("Not all brokers have rack information for replica rack aware assignment.");
             return assignReplicasToBrokersRackAware(nPartitions, replicationFactor, brokerMetadatas, fixedStartIndex,
                 startPartitionId);
