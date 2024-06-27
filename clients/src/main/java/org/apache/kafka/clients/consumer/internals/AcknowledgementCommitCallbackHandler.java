@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.common.TopicIdPartition;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
