@@ -51,7 +51,7 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
   private val user1 = "user1"
   private val user2 = "user2"
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterNothingNotAuthorized(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
@@ -64,7 +64,7 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
     assertEquals(0, results.size)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterSomethingNotAuthorized(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
