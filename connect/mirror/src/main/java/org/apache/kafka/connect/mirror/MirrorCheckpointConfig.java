@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.ConfigUtils;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.List;

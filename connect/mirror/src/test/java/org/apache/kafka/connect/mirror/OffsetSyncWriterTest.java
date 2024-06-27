@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.TopicPartition;
+
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 

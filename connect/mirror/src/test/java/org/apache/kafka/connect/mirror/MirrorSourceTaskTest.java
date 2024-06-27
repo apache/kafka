@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.junit.jupiter.api.Test;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -33,6 +31,9 @@ import org.apache.kafka.connect.mirror.MirrorSourceTask.PartitionState;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
+
+import org.junit.jupiter.api.Test;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
