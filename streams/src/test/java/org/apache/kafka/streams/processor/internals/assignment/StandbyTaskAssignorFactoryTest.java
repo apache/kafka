@@ -18,15 +18,15 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 
-import java.util.Collections;
-import java.util.List;
-
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+
+import java.util.Collections;
+import java.util.List;
 
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;

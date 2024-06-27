@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Optional;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
@@ -29,9 +28,11 @@ import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
+
 import org.slf4j.Logger;
 
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
