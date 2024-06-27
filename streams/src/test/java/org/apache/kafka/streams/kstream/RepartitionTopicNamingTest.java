@@ -25,6 +25,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
