@@ -54,9 +54,9 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
                     )
                     .define(REPLACE_NULL_WITH_DEFAULT_CONFIG,
                             ConfigDef.Type.BOOLEAN,
-                            Boolean.TRUE,
+                            true,
                             ConfigDef.Importance.MEDIUM,
-                            "Determine if null field value must be replaced with its default value or not."));
+                            "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used."));
 
     private static final String PURPOSE = "field extraction";
 

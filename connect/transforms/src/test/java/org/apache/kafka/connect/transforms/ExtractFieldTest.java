@@ -193,8 +193,7 @@ public class ExtractFieldTest {
     }
 
     @Test
-    @DisplayName("Null key value instead of default must be used")
-    public void whenKeyConverterReplaceNullWithDefaultIsFalseExtractFieldWithNullValueMustReturnNull() {
+    public void testUnsetOptionalFieldIsNull() {
 
         Map<String, Object> config = new HashMap<>();
         config.put("field", "optional_with_default");
@@ -216,8 +215,7 @@ public class ExtractFieldTest {
     }
 
     @Test
-    @DisplayName("Default key value must be used")
-    public void whenKeyConverterReplaceNullWithDefaultIsTrueExtractFieldWithNullValueMustReturnDefaultValueWhenPresent() {
+    public void testUnsetOptionalFieldReplacedWithDefault() {
 
         Map<String, Object> config = new HashMap<>();
         config.put("field", "optional_with_default");
@@ -239,8 +237,7 @@ public class ExtractFieldTest {
 
 
     @Test
-    @DisplayName("Null value instead of default must be used")
-    public void whenValueConverterReplaceNullWithDefaultIsFalseExtractFieldWithNullValueMustReturnNull() {
+    public void testUnsetOptionalFieldValueIsNull() {
 
         Map<String, Object> config = new HashMap<>();
         config.put("field", "optional_with_default");
@@ -262,8 +259,7 @@ public class ExtractFieldTest {
     }
 
     @Test
-    @DisplayName("Default key value must be used")
-    public void whenValueConverterReplaceNullWithDefaultIsTrueExtractFieldWithNullValueMustReturnDefaultValueWhenPresent() {
+    public void testUnsetOptionalFieldValueReplacedWithDefault() {
 
         Map<String, Object> config = new HashMap<>();
         config.put("field", "optional_with_default");

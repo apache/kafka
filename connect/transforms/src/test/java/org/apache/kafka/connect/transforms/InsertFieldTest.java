@@ -212,8 +212,7 @@ public class InsertFieldTest {
     }
 
     @Test
-    @DisplayName("Null value fields copied as null instead of default")
-    public void whenValueConverterReplaceNullWithDefaultIsFalseNullCopiedFieldsWithNullValueMustRemainNull() {
+    public void testUnsetOptionalFieldIsNull() {
 
         final Map<String, Object> props = new HashMap<>();
         props.put("topic.field", "topic_field!");
@@ -242,8 +241,7 @@ public class InsertFieldTest {
     }
 
     @Test
-    @DisplayName("Use default value when coping fields with null value")
-    public void whenValueConverterReplaceNullWithDefaultIsTrueCopiedFieldsWithNullValueMustUseDefault() {
+    public void testUnsetOptionalFieldReplacedWithDefault() {
 
         final Map<String, Object> props = new HashMap<>();
         props.put("topic.field", "topic_field!");
