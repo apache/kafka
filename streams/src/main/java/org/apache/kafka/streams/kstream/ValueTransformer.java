@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import java.time.Duration;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -24,6 +23,8 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
+
+import java.time.Duration;
 
 /**
  * The {@code ValueTransformer} interface for stateful mapping of a value to a new value (with possible new type).

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.query;
 
 import org.apache.kafka.streams.query.internals.SucceededQueryResult;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
