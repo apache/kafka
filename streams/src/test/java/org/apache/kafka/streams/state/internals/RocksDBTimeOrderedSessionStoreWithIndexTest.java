@@ -14,11 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.streams.state.internals;
 
-public class LeaveOnCloseEvent extends CompletableApplicationEvent<Void> {
+public class RocksDBTimeOrderedSessionStoreWithIndexTest extends AbstractSessionBytesStoreTest {
 
-    public LeaveOnCloseEvent(final long deadlineMs) {
-        super(Type.LEAVE_ON_CLOSE, deadlineMs);
+    @Override
+    StoreType storeType() {
+        return StoreType.RocksDBTimeOrderedSessionStoreWithIndex;
     }
 }

@@ -16,45 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.singleton;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -95,21 +56,61 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoJUnitRunner;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 import org.mockito.stubbing.OngoingStubbing;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import static java.util.Arrays.asList;
+import static java.util.Collections.singleton;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class WorkerSinkTaskTest {
     // These are fixed to keep this code simpler. In this example we assume byte[] raw values
     // with mix of integer/string in Connect
@@ -170,13 +171,11 @@ public class WorkerSinkTaskTest {
     @Mock
     private ErrorHandlingMetrics errorHandlingMetrics;
     private final ArgumentCaptor<ConsumerRebalanceListener> rebalanceListener = ArgumentCaptor.forClass(ConsumerRebalanceListener.class);
-    @Rule
-    public final MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
     private long recordsReturnedTp1;
     private long recordsReturnedTp3;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         time = new MockTime();
         Map<String, String> workerProps = new HashMap<>();
@@ -207,7 +206,7 @@ public class WorkerSinkTaskTest {
                 retryWithToleranceOperator, null, statusBackingStore, errorReportersSupplier);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         if (metrics != null) metrics.stop();
     }
@@ -920,10 +919,10 @@ public class WorkerSinkTaskTest {
         // is the normal commit time less the two sleeps since it started each
         // of those sleeps were 10 seconds.
         // KAFKA-8229
-        assertEquals("Should have only advanced by 40 seconds",
-                previousCommitValue  +
+        assertEquals(previousCommitValue +
                         (WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT - 10000L * 2),
-                workerTask.getNextCommit());
+                workerTask.getNextCommit(),
+                "Should have only advanced by 40 seconds");
 
         assertSinkMetricValue("partition-count", 2);
         assertSinkMetricValue("sink-record-read-total", 1.0);
@@ -1110,7 +1109,7 @@ public class WorkerSinkTaskTest {
         workerTask.iteration(); // iter 3 -- commit in progress
 
         // Make sure the "committing" flag didn't immediately get flipped back to false due to an incorrect timeout
-        assertTrue("Expected worker to be in the process of committing offsets", workerTask.isCommitting());
+        assertTrue(workerTask.isCommitting(), "Expected worker to be in the process of committing offsets");
 
         // Delay the result of trying to commit offsets to Kafka via the consumer.commitAsync method.
         ArgumentCaptor<OffsetCommitCallback> offsetCommitCallbackArgumentCaptor =
@@ -1196,8 +1195,8 @@ public class WorkerSinkTaskTest {
         workerTask.initializeAndStart();
 
         RuntimeException thrownException = assertThrows(ConnectException.class, () -> workerTask.execute());
-        assertEquals("Exception from put should be the cause", putException, thrownException.getCause());
-        assertTrue("Exception from close should be suppressed", thrownException.getSuppressed().length > 0);
+        assertEquals(putException, thrownException.getCause(), "Exception from put should be the cause");
+        assertTrue(thrownException.getSuppressed().length > 0, "Exception from close should be suppressed");
         assertEquals(closeException, thrownException.getSuppressed()[0]);
     }
 

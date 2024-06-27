@@ -34,6 +34,7 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConcreteSubClassValidator;
 import org.apache.kafka.connect.util.InstantiableClassValidator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

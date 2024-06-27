@@ -25,31 +25,33 @@ import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.SSLEngineResult;
-import javax.net.ssl.SSLException;
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.Principal;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.HashSet;
+
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLEngineResult;
+import javax.net.ssl.SSLException;
 
 public class SslFactory implements Reconfigurable, Closeable {
     private static final Logger log = LoggerFactory.getLogger(SslFactory.class);

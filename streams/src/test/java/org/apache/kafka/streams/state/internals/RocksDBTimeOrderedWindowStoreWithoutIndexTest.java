@@ -14,7 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
+package org.apache.kafka.streams.state.internals;
 
-public interface IntegrationTest {
+public class RocksDBTimeOrderedWindowStoreWithoutIndexTest extends AbstractRocksDBWindowStoreTest {
+
+    @Override
+    StoreType storeType() {
+        return StoreType.RocksDBTimeOrderedWindowStoreWithoutIndex;
+    }
 }

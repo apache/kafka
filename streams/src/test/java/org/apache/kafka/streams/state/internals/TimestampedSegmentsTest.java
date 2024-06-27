@@ -23,9 +23,10 @@ import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -37,10 +38,10 @@ import java.util.SimpleTimeZone;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TimestampedSegmentsTest {
 
@@ -53,7 +54,7 @@ public class TimestampedSegmentsTest {
     private File stateDirectory;
     private final String storeName = "test";
 
-    @Before
+    @BeforeEach
     public void createContext() {
         stateDirectory = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
@@ -67,7 +68,7 @@ public class TimestampedSegmentsTest {
         segments.openExisting(context, -1L);
     }
 
-    @After
+    @AfterEach
     public void close() {
         segments.close();
     }

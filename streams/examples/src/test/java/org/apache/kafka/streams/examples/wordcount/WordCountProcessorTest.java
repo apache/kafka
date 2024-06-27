@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

@@ -35,14 +35,13 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceP
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.controller.MockAclMutator
-import org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.AuthorizerTestServerInfo
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
+import org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.AuthorizerTestServerInfo
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_0_IV0, IBP_2_0_IV1}
-import org.apache.kafka.server.config.ZkConfigs
-import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.config.{ReplicationConfigs, ZkConfigs}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -94,8 +93,10 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
     val props = properties
     config = KafkaConfig.fromProps(props)
-    authorizer1 = createAuthorizer(config.originals)
-    authorizer2 = createAuthorizer(config.originals)
+    authorizer1 = createAuthorizer()
+    configureAuthorizer(authorizer1, config.originals)
+    authorizer2 = createAuthorizer()
+    configureAuthorizer(authorizer2, config.originals)
     resource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
 
     if (!TestInfoUtils.isKRaft(testInfo)) {
@@ -319,9 +320,9 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     props.put(AclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, "true")
 
     val cfg = KafkaConfig.fromProps(props)
-    var testAuthorizer: Authorizer = null
+    val testAuthorizer = createAuthorizer()
     try {
-      testAuthorizer = createAuthorizer(cfg.originals)
+      configureAuthorizer(testAuthorizer, cfg.originals)
       assertTrue(authorize(testAuthorizer, requestContext, READ, resource),
         "when acls = null or [],  authorizer should allow op with allow.everyone = true.")
     } finally {
@@ -337,9 +338,9 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     // replace all property values with leading & trailing whitespaces
     props.replaceAll((_,v) => " " + v + " ")
     val cfg = KafkaConfig.fromProps(props)
-    var testAuthorizer: Authorizer = null
+    val testAuthorizer = createAuthorizer()
     try {
-      testAuthorizer = createAuthorizer(cfg.originals)
+      configureAuthorizer(testAuthorizer, cfg.originals)
       assertTrue(authorize(testAuthorizer, requestContext, READ, resource),
         "when acls = null or [],  authorizer should allow op with allow.everyone = true.")
     } finally {
@@ -417,9 +418,9 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     addAcls(authorizer1, acls1, resource1)
 
     zkClient.deleteAclChangeNotifications()
-    var authorizer: Authorizer = null
+    val authorizer = new AclAuthorizer
     try {
-      authorizer = createAclAuthorizer(config.originals)
+      configureAclAuthorizer(authorizer, config.originals)
 
       assertEquals(acls, getAcls(authorizer, resource))
       assertEquals(acls1, getAcls(authorizer, resource1))
@@ -1072,9 +1073,9 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     props.put(AclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, "true")
 
     val cfg = KafkaConfig.fromProps(props)
-    var authorizer: Authorizer = null
+    val authorizer: Authorizer = createAuthorizer()
     try {
-      authorizer = createAuthorizer(cfg.originals)
+      configureAuthorizer(authorizer, cfg.originals)
       assertTrue(authorizeByResourceType(authorizer, requestContext, READ, resource.resourceType()),
         "If allow.everyone.if.no.acl.found = true, caller should have read access to at least one topic")
       assertTrue(authorizeByResourceType(authorizer, requestContext, WRITE, resource.resourceType()),
@@ -1169,27 +1170,28 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     } finally writer.close()
   }
 
-  def createAuthorizer(configs: util.Map[String, AnyRef]): Authorizer = {
-    var testAuthorizer: Authorizer = null
+  def createAuthorizer(): Authorizer = {
+    if (TestInfoUtils.isKRaft(_testInfo)) new StandardAuthorizer else new AclAuthorizer
+  }
+
+  def configureAuthorizer(authorizer: Authorizer,
+                          configs: util.Map[String, AnyRef]): Unit = {
     if (TestInfoUtils.isKRaft(_testInfo)) {
-      testAuthorizer = createStandardAuthorizer(configs)
+      configureStandardAuthorizer(authorizer.asInstanceOf[StandardAuthorizer], configs)
     } else {
-      testAuthorizer = createAclAuthorizer(configs)
+      configureAclAuthorizer(authorizer.asInstanceOf[AclAuthorizer], configs)
     }
-    testAuthorizer
   }
 
-  def createAclAuthorizer(configs: util.Map[String, AnyRef]): AclAuthorizer = {
-    val authorizer = new AclAuthorizer
-    authorizer.configure(configs)
-    authorizer
+  def configureAclAuthorizer(aclAuthorizer: AclAuthorizer,
+                             configs: util.Map[String, AnyRef]): Unit = {
+    aclAuthorizer.configure(configs)
   }
 
-  def createStandardAuthorizer(configs: util.Map[String, AnyRef]): StandardAuthorizer = {
-    val standardAuthorizer = new StandardAuthorizer
+  def configureStandardAuthorizer(standardAuthorizer: StandardAuthorizer,
+                                  configs: util.Map[String, AnyRef]): Unit = {
     standardAuthorizer.configure(configs)
     initializeStandardAuthorizer(standardAuthorizer, new AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)))
-    standardAuthorizer
   }
 
   def initializeStandardAuthorizer(standardAuthorizer: StandardAuthorizer,

@@ -231,7 +231,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val zkEnableSecureAcls: Boolean = getBoolean(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG)
   val zkMaxInFlightRequests: Int = getInt(ZkConfigs.ZK_MAX_IN_FLIGHT_REQUESTS_CONFIG)
 
-  private val _remoteLogManagerConfig = new RemoteLogManagerConfig(props)
+  private val _remoteLogManagerConfig = new RemoteLogManagerConfig(this)
   def remoteLogManagerConfig = _remoteLogManagerConfig
 
   private def zkBooleanConfigOrSystemPropertyWithDefaultValue(propKey: String): Boolean = {
@@ -788,13 +788,24 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
   }
 
-  // Use advertised listeners if defined, fallback to listeners otherwise
+  def effectiveAdvertisedControllerListeners: Seq[EndPoint] = {
+    // Only expose controller listeners
+    advertisedListeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+  }
+
   def effectiveAdvertisedListeners: Seq[EndPoint] = {
+    // Only expose broker listeners
+    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
+  }
+
+  // Use advertised listeners if defined, fallback to listeners otherwise
+  private def advertisedListeners: Seq[EndPoint] = {
     val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
-    if (advertisedListenersProp != null)
+    if (advertisedListenersProp != null) {
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
-    else
-      listeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
+    } else {
+      listeners
+    }
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
@@ -869,8 +880,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   def logLocalRetentionMs: java.lang.Long = getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP)
 
-  def remoteFetchMaxWaitMs = getInt(RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP)
-
   validateValues()
 
   @nowarn("cat=deprecation")
@@ -929,7 +938,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG} is not supported in KRaft mode.")
     }
     def validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker(): Unit = {
-      require(!advertisedListenerNames.exists(aln => controllerListenerNames.contains(aln.value())),
+      require(advertisedListenerNames.forall(aln => !controllerListenerNames.contains(aln.value())),
         s"The advertised.listeners config must not contain KRaft controller listeners from ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} when ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains the broker role because Kafka clients that send requests via advertised listeners do not send requests to KRaft controllers -- they only send requests to KRaft brokers.")
     }
     def validateControllerQuorumVotersMustContainNodeIdForKRaftController(): Unit = {
@@ -981,11 +990,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       // KRaft controller-only
       validateNonEmptyQuorumVotersForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
-      // advertised listeners must be empty when only the controller is configured
-      require(
-        getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG) == null,
-        s"The ${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG} config must be empty when ${KRaftConfigs.PROCESS_ROLES_CONFIG}=controller"
-      )
       // listeners should only contain listeners also enumerated in the controller listener
       require(
         effectiveAdvertisedListeners.isEmpty,
@@ -1135,9 +1139,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       s"${ShareGroupConfigs.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG} must be less than or equals " +
         s"to ${ShareGroupConfigs.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG}")
 
-    require(shareGroupMaxRecordLockDurationMs >= shareGroupMinRecordLockDurationMs,
-      s"${ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG} must be greater than or equals " +
-        s"to ${ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG}")
     require(shareGroupRecordLockDurationMs >= shareGroupMinRecordLockDurationMs,
       s"${ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG} must be greater than or equals " +
         s"to ${ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG}")

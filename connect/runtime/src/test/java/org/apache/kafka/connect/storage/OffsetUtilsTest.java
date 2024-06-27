@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;

@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordBatch;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

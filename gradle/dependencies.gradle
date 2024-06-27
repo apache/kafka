@@ -156,7 +156,8 @@ versions += [
   spotbugs: "4.8.0",
   zinc: "1.9.2",
   zookeeper: "3.8.4",
-  zstd: "1.5.6-3"
+  zstd: "1.5.6-3",
+  junitPlatformSuiteEngine: "1.10.2"
 ]
 
 libs += [
@@ -200,7 +201,7 @@ libs += [
   jose4j: "org.bitbucket.b_c:jose4j:$versions.jose4j",
   junitJupiter: "org.junit.jupiter:junit-jupiter:$versions.junit",
   junitJupiterApi: "org.junit.jupiter:junit-jupiter-api:$versions.junit",
-  junitVintageEngine: "org.junit.vintage:junit-vintage-engine:$versions.junit",
+  junitPlatformSuiteEngine: "org.junit.platform:junit-platform-suite-engine:$versions.junitPlatformSuiteEngine",
   jqwik: "net.jqwik:jqwik:$versions.jqwik",
   hamcrest: "org.hamcrest:hamcrest:$versions.hamcrest",
   kafkaStreams_0100: "org.apache.kafka:kafka-streams:$versions.kafka_0100",
@@ -226,7 +227,6 @@ libs += [
   kafkaStreams_35: "org.apache.kafka:kafka-streams:$versions.kafka_35",
   kafkaStreams_36: "org.apache.kafka:kafka-streams:$versions.kafka_36",
   kafkaStreams_37: "org.apache.kafka:kafka-streams:$versions.kafka_37",
-  log4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
@@ -237,6 +237,7 @@ libs += [
   pcollections: "org.pcollections:pcollections:$versions.pcollections",
   opentelemetryProto: "io.opentelemetry.proto:opentelemetry-proto:$versions.opentelemetryProto",
   reflections: "org.reflections:reflections:$versions.reflections",
+  reload4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
   scalaCollectionCompat: "org.scala-lang.modules:scala-collection-compat_$versions.baseScala:$versions.scalaCollectionCompat",
   scalaJava8Compat: "org.scala-lang.modules:scala-java8-compat_$versions.baseScala:$versions.scalaJava8Compat",
@@ -244,7 +245,7 @@ libs += [
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
-  slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
+  slf4jReload4j: "org.slf4j:slf4j-reload4j:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
   swaggerJaxrs2: "io.swagger.core.v3:swagger-jaxrs2:$swaggerVersion",

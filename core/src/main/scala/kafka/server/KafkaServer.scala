@@ -52,6 +52,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
 import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.Endpoints
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
@@ -440,6 +441,9 @@ class KafkaServer(
             threadNamePrefix,
             CompletableFuture.completedFuture(quorumVoters),
             QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
+            // Endpoint information is only needed for KRaft controllers (voters). ZK brokers
+            // (observers) can never be KRaft controllers
+            Endpoints.empty(),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
           quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
@@ -1082,6 +1086,13 @@ class KafkaServer(
         fatal("Fatal error during KafkaServer shutdown.", e)
         isShuttingDown.set(false)
         throw e
+    }
+  }
+
+  override def isShutdown(): Boolean = {
+    BrokerState.fromValue(brokerState.value()) match {
+      case BrokerState.SHUTTING_DOWN | BrokerState.NOT_RUNNING => true
+      case _ => false
     }
   }
 

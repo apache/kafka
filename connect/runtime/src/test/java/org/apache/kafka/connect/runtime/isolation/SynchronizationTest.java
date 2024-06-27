@@ -17,7 +17,21 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-import static org.junit.Assert.fail;
+
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.connect.runtime.WorkerConfig;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.management.LockInfo;
 import java.lang.management.ManagementFactory;
@@ -40,26 +54,12 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.Importance;
-import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TestName;
-import org.mockito.Mockito;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class SynchronizationTest {
 
     public static final Logger log = LoggerFactory.getLogger(SynchronizationTest.class);
-
-    @Rule
-    public final TestName testName = new TestName();
 
     private String threadPrefix;
     private Plugins plugins;
@@ -67,14 +67,14 @@ public class SynchronizationTest {
     private Breakpoint<String> dclBreakpoint;
     private Breakpoint<String> pclBreakpoint;
 
-    @Before
-    public void setup() {
+    @BeforeEach
+    public void setup(TestInfo testInfo) {
         Map<String, String> pluginProps = Collections.singletonMap(
             WorkerConfig.PLUGIN_PATH_CONFIG,
             TestPlugins.pluginPathJoined()
         );
         threadPrefix = SynchronizationTest.class.getSimpleName()
-            + "." + testName.getMethodName() + "-";
+            + "." + testInfo.getDisplayName() + "-";
         dclBreakpoint = new Breakpoint<>();
         pclBreakpoint = new Breakpoint<>();
         plugins = new Plugins(pluginProps, Plugins.class.getClassLoader(), new SynchronizedClassLoaderFactory());
@@ -89,7 +89,7 @@ public class SynchronizationTest {
 
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws InterruptedException {
         dclBreakpoint.clear();
         pclBreakpoint.clear();
@@ -113,7 +113,6 @@ public class SynchronizationTest {
         public synchronized void set(Predicate<T> predicate) {
             clear();
             this.predicate = predicate;
-            // As soon as the barrier is tripped, the barrier will be reset for the next round.
             barrier = new CyclicBarrier(2);
         }
 
@@ -125,7 +124,7 @@ public class SynchronizationTest {
             Predicate<T> predicate;
             CyclicBarrier barrier;
             synchronized (this) {
-                predicate  = this.predicate;
+                predicate = this.predicate;
                 barrier = this.barrier;
             }
             if (predicate != null && !predicate.test(obj)) {
@@ -206,7 +205,6 @@ public class SynchronizationTest {
 
         private final Breakpoint<String> pclBreakpoint;
 
-
         public SynchronizedPluginClassLoader(
                 URL pluginLocation, URL[] urls, ClassLoader parent, Breakpoint<String> pclBreakpoint
         ) {
@@ -221,8 +219,9 @@ public class SynchronizationTest {
         }
     }
 
+    @Test
+    @Timeout(15)
     // If the test times out, then there's a deadlock in the test but not necessarily the code
-    @Test(timeout = 15000L)
     public void testSimultaneousUpwardAndDownwardDelegating() throws Exception {
         String t1Class = TestPlugins.TestPlugin.SAMPLING_CONVERTER.className();
         // Grab a reference to the target PluginClassLoader before activating breakpoints
@@ -300,8 +299,9 @@ public class SynchronizationTest {
     }
 
     // If the test times out, then there's a deadlock in the test but not necessarily the code
-    @Test(timeout = 15000L)
+    @Test
     // Ensure the PluginClassLoader is parallel capable and not synchronized on its monitor lock
+    @Timeout(15)
     public void testPluginClassLoaderDoesntHoldMonitorLock()
         throws InterruptedException, TimeoutException, BrokenBarrierException {
         String t1Class = TestPlugins.TestPlugin.SAMPLING_CONVERTER.className();

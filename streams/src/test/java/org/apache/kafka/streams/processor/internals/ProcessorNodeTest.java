@@ -32,7 +32,8 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -43,9 +44,9 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProcessorNodeTest {
 
@@ -139,8 +140,8 @@ public class ProcessorNodeTest {
 
             final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
             final String msg = se.getMessage();
-            assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
-            assertTrue("Error about class cast with serdes", msg.contains("Serdes"));
+            assertTrue(msg.contains("ClassCastException"), "Error about class cast with serdes");
+            assertTrue(msg.contains("Serdes"), "Error about class cast with serdes");
         }
     }
 

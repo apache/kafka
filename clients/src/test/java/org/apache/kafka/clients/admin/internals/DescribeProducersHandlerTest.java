@@ -35,6 +35,7 @@ import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.DescribeProducersResponse;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;

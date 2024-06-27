@@ -225,7 +225,8 @@ public class TargetAssignmentBuilderTest {
                 .thenReturn(new GroupAssignment(memberAssignments));
 
             // Create and populate the assignment builder.
-            TargetAssignmentBuilder builder = new TargetAssignmentBuilder(groupId, groupEpoch, assignor)
+            TargetAssignmentBuilder<ConsumerGroupMember> builder =
+                new TargetAssignmentBuilder<ConsumerGroupMember>(groupId, groupEpoch, assignor)
                 .withMembers(members)
                 .withStaticMembers(staticMembers)
                 .withSubscriptionMetadata(subscriptionMetadata)

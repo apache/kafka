@@ -16,6 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.Arrays;
+import java.util.Optional;
+import java.util.TreeMap;
+import java.util.TreeSet;
+
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -25,15 +35,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_1_0;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertThrows;
-
-import java.util.Arrays;
-import java.util.Optional;
-import java.util.TreeMap;
-import java.util.TreeSet;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class KafkaStreamsStateTest {
     @Test

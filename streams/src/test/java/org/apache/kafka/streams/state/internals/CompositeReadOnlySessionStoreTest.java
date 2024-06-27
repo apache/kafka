@@ -21,15 +21,16 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.test.ReadOnlySessionStoreStub;
 import org.apache.kafka.test.StateStoreProviderStub;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
@@ -38,10 +39,10 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class CompositeReadOnlySessionStoreTest {
 
@@ -52,7 +53,7 @@ public class CompositeReadOnlySessionStoreTest {
     private final ReadOnlySessionStoreStub<String, Long> otherUnderlyingStore = new ReadOnlySessionStoreStub<>();
     private CompositeReadOnlySessionStore<String, Long> sessionStore;
 
-    @Before
+    @BeforeEach
     public void before() {
         stubProviderOne.addStore(storeName, underlyingSessionStore);
         stubProviderOne.addStore("other-session-store", otherUnderlyingStore);

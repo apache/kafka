@@ -18,14 +18,15 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class InternalTopicConfigTest {
 

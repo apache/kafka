@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
