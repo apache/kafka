@@ -637,14 +637,6 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Generate a random string of letters and digits of the given length
-   *
-   * @param len The length of the string
-   * @return The random string
-   */
-  def randomString(len: Int): String = JTestUtils.randomString(len)
-
-  /**
    * Generate an array of random bytes
    *
    * @param numBytes The size of the array

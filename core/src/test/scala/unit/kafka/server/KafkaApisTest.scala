@@ -4418,7 +4418,7 @@ class KafkaApisTest extends Logging {
 
     val builder: MemoryRecordsBuilder = MemoryRecords.builder(buffer, compression, timestampType, startOffset)
     for (i <- 0 until numOfRecords) {
-      builder.appendWithOffset(startOffset + i, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes())
+      builder.appendWithOffset(startOffset + i, 0L, TestUtils.randomBytes(10), TestUtils.randomBytes(10))
     }
     builder
   }
