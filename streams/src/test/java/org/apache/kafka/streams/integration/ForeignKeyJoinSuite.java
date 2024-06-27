@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySche
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ResponseJoinProcessorSupplierTest;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapperSerdeTest;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerdeTest;
+
 import org.junit.platform.suite.api.SelectClasses;
 import org.junit.platform.suite.api.Suite;
 
@@ -48,5 +49,3 @@ import org.junit.platform.suite.api.Suite;
 })
 public class ForeignKeyJoinSuite {
 }
-
-

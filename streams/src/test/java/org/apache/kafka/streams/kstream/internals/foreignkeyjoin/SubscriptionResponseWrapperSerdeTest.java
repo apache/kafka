@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.state.internals.Murmur3;
 
 import org.junit.jupiter.api.Test;
+
 import java.util.Map;
 
 import static java.util.Objects.requireNonNull;

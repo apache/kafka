@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.state.KeyValueIterator;
+
 import org.mockito.quality.Strictness;
 
 import java.io.Closeable;
