@@ -31,11 +31,17 @@ elif [[ "$OSNAME" == "OS400" ]]; then
     PIDS=$(ps -Af | grep -i 'kafka\.Kafka' | grep java | grep -v grep | awk '{print $2}')
 else
     PIDS=$(ps ax | grep ' kafka\.Kafka ' | grep java | grep -v grep | awk '{print $1}'| xargs)
+    PIDS_SUPPORT=$(ps ax | grep -i 'io\.confluent\.support\.metrics\.SupportedKafka' | grep java | grep -v grep | awk '{print $1}')
 fi
 
 if [ -z "$PIDS" ]; then
-  echo "No kafka server to stop"
-  exit 1
+  # Normal Kafka is not running, but maybe we are running the support wrapper?
+  if [ -z "${PIDS_SUPPORT}" ]; then
+    echo "No kafka server to stop"
+    exit 1
+  else
+    kill -s $SIGNAL $PIDS_SUPPORT
+  fi
 else
   if [ -z "$INPUT_PROCESS_ROLE" ] && [ -z "$INPUT_NID" ]; then
     kill -s $SIGNAL $PIDS
