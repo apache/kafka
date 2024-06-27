@@ -75,9 +75,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
@@ -963,7 +963,7 @@ public final class AssignmentTestUtils {
             for (final Entry<ProcessId, ClientState> entry : clientStateMap.entrySet()) {
                 final int expected = standbyTaskCount.get(entry.getKey());
                 final int actual = entry.getValue().standbyTaskCount();
-                assertEquals("StandbyTaskCount for " + entry.getKey() + " doesn't match", expected, actual);
+                assertEquals(expected, actual, "StandbyTaskCount for " + entry.getKey() + " doesn't match");
             }
         }
         for (final TaskId taskId : taskIds) {
@@ -992,12 +992,12 @@ public final class AssignmentTestUtils {
                     hasStandby = true;
                 }
 
-                assertFalse(clientState + " has both active and standby task " + taskId, hasActive && hasStandby);
+                assertFalse(hasActive && hasStandby, clientState + " has both active and standby task " + taskId);
             }
 
-            assertEquals("Task " + taskId + " should have 1 active task", 1, activeCount);
+            assertEquals(1, activeCount, "Task " + taskId + " should have 1 active task");
             if (replica != null) {
-                assertEquals("Task " + taskId + " has wrong replica count", replica.intValue(), standbyCount);
+                assertEquals(replica.intValue(), standbyCount, "Task " + taskId + " has wrong replica count");
             }
         }
     }
