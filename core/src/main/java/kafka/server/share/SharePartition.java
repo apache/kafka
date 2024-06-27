@@ -547,12 +547,139 @@ public class SharePartition {
      * @return A future which is completed when the records are released.
      */
     public CompletableFuture<Optional<Throwable>> releaseAcquiredRecords(String memberId) {
-        log.trace("Release acquired records request for share partition: {}-{}-{}", groupId, memberId, topicIdPartition);
+        log.trace("Release acquired records request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
 
-        CompletableFuture<Optional<Throwable>> future = new CompletableFuture<>();
-        future.completeExceptionally(new UnsupportedOperationException("Not implemented"));
+        Throwable throwable = null;
+        lock.writeLock().lock();
+        List<InFlightState> updatedStates = new ArrayList<>();
+        List<PersisterStateBatch> stateBatches = new ArrayList<>();
 
-        return future;
+        try {
+            RecordState recordState = RecordState.AVAILABLE;
+            // Iterate over multiple fetched batches. The state can vary per offset entry
+            for (Map.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
+                InFlightBatch inFlightBatch = entry.getValue();
+
+                if (inFlightBatch.offsetState() == null
+                        && inFlightBatch.batchState() == RecordState.ACQUIRED
+                        && inFlightBatch.batchMemberId().equals(memberId)
+                        && checkForStartOffsetWithinBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset())) {
+                    // For the case when batch.firstOffset < start offset <= batch.lastOffset, we will be having some
+                    // acquired records that need to move to archived state despite their delivery count.
+                    inFlightBatch.maybeInitializeOffsetStateUpdate();
+                }
+
+                if (inFlightBatch.offsetState() != null) {
+                    Optional<Throwable> releaseAcquiredRecordsThrowable = releaseAcquiredRecordsForPerOffsetBatch(memberId, inFlightBatch, recordState, updatedStates, stateBatches);
+                    if (releaseAcquiredRecordsThrowable.isPresent()) {
+                        throwable = releaseAcquiredRecordsThrowable.get();
+                        break;
+                    }
+                    continue;
+                }
+                Optional<Throwable> releaseAcquiredRecordsThrowable = releaseAcquiredRecordsForCompleteBatch(memberId, inFlightBatch, recordState, updatedStates, stateBatches);
+                if (releaseAcquiredRecordsThrowable.isPresent()) {
+                    throwable = releaseAcquiredRecordsThrowable.get();
+                    break;
+                }
+            }
+
+            // If the release acquired records is successful then persist state, complete the state transition
+            // and update the cached state for start offset. Else rollback the state transition.
+            rollbackOrProcessStateUpdates(throwable, updatedStates, stateBatches);
+        } finally {
+            lock.writeLock().unlock();
+        }
+        return CompletableFuture.completedFuture(Optional.ofNullable(throwable));
+    }
+
+    private Optional<Throwable> releaseAcquiredRecordsForPerOffsetBatch(String memberId,
+                                                                        InFlightBatch inFlightBatch,
+                                                                        RecordState recordState,
+                                                                        List<InFlightState> updatedStates,
+                                                                        List<PersisterStateBatch> stateBatches) {
+
+        log.trace("Offset tracked batch record found, batch: {} for the share partition: {}-{}", inFlightBatch,
+                groupId, topicIdPartition);
+        for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
+
+            // Check if member id is the owner of the offset.
+            if (!offsetState.getValue().memberId().equals(memberId) && !offsetState.getValue().memberId().equals(EMPTY_MEMBER_ID)) {
+                log.debug("Member {} is not the owner of offset: {} in batch: {} for the share"
+                        + " partition: {}-{}. Skipping offset.", memberId, offsetState.getKey(), inFlightBatch, groupId, topicIdPartition);
+                return Optional.empty();
+            }
+            if (offsetState.getValue().state == RecordState.ACQUIRED) {
+                InFlightState updateResult = offsetState.getValue().startStateTransition(
+                        offsetState.getKey() < startOffset ? RecordState.ARCHIVED : recordState,
+                        false,
+                        this.maxDeliveryCount,
+                        EMPTY_MEMBER_ID
+                );
+                if (updateResult == null) {
+                    log.debug("Unable to release records from acquired state for the offset: {} in batch: {}"
+                                    + " for the share partition: {}-{}", offsetState.getKey(),
+                            inFlightBatch, groupId, topicIdPartition);
+                    return Optional.of(new InvalidRecordStateException("Unable to release acquired records for the offset"));
+                }
+
+                // Successfully updated the state of the offset.
+                updatedStates.add(updateResult);
+                stateBatches.add(new PersisterStateBatch(offsetState.getKey(), offsetState.getKey(),
+                        updateResult.state.id, (short) updateResult.deliveryCount));
+
+                // If the maxDeliveryCount limit has been exceeded, the record will be transitioned to ARCHIVED state.
+                // This should not change the next fetch offset because the record is not available for acquisition
+                if (updateResult.state != RecordState.ARCHIVED) {
+                    findNextFetchOffset.set(true);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Throwable> releaseAcquiredRecordsForCompleteBatch(String memberId,
+                                                                       InFlightBatch inFlightBatch,
+                                                                       RecordState recordState,
+                                                                       List<InFlightState> updatedStates,
+                                                                       List<PersisterStateBatch> stateBatches) {
+
+        // Check if member id is the owner of the batch.
+        if (!inFlightBatch.batchMemberId().equals(memberId) && !inFlightBatch.batchMemberId().equals(EMPTY_MEMBER_ID)) {
+            log.debug("Member {} is not the owner of batch record {} for share partition: {}-{}. Skipping batch.",
+                    memberId, inFlightBatch, groupId, topicIdPartition);
+            return Optional.empty();
+        }
+
+        // Change the state of complete batch since the same state exists for the entire inFlight batch.
+        log.trace("Releasing acquired records for complete batch {} for the share partition: {}-{}",
+                inFlightBatch, groupId, topicIdPartition);
+
+        if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
+            InFlightState updateResult = inFlightBatch.startBatchStateTransition(
+                    inFlightBatch.lastOffset() < startOffset ? RecordState.ARCHIVED : recordState,
+                    false,
+                    this.maxDeliveryCount,
+                    EMPTY_MEMBER_ID
+            );
+            if (updateResult == null) {
+                log.debug("Unable to release records from acquired state for the batch: {}"
+                        + " for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
+                return Optional.of(new InvalidRecordStateException("Unable to release acquired records for the batch"));
+            }
+
+            // Successfully updated the state of the batch.
+            updatedStates.add(updateResult);
+            stateBatches.add(new PersisterStateBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset(),
+                    updateResult.state.id, (short) updateResult.deliveryCount));
+
+            // If the maxDeliveryCount limit has been exceeded, the record will be transitioned to ARCHIVED state.
+            // This should not change the next fetch offset because the record is not available for acquisition
+            if (updateResult.state != RecordState.ARCHIVED) {
+                findNextFetchOffset.set(true);
+            }
+        }
+        return Optional.empty();
     }
 
     /**
