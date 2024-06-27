@@ -563,11 +563,12 @@ public class KafkaRaftClientTest {
         context.client.poll();
         context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), Utils.mkSet(remoteId1, remoteId2));
 
-        context.time.sleep(context.beginQuorumEpochTimeoutMs / 2);
+        int partialDelay = context.beginQuorumEpochTimeoutMs / 2;
+        context.time.sleep(partialDelay);
         context.client.poll();
         context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), Utils.mkSet());
 
-        context.time.sleep(context.beginQuorumEpochTimeoutMs / 2);
+        context.time.sleep(context.beginQuorumEpochTimeoutMs - partialDelay);
         context.client.poll();
         context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), Utils.mkSet(remoteId1, remoteId2));
     }
