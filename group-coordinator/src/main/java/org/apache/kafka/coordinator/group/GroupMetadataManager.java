@@ -1936,11 +1936,10 @@ public class GroupMetadataManager {
                     .withTopicsImage(metadataImage.topics())
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
+            // If the instance id was associated to a different member, it means that the
+            // static member is replaced by the current member hence we remove the previous one.
             String previousMemberId = group.staticMemberId(updatedMember.instanceId());
             if (!updatedMember.memberId().equals(previousMemberId)) {
-                // A new static member is replacing an older one with the same subscriptions.
-                // We just need to remove the older member and add the newer one. The new member should
-                // reuse the target assignment of the older member.
                 assignmentResultBuilder.removeMember(previousMemberId);
             }
 
