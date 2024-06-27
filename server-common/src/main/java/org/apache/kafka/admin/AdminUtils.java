@@ -130,7 +130,7 @@ public class AdminUtils {
             return assignReplicasToBrokersRackUnaware(nPartitions, replicationFactor, brokerMetadatas.stream().map(b -> b.id).collect(Collectors.toList()), fixedStartIndex,
                 startPartitionId);
         else {
-            if (brokerMetadatas.stream().anyMatch(b -> !b.rack.isPresent()))
+            if (brokerMetadatas.stream().anyMatch(b -> b.rack.isEmpty()))
                 throw new AdminOperationException("Not all brokers have rack information for replica rack aware assignment.");
             return assignReplicasToBrokersRackAware(nPartitions, replicationFactor, brokerMetadatas, fixedStartIndex,
                 startPartitionId);
@@ -143,9 +143,9 @@ public class AdminUtils {
                                                                                   int fixedStartIndex,
                                                                                   int startPartitionId) {
         Map<Integer, List<Integer>> ret = new HashMap<>();
-        int startIndex = fixedStartIndex >= 0 ? fixedStartIndex : RAND.nextInt(brokerList.size());
+        int startIndex = determineIndex(fixedStartIndex, brokerList.size());
         int currentPartitionId = Math.max(0, startPartitionId);
-        int nextReplicaShift = fixedStartIndex >= 0 ? fixedStartIndex : RAND.nextInt(brokerList.size());
+        int nextReplicaShift = determineIndex(fixedStartIndex, brokerList.size());
         for (int i = 0; i < nPartitions; i++) {
             if (currentPartitionId > 0 && (currentPartitionId % brokerList.size() == 0))
                 nextReplicaShift += 1;
@@ -166,14 +166,14 @@ public class AdminUtils {
                                                                                 int fixedStartIndex,
                                                                                 int startPartitionId) {
         Map<Integer, String> brokerRackMap = new HashMap<>();
-        brokerMetadatas.forEach(m -> brokerRackMap.put(m.id, m.rack.get()));
+        brokerMetadatas.forEach(m -> brokerRackMap.put(m.id, m.rack.orElse(null)));
         int numRacks = new HashSet<>(brokerRackMap.values()).size();
         List<Integer> arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap);
         int numBrokers = arrangedBrokerList.size();
         Map<Integer, List<Integer>> ret = new HashMap<>();
-        int startIndex = fixedStartIndex >= 0 ? fixedStartIndex : RAND.nextInt(arrangedBrokerList.size());
+        int startIndex = determineIndex(fixedStartIndex, arrangedBrokerList.size());
         int currentPartitionId = Math.max(0, startPartitionId);
-        int nextReplicaShift = fixedStartIndex >= 0 ? fixedStartIndex : RAND.nextInt(arrangedBrokerList.size());
+        int nextReplicaShift = determineIndex(fixedStartIndex, arrangedBrokerList.size());
         for (int i = 0; i < nPartitions; i++) {
             if (currentPartitionId > 0 && (currentPartitionId % arrangedBrokerList.size() == 0))
                 nextReplicaShift += 1;
@@ -209,6 +209,20 @@ public class AdminUtils {
             currentPartitionId += 1;
         }
         return ret;
+    }
+
+    /**
+     * Determines the index value.
+     *
+     * If the provided fixed index value is greater than or equal to 0, returns the fixed index.
+     * Otherwise, generates a random index between 0 (inclusive) and the broker size (exclusive).
+     *
+     * @param fixedIndex the fixed index value, used if it is greater than or equal to 0
+     * @param brokerSize the size of the broker list, used as the upper limit for generating a random index
+     * @return the calculated index value
+     */
+    private static int determineIndex(int fixedIndex, int brokerSize) {
+        return fixedIndex >= 0 ? fixedIndex : RAND.nextInt(brokerSize);
     }
 
     /**
