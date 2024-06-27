@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.test;
 
-import static org.junit.Assert.assertEquals;
-
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MockApiFixedKeyProcessorSupplier<KIn, VIn, VOut>
     implements FixedKeyProcessorSupplier<KIn, VIn, VOut> {

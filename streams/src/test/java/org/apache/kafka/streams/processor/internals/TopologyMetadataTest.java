@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
-import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -27,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
@@ -45,16 +45,16 @@ public class TopologyMetadataTest {
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder,
             config);
 
-        Assert.assertFalse(topologyMetadata.isPaused(TOPOLOGY1));
-        Assert.assertFalse(topologyMetadata.isPaused(TOPOLOGY2));
+        assertFalse(topologyMetadata.isPaused(TOPOLOGY1));
+        assertFalse(topologyMetadata.isPaused(TOPOLOGY2));
 
         topologyMetadata.pauseTopology(TOPOLOGY1);
         assertTrue(topologyMetadata.isPaused(TOPOLOGY1));
-        Assert.assertFalse(topologyMetadata.isPaused(TOPOLOGY2));
+        assertFalse(topologyMetadata.isPaused(TOPOLOGY2));
 
         topologyMetadata.resumeTopology(TOPOLOGY1);
-        Assert.assertFalse(topologyMetadata.isPaused(TOPOLOGY1));
-        Assert.assertFalse(topologyMetadata.isPaused(TOPOLOGY2));
+        assertFalse(topologyMetadata.isPaused(TOPOLOGY1));
+        assertFalse(topologyMetadata.isPaused(TOPOLOGY2));
     }
 
     @Test

@@ -40,8 +40,8 @@ import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertThrows;
 import static java.util.Arrays.asList;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class NamedTopologyTest {
     private static final String UNKNOWN_TOPOLOGY = "not-a-real-topology";
