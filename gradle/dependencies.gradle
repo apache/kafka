@@ -138,7 +138,7 @@ versions += [
   lz4: "1.8.0",
   mavenArtifact: "3.9.6",
   metrics: "2.2.0",
-  netty: "4.1.110.Final",
+  netty: "4.1.111.Final",
   opentelemetryProto: "1.0.0-alpha",
   pcollections: "4.0.1",
   reflections: "0.10.2",
