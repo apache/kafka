@@ -207,7 +207,7 @@ public class LogValidatorTest {
         assertEquals(metricsKeySet.stream()
                 .filter(metric -> metric.getMBeanName().endsWith("InvalidMagicNumberRecordsPerSec"))
                 .count(), 1);
-        assertTrue(metricsRecorder.meterCount("InvalidMagicNumberRecordsPerSec") > 0);
+        assertTrue(kafka.utils.TestUtils.meterCount("InvalidMagicNumberRecordsPerSec") > 0);
     }
 
     @Test
@@ -1473,7 +1473,7 @@ public class LogValidatorTest {
                 PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ));
         assertEquals(metricsKeySet.stream().filter(m -> m.getMBeanName().endsWith(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec())).count(), 1);
-        assertTrue(metricsRecorder.meterCount(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec()) > 0);
+        assertTrue(kafka.utils.TestUtils$.MODULE$.meterCount(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec()) > 0);
     }
 
     @Test
