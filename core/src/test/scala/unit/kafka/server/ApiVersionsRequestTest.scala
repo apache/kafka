@@ -108,7 +108,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   def testApiVersionsRequestThroughControlPlaneListener(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request, cluster.controlPlaneListenerName().get())
-    validateApiVersionsResponse(apiVersionsResponse, cluster.controlPlaneListenerName().get())
+    validateApiVersionsResponse(apiVersionsResponse, cluster.controlPlaneListenerName().get(), true)
   }
 
   @ClusterTest(types = Array(Type.KRAFT))
@@ -140,14 +140,16 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   def testApiVersionsRequestValidationV0(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
     val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.clientListener())
-    validateApiVersionsResponse(apiVersionsResponse, apiVersion = 0)
+    validateApiVersionsResponse(apiVersionsResponse, apiVersion = 0,
+      enableUnstableLastVersion = !"false".equals(
+        cluster.config().serverProperties().get("unstable.api.versions.enable")))
   }
 
   @ClusterTemplate("zkApiVersionsRequest")
   def testApiVersionsRequestValidationV0ThroughControlPlaneListener(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
     val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.controlPlaneListenerName().get())
-    validateApiVersionsResponse(apiVersionsResponse, cluster.controlPlaneListenerName().get())
+    validateApiVersionsResponse(apiVersionsResponse, cluster.controlPlaneListenerName().get(), true)
   }
 
   @ClusterTest(types = Array(Type.KRAFT))
