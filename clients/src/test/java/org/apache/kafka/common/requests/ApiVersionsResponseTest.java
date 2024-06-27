@@ -147,7 +147,7 @@ public class ApiVersionsResponseTest {
             setSupportedFeatures(Features.supportedFeatures(
                 Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange((short) 1, (short) 4))))).
             setFinalizedFeatures(Utils.mkMap(Utils.mkEntry("feature", (short) 3))).
-            setFinalizedFeaturesEpoch(10).
+            setFinalizedFeaturesEpoch(10L).
             build();
 
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);

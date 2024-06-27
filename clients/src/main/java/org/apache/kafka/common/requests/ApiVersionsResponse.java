@@ -106,7 +106,7 @@ public class ApiVersionsResponse extends AbstractResponse {
             data.setApiKeys(Objects.requireNonNull(apiVersions));
             data.setThrottleTimeMs(throttleTimeMs);
             data.setSupportedFeatures(
-                createSupportedFeatureKeys(Objects.requireNonNull(supportedFeatures), suppressFeatureLevel0));
+                maybeFilterSupportedFeatureKeys(Objects.requireNonNull(supportedFeatures), suppressFeatureLevel0));
             data.setFinalizedFeatures(
                 createFinalizedFeatureKeys(Objects.requireNonNull(finalizedFeatures)));
             data.setFinalizedFeaturesEpoch(finalizedFeaturesEpoch);
@@ -282,7 +282,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         return apiKeys;
     }
 
-    private static SupportedFeatureKeyCollection createSupportedFeatureKeys(
+    private static SupportedFeatureKeyCollection maybeFilterSupportedFeatureKeys(
         Features<SupportedVersionRange> latestSupportedFeatures,
         boolean suppressV0
     ) {

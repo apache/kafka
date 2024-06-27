@@ -46,7 +46,7 @@ class ApiVersionsResponseIntegrationTest extends BaseRequestTest {
     if (quorum.equals("kraft")) {
       assertFeatureHasMinVersion("metadata.version", response.data().supportedFeatures(), 1)
     } else {
-      assertFeatureDoesNotExist("metadata.version", response.data().supportedFeatures())
+      assertEquals(0, response.data().supportedFeatures().size())
     }
   }
 
@@ -58,20 +58,19 @@ class ApiVersionsResponseIntegrationTest extends BaseRequestTest {
       assertFeatureHasMinVersion("group.version", response.data().supportedFeatures(), 0)
       assertFeatureHasMinVersion("metadata.version", response.data().supportedFeatures(), 1)
     } else {
-      assertFeatureDoesNotExist("group.version", response.data().supportedFeatures())
-      assertFeatureDoesNotExist("metadata.version", response.data().supportedFeatures())
+      assertEquals(0, response.data().supportedFeatures().size())
     }
   }
 
   def assertFeatureHasMinVersion(
     name: String,
     coll: SupportedFeatureKeyCollection,
-    expectedVersion: Short
+    expectedMinVersion: Short
   ): Unit = {
     val key = coll.find(name)
     assertNotNull(key)
     assertEquals(name, key.name())
-    assertEquals(expectedVersion, key.minVersion())
+    assertEquals(expectedMinVersion, key.minVersion())
   }
 
   def assertFeatureDoesNotExist(
