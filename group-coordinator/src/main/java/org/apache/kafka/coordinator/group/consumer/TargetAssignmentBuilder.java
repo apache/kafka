@@ -23,6 +23,7 @@ import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
@@ -48,7 +49,8 @@ import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTar
  * is deleted as part of the member deletion process. In other words, this class
  * does not yield a tombstone for removed members.
  */
-public class TargetAssignmentBuilder {
+public class TargetAssignmentBuilder<T extends ModernGroupMember> {
+
     /**
      * The assignment result returned by {{@link TargetAssignmentBuilder#build()}}.
      */
@@ -107,7 +109,7 @@ public class TargetAssignmentBuilder {
     /**
      * The members in the group.
      */
-    private Map<String, ConsumerGroupMember> members = Collections.emptyMap();
+    private Map<String, T> members = Collections.emptyMap();
 
     /**
      * The subscription metadata.
@@ -139,7 +141,7 @@ public class TargetAssignmentBuilder {
      * The members which have been updated or deleted. Deleted members
      * are signaled by a null value.
      */
-    private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
+    private final Map<String, T> updatedMembers = new HashMap<>();
 
     /**
      * The static members in the group.
@@ -169,8 +171,8 @@ public class TargetAssignmentBuilder {
      * @param members   The existing members in the consumer group.
      * @return This object.
      */
-    public TargetAssignmentBuilder withMembers(
-        Map<String, ConsumerGroupMember> members
+    public TargetAssignmentBuilder<T> withMembers(
+        Map<String, T> members
     ) {
         this.members = members;
         return this;
@@ -182,7 +184,7 @@ public class TargetAssignmentBuilder {
      * @param staticMembers   The existing static members in the consumer group.
      * @return This object.
      */
-    public TargetAssignmentBuilder withStaticMembers(
+    public TargetAssignmentBuilder<T> withStaticMembers(
         Map<String, String> staticMembers
     ) {
         this.staticMembers = staticMembers;
@@ -195,7 +197,7 @@ public class TargetAssignmentBuilder {
      * @param subscriptionMetadata  The subscription metadata.
      * @return This object.
      */
-    public TargetAssignmentBuilder withSubscriptionMetadata(
+    public TargetAssignmentBuilder<T> withSubscriptionMetadata(
         Map<String, TopicMetadata> subscriptionMetadata
     ) {
         this.subscriptionMetadata = subscriptionMetadata;
@@ -208,7 +210,7 @@ public class TargetAssignmentBuilder {
      * @param subscriptionType  Subscription type of the group.
      * @return This object.
      */
-    public TargetAssignmentBuilder withSubscriptionType(
+    public TargetAssignmentBuilder<T> withSubscriptionType(
         SubscriptionType subscriptionType
     ) {
         this.subscriptionType = subscriptionType;
@@ -221,7 +223,7 @@ public class TargetAssignmentBuilder {
      * @param targetAssignment   The existing target assignment.
      * @return This object.
      */
-    public TargetAssignmentBuilder withTargetAssignment(
+    public TargetAssignmentBuilder<T> withTargetAssignment(
         Map<String, Assignment> targetAssignment
     ) {
         this.targetAssignment = targetAssignment;
@@ -234,7 +236,7 @@ public class TargetAssignmentBuilder {
      * @param invertedTargetAssignment   The reverse lookup map of the current target assignment.
      * @return This object.
      */
-    public TargetAssignmentBuilder withInvertedTargetAssignment(
+    public TargetAssignmentBuilder<T> withInvertedTargetAssignment(
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment
     ) {
         this.invertedTargetAssignment = invertedTargetAssignment;
@@ -247,7 +249,7 @@ public class TargetAssignmentBuilder {
      * @param topicsImage    The topics image.
      * @return This object.
      */
-    public TargetAssignmentBuilder withTopicsImage(
+    public TargetAssignmentBuilder<T> withTopicsImage(
         TopicsImage topicsImage
     ) {
         this.topicsImage = topicsImage;
@@ -262,9 +264,9 @@ public class TargetAssignmentBuilder {
      * @param member    The member to add or update.
      * @return This object.
      */
-    public TargetAssignmentBuilder addOrUpdateMember(
+    public TargetAssignmentBuilder<T> addOrUpdateMember(
         String memberId,
-        ConsumerGroupMember member
+        T member
     ) {
         this.updatedMembers.put(memberId, member);
         return this;
@@ -277,7 +279,7 @@ public class TargetAssignmentBuilder {
      * @param memberId The member id.
      * @return This object.
      */
-    public TargetAssignmentBuilder removeMember(
+    public TargetAssignmentBuilder<T> removeMember(
         String memberId
     ) {
         return addOrUpdateMember(memberId, null);
@@ -382,8 +384,8 @@ public class TargetAssignmentBuilder {
     }
 
     // private for testing
-    static MemberSubscriptionAndAssignmentImpl createMemberSubscriptionAndAssignment(
-        ConsumerGroupMember member,
+    static <T extends ModernGroupMember> MemberSubscriptionAndAssignmentImpl createMemberSubscriptionAndAssignment(
+        T member,
         Assignment memberAssignment,
         TopicsImage topicsImage
     ) {
