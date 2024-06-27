@@ -365,8 +365,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         maybeUpdateServerAssignors(counts, oldMember, newMember);
 
         return counts.entrySet().stream()
-                     .max(Map.Entry.comparingByValue())
-                     .map(Map.Entry::getKey);
+            .max(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey);
     }
 
     /**
@@ -381,8 +381,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     public Optional<String> preferredServerAssignor(long committedOffset) {
         return serverAssignors.entrySet(committedOffset).stream()
-                              .max(Map.Entry.comparingByValue())
-                              .map(Map.Entry::getKey);
+            .max(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey);
     }
 
     /**
