@@ -1365,6 +1365,8 @@ public class RecordCollectorTest {
 
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
 
+        // With default handler which returns FAIL, flush() throws StreamsException with TimeoutException cause,
+        // otherwise it would throw a TaskCorruptedException with null cause
         final StreamsException thrown = assertThrows(StreamsException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
         assertThat(

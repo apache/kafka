@@ -306,16 +306,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, exception));
         } else {
-            if (exception instanceof RetriableException) {
-                if (exception instanceof TimeoutException && exception.getCause() != null) {
-                    if (exception.getCause() instanceof UnknownTopicOrPartitionException) {
-                        if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
-                            errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
-                            sendException.set(new StreamsException(errorMessage, exception));
-                            return;
-                        }
-                    }
-                }
+            if (exception instanceof RetriableException && !isMissingMetadata(exception)) {
                 errorMessage += "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\nConsider overwriting `max.block.ms` and /or " +
@@ -333,6 +324,11 @@ public class RecordCollectorImpl implements RecordCollector {
         }
 
         log.error(errorMessage, exception);
+    }
+
+    private boolean isMissingMetadata (final Exception exception) {
+        return exception.getCause() != null
+                && exception.getCause() instanceof UnknownTopicOrPartitionException;
     }
 
     private boolean isFatalException(final Exception exception) {
