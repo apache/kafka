@@ -1315,7 +1315,7 @@ private[kafka] class Processor(
 
   // 'protected` to allow override for testing
   protected[network] def connectionId(socket: Socket): String = {
-    val connId = Utils.generateConnectionId(socket, nextConnectionIndex)
+    val connId = KSelector.generateConnectionId(socket, nextConnectionIndex)
     nextConnectionIndex = if (nextConnectionIndex == Int.MaxValue) 0 else nextConnectionIndex + 1
     connId
   }

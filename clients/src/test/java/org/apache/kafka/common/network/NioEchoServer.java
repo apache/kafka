@@ -53,7 +53,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -90,7 +89,7 @@ public class NioEchoServer extends Thread {
     private volatile boolean closeKafkaChannels;
     private final DelegationTokenCache tokenCache;
     private final Time time;
-    private final AtomicInteger nextConnectionIndex = new AtomicInteger();
+    private int nextConnectionIndex = 0;
 
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
                          String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache, Time time) throws Exception {
@@ -279,7 +278,12 @@ public class NioEchoServer extends Thread {
     }
 
     private String id(SocketChannel channel) {
-        return Utils.generateConnectionId(channel.socket(), nextConnectionIndex.getAndIncrement());
+        String connectionId = Selector.generateConnectionId(channel.socket(), nextConnectionIndex);
+        if (nextConnectionIndex == Integer.MAX_VALUE)
+            nextConnectionIndex = 0;
+        else
+            nextConnectionIndex = nextConnectionIndex + 1;
+        return connectionId;
     }
 
     private KafkaChannel channel(String id) {
