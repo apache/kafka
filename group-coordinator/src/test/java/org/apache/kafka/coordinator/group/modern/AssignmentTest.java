@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 
 import org.junit.jupiter.api.Test;
@@ -64,7 +65,7 @@ public class AssignmentTest {
         ConsumerGroupTargetAssignmentMemberValue record = new ConsumerGroupTargetAssignmentMemberValue()
             .setTopicPartitions(partitions);
 
-        Assignment assignment = Assignment.fromRecord(record);
+        Assignment assignment = Utils.fromRecord(record);
 
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 1, 2, 3),

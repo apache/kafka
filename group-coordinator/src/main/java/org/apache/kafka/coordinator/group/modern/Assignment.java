@@ -14,41 +14,46 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
 /**
- * The partition assignment for a consumer group member.
+ * An immutable assignment for a member.
  */
-public class MemberAssignmentImpl implements MemberAssignment {
+public class Assignment implements MemberAssignment {
+    public static final Assignment EMPTY = new Assignment(Collections.emptyMap());
+
     /**
-     * The partitions assigned to this member keyed by topicId.
+     * The partitions assigned to the member.
      */
     private final Map<Uuid, Set<Integer>> partitions;
 
-    public MemberAssignmentImpl(Map<Uuid, Set<Integer>> partitions) {
-        this.partitions = Objects.requireNonNull(partitions);
+    public Assignment(
+        Map<Uuid, Set<Integer>> partitions
+    ) {
+        this.partitions = Collections.unmodifiableMap(Objects.requireNonNull(partitions));
     }
 
     /**
-     * @return The assigned partitions keyed by topic Ids.
+     * @return The assigned partitions.
      */
     @Override
     public Map<Uuid, Set<Integer>> partitions() {
-        return this.partitions;
+        return partitions;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        MemberAssignmentImpl that = (MemberAssignmentImpl) o;
+        Assignment that = (Assignment) o;
         return partitions.equals(that.partitions);
     }
 
@@ -59,6 +64,6 @@ public class MemberAssignmentImpl implements MemberAssignment {
 
     @Override
     public String toString() {
-        return "MemberAssignment(partitions=" + partitions + ')';
+        return "Assignment(partitions=" + partitions + ')';
     }
 }
