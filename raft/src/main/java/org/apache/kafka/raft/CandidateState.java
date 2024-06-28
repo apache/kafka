@@ -105,7 +105,7 @@ public class CandidateState implements EpochState {
         return voteStates
             .values()
             .stream()
-            .filter(voterState -> voterState.state == State.GRANTED)
+            .filter(voterState -> voterState.state() == State.GRANTED)
             .count();
     }
 
@@ -113,7 +113,7 @@ public class CandidateState implements EpochState {
         return voteStates
             .values()
             .stream()
-            .filter(voterState -> voterState.state == State.UNRECORDED)
+            .filter(voterState -> voterState.state() == State.UNRECORDED)
             .count();
     }
 
@@ -159,13 +159,13 @@ public class CandidateState implements EpochState {
         VoterState voterState = voteStates.get(remoteNodeId);
         if (voterState == null) {
             throw new IllegalArgumentException("Attempt to grant vote to non-voter " + remoteNodeId);
-        } else if (voterState.state == State.REJECTED) {
+        } else if (voterState.state() == State.REJECTED) {
             throw new IllegalArgumentException("Attempt to grant vote from node " + remoteNodeId +
                 " which previously rejected our request");
         }
 
-        boolean recorded = voterState.state == State.UNRECORDED;
-        voterState.state = State.GRANTED;
+        boolean recorded = voterState.state() == State.UNRECORDED;
+        voterState.setState(State.GRANTED);
 
         return recorded;
     }
@@ -182,13 +182,13 @@ public class CandidateState implements EpochState {
         VoterState voterState = voteStates.get(remoteNodeId);
         if (voterState == null) {
             throw new IllegalArgumentException("Attempt to reject vote to non-voter " + remoteNodeId);
-        } else if (voterState.state == State.GRANTED) {
+        } else if (voterState.state() == State.GRANTED) {
             throw new IllegalArgumentException("Attempt to reject vote from node " + remoteNodeId +
                 " which previously granted our request");
         }
 
-        boolean recorded = voterState.state == State.UNRECORDED;
-        voterState.state = State.REJECTED;
+        boolean recorded = voterState.state() == State.UNRECORDED;
+        voterState.setState(State.REJECTED);
 
         return recorded;
     }
@@ -233,8 +233,8 @@ public class CandidateState implements EpochState {
         return voteStates
             .values()
             .stream()
-            .filter(voterState -> voterState.state == state)
-            .map(voterState -> voterState.replicaKey);
+            .filter(voterState -> voterState.state() == state)
+            .map(VoterState::replicaKey);
     }
 
     public boolean hasElectionTimeoutExpired(long currentTimeMs) {
@@ -323,15 +323,23 @@ public class CandidateState implements EpochState {
     public void close() {}
 
     private static final class VoterState {
-        final ReplicaKey replicaKey;
-        State state = State.UNRECORDED;
+        private final ReplicaKey replicaKey;
+        private State state = State.UNRECORDED;
 
         private VoterState(ReplicaKey replicaKey) {
             this.replicaKey = replicaKey;
         }
 
+        public State state() {
+            return state;
+        }
+
         public void setState(State state) {
             this.state = state;
+        }
+
+        public ReplicaKey replicaKey() {
+            return replicaKey;
         }
     }
 
