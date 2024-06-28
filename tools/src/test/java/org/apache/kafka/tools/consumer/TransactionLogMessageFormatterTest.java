@@ -24,7 +24,6 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -42,12 +41,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TransactionLogMessageFormatterTest {
 
-    private static TransactionLogKey txnLogKey;
-    private static TransactionLogValue txnLogValue;
+    private final TransactionLogKey txnLogKey;
+    private final TransactionLogValue txnLogValue;
     private static final String TOPIC = "TOPIC";
 
-    @BeforeAll
-    public static void setUp() {
+    public TransactionLogMessageFormatterTest() {
         txnLogKey = new TransactionLogKey()
                 .setTransactionalId("TXNID");
         txnLogValue = new TransactionLogValue()
@@ -96,7 +94,7 @@ public class TransactionLogMessageFormatterTest {
         ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer((short) 0, txnLogKey);
         ConsumerRecord<byte[], byte[]> record = createRecord(keyBuffer.array(), null);
 
-        assertPrintContent("NULL", record);
+        assertPrintContent("{\"key\":{\"version\":\"0\",\"data\":{\"transactionalId\":\"TXNID\"}},\"value\":\"NULL\"}", record);
     }
 
     @Test

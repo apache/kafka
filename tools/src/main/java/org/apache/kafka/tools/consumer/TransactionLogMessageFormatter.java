@@ -40,12 +40,13 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
 
     private static final String VERSION = "version";
     private static final String DATA = "data";
+    private static final String KEY = "key";
+    private static final String VALUE = "value";
 
 
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
         ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
-        String content;
         
         byte[] key = consumerRecord.key();
         if (Objects.nonNull(key)) {
@@ -61,13 +62,12 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
             short valueVersion = ByteBuffer.wrap(value).getShort();
             Optional<TransactionLogValue> transactionLogValue = readToTransactionLogValue(ByteBuffer.wrap(value));
             settingValueNode(json, transactionLogValue, valueVersion);
-            content = json.toString();
         } else {
-            content = "NULL";
+            json.put(VALUE, "NULL");
         }
-        
+
         try {
-            output.write(content.getBytes(UTF_8));
+            output.write(json.toString().getBytes(UTF_8));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -94,27 +94,25 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
     }
 
     private void settingKeyNode(ObjectNode json, Optional<TransactionLogKey> transactionLogKey, short keyVersion) {
-        String key = "key";
         if (transactionLogKey.isPresent()) {
-            addDataNode(json, key, keyVersion,
+            addDataNode(json, KEY, keyVersion,
                     TransactionLogKeyJsonConverter.write(transactionLogKey.get(), keyVersion));
         } else {
-            addUnknownNode(json, key, keyVersion);
+            addUnknownNode(json, KEY, keyVersion);
         }
     }
 
     private void settingValueNode(ObjectNode json, Optional<TransactionLogValue> transactionLogValue, short valueVersion) {
-        String value = "value";
         if (transactionLogValue.isPresent()) {
-            addDataNode(json, value, valueVersion,
+            addDataNode(json, VALUE, valueVersion,
                     TransactionLogValueJsonConverter.write(transactionLogValue.get(), valueVersion));
         } else {
-            addUnknownNode(json, value, valueVersion);
+            addUnknownNode(json, VALUE, valueVersion);
         }
     }
 
-    private void addUnknownNode(ObjectNode json, String key, short keyVersion) {
-        json.putObject(key)
+    private void addUnknownNode(ObjectNode json, String nodeName, short keyVersion) {
+        json.putObject(nodeName)
                 .put(VERSION, Short.toString(keyVersion))
                 .put(DATA, "unknown");
     }
