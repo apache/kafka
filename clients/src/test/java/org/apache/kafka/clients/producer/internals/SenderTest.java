@@ -300,10 +300,12 @@ public class SenderTest {
         Sensor throttleTimeSensor = Sender.throttleTimeSensor(this.senderMetricsRegistry);
         Cluster cluster = TestUtils.singletonCluster("test", 1);
         Node node = cluster.nodes().get(0);
+        NetworkClient.BootstrapConfiguration bootstrapConfig = mock(NetworkClient.BootstrapConfiguration.class);
+
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
-                time, true, new ApiVersions(), throttleTimeSensor, logContext,
-                MetadataRecoveryStrategy.NONE);
+                bootstrapConfig, time, true, new ApiVersions(), throttleTimeSensor,
+                logContext, MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.ZK_BROKER);

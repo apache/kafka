@@ -219,6 +219,7 @@ public final class ClientUtils {
                                                     ClientTelemetrySender clientTelemetrySender) {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
+        NetworkClient.BootstrapConfiguration bootstrapConfig = null;
 
         try {
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
@@ -228,6 +229,10 @@ public final class ClientUtils {
                     metricsGroupPrefix,
                     channelBuilder,
                     logContext);
+            bootstrapConfig = new NetworkClient.BootstrapConfiguration(
+                    config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+                    ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
             return new NetworkClient(metadataUpdater,
                     metadata,
                     selector,
@@ -240,6 +245,7 @@ public final class ClientUtils {
                     requestTimeoutMs,
                     config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                     config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
+                    bootstrapConfig,
                     time,
                     true,
                     apiVersions,

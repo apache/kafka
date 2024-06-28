@@ -178,6 +178,7 @@ public class ConnectionStressWorker implements TaskWorker {
                             1000,
                             10 * 1000,
                             127 * 1000,
+                            null,
                             Time.SYSTEM,
                             false,
                             new ApiVersions(),

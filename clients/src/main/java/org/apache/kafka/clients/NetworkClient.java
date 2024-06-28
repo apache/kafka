@@ -136,6 +136,8 @@ public class NetworkClient implements KafkaClient {
 
     private final AtomicReference<State> state;
 
+    private final BootstrapState bootstrapState;
+
     private final TelemetrySender telemetrySender;
 
     public NetworkClient(Selectable selector,
@@ -149,6 +151,7 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
+                         BootstrapConfiguration bootstrapConfiguration,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -165,6 +168,7 @@ public class NetworkClient implements KafkaClient {
              defaultRequestTimeoutMs,
              connectionSetupTimeoutMs,
              connectionSetupTimeoutMaxMs,
+             bootstrapConfiguration,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -184,6 +188,7 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
+                         BootstrapConfiguration bootstrapConfiguration,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -202,6 +207,7 @@ public class NetworkClient implements KafkaClient {
              defaultRequestTimeoutMs,
              connectionSetupTimeoutMs,
              connectionSetupTimeoutMaxMs,
+             bootstrapConfiguration,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -223,6 +229,7 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
+                         BootstrapConfiguration bootstrapConfiguration,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -240,6 +247,7 @@ public class NetworkClient implements KafkaClient {
              defaultRequestTimeoutMs,
              connectionSetupTimeoutMs,
              connectionSetupTimeoutMaxMs,
+             bootstrapConfiguration,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -262,6 +270,7 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
+                         BootstrapConfiguration bootstrapConfiguration,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -281,6 +290,7 @@ public class NetworkClient implements KafkaClient {
         } else {
             this.metadataUpdater = metadataUpdater;
         }
+        this.bootstrapState = new BootstrapState(bootstrapConfiguration);
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
@@ -1155,6 +1165,22 @@ public class NetworkClient implements KafkaClient {
         }
     }
 
+    private void ensureBootstrapped(final long nowMs) {
+        if (this.bootstrapState.isDisabled || this.metadataUpdater.isBootstrapped()) {
+            return;
+        }
+
+        List<InetSocketAddress> servers = this.bootstrapState.tryResolveAddresses(nowMs);
+        if (!servers.isEmpty()) {
+            this.metadataUpdater.bootstrap(servers);
+            return;
+        }
+        if (this.bootstrapState.timer.isExpired()) {
+            throw new BootstrapResolutionException("Unable to Resolve Address within the configured period " +
+                    this.bootstrapState.dnsResolutionTimeoutMs + "ms.");
+        }
+    }
+
     class DefaultMetadataUpdater implements MetadataUpdater {
 
         /* the current cluster metadata */
@@ -1166,6 +1192,14 @@ public class NetworkClient implements KafkaClient {
         DefaultMetadataUpdater(Metadata metadata) {
             this.metadata = metadata;
             this.inProgress = null;
+        }
+
+        public boolean isBootstrapped() {
+            return metadata.fetch().isBootstrapConfigured();
+        }
+
+        public void bootstrap(List<InetSocketAddress> addresses) {
+            metadata.bootstrap(addresses);
         }
 
         @Override
