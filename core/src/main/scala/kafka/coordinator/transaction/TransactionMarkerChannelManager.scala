@@ -82,10 +82,8 @@ object TransactionMarkerChannelManager {
       logContext
     )
     val networkClient = new NetworkClient(
-      config,
-      new ManualMetadataUpdater(),
-      null,
       selector,
+      new ManualMetadataUpdater(),
       s"broker-${config.brokerId}-txn-marker-sender",
       1,
       50,
@@ -98,10 +96,7 @@ object TransactionMarkerChannelManager {
       time,
       false,
       new ApiVersions,
-      null,
       logContext,
-      null,
-      null,
       MetadataRecoveryStrategy.NONE
     )
 

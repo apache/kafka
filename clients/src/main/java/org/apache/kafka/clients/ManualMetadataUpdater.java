@@ -22,7 +22,6 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -54,11 +53,6 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     @Override
     public List<Node> fetchNodes() {
         return new ArrayList<>(nodes);
-    }
-
-    @Override
-    public void bootstrap(List<InetSocketAddress> addresses) {
-
     }
 
     @Override
