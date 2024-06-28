@@ -285,7 +285,6 @@ public enum ApiKeys {
         b.append("<th>Name</th>\n");
         b.append("<th>Key</th>\n");
         b.append("</tr>");
-        
         clientApis().stream()
             .filter(apiKey -> !apiKey.messageType.latestVersionUnstable())
             .forEach(apiKey -> {
