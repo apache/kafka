@@ -144,9 +144,8 @@ public class IncrementalCooperativeAssignorTest {
         addNewEmptyWorkers("worker3");
         performStandardRebalance();
         performStandardRebalance();
-        System.out.println("=====================");
+        assertEquals(3, memberAssignments.size());
         memberAssignments.forEach((k, v) -> {
-            System.out.println((" " + k + " ->\tc=" + v.connectors() + "\tt=" + v.tasks()).replaceAll("connector", "c"));
             Map<String, List<ConnectorTaskId>> countsByConnector = v.tasks().stream().collect(Collectors.groupingBy(ConnectorTaskId::connector));
             assertEquals(countsByConnector.size(), 2);
             countsByConnector.forEach((k2, v2) -> assertEquals(v2.size(), 4));

@@ -657,13 +657,15 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 "connector",
                 configured.connectors().size(),
                 workers,
-                WorkerLoad::connectors
+                WorkerLoad::connectors,
+                x -> x.toString()
         );
         Map<String, Set<ConnectorTaskId>> taskRevocations = loadBalancingRevocations(
                 "task",
                 configured.tasks().size(),
                 workers,
-                WorkerLoad::tasks
+                WorkerLoad::tasks,
+                x -> x.connector()
         );
 
         connectorRevocations.forEach((worker, revoked) ->
@@ -680,7 +682,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             String allocatedResourceName,
             int totalToAllocate,
             Collection<WorkerLoad> workers,
-            Function<WorkerLoad, Collection<E>> workerAllocation
+            Function<WorkerLoad, Collection<E>> workerAllocation,
+            Function<E, String> allocationGrouper
     ) {
         int totalWorkers = workers.size();
         // The minimum instances of this resource that should be assigned to each worker
@@ -737,10 +740,11 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             result.put(worker.worker(), revokedFromWorker);
 
             Map<String, List<E>> currentWorkerAllocationByPrefix = workerAllocation.apply(worker).stream().collect(
-                   Collectors.groupingBy(item -> item.toString().replaceAll("-.*", "")));
+                   Collectors.groupingBy(item -> allocationGrouper.apply(item)));
             List<String> keys = new ArrayList<>(currentWorkerAllocationByPrefix.keySet());
             Map<String, Iterator<E>> currentWokrerAllocationByPrefixIterator = currentWorkerAllocationByPrefix.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().iterator()));
+            Map<String, Boolean> exhausted = currentWorkerAllocationByPrefix.keySet().stream().collect(Collectors.toMap(Function.identity(), k -> false));
             // Revoke resources from the worker until it isn't allocated any more than it should be
             int numRevoked = 0;
             for (int i = 0; currentAllocationSizeForWorker - numRevoked > maxAllocationForWorker; i++) {
@@ -749,7 +753,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     E revocation = currentWorkerAllocation.next();
                     revokedFromWorker.add(revocation);
                     numRevoked++;
-                } else if (i == keys.size() - 1) {
+                } else {
+                    exhausted.put(keys.get(i % keys.size()), true);
+                }
+                if (exhausted.values().stream().allMatch(v -> v)) {
                     // Should never happen, but better to log a warning and move on than die and fail the whole rebalance if it does
                     log.warn(
                             "Unexpectedly ran out of {}s to revoke from worker {} while performing load-balancing revocations; " +
