@@ -691,13 +691,13 @@ public class SharePartition {
     void updateCacheAndOffsets(long logStartOffset) {
         lock.writeLock().lock();
         try {
-            if (logStartOffset <= startOffset()) {
+            if (logStartOffset <= startOffset) {
                 log.error("The log start offset: {} is not greater than the start offset: {} for the share partition: {}-{}",
-                        logStartOffset, startOffset(), groupId, topicIdPartition);
+                        logStartOffset, startOffset, groupId, topicIdPartition);
                 return;
             }
             log.debug("Updating start offset for share partition: {}-{} from: {} to: {} since LSO has moved to: {}",
-                    groupId, topicIdPartition, startOffset(), logStartOffset, logStartOffset);
+                    groupId, topicIdPartition, startOffset, logStartOffset, logStartOffset);
             if (cachedState.isEmpty()) {
                 // If the cached state is empty, then the start and end offset will be the new log start offset.
                 // This can occur during the initialization of share partition if LSO has moved.
@@ -716,11 +716,11 @@ public class SharePartition {
 
             // The new startOffset will be the log start offset.
             startOffset = logStartOffset;
-            if (endOffset < startOffset()) {
+            if (endOffset < startOffset) {
                 // This case means that the cached state is completely fresh now.
                 // Example scenario - batch of 0-10 in acquired state in cached state, then LSO moves to 15,
                 // then endOffset should be 15 as well.
-                endOffset = startOffset();
+                endOffset = startOffset;
             }
 
             // Note -
@@ -742,13 +742,13 @@ public class SharePartition {
                     break;
                 }
                 InFlightBatch inFlightBatch = entry.getValue();
-                boolean fullMatch = checkForFullMatch(inFlightBatch, startOffset(), logStartOffset - 1);
+                boolean fullMatch = checkForFullMatch(inFlightBatch, startOffset, logStartOffset - 1);
 
                 // Maintain state per offset if the inflight batch is not a full match or the offset state is managed.
                 if (!fullMatch || inFlightBatch.offsetState() != null) {
                     log.debug("Subset or offset tracked batch record found while trying to update offsets and cached" +
                                     " state map due to LSO movement, batch: {}, offsets to update - " +
-                                    "first: {}, last: {} for the share partition: {}-{}", inFlightBatch, startOffset(),
+                                    "first: {}, last: {} for the share partition: {}-{}", inFlightBatch, startOffset,
                             logStartOffset - 1, groupId, topicIdPartition);
 
                     if (inFlightBatch.offsetState() == null) {
@@ -757,7 +757,7 @@ public class SharePartition {
                         }
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    isAnyOffsetArchived = isAnyOffsetArchived || archivePerOffsetBatchRecords(inFlightBatch, startOffset(), logStartOffset - 1);
+                    isAnyOffsetArchived = isAnyOffsetArchived || archivePerOffsetBatchRecords(inFlightBatch, startOffset, logStartOffset - 1);
                     continue;
                 }
                 // The in-flight batch is a full match hence change the state of the complete batch.
@@ -1023,7 +1023,7 @@ public class SharePartition {
      * @return True if the start offset has moved and within the request first and last offset, false otherwise.
      */
     private boolean checkForStartOffsetWithinBatch(long batchFirstOffset, long batchLastOffset) {
-        return batchFirstOffset < startOffset() && batchLastOffset >= startOffset();
+        return batchFirstOffset < startOffset && batchLastOffset >= startOffset;
     }
 
     private Map<Long, RecordState> fetchRecordStateMapForAcknowledgementBatch(
