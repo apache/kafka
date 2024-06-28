@@ -736,10 +736,20 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             Set<E> revokedFromWorker = new LinkedHashSet<>();
             result.put(worker.worker(), revokedFromWorker);
 
-            Iterator<E> currentWorkerAllocation = workerAllocation.apply(worker).iterator();
+            Map<String, List<E>> currentWorkerAllocationByPrefix = workerAllocation.apply(worker).stream().collect(
+                   Collectors.groupingBy(item -> item.toString().replaceAll("-.*", "")));
+            List<String> keys = new ArrayList<>(currentWorkerAllocationByPrefix.keySet());
+            Map<String, Iterator<E>> currentWokrerAllocationByPrefixIterator = currentWorkerAllocationByPrefix.entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().iterator()));
             // Revoke resources from the worker until it isn't allocated any more than it should be
-            for (int numRevoked = 0; currentAllocationSizeForWorker - numRevoked > maxAllocationForWorker; numRevoked++) {
-                if (!currentWorkerAllocation.hasNext()) {
+            int numRevoked = 0;
+            for (int i = 0; currentAllocationSizeForWorker - numRevoked > maxAllocationForWorker; i++) {
+                Iterator<E> currentWorkerAllocation = currentWokrerAllocationByPrefixIterator.get(keys.get(i % keys.size()));
+                if (currentWorkerAllocation.hasNext()) {
+                    E revocation = currentWorkerAllocation.next();
+                    revokedFromWorker.add(revocation);
+                    numRevoked++;
+                } else if (i == keys.size() - 1) {
                     // Should never happen, but better to log a warning and move on than die and fail the whole rebalance if it does
                     log.warn(
                             "Unexpectedly ran out of {}s to revoke from worker {} while performing load-balancing revocations; " +
@@ -751,8 +761,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     );
                     break;
                 }
-                E revocation = currentWorkerAllocation.next();
-                revokedFromWorker.add(revocation);
             }
         }
         return result;

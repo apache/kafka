@@ -132,6 +132,28 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     @Test
+    public void checkIndividualConnectorBalance() {
+        connectors.clear();
+        addNewConnector("connector1", 12);
+        performStandardRebalance();
+        addNewConnector("connector2", 12);
+        performStandardRebalance();
+        addNewEmptyWorkers("worker2");
+        performStandardRebalance();
+        performStandardRebalance();
+        addNewEmptyWorkers("worker3");
+        performStandardRebalance();
+        performStandardRebalance();
+        System.out.println("=====================");
+        memberAssignments.forEach((k, v) -> {
+            System.out.println((" " + k + " ->\tc=" + v.connectors() + "\tt=" + v.tasks()).replaceAll("connector", "c"));
+            Map<String, List<ConnectorTaskId>> countsByConnector = v.tasks().stream().collect(Collectors.groupingBy(ConnectorTaskId::connector));
+            assertEquals(countsByConnector.size(), 2);
+            countsByConnector.forEach((k2, v2) -> assertEquals(v2.size(), 4));
+        });
+    }
+
+    @Test
     public void testAssignmentsWhenWorkersJoinAfterRevocations()  {
         // Customize assignor for this test case
         time = new MockTime();
