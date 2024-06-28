@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -269,6 +271,14 @@ public class QuorumConfig {
             .filter(Objects::nonNull)
             .map(entry -> new Node(entry.getKey(), entry.getValue().getHostString(), entry.getValue().getPort()))
             .collect(Collectors.toList());
+    }
+
+    //  to match pattern <replica-id>[-<replica-directory-id>]@<host>:<port>   replica-directory-id is optional
+    public static boolean validateControllerQuorumVoters(String controllerQuorumVoters) {
+        String regex = "(\\d+)(-\\d+)?@([a-zA-Z0-9.-]+):(\\d{1,5})";
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(controllerQuorumVoters);
+        return matcher.matches();
     }
 
     public static class ControllerQuorumVotersValidator implements ConfigDef.Validator {

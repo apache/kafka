@@ -414,4 +414,15 @@ public final class VoterSet {
 
         return new VoterSet(voterNodes);
     }
+
+
+    /**
+     * Creates a voter set from a map of socket addresses.
+     *
+     * @param voters the VoterNode by voter id
+     * @return the voter set
+     */
+    public static VoterSet fromMap(Map<Integer, VoterNode> voters) {
+        return new VoterSet(voters);
+    }
 }

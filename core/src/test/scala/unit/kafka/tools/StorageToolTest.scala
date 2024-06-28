@@ -17,6 +17,8 @@
 
 package kafka.tools
 
+import kafka.cluster.EndPoint
+
 import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
@@ -31,6 +33,8 @@ import org.apache.commons.io.output.NullOutputStream
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, TestFeatureVersion}
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, UserScramCredentialRecord}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -39,6 +43,9 @@ import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.Mockito
+import org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_NAME
+import org.apache.kafka.snapshot.Snapshots
+import org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -130,7 +137,7 @@ Found problem:
           "version=1",
           "node.id=1",
           "cluster.id=XcZZOzUqS4yHOjhMQB6JLQ")).
-            getBytes(StandardCharsets.UTF_8))
+          getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
         infoCommand(new PrintStream(stream), false, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
@@ -182,11 +189,15 @@ Found problem:
       val stream = new ByteArrayOutputStream()
       val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
+        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata,
+          MetadataVersion.latestTesting(), ignoreFormatted = false,
+          advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null))
       assertTrue(stringAfterFirstLine(stream.toString()).startsWith("Formatting %s".format(tempDir)))
 
       try assertEquals(1, StorageTool.
-        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false)) catch {
+        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties,
+          bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false,
+          advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null)) catch {
         case e: TerseFailure => assertEquals(s"Log directory ${tempDir} is already " +
           "formatted. Use --ignore-formatted to ignore this directory and format the " +
           "others.", e.getMessage)
@@ -194,8 +205,40 @@ Found problem:
 
       val stream2 = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = true))
+        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, bootstrapMetadata,
+          MetadataVersion.latestTesting(), ignoreFormatted = true,
+          advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null))
       assertEquals("All of the log directories are already formatted.%n".format(), stringAfterFirstLine(stream2.toString()))
+    } finally Utils.delete(tempDir)
+  }
+
+  @Test
+  def testFormatEmptyDirectoryWithStandaloneMode(): Unit = {
+    val tempDir = TestUtils.tempDir()
+    try {
+      val metaProperties = new MetaProperties.Builder().
+        setVersion(MetaPropertiesVersion.V1).
+        setClusterId("XcZZOzUqS5yHOjhMQB2JLR").
+        setNodeId(2).
+        build()
+      val stream = new ByteArrayOutputStream()
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None,
+        "test format command")
+      val advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint] = Seq.empty[EndPoint]
+      val host = "PLAINTEXT"
+      val newEndPoint = new EndPoint(host = host, port = 9092, listenerName = new ListenerName("PLAINTEXT"),
+        SecurityProtocol.PLAINTEXT)
+      val updatedAdvertisedListenerEndpoints: scala.collection.Seq[EndPoint] = advertisedListenerEndpoints :+ newEndPoint
+
+      assertEquals(0, StorageTool.
+        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata,
+          MetadataVersion.latestTesting(), ignoreFormatted = false,
+          updatedAdvertisedListenerEndpoints, null))
+      val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
+      assertTrue(stringAfterFirstLine(stream.toString()).contains("Snapshot written to %s".format(checkpointDir)))
+      val checkpointFilePath = Snapshots.snapshotPath(Paths.get(checkpointDir), BOOTSTRAP_SNAPSHOT_ID)
+      assertTrue(checkpointFilePath.toFile.exists)
+      assertTrue(Utils.readFileAsString(checkpointFilePath.toFile.getPath).contains(host))
     } finally Utils.delete(tempDir)
   }
 
@@ -211,7 +254,9 @@ Found problem:
       setNodeId(2).
       build()
     val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
-    StorageTool.formatCommand(new PrintStream(stream), directories, metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted)
+    StorageTool.formatCommand(new PrintStream(stream), directories, metaProperties, bootstrapMetadata,
+      MetadataVersion.latestTesting(), ignoreFormatted,
+      advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null)
   }
 
   @Test
@@ -265,8 +310,8 @@ Found problem:
     val config = new KafkaConfig(newSelfManagedProperties())
     assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
       "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
-        "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
-          () => StorageTool.buildMetadataProperties("invalid", config)).getMessage)
+      "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
+      () => StorageTool.buildMetadataProperties("invalid", config)).getMessage)
   }
 
   @Test
@@ -478,33 +523,33 @@ Found problem:
 
     // Validate we can add multiple SCRAM creds.
     scramRecords = parseAddScram("-S",
-    "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]",
-    "-S",
-    "SCRAM-SHA-256=[name=george,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]")
-    
+      "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]",
+      "-S",
+      "SCRAM-SHA-256=[name=george,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]")
+
     assertEquals(2, scramRecords.get.size)
 
     // Require name subfield.
-    try assertEquals(1, parseAddScram("-S", 
+    try assertEquals(1, parseAddScram("-S",
       "SCRAM-SHA-256=[salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]")) catch {
       case e: TerseFailure => assertEquals(s"You must supply 'name' to add-scram", e.getMessage)
     }
 
     // Require password xor saltedpassword
-    try assertEquals(1, parseAddScram("-S", 
+    try assertEquals(1, parseAddScram("-S",
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]"))
     catch {
       case e: TerseFailure => assertEquals(s"You must only supply one of 'password' or 'saltedpassword' to add-scram", e.getMessage)
     }
 
-    try assertEquals(1, parseAddScram("-S", 
+    try assertEquals(1, parseAddScram("-S",
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",iterations=8192]"))
     catch {
       case e: TerseFailure => assertEquals(s"You must supply one of 'password' or 'saltedpassword' to add-scram", e.getMessage)
     }
 
     // Validate salt is required with saltedpassword
-    try assertEquals(1, parseAddScram("-S", 
+    try assertEquals(1, parseAddScram("-S",
       "SCRAM-SHA-256=[name=alice,saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]"))
     catch {
       case e: TerseFailure => assertEquals(s"You must supply 'salt' with 'saltedpassword' to add-scram", e.getMessage)
@@ -514,7 +559,7 @@ Found problem:
     assertEquals(1, parseAddScram("-S", "SCRAM-SHA-256=[name=alice,password=alice,iterations=4096]").get.size)
 
     // Require 4096 <= iterations <= 16384
-    try assertEquals(1, parseAddScram("-S", 
+    try assertEquals(1, parseAddScram("-S",
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=16385]"))
     catch {
       case e: TerseFailure => assertEquals(s"The 'iterations' value must be <= 16384 for add-scram", e.getMessage)
@@ -524,7 +569,7 @@ Found problem:
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=16384]")
       .get.size)
 
-    try assertEquals(1, parseAddScram("-S", 
+    try assertEquals(1, parseAddScram("-S",
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=4095]"))
     catch {
       case e: TerseFailure => assertEquals(s"The 'iterations' value must be >= 4096 for add-scram", e.getMessage)
@@ -556,7 +601,7 @@ Found problem:
     properties.store(propsStream, "config.props")
     propsStream.close()
 
-    val args = Array("format", "-c", s"${propsFile.toPath}", "-t", "XcZZOzUqS4yHOjhMQB6JLQ", "--release-version", "3.4", "-S", 
+    val args = Array("format", "-c", s"${propsFile.toPath}", "-t", "XcZZOzUqS4yHOjhMQB6JLQ", "--release-version", "3.4", "-S",
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=8192]")
 
     try {
@@ -593,7 +638,7 @@ Found problem:
       StorageTool.main(args)
     } catch {
       case e: StorageToolTestException => assertEquals("", exitString)
-      assertEquals(0, exitStatus)
+        assertEquals(0, exitStatus)
     } finally {
       Exit.resetExitProcedure()
     }
@@ -610,13 +655,15 @@ Found problem:
       val bootstrapMetadata = StorageTool.
         buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
+        formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties,
+          bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false,
+          advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null))
 
       val metaPropertiesFile = Paths.get(tempDir.toURI).resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME).toFile
       assertTrue(metaPropertiesFile.exists())
       val metaProps = new MetaProperties.Builder(
         PropertiesUtils.readPropertiesFile(metaPropertiesFile.getAbsolutePath())).
-          build()
+        build()
       assertTrue(metaProps.directoryId().isPresent())
       assertFalse(DirectoryId.reserved(metaProps.directoryId().get()))
     } finally Utils.delete(tempDir)
