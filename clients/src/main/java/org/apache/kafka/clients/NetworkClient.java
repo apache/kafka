@@ -601,7 +601,7 @@ public class NetworkClient implements KafkaClient {
         } else {
             this.metadataUpdater = metadataUpdater;
         }
-        if(hostResolver == null)
+        if (hostResolver == null)
             hostResolver = new DefaultHostResolver();
         this.config = config;
         this.selector = selector;

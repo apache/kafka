@@ -93,7 +93,6 @@ import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
-import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
