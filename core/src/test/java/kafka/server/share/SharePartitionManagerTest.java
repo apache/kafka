@@ -105,7 +105,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 @Timeout(120)
-@SuppressWarnings({ "ClassDataAbstractionCoupling"})
+@SuppressWarnings({"ClassDataAbstractionCoupling"})
 public class SharePartitionManagerTest {
 
     private static final int RECORD_LOCK_DURATION_MS = 30000;
