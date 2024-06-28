@@ -83,7 +83,7 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  bcpkix: "1.75",
+  bcpkix: "1.77",
   caffeine: "2.9.3", // 3.x supports JDK 11 and above
   // when updating checkstyle, check whether the exclusion of
   // CVE-2023-2976 and CVE-2020-8908 can be dropped from
@@ -253,5 +253,5 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
 ]
