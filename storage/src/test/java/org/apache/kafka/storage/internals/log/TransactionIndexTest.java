@@ -228,7 +228,7 @@ public class TransactionIndexTest {
         // Then it should still append data
         index.append(new AbortedTxn(0L, 0, 10, 2));
         // When channel is closed
-        index.txnFile.channel().close();
+        index.txnFile.closeChannel();
         // Then it should still append data
         assertDoesNotThrow(() -> index.append(new AbortedTxn(1L, 5, 15, 16)));
         // When closed
@@ -240,7 +240,7 @@ public class TransactionIndexTest {
         assertEquals(0, abortedTxns.get(0).firstOffset());
         assertEquals(5, abortedTxns.get(1).firstOffset());
         // When channel is closed
-        index.txnFile.channel().close();
+        index.txnFile.closeChannel();
         // Then it should still read data
         abortedTxns = assertDoesNotThrow(() ->
             index.collectAbortedTxns(0L, 100L).abortedTransactions);

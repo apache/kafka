@@ -122,7 +122,7 @@ public class TransactionIndex implements Closeable {
                     + txnFile.path().toAbsolutePath());
         }
         lastOffset = abortedTxn.lastOffset();
-        Utils.writeFully(txnFile.channel(), abortedTxn.buffer.duplicate());
+        txnFile.write(abortedTxn.buffer.duplicate());
     }
 
     public void truncateTo(long offset) throws IOException {
@@ -191,54 +191,48 @@ public class TransactionIndex implements Closeable {
         if (!txnFile.exists())
             return Collections.emptyList();
 
-        try {
-            FileChannel channel = txnFile.channel();
-            PrimitiveRef.IntRef position = PrimitiveRef.ofInt(0);
+        PrimitiveRef.IntRef position = PrimitiveRef.ofInt(0);
 
-            return () -> new Iterator<AbortedTxnWithPosition>() {
+        return () -> new Iterator<AbortedTxnWithPosition>() {
 
-                @Override
-                public boolean hasNext() {
-                    try {
-                        return channel.position() - position.value >= AbortedTxn.TOTAL_SIZE;
-                    } catch (IOException e) {
-                        throw new KafkaException("Failed read position from the transaction index " + txnFile.path().toAbsolutePath(), e);
-                    }
+            @Override
+            public boolean hasNext() {
+                try {
+                    return txnFile.currentPosition() - position.value >= AbortedTxn.TOTAL_SIZE;
+                } catch (IOException e) {
+                    throw new KafkaException("Failed read position from the transaction index " + txnFile.path().toAbsolutePath(), e);
                 }
+            }
 
-                @Override
-                public AbortedTxnWithPosition next() {
-                    try {
-                        ByteBuffer buffer = allocate.get();
-                        Utils.readFully(channel, buffer, position.value);
-                        buffer.flip();
+            @Override
+            public AbortedTxnWithPosition next() {
+                try {
+                    ByteBuffer buffer = allocate.get();
+                    txnFile.read(buffer, position.value);
+                    buffer.flip();
 
-                        AbortedTxn abortedTxn = new AbortedTxn(buffer);
-                        if (abortedTxn.version() > AbortedTxn.CURRENT_VERSION)
-                            throw new KafkaException("Unexpected aborted transaction version " + abortedTxn.version()
-                                + " in transaction index " + txnFile.path().toAbsolutePath() + ", current version is "
-                                + AbortedTxn.CURRENT_VERSION);
-                        AbortedTxnWithPosition nextEntry = new AbortedTxnWithPosition(abortedTxn, position.value);
-                        position.value += AbortedTxn.TOTAL_SIZE;
-                        return nextEntry;
-                    } catch (IOException e) {
-                        // We received an unexpected error reading from the index file. We propagate this as an
-                        // UNKNOWN error to the consumer, which will cause it to retry the fetch.
-                        throw new KafkaException("Failed to read from the transaction index " + txnFile.path().toAbsolutePath(), e);
-                    }
+                    AbortedTxn abortedTxn = new AbortedTxn(buffer);
+                    if (abortedTxn.version() > AbortedTxn.CURRENT_VERSION)
+                        throw new KafkaException("Unexpected aborted transaction version " + abortedTxn.version()
+                            + " in transaction index " + txnFile.path().toAbsolutePath() + ", current version is "
+                            + AbortedTxn.CURRENT_VERSION);
+                    AbortedTxnWithPosition nextEntry = new AbortedTxnWithPosition(abortedTxn, position.value);
+                    position.value += AbortedTxn.TOTAL_SIZE;
+                    return nextEntry;
+                } catch (IOException e) {
+                    // We received an unexpected error reading from the index file. We propagate this as an
+                    // UNKNOWN error to the consumer, which will cause it to retry the fetch.
+                    throw new KafkaException("Failed to read from the transaction index " + txnFile.path().toAbsolutePath(), e);
                 }
+            }
 
-            };
-
-        } catch (IOException e) {
-            throw new KafkaException("Failed to read from the transaction index " + txnFile.path().toAbsolutePath(), e);
-        }
+        };
     }
 
     // Visible for testing
     static class TransactionIndexFile {
         // note that the file is not created until we need it
-        private Path path;
+        private volatile Path path;
         // channel is reopened as long as there are reads and writes
         private FileChannel channel;
 
@@ -263,28 +257,7 @@ public class TransactionIndex implements Closeable {
             this.path = parentDir.resolve(path.getFileName());
         }
 
-        /**
-         * Use to read or write values to the index.
-         * The file is the source of truth and if available values should be read from or written to.
-         *
-         * @return an open file channel with the position at the end of the file
-         * @throws IOException if any I/O error happens, but not if existing channel is closed.
-         *                     In that case, it is reopened.
-         */
-        FileChannel channel() throws IOException {
-            if (channel == null) {
-                openChannel();
-            } else {
-                // as channel is exposed, it could be closed without setting it to null
-                if (!channel.isOpen())  {
-                    log.debug("Transaction index channel was closed directly and is going to be reopened");
-                    openChannel();
-                }
-            }
-            return channel;
-        }
-
-        void renameTo(Path other) throws IOException {
+        synchronized void renameTo(Path other) throws IOException {
             try {
                 if (Files.exists(path))
                     Utils.atomicMoveWithFallback(path, other, false);
@@ -319,6 +292,39 @@ public class TransactionIndex implements Closeable {
         boolean deleteIfExists() throws IOException {
             closeChannel();
             return Files.deleteIfExists(path());
+        }
+
+        void write(ByteBuffer buffer) throws IOException {
+            Utils.writeFully(channel(), buffer);
+        }
+
+        void read(ByteBuffer buffer, int position) throws IOException {
+            Utils.readFully(channel(), buffer, position);
+        }
+
+        long currentPosition() throws IOException {
+            return channel().position();
+        }
+
+        /**
+         * Use to read or write values to the index.
+         * The file is the source of truth and if available values should be read from or written to.
+         *
+         * @return an open file channel with the position at the end of the file
+         * @throws IOException if any I/O error happens, but not if existing channel is closed.
+         *                     In that case, it is reopened.
+         */
+        private FileChannel channel() throws IOException {
+            if (channel == null) {
+                openChannel();
+            } else {
+                // as channel is exposed, it could be closed without setting it to null
+                if (!channel.isOpen())  {
+                    log.debug("Transaction index channel was closed directly and is going to be reopened");
+                    openChannel();
+                }
+            }
+            return channel;
         }
     }
 }
