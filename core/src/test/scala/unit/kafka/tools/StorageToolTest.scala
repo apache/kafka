@@ -65,7 +65,6 @@ class StorageToolTest {
   }
 
   val allFeatures = Features.FEATURES.toList
-  val checkpointFileName: String = "00000000000000000000-0000000000.checkpoint"
 
   @Test
   def testConfigToLogDirectories(): Unit = {
