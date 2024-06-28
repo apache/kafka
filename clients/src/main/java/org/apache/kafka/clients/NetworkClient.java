@@ -290,7 +290,6 @@ public class NetworkClient implements KafkaClient {
         } else {
             this.metadataUpdater = metadataUpdater;
         }
-        this.bootstrapState = new BootstrapState(bootstrapConfiguration);
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
@@ -311,6 +310,7 @@ public class NetworkClient implements KafkaClient {
         this.state = new AtomicReference<>(State.ACTIVE);
         this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
+        this.bootstrapState = new BootstrapState(bootstrapConfiguration);
     }
 
     /**
@@ -593,6 +593,7 @@ public class NetworkClient implements KafkaClient {
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
         ensureActive();
+        ensureBootstrapped(now);
 
         if (!abortedSends.isEmpty()) {
             // If there are aborted sends because of unsupported version exceptions or disconnects,
@@ -1142,11 +1143,19 @@ public class NetworkClient implements KafkaClient {
         private final boolean isDisabled;
 
         BootstrapState(BootstrapConfiguration bootstrapConfiguration) {
-            this.dnsResolutionTimeoutMs = bootstrapConfiguration.bootstrapResolveTimeoutMs;
-            this.timer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
-            this.bootstrapServers = bootstrapConfiguration.bootstrapServers;
-            this.clientDnsLookup = bootstrapConfiguration.clientDnsLookup;
-            this.isDisabled = bootstrapConfiguration.bootstrapDisabled;
+            if (bootstrapConfiguration == null) {
+                this.dnsResolutionTimeoutMs = -1;
+                this.timer = null;
+                this.bootstrapServers = null;
+                this.clientDnsLookup = null;
+                this.isDisabled = true;
+            } else {
+                this.dnsResolutionTimeoutMs = bootstrapConfiguration.bootstrapResolveTimeoutMs;
+                this.timer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
+                this.bootstrapServers = bootstrapConfiguration.bootstrapServers;
+                this.clientDnsLookup = bootstrapConfiguration.clientDnsLookup;
+                this.isDisabled = bootstrapConfiguration.bootstrapDisabled;
+            }
         }
 
         List<InetSocketAddress> tryResolveAddresses(final long currentTimeMs) {

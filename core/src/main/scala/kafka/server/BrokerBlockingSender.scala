@@ -81,6 +81,9 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       channelBuilder,
       logContext
     )
+    val bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(brokerConfig.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+      ClientDnsLookup.forConfig(brokerConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+      brokerConfig.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG))
     val networkClient = new NetworkClient(
       selector,
       new ManualMetadataUpdater(),
@@ -93,6 +96,7 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       brokerConfig.requestTimeoutMs,
       brokerConfig.connectionSetupTimeoutMs,
       brokerConfig.connectionSetupTimeoutMaxMs,
+      bootstrapConfiguration,
       time,
       false,
       new ApiVersions,

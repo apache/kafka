@@ -82,6 +82,7 @@ public class NetworkUtils {
             config.requestTimeoutMs(),
             config.connectionSetupTimeoutMs(),
             config.connectionSetupTimeoutMaxMs(),
+            null,
             time,
             true,
             new ApiVersions(),

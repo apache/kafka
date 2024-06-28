@@ -93,6 +93,7 @@ object TransactionMarkerChannelManager {
       config.requestTimeoutMs,
       config.connectionSetupTimeoutMs,
       config.connectionSetupTimeoutMaxMs,
+      null,
       time,
       false,
       new ApiVersions,

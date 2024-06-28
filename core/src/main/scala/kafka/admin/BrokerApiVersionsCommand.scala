@@ -295,6 +295,10 @@ object BrokerApiVersionsCommand {
         channelBuilder,
         logContext)
 
+      val bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+        ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+        config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG))
+
       val networkClient = new NetworkClient(
         selector,
         metadata,
@@ -307,6 +311,7 @@ object BrokerApiVersionsCommand {
         requestTimeoutMs,
         connectionSetupTimeoutMs,
         connectionSetupTimeoutMaxMs,
+        bootstrapConfiguration,
         time,
         true,
         new ApiVersions,

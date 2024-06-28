@@ -313,6 +313,7 @@ class KafkaRaftManager[T](
       config.quorumRequestTimeoutMs,
       config.connectionSetupTimeoutMs,
       config.connectionSetupTimeoutMaxMs,
+      null,
       time,
       discoverBrokerVersions,
       apiVersions,
