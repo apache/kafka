@@ -27,6 +27,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -87,4 +88,16 @@ public class ApiKeysTest {
             "Found some APIs missing scope definition");
     }
 
+    @Test
+    public void testHtmlOnlyHaveStableApi() {
+        String html = ApiKeys.toHtml();
+        ApiKeys.clientApis()
+            .stream()
+            .filter(apiKeys -> !apiKeys.messageType.latestVersionUnstable())
+            .forEach(apiKey -> assertTrue(html.contains(apiKey.name), "Html should contain " + apiKey.name));
+        ApiKeys.clientApis()
+            .stream()
+            .filter(apiKeys -> apiKeys.messageType.latestVersionUnstable())
+            .forEach(apiKey -> assertFalse(html.contains(apiKey.name), "Html should not contain " + apiKey.name));
+    }
 }

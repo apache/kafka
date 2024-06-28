@@ -278,7 +278,7 @@ public enum ApiKeys {
         return messageType.listeners().contains(listener);
     }
 
-    private static String toHtml() {
+    static String toHtml() {
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>");
