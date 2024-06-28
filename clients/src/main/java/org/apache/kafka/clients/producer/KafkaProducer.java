@@ -253,6 +253,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final RecordAccumulator accumulator;
     private final Sender sender;
     private final Thread ioThread;
+    private Throwable uncaughtExceptionOfIoThread;
     private final Compression compression;
     private final Sensor errors;
     private final Time time;
@@ -265,6 +266,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
+
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -465,6 +467,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.sender = newSender(logContext, kafkaClient, this.metadata);
             String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
+            this.ioThread.setUncaughtExceptionHandler((t, e) -> {
+                log.error("Uncaught exception in thread '{}':", ioThreadName, e);
+                this.uncaughtExceptionOfIoThread = e;
+            });
             this.ioThread.start();
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -657,6 +663,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void initTransactions() {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        throwIfIoThreadThrowError();
         long now = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
@@ -682,6 +689,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void beginTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        throwIfIoThreadThrowError();
         long now = time.nanoseconds();
         transactionManager.beginTransaction();
         producerMetrics.recordBeginTxn(time.nanoseconds() - now);
@@ -779,6 +787,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfInvalidGroupMetadata(groupMetadata);
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        throwIfIoThreadThrowError();
 
         if (!offsets.isEmpty()) {
             long start = time.nanoseconds();
@@ -824,6 +833,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void commitTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        throwIfIoThreadThrowError();
         long commitStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
@@ -858,6 +868,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void abortTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        throwIfIoThreadThrowError();
         log.info("Aborting incomplete transaction");
         long abortStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginAbort();
@@ -1001,6 +1012,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     *  Verify that io thread throws uncaught exception.This method throws IllegalStateException if the io thread throws un-caught exception.
+     */
+    private void throwIfIoThreadThrowError() {
+        if (uncaughtExceptionOfIoThread != null) {
+            if (sender == null || !sender.isRunning())
+                throw new IllegalStateException("Uncaught exception in io thread.", uncaughtExceptionOfIoThread);
+        }
+    }
+
+    /**
      * Call deprecated {@link Partitioner#onNewBatch}
      */
     @SuppressWarnings("deprecation")
@@ -1020,6 +1041,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         try {
             throwIfProducerClosed();
+            throwIfIoThreadThrowError();
             // first make sure the metadata for the topic is available
             long nowMs = time.milliseconds();
             ClusterAndWaitTime clusterAndWaitTime;
