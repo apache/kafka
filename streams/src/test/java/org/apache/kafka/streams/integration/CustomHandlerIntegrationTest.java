@@ -78,7 +78,7 @@ public class CustomHandlerIntegrationTest {
     private static final String NON_EXISTING_TOPIC = "non_existing_topic";
 
     private KafkaStreams kafkaStreams;
-    AtomicReference<Throwable> caughtException ;
+    AtomicReference<Throwable> caughtException;
     Topology topology;
     private String appId;
 
@@ -119,8 +119,8 @@ public class CustomHandlerIntegrationTest {
                 CLUSTER.time.milliseconds() + 2
         );
     }
-    private Properties getCommonProperties () {
-        Properties streamsConfiguration = new Properties();
+    private Properties getCommonProperties() {
+        final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
@@ -141,7 +141,7 @@ public class CustomHandlerIntegrationTest {
     }
 
     @Test
-    public void shouldThrowTimeoutException() throws Exception {
+    public void shouldThrowStreamsExceptionWithMissingTopicAndDefaultExceptionHandler() throws Exception {
         final Properties streamsConfiguration = getCommonProperties();
         kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
         kafkaStreams.setUncaughtExceptionHandler(e -> {
@@ -154,7 +154,7 @@ public class CustomHandlerIntegrationTest {
                 timeout,
                 () -> "Kafka Streams application did not reach state RUNNING in " + timeout + " ms");
         while (true) {
-            if(caughtException.get() != null) {
+            if (caughtException.get() != null) {
                 assertInstanceOf(StreamsException.class, caughtException.get());
                 assertInstanceOf(TimeoutException.class, caughtException.get().getCause());
                 closeApplication(streamsConfiguration);

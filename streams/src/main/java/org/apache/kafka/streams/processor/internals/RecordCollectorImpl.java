@@ -306,16 +306,14 @@ public class RecordCollectorImpl implements RecordCollector {
                 "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, exception));
         } else {
-            final ProductionExceptionHandlerResponse response = productionExceptionHandler.handle(serializedRecord, exception);
-            if (exception instanceof RetriableException &&
-                    (!isMissingMetadata(exception) || response == ProductionExceptionHandlerResponse.CONTINUE)) {
+            if (isRetriable(exception)) {
                 errorMessage += "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\nConsider overwriting `max.block.ms` and /or " +
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
                 sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
-                if (response == ProductionExceptionHandlerResponse.FAIL) {
+                if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
                     errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
                     sendException.set(new StreamsException(errorMessage, exception));
                 } else {
@@ -328,9 +326,9 @@ public class RecordCollectorImpl implements RecordCollector {
         log.error(errorMessage, exception);
     }
 
-    private boolean isMissingMetadata (final Exception exception) {
-        return exception.getCause() != null
-                && exception.getCause() instanceof UnknownTopicOrPartitionException;
+    private boolean isRetriable(final Exception exception) {
+        return (!(exception instanceof TimeoutException) || exception.getCause() == null
+                || !(exception.getCause() instanceof UnknownTopicOrPartitionException)) && exception instanceof RetriableException;
     }
 
     private boolean isFatalException(final Exception exception) {
