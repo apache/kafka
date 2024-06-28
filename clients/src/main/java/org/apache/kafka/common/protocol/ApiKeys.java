@@ -332,6 +332,7 @@ public enum ApiKeys {
     public static EnumSet<ApiKeys> clientApis() {
         List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
             .filter(apiKey -> apiKey.inScope(ApiMessageType.ListenerType.ZK_BROKER) || apiKey.inScope(ApiMessageType.ListenerType.BROKER))
+                .filter(apiKey -> !apiKey.messageType.latestVersionUnstable())
             .collect(Collectors.toList());
         return EnumSet.copyOf(apis);
     }
