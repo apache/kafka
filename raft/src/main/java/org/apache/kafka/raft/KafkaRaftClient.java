@@ -2009,10 +2009,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      */
     private boolean isValidVoterKey(Optional<ReplicaKey> voterKey) {
         return voterKey
-            .map(key ->
-                OptionalInt.of(key.id()).equals(nodeId) &&
-                key.directoryId().equals(Optional.of(nodeDirectoryId))
-            )
+            .map(key -> {
+                if (!OptionalInt.of(key.id()).equals(nodeId)) return false;
+                if (!key.directoryId().isPresent()) return true;
+
+                return key.directoryId().get().equals(nodeDirectoryId);
+            })
             .orElse(true);
     }
     /**
@@ -2317,6 +2319,28 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return timeUntilDrain;
     }
 
+    private long maybeSendBeginQuorumEpochRequests(
+        LeaderState<T> state,
+        long currentTimeMs
+    ) {
+        long timeUntilNextBeginQuorumSend = state.timeUntilBeginQuorumEpochTimerExpires(currentTimeMs);
+        if (timeUntilNextBeginQuorumSend == 0) {
+            VoterSet lastVoterSet = partitionState.lastVoterSet();
+            timeUntilNextBeginQuorumSend = maybeSendRequests(
+                currentTimeMs,
+                lastVoterSet.voterNodes(lastVoterSet.voterIds().stream().filter(id -> id != quorum.localIdOrThrow()), channel.listenerName()),
+                this::buildBeginQuorumEpochRequest
+            );
+            state.resetBeginQuorumEpochTimer(currentTimeMs);
+            logger.trace(
+                "Attempted to send BeginQuorumEpochRequest as heartbeat to all voters. " +
+                "Request can be retried in {} ms",
+                timeUntilNextBeginQuorumSend
+            );
+        }
+        return timeUntilNextBeginQuorumSend;
+    }
+
     private long pollResigned(long currentTimeMs) {
         ResignedState state = quorum.resignedStateOrThrow();
         long endQuorumBackoffMs = maybeSendRequests(
@@ -2358,15 +2382,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             currentTimeMs
         );
 
-        long timeUntilSend = maybeSendRequests(
-            currentTimeMs,
-            partitionState
-                .lastVoterSet()
-                .voterNodes(state.nonAcknowledgingVoters().stream(), channel.listenerName()),
-            this::buildBeginQuorumEpochRequest
+        long timeUntilNextBeginQuorumSend = maybeSendBeginQuorumEpochRequests(
+            state,
+            currentTimeMs
         );
 
-        return Math.min(timeUntilFlush, Math.min(timeUntilSend, timeUntilCheckQuorumExpires));
+        return Math.min(timeUntilFlush, Math.min(timeUntilNextBeginQuorumSend, timeUntilCheckQuorumExpires));
     }
 
     private long maybeSendVoteRequests(

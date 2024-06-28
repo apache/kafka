@@ -24,8 +24,8 @@
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "0+",
       "nullableVersions": "0+", "default": "null"},
-    { "name": "VoterId", "type": "int32", "versions": "1+", "entityType": "brokerId", "ignorable": true,
-      "about": "The voter ID of the receiving replica" },
+    { "name": "VoterId", "type": "int32", "versions": "1+", "ignorable": true, "default": "-1", "entityType": "brokerId",
+      "about": "The replica id of the voter receiving the request" },
     { "name": "Topics", "type": "[]TopicData",
       "versions": "0+", "fields": [
         { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",

@@ -97,6 +97,7 @@ public final class RaftClientTestContext {
     final int fetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
     final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
+    final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
 
     private int electionTimeoutMs;
@@ -671,10 +672,10 @@ public final class RaftClientTestContext {
         channel.mockReceive(new RaftResponse.Inbound(correlationId, response, source));
     }
 
-    RaftRequest.Outbound assertSentBeginQuorumEpochRequest(int epoch, int numBeginEpochRequests) {
+    void assertSentBeginQuorumEpochRequest(int epoch, Set<Integer> destinationIds) {
         List<RaftRequest.Outbound> requests = collectBeginEpochRequests(epoch);
-        assertEquals(numBeginEpochRequests, requests.size());
-        return requests.get(0);
+        assertEquals(destinationIds.size(), requests.size());
+        assertEquals(destinationIds, requests.stream().map(r -> r.destination().id()).collect(Collectors.toSet()));
     }
 
     private List<RaftResponse.Outbound> drainSentResponses(
@@ -1001,10 +1002,11 @@ public final class RaftClientTestContext {
         assertElectedLeader(epoch, leaderId);
     }
 
-    private List<RaftRequest.Outbound> collectBeginEpochRequests(int epoch) {
+    List<RaftRequest.Outbound> collectBeginEpochRequests(int epoch) {
         List<RaftRequest.Outbound> requests = new ArrayList<>();
         for (RaftRequest.Outbound raftRequest : channel.drainSentRequests(Optional.of(ApiKeys.BEGIN_QUORUM_EPOCH))) {
             assertInstanceOf(BeginQuorumEpochRequestData.class, raftRequest.data());
+            assertNotEquals(localIdOrThrow(), raftRequest.destination().id());
             BeginQuorumEpochRequestData request = (BeginQuorumEpochRequestData) raftRequest.data();
 
             BeginQuorumEpochRequestData.PartitionData partitionRequest =
