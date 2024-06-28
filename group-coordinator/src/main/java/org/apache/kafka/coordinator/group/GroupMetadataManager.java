@@ -1784,9 +1784,9 @@ public class GroupMetadataManager {
                 // Generate the records to replace the member.
                 replaceMember(records, group, existingStaticMemberOrNull, newMember);
 
-                log.info("[GroupId {}] Static member with unknown member id and instance id {} re-joins the consumer group " +
+                log.info("[GroupId {}] Static member with instance id {} re-joins the consumer group " +
                     "using the {} protocol. Created a new member {} to replace the existing member {}.",
-                    group.groupId(), instanceId, memberId, useClassicProtocol ? "classic" : "consumer", existingStaticMemberOrNull.memberId());
+                    group.groupId(), instanceId, useClassicProtocol ? "classic" : "consumer", memberId, existingStaticMemberOrNull.memberId());
 
                 return newMember;
             }
@@ -1939,7 +1939,7 @@ public class GroupMetadataManager {
             // If the instance id was associated to a different member, it means that the
             // static member is replaced by the current member hence we remove the previous one.
             String previousMemberId = group.staticMemberId(updatedMember.instanceId());
-            if (!updatedMember.memberId().equals(previousMemberId)) {
+            if (previousMemberId != null && !updatedMember.memberId().equals(previousMemberId)) {
                 assignmentResultBuilder.removeMember(previousMemberId);
             }
 
