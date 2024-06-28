@@ -53,7 +53,7 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
             Optional<TransactionLogKey> transactionLogKey = readToTransactionLogKey(ByteBuffer.wrap(key));
             settingKeyNode(json, transactionLogKey, keyVersion);
         } else {
-            return;
+            json.put(KEY, "NULL");
         }
 
         byte[] value = consumerRecord.value();

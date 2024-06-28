@@ -24,14 +24,12 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -41,78 +39,73 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TransactionLogMessageFormatterTest {
 
-    private final TransactionLogKey txnLogKey;
-    private final TransactionLogValue txnLogValue;
+    private static final TransactionLogKey TXN_LOG_KEY = new TransactionLogKey()
+            .setTransactionalId("TXNID");
+    private static final TransactionLogValue TXN_LOG_VALUE = new TransactionLogValue()
+            .setProducerId(100)
+            .setProducerEpoch((short) 50)
+            .setTransactionStatus((byte) 4)
+            .setTransactionStartTimestampMs(750L)
+            .setTransactionLastUpdateTimestampMs(1000L)
+            .setTransactionTimeoutMs(500)
+            .setTransactionPartitions(emptyList());
     private static final String TOPIC = "TOPIC";
 
-    public TransactionLogMessageFormatterTest() {
-        txnLogKey = new TransactionLogKey()
-                .setTransactionalId("TXNID");
-        txnLogValue = new TransactionLogValue()
-                .setProducerId(100)
-                .setProducerEpoch((short) 50)
-                .setTransactionStatus((byte) 4)
-                .setTransactionStartTimestampMs(750L)
-                .setTransactionLastUpdateTimestampMs(1000L)
-                .setTransactionTimeoutMs(500)
-                .setTransactionPartitions(emptyList());
-    }
 
     private static Stream<Arguments> parameters() {
         return Stream.of(
-                Arguments.of((short) 10, (short) 10,
+                Arguments.of(
+                    MessageUtil.toVersionPrefixedByteBuffer((short) 10, TXN_LOG_KEY).array(),
+                    MessageUtil.toVersionPrefixedByteBuffer((short) 10, TXN_LOG_VALUE).array(),
                     "{\"key\":{\"version\":\"10\",\"data\":\"unknown\"}," +
-                        "\"value\":{\"version\":\"10\",\"data\":\"unknown\"}}"),
-                Arguments.of((short) 0, (short) 1,
+                        "\"value\":{\"version\":\"10\",\"data\":\"unknown\"}}"
+                ),
+                Arguments.of(
+                    MessageUtil.toVersionPrefixedByteBuffer((short) 0, TXN_LOG_KEY).array(),
+                    MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_VALUE).array(),
                     "{\"key\":{\"version\":\"0\",\"data\":{\"transactionalId\":\"TXNID\"}}," +
-                        "\"value\":{\"version\":\"1\",\"data\":{\"producerId\":100,\"producerEpoch\":50,\"transactionTimeoutMs\":500," +
-                        "\"transactionStatus\":4,\"transactionPartitions\":[],\"transactionLastUpdateTimestampMs\":1000," +
-                        "\"transactionStartTimestampMs\":750}}}"),
-                Arguments.of((short) 0, (short) 5,
+                        "\"value\":{\"version\":\"1\",\"data\":{\"producerId\":100,\"producerEpoch\":50," +
+                        "\"transactionTimeoutMs\":500,\"transactionStatus\":4,\"transactionPartitions\":[]," +
+                        "\"transactionLastUpdateTimestampMs\":1000,\"transactionStartTimestampMs\":750}}}"
+                ),
+                Arguments.of(
+                    MessageUtil.toVersionPrefixedByteBuffer((short) 0, TXN_LOG_KEY).array(),
+                    MessageUtil.toVersionPrefixedByteBuffer((short) 5, TXN_LOG_VALUE).array(),
                     "{\"key\":{\"version\":\"0\",\"data\":{\"transactionalId\":\"TXNID\"}}," +
-                        "\"value\":{\"version\":\"5\",\"data\":\"unknown\"}}"),
-                Arguments.of((short) 1, (short) 1,
+                        "\"value\":{\"version\":\"5\",\"data\":\"unknown\"}}"
+                ),
+                Arguments.of(
+                    MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_KEY).array(),
+                    MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_VALUE).array(),
                     "{\"key\":{\"version\":\"1\",\"data\":\"unknown\"}," +
-                        "\"value\":{\"version\":\"1\",\"data\":{\"producerId\":100,\"producerEpoch\":50,\"transactionTimeoutMs\":500," +
-                        "\"transactionStatus\":4,\"transactionPartitions\":[],\"transactionLastUpdateTimestampMs\":1000," +
-                        "\"transactionStartTimestampMs\":750}}}")
+                        "\"value\":{\"version\":\"1\",\"data\":{\"producerId\":100,\"producerEpoch\":50," +
+                        "\"transactionTimeoutMs\":500,\"transactionStatus\":4,\"transactionPartitions\":[]," +
+                        "\"transactionLastUpdateTimestampMs\":1000,\"transactionStartTimestampMs\":750}}}"),
+                Arguments.of(
+                    MessageUtil.toVersionPrefixedByteBuffer((short) 0, TXN_LOG_KEY).array(),
+                    null,
+                    "{\"key\":{\"version\":\"0\",\"data\":{\"transactionalId\":\"TXNID\"}}," +
+                        "\"value\":\"NULL\"}"),
+                Arguments.of(
+                    null,
+                    MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_VALUE).array(),
+                    "{\"key\":\"NULL\"," +
+                        "\"value\":{\"version\":\"1\",\"data\":{\"producerId\":100,\"producerEpoch\":50," +
+                        "\"transactionTimeoutMs\":500,\"transactionStatus\":4,\"transactionPartitions\":[]," +
+                        "\"transactionLastUpdateTimestampMs\":1000,\"transactionStartTimestampMs\":750}}}"),
+                Arguments.of(null, null, "{\"key\":\"NULL\",\"value\":\"NULL\"}")
         );
     }
 
     @ParameterizedTest
     @MethodSource("parameters")
-    public void testTransactionLogMessageFormatter(short keyVersion, short valueVersion, String expectedOutput) {
-        ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(keyVersion, txnLogKey);
-        ByteBuffer valueBuffer = MessageUtil.toVersionPrefixedByteBuffer(valueVersion, txnLogValue);
-        ConsumerRecord<byte[], byte[]> record = createRecord(keyBuffer.array(), valueBuffer.array());
-
-        assertPrintContent(expectedOutput, record);
-    }
-
-    @Test
-    public void testNullPayLoadWithTransactionLogMessage() {
-        ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer((short) 0, txnLogKey);
-        ConsumerRecord<byte[], byte[]> record = createRecord(keyBuffer.array(), null);
-
-        assertPrintContent("{\"key\":{\"version\":\"0\",\"data\":{\"transactionalId\":\"TXNID\"}},\"value\":\"NULL\"}", record);
-    }
-
-    @Test
-    public void testNullKeyWithTransactionLogMessage() {
-        ConsumerRecord<byte[], byte[]> record = createRecord(null, null);
-        
-        assertPrintContent("", record);
-    }
-
-    private static ConsumerRecord<byte[], byte[]> createRecord(byte[] keyBuffer, byte[] valueBuffer) {
-        return new ConsumerRecord<>(
+    public void testTransactionLogMessageFormatter(byte[] keyBuffer, byte[] valueBuffer, String expectedOutput) {
+        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
                 TOPIC, 0, 0,
                 0L, TimestampType.CREATE_TIME, 0,
                 0, keyBuffer, valueBuffer,
                 new RecordHeaders(), Optional.empty());
-    }
 
-    private void assertPrintContent(String expectedOutput, ConsumerRecord<byte[], byte[]> record) {
         try (MessageFormatter formatter = new TransactionLogMessageFormatter()) {
             formatter.configure(new HashMap<>());
             ByteArrayOutputStream out = new ByteArrayOutputStream();
