@@ -33,7 +33,7 @@ import java.util.Objects;
 import java.util.concurrent.Semaphore;
 
 /**
- * Used internally by MirrorMaker to write, queued, and promote the new translated offsets into offset-syncs topic.
+ * Used internally by MirrorMaker to write translated offsets into offset-syncs topic, with some buffering logic to limit the number of in-flight records.
  */
 class OffsetSyncWriter implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(OffsetSyncWriter.class);
@@ -55,6 +55,7 @@ class OffsetSyncWriter implements AutoCloseable {
         maxOffsetLag = config.maxOffsetLag();
     }
 
+    // Visible for testing
     public OffsetSyncWriter(KafkaProducer<byte[], byte[]> producer,
                             String offsetSyncsTopic,
                             Semaphore outstandingOffsetSyncs,
