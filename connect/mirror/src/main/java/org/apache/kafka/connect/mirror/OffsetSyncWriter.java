@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -42,7 +43,9 @@ class OffsetSyncWriter implements AutoCloseable {
     private final Semaphore outstandingOffsetSyncs;
     private final KafkaProducer<byte[], byte[]> offsetProducer;
     private final String offsetSyncsTopic;
-    protected final long maxOffsetLag;
+    private final long maxOffsetLag;
+    private Map<TopicPartition, MirrorSourceTask.PartitionState> partitionStates = new HashMap<>();
+
 
     public OffsetSyncWriter(MirrorSourceTaskConfig config) {
         outstandingOffsetSyncs = new Semaphore(MAX_OUTSTANDING_OFFSET_SYNCS);
@@ -67,6 +70,10 @@ class OffsetSyncWriter implements AutoCloseable {
 
     public long maxOffsetLag() {
         return maxOffsetLag;
+    }
+
+    public Map<TopicPartition, MirrorSourceTask.PartitionState> partitionStates() {
+        return this.partitionStates;
     }
 
     // sends OffsetSync record to internal offsets topic
@@ -115,10 +122,10 @@ class OffsetSyncWriter implements AutoCloseable {
     }
 
     // updates partition state and queues up OffsetSync if necessary
-    void maybeQueueOffsetSyncs(MirrorSourceTask.PartitionState partitionState,
-                               TopicPartition topicPartition,
-                               long upstreamOffset,
-                               long downstreamOffset) {
+    void maybeQueueOffsetSyncs(TopicPartition topicPartition, long upstreamOffset, long downstreamOffset) {
+        MirrorSourceTask.PartitionState partitionState =
+                partitionStates.computeIfAbsent(topicPartition, x -> new MirrorSourceTask.PartitionState(maxOffsetLag));
+
         OffsetSync offsetSync = new OffsetSync(topicPartition, upstreamOffset, downstreamOffset);
         if (partitionState.update(upstreamOffset, downstreamOffset)) {
             // Queue this sync for an immediate send, as downstream state is sufficiently stale

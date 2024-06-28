@@ -49,15 +49,17 @@ public class OffsetSyncWriterTest {
         @SuppressWarnings("unchecked")
         KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
         Semaphore outstandingOffsetSyncs = new Semaphore(1);
-        MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(maxOffsetLag);
 
         OffsetSyncWriter offsetSyncWriter = new OffsetSyncWriter(producer, topicName, outstandingOffsetSyncs, maxOffsetLag);
 
-        offsetSyncWriter.maybeQueueOffsetSyncs(partitionState, topicPartition, 0, 1);
+        offsetSyncWriter.maybeQueueOffsetSyncs(topicPartition, 0, 1);
         assertFalse(offsetSyncWriter.getDelayedOffsetSyncs().containsKey(topicPartition));
         assertTrue(offsetSyncWriter.getPendingOffsetSyncs().containsKey(topicPartition));
-        offsetSyncWriter.maybeQueueOffsetSyncs(partitionState, topicPartition, 1, 2);
+        assertEquals(offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset, 1);
+
+        offsetSyncWriter.maybeQueueOffsetSyncs(topicPartition, 1, 2);
         assertTrue(offsetSyncWriter.getDelayedOffsetSyncs().containsKey(topicPartition));
+        assertEquals(offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset, 1);
     }
     
     @Test
@@ -65,11 +67,12 @@ public class OffsetSyncWriterTest {
         int maxOffsetLag = 1;
 
         Semaphore outstandingOffsetSyncs = new Semaphore(1);
-        MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(maxOffsetLag);
 
         OffsetSyncWriter offsetSyncWriter = new OffsetSyncWriter(producer, topicName, outstandingOffsetSyncs, maxOffsetLag);
 
-        offsetSyncWriter.maybeQueueOffsetSyncs(partitionState, topicPartition, 0, 100);
+        offsetSyncWriter.maybeQueueOffsetSyncs(topicPartition, 0, 100);
+        assertEquals(offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset, 100);
+
         offsetSyncWriter.firePendingOffsetSyncs();
 
         ArgumentCaptor<Callback> producerCallback = ArgumentCaptor.forClass(Callback.class);
@@ -81,8 +84,10 @@ public class OffsetSyncWriterTest {
         // We should have dispatched this sync to the producer
         verify(producer, times(1)).send(any(), any());
 
-        offsetSyncWriter.maybeQueueOffsetSyncs(partitionState, topicPartition, 2, 102);
+        offsetSyncWriter.maybeQueueOffsetSyncs(topicPartition, 2, 102);
+        assertEquals(offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset, 102);
         offsetSyncWriter.firePendingOffsetSyncs();
+
         // in-flight offset syncs; will not try to send remaining offset syncs immediately
         verifyNoMoreInteractions(producer);
     }
@@ -93,11 +98,10 @@ public class OffsetSyncWriterTest {
         @SuppressWarnings("unchecked")
         KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
         Semaphore outstandingOffsetSyncs = new Semaphore(1);
-        MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(maxOffsetLag);
 
         OffsetSyncWriter offsetSyncWriter = new OffsetSyncWriter(producer, topicName, outstandingOffsetSyncs, maxOffsetLag);
-        offsetSyncWriter.maybeQueueOffsetSyncs(partitionState, topicPartition, 0, 100);
-        offsetSyncWriter.maybeQueueOffsetSyncs(partitionState, topicPartition, 1, 101);
+        offsetSyncWriter.maybeQueueOffsetSyncs(topicPartition, 0, 100);
+        offsetSyncWriter.maybeQueueOffsetSyncs(topicPartition, 1, 101);
         offsetSyncWriter.promoteDelayedOffsetSyncs();
 
         assertTrue(offsetSyncWriter.getDelayedOffsetSyncs().isEmpty());

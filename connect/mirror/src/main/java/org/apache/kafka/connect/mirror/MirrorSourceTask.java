@@ -36,7 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -52,7 +51,6 @@ public class MirrorSourceTask extends SourceTask {
     private KafkaConsumer<byte[], byte[]> consumer;
     private String sourceClusterAlias;
     private Duration pollTimeout;
-    private Map<TopicPartition, PartitionState> partitionStates;
     private ReplicationPolicy replicationPolicy;
     private MirrorSourceMetrics metrics;
     private boolean stopping = false;
@@ -63,7 +61,7 @@ public class MirrorSourceTask extends SourceTask {
 
     // for testing
     MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceMetrics metrics, String sourceClusterAlias,
-                     ReplicationPolicy replicationPolicy, Map<TopicPartition, PartitionState> partitionStates,
+                     ReplicationPolicy replicationPolicy,
                      OffsetSyncWriter offsetSyncWriter) {
         this.consumer = consumer;
         this.metrics = metrics;
@@ -71,7 +69,6 @@ public class MirrorSourceTask extends SourceTask {
         this.replicationPolicy = replicationPolicy;
         consumerAccess = new Semaphore(1);
         this.offsetSyncWriter = offsetSyncWriter;
-        this.partitionStates = partitionStates;
     }
 
     @Override
@@ -82,7 +79,6 @@ public class MirrorSourceTask extends SourceTask {
         metrics = config.metrics();
         pollTimeout = config.consumerPollTimeout();
         replicationPolicy = config.replicationPolicy();
-        partitionStates = new HashMap<>();
         if (config.emitOffsetSyncsEnabled()) {
             offsetSyncWriter = new OffsetSyncWriter(config);
         }
@@ -189,9 +185,7 @@ public class MirrorSourceTask extends SourceTask {
             TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
             long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
             long downstreamOffset = metadata.offset();
-            MirrorSourceTask.PartitionState partitionState =
-                    partitionStates.computeIfAbsent(topicPartition, x -> new MirrorSourceTask.PartitionState(offsetSyncWriter.maxOffsetLag()));
-            offsetSyncWriter.maybeQueueOffsetSyncs(partitionState, sourceTopicPartition, upstreamOffset, downstreamOffset);
+            offsetSyncWriter.maybeQueueOffsetSyncs(sourceTopicPartition, upstreamOffset, downstreamOffset);
             // We may be able to immediately publish an offset sync that we've queued up here
             offsetSyncWriter.firePendingOffsetSyncs();
         }

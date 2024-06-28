@@ -69,7 +69,7 @@ public class MirrorSourceTaskTest {
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("topic1", 2, 3L, 4L,
             TimestampType.CREATE_TIME, 5, 6, key, value, headers, Optional.empty());
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(null, null, "cluster7",
-                new DefaultReplicationPolicy(), null, null);
+                new DefaultReplicationPolicy(), null);
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(consumerRecord);
         assertEquals("cluster7.topic1", sourceRecord.topic(),
                 "Failure on cluster7.topic1 consumerRecord serde");
@@ -188,7 +188,7 @@ public class MirrorSourceTaskTest {
         String sourceClusterName = "cluster1";
         ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
-                replicationPolicy, null, null);
+                replicationPolicy, null);
         List<SourceRecord> sourceRecords = mirrorSourceTask.poll();
 
         assertEquals(2, sourceRecords.size());
@@ -248,7 +248,7 @@ public class MirrorSourceTaskTest {
         });
 
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(mockConsumer, null, null,
-                new DefaultReplicationPolicy(), null, null);
+                new DefaultReplicationPolicy(), null);
         mirrorSourceTask.initialize(mockSourceTaskContext);
 
         // Call test subject
@@ -289,7 +289,7 @@ public class MirrorSourceTaskTest {
         String sourceClusterName = "cluster1";
         ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
-                replicationPolicy, null, null);
+                replicationPolicy, null);
 
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, 0, 0, System.currentTimeMillis(),
                 TimestampType.CREATE_TIME, key1.length, value1.length, key1, value1, headers, Optional.empty()));
@@ -323,7 +323,7 @@ public class MirrorSourceTaskTest {
         doNothing().when(offsetSyncWriter).promoteDelayedOffsetSyncs();
 
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
-                replicationPolicy, partitionStates, offsetSyncWriter);
+                replicationPolicy, offsetSyncWriter);
 
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, recordPartition,
                 recordOffset, System.currentTimeMillis(), TimestampType.CREATE_TIME, recordKey.length,
@@ -332,11 +332,11 @@ public class MirrorSourceTaskTest {
         TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(sourceRecord.sourcePartition());
         partitionStates.put(sourceTopicPartition, partitionState);
         RecordMetadata recordMetadata = new RecordMetadata(sourceTopicPartition, metadataOffset, 0, 0, 0, recordPartition);
-        doNothing().when(offsetSyncWriter).maybeQueueOffsetSyncs(eq(partitionState), eq(sourceTopicPartition), eq((long) recordOffset), eq(recordMetadata.offset()));
+        doNothing().when(offsetSyncWriter).maybeQueueOffsetSyncs(eq(sourceTopicPartition), eq((long) recordOffset), eq(recordMetadata.offset()));
 
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
         // We should have dispatched this sync to the producer
-        verify(offsetSyncWriter, times(1)).maybeQueueOffsetSyncs(eq(partitionState), eq(sourceTopicPartition), eq((long) recordOffset), eq(recordMetadata.offset()));
+        verify(offsetSyncWriter, times(1)).maybeQueueOffsetSyncs(eq(sourceTopicPartition), eq((long) recordOffset), eq(recordMetadata.offset()));
         verify(offsetSyncWriter, times(1)).firePendingOffsetSyncs();
 
         mirrorSourceTask.commit();
