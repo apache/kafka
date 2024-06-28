@@ -81,7 +81,10 @@ public interface Producer<K, V> extends Closeable {
      */
     Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback);
 
-    default Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback, KafkaProducer.TxnSendOption option) {
+    /**
+     * See {@link KafkaProducer#send(ProducerRecord, Callback, KafkaProducer.TxnSendOption)}
+     */
+    default Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback, KafkaProducer.TxnSendOption txnSendOption) {
         return send(record, callback);
     }
     /**
