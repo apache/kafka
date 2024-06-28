@@ -17,17 +17,16 @@
 
 package kafka.tools
 
-import kafka.cluster.EndPoint
 import kafka.server.KafkaConfig
 
-import java.io.PrintStream
+import java.io.{File, PrintStream}
 import java.nio.file.{Files, Paths}
 import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
 import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.message.VotersRecord
+import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion}
@@ -38,20 +37,24 @@ import org.apache.kafka.common.security.scram.internals.ScramFormatter
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.raft.OffsetAndEpoch
-import org.apache.kafka.raft.internals.{StringSerde, VoterSet}
+import org.apache.kafka.raft.internals.{ReplicaKey, StringSerde, VoterSet}
 import org.apache.kafka.server.common.FeatureVersion
 import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RecordsSnapshotWriter}
+import org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_NAME
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.raft.QuorumConfig.{parseVoterConnections, validateControllerQuorumVoters}
+import org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID
 
+import java.net.InetSocketAddress
 import java.util
-import java.util.{Base64, Collections, Optional}
+import java.util.{Base64, Collections, Optional, OptionalInt}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
+import scala.util.matching.Regex
 
 object StorageTool extends Logging {
-
-  val clusterMetadataDir: String = "/__cluster_metadata-0"
 
   def main(args: Array[String]): Unit = {
     var exitCode: Integer = 0
@@ -97,6 +100,7 @@ object StorageTool extends Logging {
   /**
    * Validates arguments, configuration, prepares bootstrap metadata and delegates to {{@link formatCommand}}.
    * Visible for testing.
+   *
    * @param namespace   Arguments
    * @param config      The server configuration
    * @return            The exit code
@@ -110,9 +114,22 @@ object StorageTool extends Logging {
       setNodeId(config.nodeId).
       build()
     val standaloneMode = namespace.getBoolean("standalone")
-    val advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint] = config.effectiveAdvertisedListeners
+    var advertisedListenerEndpoints: collection.Seq[kafka.cluster.EndPoint] = List()
+
+    if (standaloneMode) {
+      advertisedListenerEndpoints = config.effectiveAdvertisedListeners
+    }
 
     // effectiveAdvertisedControllerListeners to be added
+
+    val controllersQuorumVoters = namespace.getString("controller_quorum_voters")
+    if(standaloneMode && controllersQuorumVoters != null) {
+      throw new TerseFailure("Both --standalone and --controller-quorum-voters were set. Only one of the two flags can be set.")
+    }
+
+    if(!validateControllerQuorumVoters(controllersQuorumVoters)) {
+      throw new TerseFailure("Expected schema for --controller-quorum-voters is <replica-id>[-<replica-directory-id>]@<host>:<port>")
+    }
 
     val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
     val specifiedFeatures: util.List[String] = namespace.getList("feature")
@@ -149,7 +166,7 @@ object StorageTool extends Logging {
         "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
     }
     formatCommand(System.out, directories, metaProperties, bootstrapMetadata,
-      metadataVersion, ignoreFormatted, standaloneMode, advertisedListenerEndpoints)
+      metadataVersion, ignoreFormatted, advertisedListenerEndpoints, controllersQuorumVoters)
   }
 
   private def validateMetadataVersion(metadataVersion: MetadataVersion, config: KafkaConfig): Unit = {
@@ -185,7 +202,7 @@ object StorageTool extends Logging {
       val level: java.lang.Short = specifiedFeatures.getOrElse(feature.featureName, feature.defaultValue(metadataVersionForDefault))
       // Only set feature records for levels greater than 0. 0 is assumed if there is no record. Throw an error if level < 0.
       if (level != 0) {
-       allNonZeroFeaturesAndLevels.append(feature.fromFeatureLevel(level, unstableFeatureVersionsEnabled))
+        allNonZeroFeaturesAndLevels.append(feature.fromFeatureLevel(level, unstableFeatureVersionsEnabled))
       }
     }
     val featuresMap = Features.featureImplsToMap(allNonZeroFeaturesAndLevels.asJava)
@@ -229,8 +246,8 @@ object StorageTool extends Logging {
     formatParser.addArgument("--add-scram", "-S").
       action(append()).
       help("""A SCRAM_CREDENTIAL to add to the __cluster_metadata log e.g.
-              |'SCRAM-SHA-256=[name=alice,password=alice-secret]'
-              |'SCRAM-SHA-512=[name=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
+             |'SCRAM-SHA-256=[name=alice,password=alice-secret]'
+             |'SCRAM-SHA-512=[name=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
     formatParser.addArgument("--ignore-formatted", "-g").
       action(storeTrue())
     formatParser.addArgument("--release-version", "-r").
@@ -240,10 +257,13 @@ object StorageTool extends Logging {
       help("A feature upgrade we should perform, in feature=level format. For example: `metadata.version=5`.").
       action(append())
     formatParser.addArgument("--standalone", "-s").
-      help("This command will 1) create a meta.properties file in metadata.log.dir with a randomly generated" +
-        " directory.id, 2) create a snapshot at 00000000000000000000-0000000000.checkpoint with the necessary control" +
-        " records (KRaftVersionRecord and VotersRecord) to make this Kafka node the only voter for the quorum").
-      action(storeTrue());
+      help("This flag will bootstrap the controller in standalone as the only KRaft controller if the Kafka" +
+        " cluster. Use the --controller-quorum-voters flag instead to bootstrap a controller cluster with more than one" +
+        " controller.").
+      action(storeTrue())
+    formatParser.addArgument("--controller-quorum-voters", "-q").
+      help("This flag will bootstrap a controller cluster with more than one controller.").
+      action(append())
 
     parser.parseArgsOrFail(args)
   }
@@ -258,10 +278,10 @@ object StorageTool extends Logging {
   private def configToSelfManagedMode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
 
   def getMetadataVersion(
-    namespace: Namespace,
-    featureNamesAndLevelsMap: Map[String, java.lang.Short],
-    defaultVersionString: Option[String]
-  ): MetadataVersion = {
+                          namespace: Namespace,
+                          featureNamesAndLevelsMap: Map[String, java.lang.Short],
+                          defaultVersionString: Option[String]
+                        ): MetadataVersion = {
     val defaultValue = defaultVersionString match {
       case Some(versionString) => MetadataVersion.fromVersionString(versionString)
       case None => MetadataVersion.LATEST_PRODUCTION
@@ -283,9 +303,9 @@ object StorageTool extends Logging {
   }
 
   private def getUserScramCredentialRecord(
-    mechanism: String,
-    config: String
-  ) : UserScramCredentialRecord = {
+                                            mechanism: String,
+                                            config: String
+                                          ) : UserScramCredentialRecord = {
     /*
      * Remove  '[' amd ']'
      * Split K->V pairs on ',' and no K or V should contain ','
@@ -293,9 +313,9 @@ object StorageTool extends Logging {
      * Create Map of K to V and replace all " in V
      */
     val argMap = config.substring(1, config.length - 1)
-                       .split(",")
-                       .map(_.split("=(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)"))
-                       .map(args => args(0) -> args(1).replaceAll("\"", "")).toMap
+      .split(",")
+      .map(_.split("=(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)"))
+      .map(args => args(0) -> args(1).replaceAll("\"", "")).toMap
 
     val scramMechanism = ScramMechanism.forMechanismName(mechanism)
 
@@ -318,10 +338,10 @@ object StorageTool extends Logging {
       if (argMap.contains("salt")) {
         val iterations = argMap("iterations").toInt
         if (iterations < scramMechanism.minIterations()) {
-            throw new TerseFailure(s"The 'iterations' value must be >= ${scramMechanism.minIterations()} for add-scram")
+          throw new TerseFailure(s"The 'iterations' value must be >= ${scramMechanism.minIterations()} for add-scram")
         }
         if (iterations > scramMechanism.maxIterations()) {
-            throw new TerseFailure(s"The 'iterations' value must be <= ${scramMechanism.maxIterations()} for add-scram")
+          throw new TerseFailure(s"The 'iterations' value must be <= ${scramMechanism.maxIterations()} for add-scram")
         }
         iterations
       } else {
@@ -330,22 +350,22 @@ object StorageTool extends Logging {
     }
 
     def getSaltedPassword(
-      argMap: Map[String,String],
-      scramMechanism : ScramMechanism,
-      salt : Array[Byte],
-      iterations: Int
-    ) : Array[Byte] = {
+                           argMap: Map[String,String],
+                           scramMechanism : ScramMechanism,
+                           salt : Array[Byte],
+                           iterations: Int
+                         ) : Array[Byte] = {
       if (argMap.contains("password")) {
         if (argMap.contains("saltedpassword")) {
-            throw new TerseFailure(s"You must only supply one of 'password' or 'saltedpassword' to add-scram")
+          throw new TerseFailure(s"You must only supply one of 'password' or 'saltedpassword' to add-scram")
         }
         new ScramFormatter(scramMechanism).saltedPassword(argMap("password"), salt, iterations)
       } else {
         if (!argMap.contains("saltedpassword")) {
-            throw new TerseFailure(s"You must supply one of 'password' or 'saltedpassword' to add-scram")
+          throw new TerseFailure(s"You must supply one of 'password' or 'saltedpassword' to add-scram")
         }
         if (!argMap.contains("salt")) {
-            throw new TerseFailure(s"You must supply 'salt' with 'saltedpassword' to add-scram")
+          throw new TerseFailure(s"You must supply 'salt' with 'saltedpassword' to add-scram")
         }
         Base64.getDecoder.decode(argMap("saltedpassword"))
       }
@@ -360,12 +380,12 @@ object StorageTool extends Logging {
       val formatter = new ScramFormatter(scramMechanism)
 
       new UserScramCredentialRecord()
-           .setName(name)
-           .setMechanism(scramMechanism.`type`)
-           .setSalt(salt)
-           .setStoredKey(formatter.storedKey(formatter.clientKey(saltedPassword)))
-           .setServerKey(formatter.serverKey(saltedPassword))
-           .setIterations(iterations)
+        .setName(name)
+        .setMechanism(scramMechanism.`type`)
+        .setSalt(salt)
+        .setStoredKey(formatter.storedKey(formatter.clientKey(saltedPassword)))
+        .setServerKey(formatter.serverKey(saltedPassword))
+        .setIterations(iterations)
     } catch {
       case e: Throwable =>
         throw new TerseFailure(s"Error attempting to create UserScramCredentialRecord: ${e.getMessage}")
@@ -489,8 +509,8 @@ object StorageTool extends Logging {
 
     val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
     metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-                        setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(metadataVersion.featureLevel()), 0.toShort))
+      setName(MetadataVersion.FEATURE_NAME).
+      setFeatureLevel(metadataVersion.featureLevel()), 0.toShort))
 
     metadataOptionalArguments.foreach { metadataArguments =>
       for (record <- metadataArguments) metadataRecords.add(record)
@@ -501,9 +521,9 @@ object StorageTool extends Logging {
 
 
   def buildMetadataProperties(
-    clusterIdStr: String,
-    config: KafkaConfig
-  ): MetaProperties = {
+                               clusterIdStr: String,
+                               config: KafkaConfig
+                             ): MetaProperties = {
     val effectiveClusterId = try {
       Uuid.fromString(clusterIdStr)
     } catch {
@@ -520,29 +540,29 @@ object StorageTool extends Logging {
   }
 
   def formatCommand(
-    stream: PrintStream,
-    directories: Seq[String],
-    metaProperties: MetaProperties,
-    metadataVersion: MetadataVersion,
-    ignoreFormatted: Boolean,
-    standaloneMode: Boolean,
-    advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint]
-  ): Int = {
+                     stream: PrintStream,
+                     directories: Seq[String],
+                     metaProperties: MetaProperties,
+                     metadataVersion: MetadataVersion,
+                     ignoreFormatted: Boolean,
+                     advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint],
+                     controllersQuorumVoters: String
+                   ): Int = {
     val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, None, "format command")
     formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted,
-      standaloneMode, advertisedListenerEndpoints)
+      advertisedListenerEndpoints, controllersQuorumVoters)
   }
 
   def formatCommand(
-    stream: PrintStream,
-    directories: Seq[String],
-    metaProperties: MetaProperties,
-    bootstrapMetadata: BootstrapMetadata,
-    metadataVersion: MetadataVersion,
-    ignoreFormatted: Boolean,
-    standaloneMode: Boolean,
-    advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint]
-  ): Int = {
+                     stream: PrintStream,
+                     directories: Seq[String],
+                     metaProperties: MetaProperties,
+                     bootstrapMetadata: BootstrapMetadata,
+                     metadataVersion: MetadataVersion,
+                     ignoreFormatted: Boolean,
+                     advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint],
+                     controllersQuorumVoters: String
+                   ): Int = {
     if (directories.isEmpty) {
       throw new TerseFailure("No log directories found in the configuration.")
     }
@@ -570,7 +590,6 @@ object StorageTool extends Logging {
     if (metaPropertiesEnsemble.emptyLogDirs().isEmpty) {
       stream.println("All of the log directories are already formatted.")
     } else {
-      val directoryId = copier.generateValidDirectoryId()
       metaPropertiesEnsemble.emptyLogDirs().forEach(logDir => {
         copier.setLogDirProps(logDir, new MetaProperties.Builder(metaProperties).
           setDirectoryId(copier.generateValidDirectoryId()).
@@ -584,12 +603,30 @@ object StorageTool extends Logging {
         copier.setWriteErrorHandler((logDir, e) => {
           throw new TerseFailure(s"Error while writing meta.properties file $logDir: ${e.getMessage}")
         })
-        // Write new file checkpoint file if standalone mode
-        if (standaloneMode) {
-          writeCheckpointFile(stream, logDir, directoryId, advertisedListenerEndpoints)
-        }
       })
       copier.writeLogDirChanges()
+      if (advertisedListenerEndpoints.nonEmpty) {
+        metaPropertiesEnsemble.emptyLogDirs().forEach(logDir => {
+          val listeners: java.util.Map[ListenerName, InetSocketAddress] = new util.HashMap()
+          advertisedListenerEndpoints.foreach(endpoint => {
+            listeners.put(endpoint.listenerName, new InetSocketAddress(endpoint.host, endpoint.port))
+          })
+          writeCheckpointFile(stream, logDir, copier.logDirProps().get(logDir), listeners)
+        })
+      }else if (controllersQuorumVoters != null) {
+        metaPropertiesEnsemble.emptyLogDirs().forEach(logDir => {
+          val nodeId = copier.logDirProps().get(logDir).nodeId()
+          val voterMap: util.Map[Integer, InetSocketAddress] = parseVoterConnections(Collections.singletonList(controllersQuorumVoters))
+          val listeners: java.util.Map[ListenerName, InetSocketAddress] = new util.HashMap()
+          voterMap.keySet().forEach(replicaId => {
+            if (nodeId.getAsInt == replicaId){
+              listeners.put(new ListenerName(SecurityProtocol.PLAINTEXT.name), voterMap.get(replicaId))
+            }
+          })
+          // write only once for all listeners
+          writeCheckpointFile(stream, logDir, copier.logDirProps().get(logDir), listeners)
+        })
+      }
     }
     0
   }
@@ -617,55 +654,46 @@ object StorageTool extends Logging {
     }.toMap
   }
 
-  def writeCheckpointFile(stream: PrintStream, logDir: String, directoryId: Uuid,
-                          advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint]): Unit = {
-    val snapshotCheckpointDir = logDir + clusterMetadataDir
-
-    // Ensure the directory exists
-    val snapshotDir = Paths.get(snapshotCheckpointDir)
-    if (!Files.exists(snapshotDir)) {
-      Files.createDirectories(snapshotDir)
-    }
-
-    // Create the full path for the checkpoint file
-    val checkpointFilePath = snapshotDir.resolve(snapshotDir)
-
+  def writeCheckpointFile(stream: PrintStream, logDir: String, metaProperties: MetaProperties,
+                          listeners: java.util.Map[ListenerName, InetSocketAddress]): Unit = {
+    val snapshotDir = createLogDirectory(new File(logDir), CLUSTER_METADATA_TOPIC_NAME)
     // Create the raw snapshot writer
-    val rawSnapshotWriter = FileRawSnapshotWriter.create(checkpointFilePath, new OffsetAndEpoch(0, 0))
+    val rawSnapshotWriter = FileRawSnapshotWriter.create(snapshotDir.toPath, BOOTSTRAP_SNAPSHOT_ID)
 
-    if(advertisedListenerEndpoints.nonEmpty){
-      val voterSet: VoterSet = getVoterSet(directoryId, advertisedListenerEndpoints)
+    if(!listeners.isEmpty){
+      if (!metaProperties.nodeId().isPresent) {
+        throw new TerseFailure(s"Error while formatting. node.id is missing in the meta.properties")
+      }
 
+      val voterSet: VoterSet = getVoterSet(metaProperties.nodeId(), metaProperties.directoryId().get(), listeners)
       val builder = new RecordsSnapshotWriter.Builder()
         .setKraftVersion(1)
         .setVoterSet(Optional.of(voterSet))
-        .setRawSnapshotWriter(rawSnapshotWriter).build(new StringSerde)
-
-      // Close the builder to finalize the snapshot
-      builder.freeze()
-      builder.close()
-      stream.println(s"Snapshot written to $checkpointFilePath")
+        .setRawSnapshotWriter(rawSnapshotWriter)
+        .build(new StringSerde)
+      try{
+        builder.freeze()
+      } finally{
+        // Close the builder to finalize the snapshot
+        builder.close()
+        stream.println(s"Snapshot written to $snapshotDir")
+      }
     }
   }
 
-  private def getVoterSet(directoryId: Uuid, advertisedListenerEndpoints: collection.Seq[EndPoint]) = {
-    // Create a VotersRecord endpoint collection
-    val endpointCollection = new VotersRecord.EndpointCollection()
-    advertisedListenerEndpoints.foreach(endpoint => {
-      endpointCollection.add(new VotersRecord.Endpoint().setName(endpoint.listenerName.value())
-        .setHost(endpoint.host).setPort(endpoint.port))
-    })
-
-    // Create voters
-    val voters: util.List[VotersRecord.Voter] = new util.ArrayList()
-    voters.add(new VotersRecord.Voter()
-      .setVoterId(1)
-      .setVoterDirectoryId(directoryId)
-      .setEndpoints(endpointCollection))
-
-    // Create Voter set
-    val voterNewRecord = new VotersRecord().setVersion(1).setVoters(voters)
-    val voterSet = VoterSet.fromVotersRecord(voterNewRecord)
+  private def getVoterSet(nodeId: OptionalInt, directoryId: Uuid, listeners: java.util.Map[ListenerName, InetSocketAddress]) = {
+    val voters: util.Map[Integer, VoterSet.VoterNode] = new util.HashMap[Integer, VoterSet.VoterNode]()
+    voters.put(nodeId.getAsInt, new VoterSet.VoterNode(ReplicaKey.of(nodeId.getAsInt, Optional.of(directoryId)), listeners,
+      new SupportedVersionRange(0, 1)))
+    val voterSet = VoterSet.fromMap(voters)
     voterSet
   }
+
+  private def createLogDirectory(logDir: File, logDirName: String): File = {
+    val logDirPath = logDir.getAbsolutePath
+    val dir = new File(logDirPath, logDirName)
+    Files.createDirectories(dir.toPath)
+    dir
+  }
+
 }

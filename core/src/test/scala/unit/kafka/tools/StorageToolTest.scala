@@ -26,7 +26,6 @@ import java.util
 import java.util.{Collections, Properties}
 import org.apache.kafka.common.{DirectoryId, KafkaException}
 import kafka.server.KafkaConfig
-import kafka.tools.StorageTool.clusterMetadataDir
 import kafka.utils.Exit
 import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.Namespace
@@ -193,10 +192,14 @@ Found problem:
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata,
 <<<<<<< HEAD
+<<<<<<< HEAD
           MetadataVersion.latestTesting(), ignoreFormatted = false,
           advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null))
 =======
           MetadataVersion.latestTesting(), ignoreFormatted = false, standaloneMode = false,
+=======
+          MetadataVersion.latestTesting(), ignoreFormatted = false,
+>>>>>>> 484aa1a709 (From review)
           advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint]))
 >>>>>>> b626dbfe9d (Update voterset, test)
       assertTrue(stringAfterFirstLine(stream.toString()).startsWith("Formatting %s".format(tempDir)))
@@ -204,10 +207,14 @@ Found problem:
       try assertEquals(1, StorageTool.
         formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties,
 <<<<<<< HEAD
+<<<<<<< HEAD
           bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false,
           advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null)) catch {
 =======
           bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false, standaloneMode = false,
+=======
+          bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false,
+>>>>>>> 484aa1a709 (From review)
           advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint])) catch {
 >>>>>>> b626dbfe9d (Update voterset, test)
         case e: TerseFailure => assertEquals(s"Log directory ${tempDir} is already " +
@@ -219,10 +226,14 @@ Found problem:
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, bootstrapMetadata,
 <<<<<<< HEAD
+<<<<<<< HEAD
           MetadataVersion.latestTesting(), ignoreFormatted = true,
           advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null))
 =======
           MetadataVersion.latestTesting(), ignoreFormatted = true, standaloneMode = false,
+=======
+          MetadataVersion.latestTesting(), ignoreFormatted = true,
+>>>>>>> 484aa1a709 (From review)
           advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint]))
 >>>>>>> b626dbfe9d (Update voterset, test)
       assertEquals("All of the log directories are already formatted.%n".format(), stringAfterFirstLine(stream2.toString()))
@@ -250,6 +261,7 @@ Found problem:
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata,
 <<<<<<< HEAD
+<<<<<<< HEAD
           MetadataVersion.latestTesting(), ignoreFormatted = false,
           updatedAdvertisedListenerEndpoints, null))
       val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
@@ -263,6 +275,13 @@ Found problem:
         "\n" + "Formatting %s".format(tempDir)))
       val checkpointFilePath = Paths.get(checkpointDir + "/"+ checkpointFileName)
 >>>>>>> b626dbfe9d (Update voterset, test)
+=======
+          MetadataVersion.latestTesting(), ignoreFormatted = false,
+          updatedAdvertisedListenerEndpoints))
+      val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
+      assertTrue(stringAfterFirstLine(stream.toString()).contains("Snapshot written to %s".format(checkpointDir)))
+      val checkpointFilePath = Snapshots.snapshotPath(Paths.get(checkpointDir), BOOTSTRAP_SNAPSHOT_ID)
+>>>>>>> 484aa1a709 (From review)
       assertTrue(checkpointFilePath.toFile.exists)
       assertTrue(Utils.readFileAsString(checkpointFilePath.toFile.getPath).contains(host))
     } finally Utils.delete(tempDir)
@@ -282,10 +301,14 @@ Found problem:
     val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
     StorageTool.formatCommand(new PrintStream(stream), directories, metaProperties, bootstrapMetadata,
 <<<<<<< HEAD
+<<<<<<< HEAD
       MetadataVersion.latestTesting(), ignoreFormatted,
       advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null)
 =======
       MetadataVersion.latestTesting(), ignoreFormatted, standaloneMode = false,
+=======
+      MetadataVersion.latestTesting(), ignoreFormatted,
+>>>>>>> 484aa1a709 (From review)
       advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint])
 >>>>>>> b626dbfe9d (Update voterset, test)
   }
@@ -688,10 +711,14 @@ Found problem:
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties,
 <<<<<<< HEAD
+<<<<<<< HEAD
           bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false,
           advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null))
 =======
           bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false, standaloneMode = false,
+=======
+          bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false,
+>>>>>>> 484aa1a709 (From review)
           advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint]))
 >>>>>>> b626dbfe9d (Update voterset, test)
 
