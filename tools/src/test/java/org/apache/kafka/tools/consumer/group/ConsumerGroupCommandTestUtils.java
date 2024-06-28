@@ -22,8 +22,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.Features;
-import org.apache.kafka.server.common.GroupVersion;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -43,7 +41,6 @@ import java.util.stream.Stream;
 
 import static kafka.test.annotation.Type.CO_KRAFT;
 import static kafka.test.annotation.Type.KRAFT;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
@@ -63,11 +60,9 @@ class ConsumerGroupCommandTestUtils {
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
         serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
-        serverProperties.put(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer");
 
         return Collections.singletonList(ClusterConfig.defaultBuilder()
                 .setTypes(Stream.of(KRAFT, CO_KRAFT).collect(Collectors.toSet()))
-                .setFeatures(Collections.singletonMap(Features.GROUP_VERSION, GroupVersion.GV_1.featureLevel()))
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("consumerGroupCoordinator"))
                 .build());

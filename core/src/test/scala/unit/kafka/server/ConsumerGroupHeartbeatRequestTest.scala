@@ -17,14 +17,13 @@
 package kafka.server
 
 import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterFeature, ClusterTest, Type}
+import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse}
-import org.apache.kafka.server.common.Features
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull}
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -37,7 +36,7 @@ import scala.jdk.CollectionConverters._
 class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest()
-  def testConsumerGroupHeartbeatIsInaccessibleWhenDisabledByStaticConfig(): Unit = {
+  def testConsumerGroupHeartbeatIsAccessibleWhenEnabled(): Unit = {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
       new ConsumerGroupHeartbeatRequestData()
     ).build()
@@ -47,35 +46,11 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertEquals(expectedResponse, consumerGroupHeartbeatResponse.data)
   }
 
-  @ClusterTest(
-    types = Array(Type.KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-    )
-  )
-  def testConsumerGroupHeartbeatIsInaccessibleWhenDisabledByGroupVersion(): Unit = {
-    val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
-      new ConsumerGroupHeartbeatRequestData()
-    ).build()
-
-    val consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
-    val expectedResponse = new ConsumerGroupHeartbeatResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-    assertEquals(expectedResponse, consumerGroupHeartbeatResponse.data)
-  }
-
-  @ClusterTest(
-    types = Array(Type.KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-    ),
-    features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
-    )
-  )
+  @ClusterTest(types = Array(Type.KRAFT), serverProperties = Array(
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+  ))
   def testConsumerGroupHeartbeatIsAccessibleWhenNewGroupCoordinatorIsEnabled(): Unit = {
     val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.createAdminClient()
@@ -159,17 +134,11 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertEquals(-1, consumerGroupHeartbeatResponse.data.memberEpoch)
   }
 
-  @ClusterTest(
-    types = Array(Type.KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-    ),
-    features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
-    )
-  )
+  @ClusterTest(types = Array(Type.KRAFT), serverProperties = Array(
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+  ))
   def testRejoiningStaticMemberGetsAssignmentsBackWhenNewGroupCoordinatorIsEnabled(): Unit = {
     val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.createAdminClient()
@@ -279,19 +248,13 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertNotEquals(oldMemberId, consumerGroupHeartbeatResponse.data.memberId)
   }
 
-  @ClusterTest(
-    types = Array(Type.KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-      new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "5000"),
-      new ClusterConfigProperty(key = "group.consumer.min.session.timeout.ms", value = "5000")
-    ),
-    features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
-    )
-  )
+  @ClusterTest(types = Array(Type.KRAFT), serverProperties = Array(
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+    new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "5000"),
+    new ClusterConfigProperty(key = "group.consumer.min.session.timeout.ms", value = "5000")
+  ))
   def testStaticMemberRemovedAfterSessionTimeoutExpiryWhenNewGroupCoordinatorIsEnabled(): Unit = {
     val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.createAdminClient()

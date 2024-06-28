@@ -85,10 +85,7 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             0,
             false
         ).foreach(props -> {
-            if (isNewGroupCoordinatorEnabled()) {
-                props.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
-                props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer");
-            }
+            props.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, isNewGroupCoordinatorEnabled() + "");
             cfgs.add(KafkaConfig.fromProps(props));
             return null;
         });
