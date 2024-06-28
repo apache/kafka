@@ -91,13 +91,12 @@ public class ApiKeysTest {
     @Test
     public void testHtmlOnlyHaveStableApi() {
         String html = ApiKeys.toHtml();
-        ApiKeys.clientApis()
-            .stream()
-            .filter(apiKeys -> !apiKeys.messageType.latestVersionUnstable())
-            .forEach(apiKey -> assertTrue(html.contains(apiKey.name), "Html should contain " + apiKey.name));
-        ApiKeys.clientApis()
-            .stream()
-            .filter(apiKeys -> apiKeys.messageType.latestVersionUnstable())
-            .forEach(apiKey -> assertFalse(html.contains(apiKey.name), "Html should not contain " + apiKey.name));
+        for (ApiKeys apiKeys : ApiKeys.clientApis()) {
+            if (apiKeys.messageType.latestVersionUnstable()) {
+                assertFalse(html.contains(apiKeys.name), "Html should not contain unstable api: " + apiKeys.name);
+            } else {
+                assertTrue(html.contains(apiKeys.name), "Html should contain stable api: " + apiKeys.name);
+            }
+        }
     }
 }
