@@ -298,7 +298,7 @@ public class QuorumControllerTest {
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
                         setIncarnationId(Uuid.randomUuid()).
                         setListeners(listeners));
                 brokerEpochs.put(brokerId, reply.get().epoch());

@@ -62,7 +62,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   override def generateConfigs: Seq[KafkaConfig] = {
-
     val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     configureListeners(cfgs)
