@@ -493,7 +493,7 @@ public class HeartbeatRequestManager implements RequestManager {
         }
 
         // Visible for testing
-        protected Timer heartbeatTimer() {
+        Timer heartbeatTimer() {
             return heartbeatTimer;
         }
 
