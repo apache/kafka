@@ -50,8 +50,7 @@ public class TransactionLogMessageFormatterTest {
             .setTransactionTimeoutMs(500)
             .setTransactionPartitions(emptyList());
     private static final String TOPIC = "TOPIC";
-
-
+    
     private static Stream<Arguments> parameters() {
         return Stream.of(
                 Arguments.of(
