@@ -23,8 +23,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.Features;
-import org.apache.kafka.server.common.GroupVersion;
 
 import java.time.Duration;
 import java.util.ArrayList;
