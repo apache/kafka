@@ -1665,7 +1665,6 @@ public final class Utils {
         configDefs.forEach(configDef -> configDef.configKeys().values().forEach(all::define));
         return all;
     }
-
     /**
      * A runnable that can throw checked exception.
      */
