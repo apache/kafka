@@ -302,6 +302,7 @@ public class RequestManagers implements Closeable {
                         backgroundEventHandler,
                         metrics);
                 ShareConsumeRequestManager shareConsumeRequestManager = new ShareConsumeRequestManager(
+                        time,
                         logContext,
                         groupRebalanceConfig.groupId,
                         metadata,

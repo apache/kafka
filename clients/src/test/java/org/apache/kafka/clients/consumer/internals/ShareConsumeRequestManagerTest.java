@@ -305,7 +305,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements.add(3L, AcknowledgeType.REJECT);
 
-        fetcher.commitSync(time.milliseconds() + 2000, Collections.singletonMap(tip0, acknowledgements));
+        fetcher.commitSync(Collections.singletonMap(tip0, acknowledgements), time.milliseconds() + 2000);
 
         assertEquals(1, fetcher.sendAcknowledgements());
 
@@ -865,7 +865,7 @@ public class ShareConsumeRequestManagerTest {
                                                   BackgroundEventHandler backgroundEventHandler,
                                                   ShareFetchMetricsManager metricsManager,
                                                   ShareFetchCollector<K, V> fetchCollector) {
-            super(logContext, groupId, metadata, subscriptions, fetchConfig, shareFetchBuffer,
+            super(time, logContext, groupId, metadata, subscriptions, fetchConfig, shareFetchBuffer,
                     backgroundEventHandler, metricsManager, retryBackoffMs, 1000);
             this.shareFetchCollector = fetchCollector;
             onMemberEpochUpdated(Optional.empty(), Optional.of(Uuid.randomUuid().toString()));

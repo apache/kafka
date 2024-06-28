@@ -310,7 +310,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
         ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
         CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future =
-                manager.commitSync(event.deadlineMs(), event.acknowledgementsMap());
+                manager.commitSync(event.acknowledgementsMap(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 

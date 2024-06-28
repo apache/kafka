@@ -148,6 +148,7 @@ public class ShareConsumerTestBuilder implements Closeable {
 
         ShareFetchBuffer fetchBuffer = new ShareFetchBuffer(logContext);
         ShareConsumeRequestManager consumeRequestManager = spy(new ShareConsumeRequestManager(
+                time,
                 logContext,
                 groupRebalanceConfig.groupId,
                 metadata,
