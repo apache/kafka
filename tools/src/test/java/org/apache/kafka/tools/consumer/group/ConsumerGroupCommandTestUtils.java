@@ -93,7 +93,6 @@ class ConsumerGroupCommandTestUtils {
         serverProperties.put(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer");
 
         return Collections.singletonList(ClusterConfig.defaultBuilder()
-                .setFeatures(Collections.singletonMap(Features.GROUP_VERSION, GroupVersion.GV_1.featureLevel()))
                 .setTypes(Collections.singleton(CO_KRAFT))
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("consumerGroupCoordinator"))

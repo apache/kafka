@@ -28,7 +28,6 @@ import org.apache.kafka.common.requests.{ConsumerGroupDescribeRequest, ConsumerG
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.common.Features
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{Tag, Timeout}
@@ -99,9 +98,6 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
       new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-    ),
-    features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
     )
   )
   def testConsumerGroupDescribeWithNewGroupCoordinator(): Unit = {
