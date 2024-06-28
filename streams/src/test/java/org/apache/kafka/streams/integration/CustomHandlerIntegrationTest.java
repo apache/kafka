@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -133,11 +134,6 @@ public class CustomHandlerIntegrationTest {
         kafkaStreams.close();
         kafkaStreams.cleanUp();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        final long timeout = 60000;
-        TestUtils.waitForCondition(
-                () -> kafkaStreams.state() == State.NOT_RUNNING,
-                timeout,
-                () -> "Kafka Streams application did not reach state NOT_RUNNING in " + timeout + " ms");
     }
 
     @Test
@@ -155,10 +151,14 @@ public class CustomHandlerIntegrationTest {
                 () -> "Kafka Streams application did not reach state RUNNING in " + timeout + " ms");
         while (true) {
             if (caughtException.get() != null) {
-                assertInstanceOf(StreamsException.class, caughtException.get());
-                assertInstanceOf(TimeoutException.class, caughtException.get().getCause());
+                final Throwable throwable = caughtException.get();
+                assertInstanceOf(StreamsException.class, throwable);
+                assertInstanceOf(TimeoutException.class, throwable.getCause());
+                assertInstanceOf(UnknownTopicOrPartitionException.class, throwable.getCause().getCause());
                 closeApplication(streamsConfiguration);
                 break;
+            } else {
+                Thread.sleep(100);
             }
         }
     }

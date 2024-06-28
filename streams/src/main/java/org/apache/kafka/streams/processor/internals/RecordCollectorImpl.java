@@ -326,9 +326,14 @@ public class RecordCollectorImpl implements RecordCollector {
         log.error(errorMessage, exception);
     }
 
+    /**
+     * The `TimeoutException` with root cause `UnknownTopicOrPartitionException` is considered as non-retriable
+     * (despite `TimeoutException` being a subclass of `RetriableException`, this particular case is explicitly excluded).
+    */
     private boolean isRetriable(final Exception exception) {
-        return (!(exception instanceof TimeoutException) || exception.getCause() == null
-                || !(exception.getCause() instanceof UnknownTopicOrPartitionException)) && exception instanceof RetriableException;
+        return exception instanceof RetriableException &&
+                (!(exception instanceof TimeoutException) || exception.getCause() == null
+                        || !(exception.getCause() instanceof UnknownTopicOrPartitionException));
     }
 
     private boolean isFatalException(final Exception exception) {
