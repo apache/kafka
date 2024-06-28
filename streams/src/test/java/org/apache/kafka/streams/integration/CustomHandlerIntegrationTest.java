@@ -120,6 +120,7 @@ public class CustomHandlerIntegrationTest {
                 CLUSTER.time.milliseconds() + 2
         );
     }
+
     private Properties getCommonProperties() {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
@@ -134,11 +135,6 @@ public class CustomHandlerIntegrationTest {
         kafkaStreams.close();
         kafkaStreams.cleanUp();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        final long timeout = 60000;
-        TestUtils.waitForCondition(
-                () -> kafkaStreams.state() == State.ERROR,
-                timeout,
-                () -> "Kafka Streams application did not reach state NOT_RUNNING in " + timeout + " ms");
     }
 
     @Test
