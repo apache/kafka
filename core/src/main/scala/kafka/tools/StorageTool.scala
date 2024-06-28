@@ -683,7 +683,7 @@ object StorageTool extends Logging {
 
   private def getVoterSet(nodeId: OptionalInt, directoryId: Uuid, listeners: java.util.Map[ListenerName, InetSocketAddress]) = {
     val voters: util.Map[Integer, VoterSet.VoterNode] = new util.HashMap[Integer, VoterSet.VoterNode]()
-    voters.put(nodeId.getAsInt, new VoterSet.VoterNode(ReplicaKey.of(nodeId.getAsInt, Optional.of(directoryId)), listeners,
+    voters.put(nodeId.getAsInt, new VoterSet.VoterNode(ReplicaKey.of(nodeId.getAsInt, directoryId), listeners,
       new SupportedVersionRange(0, 1)))
     val voterSet = VoterSet.fromMap(voters)
     voterSet
