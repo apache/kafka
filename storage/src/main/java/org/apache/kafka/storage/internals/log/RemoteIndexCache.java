@@ -545,7 +545,7 @@ public class RemoteIndexCache implements Closeable {
         private long estimatedEntrySize() {
             entryLock.readLock().lock();
             try {
-                return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.file().toPath());
+                return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.path());
             } catch (IOException e) {
                 log.warn("Error occurred when estimating remote index cache entry bytes size, just set 0 firstly.", e);
                 return 0L;

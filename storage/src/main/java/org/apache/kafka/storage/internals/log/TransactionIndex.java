@@ -68,7 +68,11 @@ public class TransactionIndex implements Closeable {
 
     public TransactionIndex(long startOffset, File file) throws IOException {
         this.startOffset = startOffset;
-        this.txnFile = new TransactionIndexFile(file);
+        this.txnFile = new TransactionIndexFile(file.toPath());
+    }
+
+    public Path path() {
+        return txnFile.path();
     }
 
     public File file() {
@@ -76,7 +80,11 @@ public class TransactionIndex implements Closeable {
     }
 
     public void updateParentDir(File parentDir) {
-        txnFile.updateParentDir(parentDir);
+        txnFile.updateParentDir(parentDir.toPath());
+    }
+
+    public void renameTo(File f) throws IOException {
+        txnFile.renameTo(f.toPath());
     }
 
     public void flush() throws IOException {
@@ -104,10 +112,6 @@ public class TransactionIndex implements Closeable {
      */
     public boolean deleteIfExists() throws IOException {
         return txnFile.deleteIfExists();
-    }
-
-    public void renameTo(File f) throws IOException {
-        txnFile.renameTo(f);
     }
 
     public void append(AbortedTxn abortedTxn) throws IOException {
@@ -234,25 +238,29 @@ public class TransactionIndex implements Closeable {
     // Visible for testing
     static class TransactionIndexFile {
         // note that the file is not created until we need it
-        private volatile File file;
+        private Path path;
         // channel is reopened as long as there are reads and writes
         private FileChannel channel;
 
-        TransactionIndexFile(File file) throws IOException {
-            this.file = file;
+        TransactionIndexFile(Path path) throws IOException {
+            this.path = path;
 
-            if (file.exists())
+            if (Files.exists(path))
                 openChannel();
         }
 
         private void openChannel() throws IOException {
             channel = FileChannel.open(
-                file.toPath(),
+                path,
                 StandardOpenOption.CREATE,
                 StandardOpenOption.READ,
                 StandardOpenOption.WRITE
             );
             channel.position(channel.size());
+        }
+
+        synchronized void updateParentDir(Path parentDir) {
+            this.path = parentDir.resolve(path.getFileName());
         }
 
         /**
@@ -276,8 +284,13 @@ public class TransactionIndex implements Closeable {
             return channel;
         }
 
-        synchronized void updateParentDir(File parentDir) {
-            file = new File(parentDir, file.getName());
+        void renameTo(Path other) throws IOException {
+            try {
+                if (Files.exists(path))
+                    Utils.atomicMoveWithFallback(path, other, false);
+            } finally {
+                this.path = other;
+            }
         }
 
         void flush() throws IOException {
@@ -291,16 +304,7 @@ public class TransactionIndex implements Closeable {
         }
 
         Path path() {
-            return file.toPath();
-        }
-
-        void renameTo(File f) throws IOException {
-            try {
-                if (file.exists())
-                    Utils.atomicMoveWithFallback(file.toPath(), f.toPath(), false);
-            } finally {
-                this.file = f;
-            }
+            return path;
         }
 
         void truncate(long position) throws IOException {
@@ -309,7 +313,7 @@ public class TransactionIndex implements Closeable {
         }
 
         boolean exists() {
-            return file.exists();
+            return Files.exists(path);
         }
 
         boolean deleteIfExists() throws IOException {
