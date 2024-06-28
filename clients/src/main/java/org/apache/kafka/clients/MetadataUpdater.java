@@ -24,6 +24,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
 import java.io.Closeable;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,6 +40,8 @@ public interface MetadataUpdater extends Closeable {
      * Gets the current cluster info without blocking.
      */
     List<Node> fetchNodes();
+
+    void bootstrap(List<InetSocketAddress> addresses);
 
     /**
      * Returns true if an update to the cluster metadata info is due.

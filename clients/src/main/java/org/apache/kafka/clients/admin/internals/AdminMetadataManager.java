@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
+import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -102,6 +103,11 @@ public class AdminMetadataManager {
         @Override
         public List<Node> fetchNodes() {
             return cluster.nodes();
+        }
+
+        @Override
+        public void bootstrap(List<InetSocketAddress> addresses) {
+
         }
 
         @Override

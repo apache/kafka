@@ -177,8 +177,10 @@ class NodeToControllerChannelManagerImpl(
         logContext
       )
       new NetworkClient(
-        selector,
+        config,
         manualMetadataUpdater,
+        null,
+        selector,
         config.brokerId.toString,
         1,
         50,
@@ -191,7 +193,10 @@ class NodeToControllerChannelManagerImpl(
         time,
         true,
         apiVersions,
+        null,
         logContext,
+        null,
+        null,
         MetadataRecoveryStrategy.NONE
       )
     }
