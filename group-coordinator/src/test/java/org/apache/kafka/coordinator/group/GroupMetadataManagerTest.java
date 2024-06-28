@@ -997,6 +997,7 @@ public class GroupMetadataManagerTest {
             .setInstanceId(memberId1)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
+            .setRebalanceTimeoutMs(5000)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
@@ -1173,9 +1174,10 @@ public class GroupMetadataManagerTest {
             .setInstanceId("instance-id-1")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
+            .setRebalanceTimeoutMs(5000)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(Arrays.asList("foo"))
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2)))
@@ -1188,7 +1190,7 @@ public class GroupMetadataManagerTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(Arrays.asList("foo"))
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 3, 4, 5)))
@@ -1223,7 +1225,6 @@ public class GroupMetadataManagerTest {
                     put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)
                     )));
-                    // When the member rejoins, it gets the same assignments.
                     put(member2RejoinId, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
                         mkTopicAssignment(barTopicId, 0, 1, 2)
@@ -1293,7 +1294,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setRebalanceTimeoutMs(5000)
-            .setSubscribedTopicNames(Arrays.asList("foo"))
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 3, 4, 5)))
