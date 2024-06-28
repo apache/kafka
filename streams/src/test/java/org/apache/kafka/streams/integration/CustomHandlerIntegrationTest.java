@@ -134,6 +134,11 @@ public class CustomHandlerIntegrationTest {
         kafkaStreams.close();
         kafkaStreams.cleanUp();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+        final long timeout = 60000;
+        TestUtils.waitForCondition(
+                () -> kafkaStreams.state() == State.ERROR,
+                timeout,
+                () -> "Kafka Streams application did not reach state NOT_RUNNING in " + timeout + " ms");
     }
 
     @Test
