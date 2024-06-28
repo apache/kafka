@@ -42,8 +42,7 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
     private static final String DATA = "data";
     private static final String KEY = "key";
     private static final String VALUE = "value";
-
-
+    
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
         ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
