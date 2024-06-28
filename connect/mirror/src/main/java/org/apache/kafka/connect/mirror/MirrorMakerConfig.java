@@ -290,11 +290,6 @@ public class MirrorMakerConfig extends AbstractConfig {
                 .define(CLUSTERS_CONFIG, Type.LIST, Importance.HIGH, CLUSTERS_DOC)
                 .define(ENABLE_INTERNAL_REST_CONFIG, Type.BOOLEAN, false, Importance.HIGH, ENABLE_INTERNAL_REST_DOC)
                 .define(CONFIG_PROVIDERS_CONFIG, Type.LIST, Collections.emptyList(), Importance.LOW, CONFIG_PROVIDERS_DOC)
-                .define(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED,
-                        ConfigDef.Type.BOOLEAN,
-                        MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED_DEFAULT,
-                        ConfigDef.Importance.LOW,
-                        MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED_DOC)
                 // security support
                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                         Type.STRING,

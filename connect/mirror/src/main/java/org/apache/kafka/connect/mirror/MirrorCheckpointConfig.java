@@ -17,12 +17,15 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.utils.ConfigUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -170,19 +173,27 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }
 
-    public boolean validate() {
+    public List<ConfigValue> validate() {
+        List<ConfigValue> invalidConfigs = new ArrayList<>();
+
         if (!this.getBoolean(EMIT_CHECKPOINTS_ENABLED) && !this.getBoolean(SYNC_GROUP_OFFSETS_ENABLED)) {
-            LOG.warn("MirrorCheckpointConnector can't run without both " + SYNC_GROUP_OFFSETS_ENABLED + ", " +
-                    EMIT_CHECKPOINTS_ENABLED + " set to false");
-            return false;
+            Arrays.asList(new ConfigValue(SYNC_GROUP_OFFSETS_ENABLED), new ConfigValue(EMIT_CHECKPOINTS_ENABLED))
+                    .forEach(configValue -> {
+                        configValue.addErrorMessage("MirrorCheckpointConnector can't run without both " + SYNC_GROUP_OFFSETS_ENABLED + ", " +
+                                EMIT_CHECKPOINTS_ENABLED + " set to false");
+                        invalidConfigs.add(configValue);
+                    });
         }
 
         if ("false".equals(Optional.ofNullable(this.originals().get(EMIT_OFFSET_SYNCS_ENABLED)).orElse("true"))) {
-            LOG.warn("MirrorCheckpointConnector can't run with " + EMIT_OFFSET_SYNCS_ENABLED + " set to false while, " +
-                    EMIT_CHECKPOINTS_ENABLED  + " and/or" + SYNC_GROUP_OFFSETS_ENABLED + " set to true");
-            return false;
+            Arrays.asList(new ConfigValue(SYNC_GROUP_OFFSETS_ENABLED), new ConfigValue(EMIT_CHECKPOINTS_ENABLED), new ConfigValue(EMIT_OFFSET_SYNCS_ENABLED))
+                    .forEach(configValue -> {
+                        configValue.addErrorMessage("MirrorCheckpointConnector can't run with " + EMIT_OFFSET_SYNCS_ENABLED + " set to false while, " +
+                                EMIT_CHECKPOINTS_ENABLED  + " and/or" + SYNC_GROUP_OFFSETS_ENABLED + " set to true");
+                        invalidConfigs.add(configValue);
+                    });
         }
-        return true;
+        return invalidConfigs;
     }
 
     private static ConfigDef defineCheckpointConfig(ConfigDef baseConfig) {

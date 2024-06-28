@@ -46,6 +46,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -62,7 +63,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorMaker.CONNECTOR_CLASSES;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
@@ -219,8 +220,6 @@ public class DedicatedMirrorIntegrationTest {
                     put(b + ".bootstrap.servers", clusterB.bootstrapServers());
                     put(ab + ".enabled", "true");
                     put(ab + ".topics", "^" + testTopicPrefix + ".*");
-                    put(ba + ".enabled", "false");
-                    put(ba + ".emit.heartbeats.enabled", "false");
                     put("replication.factor", "1");
                     put("checkpoints.topic.replication.factor", "1");
                     put("heartbeats.topic.replication.factor", "1");
@@ -228,18 +227,16 @@ public class DedicatedMirrorIntegrationTest {
                     put("status.storage.replication.factor", "1");
                     put("offset.storage.replication.factor", "1");
                     put("config.storage.replication.factor", "1");
-                    put("replication.factor", "1");
-                    put("checkpoints.topic.replication.factor", "1");
-                    put("heartbeats.topic.replication.factor", "1");
                 }};
 
             // Bring up a single-node cluster
             final MirrorMaker mm = startMirrorMaker("no-offset-syncing", mmProps);
             final SourceAndTarget sourceAndTarget = new SourceAndTarget(a, b);
-            awaitMirrorMakerStart(mm, sourceAndTarget);
+            awaitMirrorMakerStart(mm, sourceAndTarget, Arrays.asList(MirrorSourceConnector.class, MirrorHeartbeatConnector.class));
 
-            // wait for heartbeat connector to start a task
+            // wait for mirror source and heartbeat connectors to start a task
             awaitConnectorTasksStart(mm, MirrorHeartbeatConnector.class, sourceAndTarget);
+            assertThrows(NotFoundException.class, () -> isTaskRunningForMirrorMakerConnector(MirrorCheckpointConnector.class, mm, sourceAndTarget));
 
             final int numMessages = 10;
             String topic = testTopicPrefix + "1";
@@ -265,7 +262,6 @@ public class DedicatedMirrorIntegrationTest {
                     .collect(Collectors.toList());
 
             assertTrue(offsetSyncTopic.isEmpty());
-            assertFalse(isTaskRunningForMirrorMakerConnector(MirrorCheckpointConnector.class, mm, sourceAndTarget));
         }
     }
 
@@ -401,11 +397,14 @@ public class DedicatedMirrorIntegrationTest {
             cluster.produce(topic, Integer.toString(i));
         }
     }
-
     private void awaitMirrorMakerStart(final MirrorMaker mm, final SourceAndTarget sourceAndTarget) throws InterruptedException {
+        awaitMirrorMakerStart(mm, sourceAndTarget, CONNECTOR_CLASSES);
+    }
+
+    private void awaitMirrorMakerStart(final MirrorMaker mm, final SourceAndTarget sourceAndTarget, final  List<Class<?>> connectorClasses) throws InterruptedException {
         waitForCondition(() -> {
             try {
-                return CONNECTOR_CLASSES.stream().allMatch(
+                return connectorClasses.stream().allMatch(
                     connectorClazz -> isConnectorRunningForMirrorMaker(connectorClazz, mm, sourceAndTarget));
             } catch (Exception ex) {
                 log.error("Something unexpected occurred. Unable to check for startup status for mirror maker {}", mm, ex);

@@ -20,7 +20,9 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
@@ -76,7 +78,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorCheckpointConfig(props);
-        config.validate();
         if (!config.enabled()) {
             return;
         }
@@ -105,6 +106,17 @@ public class MirrorCheckpointConnector extends SourceConnector {
         Utils.closeQuietly(groupFilter, "group filter");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
+    }
+
+    @Override
+    public Config validate(Map<String, String> connectorConfigs) {
+        List<ConfigValue> configValues = super.validate(connectorConfigs).configValues();
+        new MirrorCheckpointConfig(connectorConfigs).validate().forEach(invalidConfig ->
+                configValues.stream()
+                        .filter(conf -> conf.name().equals(invalidConfig.name()))
+                        .forEach(conf -> invalidConfig.errorMessages().forEach(msg -> conf.addErrorMessage(msg))));
+
+        return new Config(configValues);
     }
 
     @Override
