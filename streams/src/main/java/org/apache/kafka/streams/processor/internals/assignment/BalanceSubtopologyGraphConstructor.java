@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
+
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -26,10 +31,6 @@ import java.util.TreeSet;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
-import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
 
 public class BalanceSubtopologyGraphConstructor<T> implements RackAwareGraphConstructor<T> {
 

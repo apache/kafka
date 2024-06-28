@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.internals.SuppressTopologyTest;
 import org.apache.kafka.streams.state.internals.BufferValueTest;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBufferTest;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferTest;
+
 import org.junit.platform.suite.api.SelectClasses;
 import org.junit.platform.suite.api.Suite;
 
@@ -52,5 +53,3 @@ import org.junit.platform.suite.api.Suite;
 })
 public class SuppressSuite {
 }
-
-

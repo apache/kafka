@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams.state;
 
-import java.util.Objects;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KafkaStreams;
 
 import java.util.Collections;
+import java.util.Objects;
 import java.util.Set;
 
 /**

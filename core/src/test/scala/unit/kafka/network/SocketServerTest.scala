@@ -367,7 +367,7 @@ class SocketServerTest {
     val config = KafkaConfig.fromProps(testProps)
     val testableServer = new TestableSocketServer(config)
 
-    val updatedEndPoints = config.effectiveAdvertisedListeners.map { endpoint =>
+    val updatedEndPoints = config.effectiveAdvertisedBrokerListeners.map { endpoint =>
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
     }.map(_.toJava)
 
