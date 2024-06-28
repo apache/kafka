@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.network.BootstrapResolutionException;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.NetworkSend;
@@ -48,6 +49,7 @@ import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -649,9 +651,6 @@ public class NetworkClient implements KafkaClient {
             return responses;
         }
 
-        final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-        metadataUpdater.bootstrap(addresses);
-
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         long telemetryTimeout = telemetrySender != null ? telemetrySender.maybeUpdate(now) : Integer.MAX_VALUE;
         try {
@@ -1161,6 +1160,57 @@ public class NetworkClient implements KafkaClient {
      */
     private boolean isTelemetryApi(ApiKeys apiKey) {
         return apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY;
+    }
+
+    public static class BootstrapConfiguration {
+        public final List<String> bootstrapServers;
+        public final ClientDnsLookup clientDnsLookup;
+        public final long bootstrapResolveTimeoutMs;
+        private boolean bootstrapDisabled;
+
+        public BootstrapConfiguration(final List<String> bootstrapServers,
+                                      final ClientDnsLookup clientDnsLookup,
+                                      final long bootstrapResolveTimeoutMs) {
+            this.bootstrapServers = bootstrapServers;
+            this.clientDnsLookup = clientDnsLookup;
+            this.bootstrapResolveTimeoutMs = bootstrapResolveTimeoutMs;
+            this.bootstrapDisabled = false;
+        }
+
+        public void disableBootstrap() {
+            this.bootstrapDisabled = true;
+        }
+    }
+
+    private class BootstrapState {
+        private final Timer timer;
+        private final List<String> bootstrapServers;
+        private final ClientDnsLookup clientDnsLookup;
+        private final long dnsResolutionTimeoutMs;
+        private final boolean isDisabled;
+
+        BootstrapState(BootstrapConfiguration bootstrapConfiguration) {
+            this.dnsResolutionTimeoutMs = bootstrapConfiguration.bootstrapResolveTimeoutMs;
+            this.timer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
+            this.bootstrapServers = bootstrapConfiguration.bootstrapServers;
+            this.clientDnsLookup = bootstrapConfiguration.clientDnsLookup;
+            this.isDisabled = bootstrapConfiguration.bootstrapDisabled;
+        }
+
+        List<InetSocketAddress> tryResolveAddresses(final long currentTimeMs) {
+            timer.update(currentTimeMs);
+            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers, clientDnsLookup);
+            if (!addresses.isEmpty()) {
+                timer.reset(dnsResolutionTimeoutMs);
+                return addresses;
+            }
+
+            if (timer.isExpired()) {
+                throw new BootstrapResolutionException("Timeout while attempting to resolve bootstrap " +
+                        "servers. ");
+            }
+            return ClientUtils.parseAndValidateAddresses(bootstrapServers, clientDnsLookup);
+        }
     }
 
     class DefaultMetadataUpdater implements MetadataUpdater {
