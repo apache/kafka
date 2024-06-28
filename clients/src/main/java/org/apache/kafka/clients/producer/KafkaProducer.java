@@ -867,12 +867,21 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.
-     * See {@link #send(ProducerRecord, Callback)} for details.
+     * Asynchronously send a record to a topic. Equivalent to <code>send(record, null, TxnSendOption.NONE)</code>.
+     * See {@link #send(ProducerRecord, Callback, TxnSendOption)} for details.
      */
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record) {
-        return send(record, null);
+        return send(record, null, TxnSendOption.NONE);
+    }
+
+    /**
+     * Asynchronously send a record to a topic. Equivalent to <code>send(record, callback, TxnSendOption.NONE)</code>.
+     * See {@link #send(ProducerRecord, Callback, TxnSendOption)} for details.
+     */
+    @Override
+    public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
+        return send(record, callback, TxnSendOption.NONE);
     }
 
     /**
@@ -971,10 +980,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * they will delay the sending of messages from other threads. If you want to execute blocking or computationally
      * expensive callbacks it is recommended to use your own {@link java.util.concurrent.Executor} in the callback body
      * to parallelize processing.
+     *</p>
+     * <p>
+     * To manage ApiExceptions in transactions, the user can configure the TnxSendOption to IGNORE_SEND_ERRORS. This setting
+     * excludes "poison pill" records from the batch, ensuring they do not disrupt the commit process. By default, TnxSendOption
+     * is set to NONE, which is the required setting for non-transactional sends.
      *
      * @param record The record to send
      * @param callback A user-supplied callback to execute when the record has been acknowledged by the server (null
      *        indicates no callback)
+     * @param txnSendOption Determines ignoring errors in transactions
      *
      * @throws AuthenticationException if authentication fails. See the exception for more details
      * @throws AuthorizationException fatal error indicating that the producer is not allowed to write
@@ -987,17 +1002,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws KafkaException If a Kafka related error occurs that does not belong to the public API exceptions.
      */
     @Override
-    public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
+    public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback, TxnSendOption txnSendOption) {
         // intercept the record, which can be potentially modified; this method does not throw exceptions
         ProducerRecord<K, V> interceptedRecord = this.interceptors.onSend(record);
-        return doSend(interceptedRecord, callback, TxnSendOption.NONE);
-    }
-
-    @Override
-    public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback, TxnSendOption option) {
-        // intercept the record, which can be potentially modified; this method does not throw exceptions
-        ProducerRecord<K, V> interceptedRecord = this.interceptors.onSend(record);
-        return doSend(interceptedRecord, callback, option);
+        return doSend(interceptedRecord, callback, txnSendOption);
     }
 
     // Verify that this producer instance has not been closed. This method throws IllegalStateException if the producer
@@ -1019,8 +1027,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Implementation of asynchronously send a record to a topic.
      */
-    private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback, TxnSendOption option) {
-        if (option == TxnSendOption.IGNORE_SEND_ERRORS) {
+    private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback, TxnSendOption txnSendOption) {
+        if (txnSendOption == TxnSendOption.IGNORE_SEND_ERRORS) {
             throwIfNoTransactionManager();
         }
         // Append callback takes care of the following:
@@ -1119,7 +1127,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             this.errors.record();
             this.interceptors.onSendError(record, appendCallbacks.topicPartition(), e);
-            if (transactionManager != null && option == TxnSendOption.NONE) {
+            if (transactionManager != null && txnSendOption == TxnSendOption.NONE) {
                 transactionManager.maybeTransitionToErrorState(e);
             }
             return new FutureFailure(e);
@@ -1613,7 +1621,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     public enum TxnSendOption {
+        /**
+         * The irrecoverable {@link #send(ProducerRecord)} errors lead the transaction to the error state, which ends up an unsuccessful commit.
+         */
         NONE,
-        IGNORE_SEND_ERRORS;
+        /**
+         * The records causing irrecoverable errors are excluded from the batch and do not disrupt committing the transaction.
+         * Note to use this, only in transactions. Otherwise {@link #send(ProducerRecord, Callback, TxnSendOption)} throws exception.
+         */
+        IGNORE_SEND_ERRORS
     }
 }
