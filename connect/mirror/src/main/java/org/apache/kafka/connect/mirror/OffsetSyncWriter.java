@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Semaphore;
 
 /**
@@ -44,7 +45,7 @@ class OffsetSyncWriter implements AutoCloseable {
     private final KafkaProducer<byte[], byte[]> offsetProducer;
     private final String offsetSyncsTopic;
     private final long maxOffsetLag;
-    private Map<TopicPartition, MirrorSourceTask.PartitionState> partitionStates = new HashMap<>();
+    private Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
 
 
     public OffsetSyncWriter(MirrorSourceTaskConfig config) {
@@ -72,7 +73,7 @@ class OffsetSyncWriter implements AutoCloseable {
         return maxOffsetLag;
     }
 
-    public Map<TopicPartition, MirrorSourceTask.PartitionState> partitionStates() {
+    public Map<TopicPartition, PartitionState> partitionStates() {
         return this.partitionStates;
     }
 
@@ -123,8 +124,8 @@ class OffsetSyncWriter implements AutoCloseable {
 
     // updates partition state and queues up OffsetSync if necessary
     void maybeQueueOffsetSyncs(TopicPartition topicPartition, long upstreamOffset, long downstreamOffset) {
-        MirrorSourceTask.PartitionState partitionState =
-                partitionStates.computeIfAbsent(topicPartition, x -> new MirrorSourceTask.PartitionState(maxOffsetLag));
+        PartitionState partitionState =
+                partitionStates.computeIfAbsent(topicPartition, x -> new PartitionState(maxOffsetLag));
 
         OffsetSync offsetSync = new OffsetSync(topicPartition, upstreamOffset, downstreamOffset);
         if (partitionState.update(upstreamOffset, downstreamOffset)) {
@@ -151,4 +152,56 @@ class OffsetSyncWriter implements AutoCloseable {
     protected Map<TopicPartition, OffsetSync> getPendingOffsetSyncs() {
         return pendingOffsetSyncs;
     }
+
+    static class PartitionState {
+        long previousUpstreamOffset = -1L;
+        long previousDownstreamOffset = -1L;
+        long lastSyncDownstreamOffset = -1L;
+        long maxOffsetLag;
+        boolean shouldSyncOffsets;
+
+        PartitionState(long maxOffsetLag) {
+            this.maxOffsetLag = maxOffsetLag;
+        }
+
+        // true if we should emit an offset sync
+        boolean update(long upstreamOffset, long downstreamOffset) {
+            // Emit an offset sync if any of the following conditions are true
+            boolean noPreviousSyncThisLifetime = lastSyncDownstreamOffset == -1L;
+            // the OffsetSync::translateDownstream method will translate this offset 1 past the last sync, so add 1.
+            // TODO: share common implementation to enforce this relationship
+            boolean translatedOffsetTooStale = downstreamOffset - (lastSyncDownstreamOffset + 1) >= maxOffsetLag;
+            boolean skippedUpstreamRecord = upstreamOffset - previousUpstreamOffset != 1L;
+            boolean truncatedDownstreamTopic = downstreamOffset < previousDownstreamOffset;
+            if (noPreviousSyncThisLifetime || translatedOffsetTooStale || skippedUpstreamRecord || truncatedDownstreamTopic) {
+                lastSyncDownstreamOffset = downstreamOffset;
+                shouldSyncOffsets = true;
+            }
+            previousUpstreamOffset = upstreamOffset;
+            previousDownstreamOffset = downstreamOffset;
+            return shouldSyncOffsets;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof PartitionState)) return false;
+            PartitionState that = (PartitionState) o;
+            return previousUpstreamOffset == that.previousUpstreamOffset &&
+                    previousDownstreamOffset == that.previousDownstreamOffset &&
+                    lastSyncDownstreamOffset == that.lastSyncDownstreamOffset &&
+                    maxOffsetLag == that.maxOffsetLag &&
+                    shouldSyncOffsets == that.shouldSyncOffsets;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(previousUpstreamOffset, previousDownstreamOffset, lastSyncDownstreamOffset, maxOffsetLag, shouldSyncOffsets);
+        }
+
+        void reset() {
+            shouldSyncOffsets = false;
+        }
+    }
+
 }

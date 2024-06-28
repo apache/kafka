@@ -38,7 +38,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
@@ -255,56 +254,5 @@ public class MirrorSourceTask extends SourceTask {
 
     private boolean isUncommitted(Long offset) {
         return offset == null || offset < 0;
-    }
-
-    static class PartitionState {
-        long previousUpstreamOffset = -1L;
-        long previousDownstreamOffset = -1L;
-        long lastSyncDownstreamOffset = -1L;
-        long maxOffsetLag;
-        boolean shouldSyncOffsets;
-
-        PartitionState(long maxOffsetLag) {
-            this.maxOffsetLag = maxOffsetLag;
-        }
-
-        // true if we should emit an offset sync
-        boolean update(long upstreamOffset, long downstreamOffset) {
-            // Emit an offset sync if any of the following conditions are true
-            boolean noPreviousSyncThisLifetime = lastSyncDownstreamOffset == -1L;
-            // the OffsetSync::translateDownstream method will translate this offset 1 past the last sync, so add 1.
-            // TODO: share common implementation to enforce this relationship
-            boolean translatedOffsetTooStale = downstreamOffset - (lastSyncDownstreamOffset + 1) >= maxOffsetLag;
-            boolean skippedUpstreamRecord = upstreamOffset - previousUpstreamOffset != 1L;
-            boolean truncatedDownstreamTopic = downstreamOffset < previousDownstreamOffset;
-            if (noPreviousSyncThisLifetime || translatedOffsetTooStale || skippedUpstreamRecord || truncatedDownstreamTopic) {
-                lastSyncDownstreamOffset = downstreamOffset;
-                shouldSyncOffsets = true;
-            }
-            previousUpstreamOffset = upstreamOffset;
-            previousDownstreamOffset = downstreamOffset;
-            return shouldSyncOffsets;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof PartitionState)) return false;
-            PartitionState that = (PartitionState) o;
-            return previousUpstreamOffset == that.previousUpstreamOffset &&
-                    previousDownstreamOffset == that.previousDownstreamOffset &&
-                    lastSyncDownstreamOffset == that.lastSyncDownstreamOffset &&
-                    maxOffsetLag == that.maxOffsetLag &&
-                    shouldSyncOffsets == that.shouldSyncOffsets;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(previousUpstreamOffset, previousDownstreamOffset, lastSyncDownstreamOffset, maxOffsetLag, shouldSyncOffsets);
-        }
-
-        void reset() {
-            shouldSyncOffsets = false;
-        }
     }
 }

@@ -27,7 +27,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.connect.mirror.MirrorSourceTask.PartitionState;
+import org.apache.kafka.connect.mirror.OffsetSyncWriter.PartitionState;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
@@ -91,7 +91,7 @@ public class MirrorSourceTaskTest {
 
     @Test
     public void testOffsetSync() {
-        MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(50);
+        OffsetSyncWriter.PartitionState partitionState = new OffsetSyncWriter.PartitionState(50);
 
         assertTrue(partitionState.update(0, 100), "always emit offset sync on first update");
         assertTrue(partitionState.shouldSyncOffsets, "should sync offsets");
@@ -127,7 +127,7 @@ public class MirrorSourceTaskTest {
 
     @Test
     public void testZeroOffsetSync() {
-        MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(0);
+        OffsetSyncWriter.PartitionState partitionState = new OffsetSyncWriter.PartitionState(0);
 
         // if max offset lag is zero, should always emit offset syncs
         assertTrue(partitionState.update(0, 100), "zeroOffsetSync downStreamOffset 100 is incorrect");
