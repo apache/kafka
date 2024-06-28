@@ -789,11 +789,17 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   def effectiveAdvertisedControllerListeners: Seq[EndPoint] = {
-    // Only expose controller listeners
-    advertisedListeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+    val controllerAdvertisedListeners = advertisedListeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+    val controllerListenersValue = controllerListeners
+
+    controllerListenerNames.flatMap { name =>
+      controllerAdvertisedListeners
+        .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
+        .orElse(controllerListenersValue.find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name))))
+    }
   }
 
-  def effectiveAdvertisedListeners: Seq[EndPoint] = {
+  def effectiveAdvertisedBrokerListeners: Seq[EndPoint] = {
     // Only expose broker listeners
     advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
   }
@@ -919,7 +925,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       " to prevent frequent changes in ISR")
     require(offsetCommitRequiredAcks >= -1 && offsetCommitRequiredAcks <= offsetsTopicReplicationFactor,
       "offsets.commit.required.acks must be greater or equal -1 and less or equal to offsets.topic.replication.factor")
-    val advertisedListenerNames = effectiveAdvertisedListeners.map(_.listenerName).toSet
+    val advertisedBrokerListenerNames = effectiveAdvertisedBrokerListeners.map(_.listenerName).toSet
 
     // validate KRaft-related configs
     val voterIds = QuorumConfig.parseVoterIds(quorumVoters)
@@ -938,7 +944,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG} is not supported in KRaft mode.")
     }
     def validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker(): Unit = {
-      require(advertisedListenerNames.forall(aln => !controllerListenerNames.contains(aln.value())),
+      require(advertisedBrokerListenerNames.forall(aln => !controllerListenerNames.contains(aln.value())),
         s"The advertised.listeners config must not contain KRaft controller listeners from ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} when ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains the broker role because Kafka clients that send requests via advertised listeners do not send requests to KRaft controllers -- they only send requests to KRaft brokers.")
     }
     def validateControllerQuorumVotersMustContainNodeIdForKRaftController(): Unit = {
@@ -955,7 +961,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must only contain values appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
     }
     def validateAdvertisedListenersNonEmptyForBroker(): Unit = {
-      require(advertisedListenerNames.nonEmpty,
+      require(advertisedBrokerListenerNames.nonEmpty,
         "There must be at least one advertised listener." + (
           if (processRoles.contains(ProcessRole.BrokerRole)) s" Perhaps all listeners appear in ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG}?" else ""))
     }
@@ -992,7 +998,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       validateControlPlaneListenerEmptyForKRaft()
       // listeners should only contain listeners also enumerated in the controller listener
       require(
-        effectiveAdvertisedListeners.isEmpty,
+        effectiveAdvertisedControllerListeners.size == listeners.size,
         s"The ${SocketServerConfigs.LISTENERS_CONFIG} config must only contain KRaft controller listeners from ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} when ${KRaftConfigs.PROCESS_ROLES_CONFIG}=controller"
       )
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
@@ -1032,25 +1038,29 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     if (processRoles.isEmpty || processRoles.contains(ProcessRole.BrokerRole)) {
       // validations for all broker setups (i.e. ZooKeeper and KRaft broker-only and KRaft co-located)
       validateAdvertisedListenersNonEmptyForBroker()
-      require(advertisedListenerNames.contains(interBrokerListenerName),
+      require(advertisedBrokerListenerNames.contains(interBrokerListenerName),
         s"${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} must be a listener name defined in ${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG}. " +
-          s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
-      require(advertisedListenerNames.subsetOf(listenerNames),
+          s"The valid options based on currently configured listeners are ${advertisedBrokerListenerNames.map(_.value).mkString(",")}")
+      require(advertisedBrokerListenerNames.subsetOf(listenerNames),
         s"${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG} listener names must be equal to or a subset of the ones defined in ${SocketServerConfigs.LISTENERS_CONFIG}. " +
-          s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
+          s"Found ${advertisedBrokerListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
           s"are ${listenerNames.map(_.value).mkString(",")}"
       )
     }
 
-    require(!effectiveAdvertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
+    require(!effectiveAdvertisedBrokerListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
+      s"${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG} cannot use the nonroutable meta-address 0.0.0.0. "+
+      s"Use a routable IP address.")
+
+    require(!effectiveAdvertisedControllerListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
       s"${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")
 
     // validate control.plane.listener.name config
     if (controlPlaneListenerName.isDefined) {
-      require(advertisedListenerNames.contains(controlPlaneListenerName.get),
+      require(advertisedBrokerListenerNames.contains(controlPlaneListenerName.get),
         s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG} must be a listener name defined in ${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG}. " +
-        s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
+        s"The valid options based on currently configured listeners are ${advertisedBrokerListenerNames.map(_.value).mkString(",")}")
       // controlPlaneListenerName should be different from interBrokerListenerName
       require(!controlPlaneListenerName.get.value().equals(interBrokerListenerName.value()),
         s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG}, when defined, should have a different value from the inter broker listener name. " +
