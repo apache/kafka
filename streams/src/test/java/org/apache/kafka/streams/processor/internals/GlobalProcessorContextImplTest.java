@@ -27,6 +27,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
+
 import org.hamcrest.core.IsInstanceOf;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

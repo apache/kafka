@@ -20,9 +20,9 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A wrapper over all of the {@link StateStoreProvider}s in a Topology

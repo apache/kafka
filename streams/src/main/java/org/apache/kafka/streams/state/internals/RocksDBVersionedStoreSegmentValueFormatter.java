@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Helper utility for managing the bytes layout of the value stored in segments of the {@link RocksDBVersionedStore}.

@@ -2009,10 +2009,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      */
     private boolean isValidVoterKey(Optional<ReplicaKey> voterKey) {
         return voterKey
-            .map(key ->
-                OptionalInt.of(key.id()).equals(nodeId) &&
-                key.directoryId().equals(Optional.of(nodeDirectoryId))
-            )
+            .map(key -> {
+                if (!OptionalInt.of(key.id()).equals(nodeId)) return false;
+                if (!key.directoryId().isPresent()) return true;
+
+                return key.directoryId().get().equals(nodeDirectoryId);
+            })
             .orElse(true);
     }
     /**
