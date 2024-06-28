@@ -686,12 +686,13 @@ public class ConsoleConsumerOptionsTest {
         assertInstanceOf(kafka.coordinator.transaction.TransactionLog.TransactionLogMessageFormatter.class, 
                 new ConsoleConsumerOptions(deprecatedTransactionLogMessageFormatter).formatter());
 
-        String[] loggingMessageFormatter = new String[]{
+        String[] transactionLogMessageFormatter = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
             "--partition", "0",
             "--formatter", "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter",
         };
-        assertInstanceOf(TransactionLogMessageFormatter.class, new ConsoleConsumerOptions(loggingMessageFormatter).formatter());
+        assertInstanceOf(TransactionLogMessageFormatter.class, 
+                new ConsoleConsumerOptions(transactionLogMessageFormatter).formatter());
     }
 }
