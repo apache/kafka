@@ -202,7 +202,6 @@ libs += [
   junitJupiter: "org.junit.jupiter:junit-jupiter:$versions.junit",
   junitJupiterApi: "org.junit.jupiter:junit-jupiter-api:$versions.junit",
   junitPlatformSuiteEngine: "org.junit.platform:junit-platform-suite-engine:$versions.junitPlatformSuiteEngine",
-  junitVintageEngine: "org.junit.vintage:junit-vintage-engine:$versions.junit",
   jqwik: "net.jqwik:jqwik:$versions.jqwik",
   hamcrest: "org.hamcrest:hamcrest:$versions.hamcrest",
   kafkaStreams_0100: "org.apache.kafka:kafka-streams:$versions.kafka_0100",

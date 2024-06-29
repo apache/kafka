@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import java.util.Objects;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.MockProcessorContext;
@@ -42,6 +41,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListe
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 

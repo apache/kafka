@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
-import java.time.Duration;
-import java.util.Map;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
+
+import java.time.Duration;
+import java.util.Map;
 import java.util.Set;
 
 public interface TaskManager {

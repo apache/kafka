@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.WindowStore;
+
 import org.junit.jupiter.api.Test;
 
 import static java.time.Duration.ZERO;
