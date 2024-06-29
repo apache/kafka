@@ -568,7 +568,6 @@ class BrokerServer(
     if (config.isNewGroupCoordinatorEnabled) {
       val time = Time.SYSTEM
       val serde = new CoordinatorRecordSerde
-      val groupCoordinatorConfig = new GroupCoordinatorConfig(config)
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",
         new SystemTimer("group-coordinator")
@@ -582,7 +581,7 @@ class BrokerServer(
       val writer = new CoordinatorPartitionWriter(
         replicaManager
       )
-      new GroupCoordinatorService.Builder(config.brokerId, groupCoordinatorConfig)
+      new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
         .withTime(time)
         .withTimer(timer)
         .withLoader(loader)
