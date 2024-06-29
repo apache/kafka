@@ -361,4 +361,98 @@ public class GroupCoordinatorConfig {
                 .map(CompressionType::forId)
                 .orElse(null);
     }
+
+    /**
+     * Batch size for reading from the offsets segments when loading offsets into
+     * the cache (soft-limit, overridden if records are too large).
+     */
+    public int offsetsLoadBufferSize() {
+        return config.getInt(GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG);
+    }
+
+    /**
+     * The number of partitions for the offset commit topic (should not change after deployment).
+     */
+    public int offsetsTopicPartitions() {
+        return config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG);
+    }
+
+    /**
+     * The replication factor for the offsets topic (set higher to ensure availability).
+     * Internal topic creation will fail until the cluster size meets this replication factor requirement.
+     */
+    public short offsetsTopicReplicationFactor() {
+        return config.getShort(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG);
+    }
+
+    /**
+     * DEPRECATED: The required acks before the commit can be accepted.
+     * In general, the default (-1) should not be overridden.
+     */
+    @Deprecated // since 3.8
+    public short offsetCommitRequiredAcks() {
+        return config.getShort(GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG);
+    }
+
+    /**
+     * The minimum allowed session timeout for registered consumers.
+     * Shorter timeouts result in quicker failure detection at the cost of more frequent consumer heartbeating,
+     * which can overwhelm broker resources.
+     */
+    public int groupMinSessionTimeoutMs() {
+        return config.getInt(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+    }
+
+    /**
+     * The maximum allowed session timeout for registered consumers.
+     * Longer timeouts give consumers more time to process messages in between heartbeats at the cost of
+     * a longer time to detect failures.
+     */
+    public int groupMaxSessionTimeoutMs() {
+        return config.getInt(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+    }
+
+    /**
+     * The amount of time the group coordinator will wait for more consumers to join a new group before performing
+     * the first rebalance.
+     * A longer delay means potentially fewer rebalances, but increases the time until processing begins.
+     */
+    public int groupInitialRebalanceDelay() {
+        return config.getInt(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG);
+    }
+
+    /**
+     * The maximum number of consumers that a single consumer group can accommodate.
+     */
+    public int groupMaxSize() {
+        return config.getInt(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG);
+    }
+
+    /**
+     * The minimum allowed session timeout for registered consumers.
+     */
+    public int consumerGroupMinSessionTimeoutMs() {
+        return config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+    }
+
+    /**
+     * The maximum allowed session timeout for registered consumers.
+     */
+    public int consumerGroupMaxSessionTimeoutMs() {
+        return config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+    }
+
+    /**
+     * The minimum heartbeat interval for registered consumers.
+     */
+    public int consumerGroupMinHeartbeatIntervalMs() {
+        return config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
+    }
+
+    /**
+     * The maximum heartbeat interval for registered consumers.
+     */
+    public int consumerGroupMaxHeartbeatIntervalMs() {
+        return config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
+    }
 }

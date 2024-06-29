@@ -577,7 +577,7 @@ class BrokerServer(
         time,
         replicaManager,
         serde,
-        config.offsetsLoadBufferSize
+        config.groupCoordinatorConfig.offsetsLoadBufferSize
       )
       val writer = new CoordinatorPartitionWriter(
         replicaManager
