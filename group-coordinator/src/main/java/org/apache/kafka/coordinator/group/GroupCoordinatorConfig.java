@@ -396,40 +396,6 @@ public class GroupCoordinatorConfig {
 
     /**
      * The minimum allowed session timeout for registered consumers.
-     * Shorter timeouts result in quicker failure detection at the cost of more frequent consumer heartbeating,
-     * which can overwhelm broker resources.
-     */
-    public int groupMinSessionTimeoutMs() {
-        return config.getInt(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
-    }
-
-    /**
-     * The maximum allowed session timeout for registered consumers.
-     * Longer timeouts give consumers more time to process messages in between heartbeats at the cost of
-     * a longer time to detect failures.
-     */
-    public int groupMaxSessionTimeoutMs() {
-        return config.getInt(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
-    }
-
-    /**
-     * The amount of time the group coordinator will wait for more consumers to join a new group before performing
-     * the first rebalance.
-     * A longer delay means potentially fewer rebalances, but increases the time until processing begins.
-     */
-    public int groupInitialRebalanceDelay() {
-        return config.getInt(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG);
-    }
-
-    /**
-     * The maximum number of consumers that a single consumer group can accommodate.
-     */
-    public int groupMaxSize() {
-        return config.getInt(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG);
-    }
-
-    /**
-     * The minimum allowed session timeout for registered consumers.
      */
     public int consumerGroupMinSessionTimeoutMs() {
         return config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);

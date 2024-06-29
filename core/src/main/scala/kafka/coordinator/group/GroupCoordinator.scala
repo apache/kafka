@@ -1791,10 +1791,10 @@ object GroupCoordinator {
     metrics: Metrics
   ): GroupCoordinator = {
     val offsetConfig = this.offsetConfig(config)
-    val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupCoordinatorConfig.groupMinSessionTimeoutMs,
-      groupMaxSessionTimeoutMs = config.groupCoordinatorConfig.groupMaxSessionTimeoutMs,
-      groupMaxSize = config.groupCoordinatorConfig.groupMaxSize,
-      groupInitialRebalanceDelayMs = config.groupCoordinatorConfig.groupInitialRebalanceDelay)
+    val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupCoordinatorConfig.classicGroupMinSessionTimeoutMs,
+      groupMaxSessionTimeoutMs = config.groupCoordinatorConfig.classicGroupMaxSessionTimeoutMs,
+      groupMaxSize = config.groupCoordinatorConfig.classicGroupMaxSize,
+      groupInitialRebalanceDelayMs = config.groupCoordinatorConfig.classicGroupInitialRebalanceDelayMs)
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
       offsetConfig, replicaManager, time, metrics)
