@@ -20,9 +20,9 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import java.util.Collection;
-import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 public class KTablePassThrough<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, VIn> {
     private final Collection<KStreamAggProcessorSupplier> parents;

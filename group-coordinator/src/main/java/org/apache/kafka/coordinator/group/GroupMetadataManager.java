@@ -68,7 +68,6 @@ import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.consumer.CurrentAssignmentBuilder;
-import org.apache.kafka.coordinator.group.consumer.MemberState;
 import org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -86,6 +85,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.image.MetadataDelta;
@@ -881,7 +881,7 @@ public class GroupMetadataManager {
             log.info("Cannot upgrade classic group {} to consumer group because the group does not use the consumer embedded protocol.",
                 classicGroup.groupId());
             return false;
-        } else if (classicGroup.size() > consumerGroupMaxSize) {
+        } else if (classicGroup.numMembers() > consumerGroupMaxSize) {
             log.info("Cannot upgrade classic group {} to consumer group because the group size exceeds the consumer group maximum size.",
                 classicGroup.groupId());
             return false;
@@ -1856,8 +1856,8 @@ public class GroupMetadataManager {
             updatedMember
         ).orElse(defaultConsumerGroupAssignor.name());
         try {
-            TargetAssignmentBuilder assignmentResultBuilder =
-                new TargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
+            TargetAssignmentBuilder<ConsumerGroupMember> assignmentResultBuilder =
+                new TargetAssignmentBuilder<ConsumerGroupMember>(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
                     .withMembers(group.members())
                     .withStaticMembers(group.staticMembers())
                     .withSubscriptionMetadata(subscriptionMetadata)
@@ -2600,10 +2600,10 @@ public class GroupMetadataManager {
                         rescheduleClassicGroupMemberHeartbeat(classicGroup, member);
                     });
 
-                    if (classicGroup.size() > classicGroupMaxSize) {
+                    if (classicGroup.numMembers() > classicGroupMaxSize) {
                         // In case the max size config has changed.
                         prepareRebalance(classicGroup, "Freshly-loaded group " + groupId +
-                            " (size " + classicGroup.size() + ") is over capacity " + classicGroupMaxSize +
+                            " (size " + classicGroup.numMembers() + ") is over capacity " + classicGroupMaxSize +
                             ". Rebalancing in order to give a chance for consumers to commit offsets");
                     }
                     break;
@@ -3255,7 +3255,7 @@ public class GroupMetadataManager {
 
             } else {
                 log.info("Stabilized group {} generation {} with {} members.",
-                    groupId, group.generationId(), group.size());
+                    groupId, group.generationId(), group.numMembers());
 
                 // Complete the awaiting join group response future for all the members after rebalancing
                 group.allMembers().forEach(member -> {
@@ -3333,7 +3333,7 @@ public class GroupMetadataManager {
                 memberId, group.groupId());
 
             return removePendingMemberAndUpdateClassicGroup(group, memberId);
-        } else if (!group.hasMemberId(memberId)) {
+        } else if (!group.hasMember(memberId)) {
             log.debug("Member {} has already been removed from the group.", memberId);
         } else {
             ClassicGroupMember member = group.member(memberId);
@@ -3801,14 +3801,14 @@ public class GroupMetadataManager {
                 //    if the max group size was reduced.
                 // 2) using the number of awaiting members allows to kick out the last rejoining
                 //    members of the group.
-                return (group.hasMemberId(memberId) && group.member(memberId).isAwaitingJoin()) ||
+                return (group.hasMember(memberId) && group.member(memberId).isAwaitingJoin()) ||
                     group.numAwaitingJoinResponse() < classicGroupMaxSize;
             case COMPLETING_REBALANCE:
             case STABLE:
                 // An existing member is accepted. New members are accepted up to the max group size.
                 // Note that the group size is used here. When the group transitions to CompletingRebalance,
                 // members who haven't rejoined are removed.
-                return group.hasMemberId(memberId) || group.size() < classicGroupMaxSize;
+                return group.hasMember(memberId) || group.numMembers() < classicGroupMaxSize;
             default:
                 throw new IllegalStateException("Unknown group state: " + group.stateAsString());
         }
@@ -4011,7 +4011,7 @@ public class GroupMetadataManager {
             if (group.isLeader(memberId)) {
                 log.info("Assignment received from leader {} for group {} for generation {}. " +
                     "The group has {} members, {} of which are static.",
-                    memberId, groupId, group.generationId(), group.size(), group.allStaticMemberIds().size());
+                    memberId, groupId, group.generationId(), group.numMembers(), group.allStaticMemberIds().size());
 
                 // Fill all members with corresponding member assignment. If the member assignment
                 // does not exist, fill with an empty assignment.

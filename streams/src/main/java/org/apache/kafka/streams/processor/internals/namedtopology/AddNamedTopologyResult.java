@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.streams.errors.StreamsException;
+
 import java.util.concurrent.ExecutionException;
 
 public class AddNamedTopologyResult {

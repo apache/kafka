@@ -1069,7 +1069,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     val oldConfig = server.config
     val newListeners = listenersToMap(newConfig.listeners)
-    val newAdvertisedListeners = listenersToMap(newConfig.effectiveAdvertisedListeners)
+    val newAdvertisedListeners = listenersToMap(newConfig.effectiveAdvertisedBrokerListeners)
     val oldListeners = listenersToMap(oldConfig.listeners)
     if (!newAdvertisedListeners.keySet.subsetOf(newListeners.keySet))
       throw new ConfigException(s"Advertised listeners '$newAdvertisedListeners' must be a subset of listeners '$newListeners'")
@@ -1093,8 +1093,8 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
 
     // Currently, we do not support adding or removing listeners when in KRaft mode.
     // However, we support changing other listener configurations (max connections, etc.)
-    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedListeners),
-        listenersToMap(newConfig.effectiveAdvertisedListeners))) {
+    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedBrokerListeners),
+        listenersToMap(newConfig.effectiveAdvertisedBrokerListeners))) {
       verifyListenerRegistrationAlterationSupported()
     }
   }
@@ -1111,8 +1111,8 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
       if (listenersRemoved.nonEmpty) server.socketServer.removeListeners(listenersRemoved)
       if (listenersAdded.nonEmpty) server.socketServer.addListeners(listenersAdded)
     }
-    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedListeners),
-        listenersToMap(newConfig.effectiveAdvertisedListeners))) {
+    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedBrokerListeners),
+        listenersToMap(newConfig.effectiveAdvertisedBrokerListeners))) {
       verifyListenerRegistrationAlterationSupported()
       server match {
         case kafkaServer: KafkaServer => kafkaServer.kafkaController.updateBrokerInfo(kafkaServer.createBrokerInfo)
