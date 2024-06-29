@@ -102,19 +102,11 @@ public class CandidateState implements EpochState {
     }
 
     private long numGranted() {
-        return voteStates
-            .values()
-            .stream()
-            .filter(voterState -> voterState.state() == State.GRANTED)
-            .count();
+        return votersInState(State.GRANTED).count();
     }
 
     private long numUnrecorded() {
-        return voteStates
-            .values()
-            .stream()
-            .filter(voterState -> voterState.state() == State.UNRECORDED)
-            .count();
+        return votersInState(State.UNRECORDED).count();
     }
 
     /**

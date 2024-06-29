@@ -26,6 +26,7 @@ import org.apache.kafka.raft.internals.VoterSetTest;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
@@ -209,18 +210,22 @@ public class CandidateStateTest {
         assertFalse(state.recordRejectedVote(otherNodeId));
     }
 
-    // TODO: add withDirectoryId
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testGrantVote(boolean isLogUpToDate) {
+    @CsvSource({ "true,true", "true,false", "false,true", "false,false" })
+    public void testGrantVote(boolean isLogUpToDate, boolean withDirectoryId) {
+        ReplicaKey node0 = replicaKey(0, withDirectoryId);
+        ReplicaKey node1 = replicaKey(1, withDirectoryId);
+        ReplicaKey node2 = replicaKey(2, withDirectoryId);
+        ReplicaKey node3 = replicaKey(3, withDirectoryId);
+
         CandidateState state = newCandidateState(
-            voterSetWithLocal(IntStream.of(1, 2, 3), false)
+            voterSetWithLocal(Stream.of(node1, node2, node3), withDirectoryId)
         );
 
-        assertFalse(state.canGrantVote(ReplicaKey.of(0, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
-        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
-        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
-        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
+        assertFalse(state.canGrantVote(node0, isLogUpToDate));
+        assertFalse(state.canGrantVote(node1, isLogUpToDate));
+        assertFalse(state.canGrantVote(node2, isLogUpToDate));
+        assertFalse(state.canGrantVote(node3, isLogUpToDate));
     }
 
     @ParameterizedTest

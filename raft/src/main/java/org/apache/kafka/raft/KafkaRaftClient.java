@@ -2482,7 +2482,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     .collect(Collectors.toSet()),
                 voterId -> voters
                     .voterNode(voterId, channel.listenerName())
-                    .orElseThrow(() -> new IllegalStateException("TODO")),
+                    .orElseThrow(() ->
+                        new IllegalStateException(
+                            String.format(
+                                "Unknown endpoint for voter id %d for listener name %s",
+                                voterId,
+                                channel.listenerName()
+                            )
+                        )
+                    ),
                 this::buildBeginQuorumEpochRequest
             );
             state.resetBeginQuorumEpochTimer(currentTimeMs);
@@ -2556,7 +2564,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 state.unrecordedVoters(),
                 voterId -> voters
                     .voterNode(voterId, channel.listenerName())
-                    .orElseThrow(() -> new IllegalStateException("TODO")),
+                    .orElseThrow(() ->
+                        new IllegalStateException(
+                            String.format(
+                                "Unknown endpoint for voter id %d for listener name %s",
+                                voterId,
+                                channel.listenerName()
+                            )
+                        )
+                    ),
                 this::buildVoteRequest
             );
         }

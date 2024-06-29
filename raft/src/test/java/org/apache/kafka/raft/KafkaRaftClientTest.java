@@ -77,8 +77,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// TODO: Add test for invalid voter key for vote response
-// TODO: Add test for invalid voter key for begin quorum epoch response
 public class KafkaRaftClientTest {
 
     @ParameterizedTest

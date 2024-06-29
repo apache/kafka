@@ -164,8 +164,10 @@ public class QuorumStateTest {
         assertTrue(state.isUnattached());
         UnattachedState unattachedState = state.unattachedStateOrThrow();
         assertEquals(epoch, unattachedState.epoch());
-        assertEquals(electionTimeoutMs + jitterMs,
-            unattachedState.remainingElectionTimeMs(time.milliseconds()));
+        assertEquals(
+            electionTimeoutMs + jitterMs,
+            unattachedState.remainingElectionTimeMs(time.milliseconds())
+        );
     }
 
     @ParameterizedTest
@@ -186,6 +188,25 @@ public class QuorumStateTest {
         assertEquals(epoch, followerState.epoch());
         assertEquals(node1, followerState.leaderId());
         assertEquals(fetchTimeoutMs, followerState.remainingFetchTimeMs(time.milliseconds()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(shorts = {0, 1})
+    public void testInitializeAsUnattachedWhenMissingEndpoints(short kraftVersion) {
+        int node1 = 1;
+        int node2 = 2;
+        int leader = 3;
+        int epoch = 5;
+        VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
+        store.writeElectionState(ElectionState.withElectedLeader(epoch, leader, voters.voterIds()), kraftVersion);
+
+        QuorumState state = buildQuorumState(OptionalInt.of(localId), voters, kraftVersion);
+        state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
+        assertTrue(state.isUnattached());
+        assertEquals(epoch, state.epoch());
+
+        UnattachedState unattachedState = state.unattachedStateOrThrow();
+        assertEquals(epoch, unattachedState.epoch());
     }
 
     @ParameterizedTest
