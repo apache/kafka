@@ -356,7 +356,7 @@ public class GroupCoordinatorConfig {
     /**
      * The compression type used to compress records in batches.
      */
-    public CompressionType compressionType() {
+    public CompressionType offsetTopicCompressionType() {
         return Optional.ofNullable(config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG))
                 .map(CompressionType::forId)
                 .orElse(null);

@@ -71,7 +71,7 @@ public class GroupCoordinatorConfigTest {
         assertEquals(10 * 60 * 1000, config.offsetsRetentionCheckIntervalMs());
         assertEquals(Duration.ofMinutes(24 * 60 * 60 * 1000L).toMillis(), config.offsetsRetentionMs());
         assertEquals(5000, config.offsetCommitTimeoutMs());
-        assertEquals(CompressionType.GZIP, config.compressionType());
+        assertEquals(CompressionType.GZIP, config.offsetTopicCompressionType());
         assertEquals(10, config.appendLingerMs());
     }
 

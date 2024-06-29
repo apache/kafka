@@ -1227,7 +1227,7 @@ class KafkaConfigTest {
     assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
     assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
     assertEquals(123L, config.logFlushIntervalMs)
-    assertEquals(CompressionType.SNAPPY, config.groupCoordinatorConfig.compressionType)
+    assertEquals(CompressionType.SNAPPY, config.groupCoordinatorConfig.offsetTopicCompressionType)
     assertEquals(Sensor.RecordingLevel.DEBUG.toString, config.metricRecordingLevel)
     assertEquals(false, config.tokenAuthEnabled)
     assertEquals(7 * 24 * 60L * 60L * 1000L, config.delegationTokenMaxLifeMs)

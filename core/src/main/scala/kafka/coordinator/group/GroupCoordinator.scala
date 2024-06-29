@@ -1777,7 +1777,7 @@ object GroupCoordinator {
     config.groupCoordinatorConfig.offsetsTopicPartitions,
     config.groupCoordinatorConfig.offsetsTopicSegmentBytes,
     config.groupCoordinatorConfig.offsetsTopicReplicationFactor,
-    config.groupCoordinatorConfig.compressionType,
+    config.groupCoordinatorConfig.offsetTopicCompressionType,
     config.groupCoordinatorConfig.offsetCommitTimeoutMs,
     config.groupCoordinatorConfig.offsetCommitRequiredAcks
   )

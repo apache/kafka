@@ -187,7 +187,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(groupCoordinatorMetrics)
                     .withSerializer(new CoordinatorRecordSerde())
-                    .withCompression(Compression.of(config.compressionType()).build())
+                    .withCompression(Compression.of(config.offsetTopicCompressionType()).build())
                     .withAppendLingerMs(config.appendLingerMs())
                     .build();
 

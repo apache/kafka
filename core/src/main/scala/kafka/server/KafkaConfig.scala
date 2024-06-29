@@ -1035,7 +1035,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       s"log.message.format.version $logMessageFormatVersionString can only be used when inter.broker.protocol.version " +
       s"is set to version ${MetadataVersion.minSupportedFor(recordVersion).shortVersion} or higher")
 
-    if (groupCoordinatorConfig.compressionType == CompressionType.ZSTD)
+    if (groupCoordinatorConfig.offsetTopicCompressionType == CompressionType.ZSTD)
       require(interBrokerProtocolVersion.highestSupportedRecordVersion().value >= IBP_2_1_IV0.highestSupportedRecordVersion().value,
         "offsets.topic.compression.codec zstd can only be used when inter.broker.protocol.version " +
         s"is set to version ${IBP_2_1_IV0.shortVersion} or higher")
