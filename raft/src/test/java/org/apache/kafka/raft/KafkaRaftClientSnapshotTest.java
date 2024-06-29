@@ -1380,6 +1380,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .setLeaderEpoch(epoch)
                         .setLeaderId(leaderId);
 
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
+
                     return responsePartitionSnapshot
                         .setErrorCode(Errors.SNAPSHOT_NOT_FOUND.code());
                 }
@@ -1440,6 +1442,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .setLeaderEpoch(epoch + 1)
                         .setLeaderId(secondLeaderId);
 
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
+
                     return responsePartitionSnapshot
                         .setErrorCode(Errors.FENCED_LEADER_EPOCH.code());
                 }
@@ -1499,6 +1503,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .setLeaderEpoch(epoch + 1)
                         .setLeaderId(leaderId);
 
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
+
                     return responsePartitionSnapshot
                         .setErrorCode(Errors.FENCED_LEADER_EPOCH.code());
                 }
@@ -1557,6 +1563,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .currentLeader()
                         .setLeaderEpoch(epoch - 1)
                         .setLeaderId(leaderId + 1);
+
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
 
                     return responsePartitionSnapshot
                         .setErrorCode(Errors.UNKNOWN_LEADER_EPOCH.code());
@@ -1632,6 +1640,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .setEndOffset(-1)
                         .setEpoch(snapshotId.epoch());
 
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
+
                     return responsePartitionSnapshot;
                 }
             )
@@ -1678,6 +1688,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .snapshotId()
                         .setEndOffset(snapshotId.offset())
                         .setEpoch(-1);
+
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
 
                     return responsePartitionSnapshot;
                 }
@@ -1752,6 +1764,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .snapshotId()
                         .setEndOffset(snapshotId.offset())
                         .setEpoch(snapshotId.epoch());
+
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
 
                     return responsePartitionSnapshot;
                 }

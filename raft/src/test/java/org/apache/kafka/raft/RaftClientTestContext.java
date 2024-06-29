@@ -39,7 +39,10 @@ import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.DataOutputStreamWritable;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -60,6 +63,8 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -651,12 +656,33 @@ public final class RaftClientTestContext {
         return voteRequests;
     }
 
+    private ApiMessage roundTripApiMessage(ApiMessage message, short version) {
+        ObjectSerializationCache cache =  new ObjectSerializationCache();
+        ByteArrayOutputStream  buffer = new ByteArrayOutputStream(message.size(cache, version));
+
+        // Endode the message to a byte array with the given version
+        DataOutputStreamWritable writer = new DataOutputStreamWritable(new DataOutputStream(buffer));
+        message.write(writer, cache, version);
+
+        // Decode the message from the byte array
+        ByteBufferAccessor reader = new ByteBufferAccessor(ByteBuffer.wrap(buffer.toByteArray()));
+        message.read(reader, version);
+
+        return message;
+    }
+
     void deliverRequest(ApiMessage request) {
+        short version = raftRequestVersion(request);
+        deliverRequest(request, version);
+    }
+
+    void deliverRequest(ApiMessage request, short version) {
+        ApiMessage versionedRequest = roundTripApiMessage(request, version);
         RaftRequest.Inbound inboundRequest = new RaftRequest.Inbound(
             channel.listenerName(),
             channel.newCorrelationId(),
-            raftRequestVersion(request),
-            request,
+            version,
+            versionedRequest,
             time.milliseconds()
         );
         inboundRequest.completion.whenComplete((response, exception) -> {
@@ -670,7 +696,9 @@ public final class RaftClientTestContext {
     }
 
     void deliverResponse(int correlationId, Node source, ApiMessage response) {
-        channel.mockReceive(new RaftResponse.Inbound(correlationId, response, source));
+        short version = raftResponseVersion(response);
+        ApiMessage versionedResponse = roundTripApiMessage(response, version);
+        channel.mockReceive(new RaftResponse.Inbound(correlationId, versionedResponse, source));
     }
 
     void assertSentBeginQuorumEpochRequest(int epoch, Set<Integer> destinationIds) {
@@ -1080,8 +1108,8 @@ public final class RaftClientTestContext {
 
     BeginQuorumEpochRequestData beginEpochRequest(String clusterId, int epoch, int leaderId) {
         ReplicaKey localReplicaKey = kip853Rpc ?
-            ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID) :
-            ReplicaKey.of(localIdOrThrow(), localDirectoryId);
+            ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
+            ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID);
 
         return beginEpochRequest(clusterId, epoch, leaderId, localReplicaKey);
     }
@@ -1138,8 +1166,8 @@ public final class RaftClientTestContext {
         long lastEpochOffset
     ) {
         ReplicaKey localReplicaKey = kip853Rpc ?
-            ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID) :
-            ReplicaKey.of(localIdOrThrow(), localDirectoryId);
+            ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
+            ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID);
 
         return voteRequest(
             clusterId,
@@ -1469,6 +1497,24 @@ public final class RaftClientTestContext {
             return describeQuorumRpcVersion();
         } else {
             throw new IllegalArgumentException(String.format("Request %s is not a raft request", request));
+        }
+    }
+
+    private short raftResponseVersion(ApiMessage response) {
+        if (response instanceof FetchResponseData) {
+            return fetchRpcVersion();
+        } else if (response instanceof FetchSnapshotResponseData) {
+            return fetchSnapshotRpcVersion();
+        } else if (response instanceof VoteResponseData) {
+            return voteRpcVersion();
+        } else if (response instanceof BeginQuorumEpochResponseData) {
+            return beginQuorumEpochRpcVersion();
+        } else if (response instanceof EndQuorumEpochResponseData) {
+            return endQuorumEpochRpcVersion();
+        } else if (response instanceof DescribeQuorumResponseData) {
+            return describeQuorumRpcVersion();
+        } else {
+            throw new IllegalArgumentException(String.format("Request %s is not a raft response", response));
         }
     }
 

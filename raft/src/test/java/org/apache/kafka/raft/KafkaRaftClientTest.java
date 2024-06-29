@@ -29,7 +29,6 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -38,7 +37,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
@@ -48,6 +46,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
@@ -65,6 +64,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.raft.RaftClientTestContext.Builder.DEFAULT_ELECTION_TIMEOUT_MS;
@@ -570,14 +570,17 @@ public class KafkaRaftClientTest {
             context.listener.currentLeaderAndEpoch());
     }
 
-    @Test
-    public void testBeginQuorumHeartbeat() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testBeginQuorumEpochHeartbeat(boolean withKip853Rpc) throws Exception {
         int localId = 0;
         int remoteId1 = 1;
         int remoteId2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, remoteId1, remoteId2);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
 
         context.becomeLeader();
         assertEquals(OptionalInt.of(localId), context.currentLeader());
@@ -1961,9 +1964,17 @@ public class KafkaRaftClientTest {
         context.assertSentFetchPartitionResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
     }
 
+    private static Stream<Short> validFetchVersions() {
+        int minimumSupportedVersion = 13;
+        return Stream
+            .iterate(minimumSupportedVersion, value -> value + 1)
+            .limit(FetchRequestData.HIGHEST_SUPPORTED_VERSION - minimumSupportedVersion + 1)
+            .map(Integer::shortValue);
+    }
+
     // This test mainly focuses on whether the leader state is correctly updated under different fetch version.
     @ParameterizedTest
-    @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
+    @MethodSource("validFetchVersions")
     public void testLeaderStateUpdateWithDifferentFetchRequestVersions(short version) throws Exception {
         int localId = 0;
         ReplicaKey otherNodeKey = replicaKey(1, false);
@@ -1982,7 +1993,7 @@ public class KafkaRaftClientTest {
         FetchRequestData request = new FetchRequest.SimpleBuilder(fetchRequestData).build(version).data();
         assertEquals((version < 15) ? 1 : -1, fetchRequestData.replicaId());
         assertEquals((version < 15) ? -1 : 1, fetchRequestData.replicaState().replicaId());
-        context.deliverRequest(request);
+        context.deliverRequest(request, version);
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(OptionalLong.of(1L), context.client.highWatermark());
