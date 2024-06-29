@@ -147,7 +147,7 @@ public class EOSUncleanShutdownIntegrationTest {
 
             TestUtils.waitForCondition(() -> recordCount.get() == RECORD_TOTAL,
                 "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
-        } catch (Exception e) {
+        } catch (final Exception e) {
             e.printStackTrace();
         } finally {
             TestUtils.waitForCondition(() -> driver.state().equals(State.ERROR),
