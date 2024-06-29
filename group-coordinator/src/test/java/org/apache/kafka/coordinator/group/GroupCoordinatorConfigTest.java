@@ -31,6 +31,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class GroupCoordinatorConfigTest {
     @Test
     public void testConfigs() {
@@ -52,6 +53,14 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, 5000);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.DISABLED.name());
         configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, (int) CompressionType.GZIP.id);
+        configs.put(GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG, 555);
+        configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 111);
+        configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, (short) 11);
+        configs.put(GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG, (short) 0);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 333);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, 666);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 111);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 222);
 
         GroupCoordinatorConfig config = new GroupCoordinatorConfig(new GroupCoordinatorTestConfig(configs));
 
@@ -73,6 +82,14 @@ public class GroupCoordinatorConfigTest {
         assertEquals(5000, config.offsetCommitTimeoutMs());
         assertEquals(CompressionType.GZIP, config.offsetTopicCompressionType());
         assertEquals(10, config.appendLingerMs());
+        assertEquals(555, config.offsetsLoadBufferSize());
+        assertEquals(111, config.offsetsTopicPartitions());
+        assertEquals(11, config.offsetsTopicReplicationFactor());
+        assertEquals(0, config.offsetCommitRequiredAcks());
+        assertEquals(333, config.consumerGroupMinSessionTimeoutMs());
+        assertEquals(666, config.consumerGroupMaxSessionTimeoutMs());
+        assertEquals(111, config.consumerGroupMinHeartbeatIntervalMs());
+        assertEquals(222, config.consumerGroupMaxHeartbeatIntervalMs());
     }
 
     public static GroupCoordinatorConfig createGroupCoordinatorConfig(
