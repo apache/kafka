@@ -40,7 +40,6 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +78,6 @@ import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -558,12 +556,16 @@ public class TestUtils {
      * @param <T> Exception cause type parameter
      * @return The caught exception cause
      */
-    @Timeout(DEFAULT_MAX_WAIT_MS)
     public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
-        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        assertInstanceOf(exceptionCauseClass, exception.getCause(),
-                "Unexpected exception cause " + exception.getCause());
-        return exceptionCauseClass.cast(exception.getCause());
+        try {
+            future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.SECONDS);
+            fail("Future should throw expected exception " + exceptionCauseClass.getSimpleName() + " but succeed.");
+        } catch (TimeoutException | InterruptedException | ExecutionException e) {
+            assertInstanceOf(exceptionCauseClass, e.getCause(),
+                    "Unexpected exception cause " + e.getCause());
+            return exceptionCauseClass.cast(e.getCause());
+        }
+        return null;
     }
 
     public static <T extends Throwable> void assertFutureThrows(
