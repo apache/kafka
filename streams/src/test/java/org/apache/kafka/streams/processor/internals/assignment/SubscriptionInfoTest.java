@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Map;
-
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -39,12 +39,12 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T1_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T2_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T2_2_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_0;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.MIN_NAMED_TOPOLOGY_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.MIN_VERSION_OFFSET_SUM_SUBSCRIPTION;

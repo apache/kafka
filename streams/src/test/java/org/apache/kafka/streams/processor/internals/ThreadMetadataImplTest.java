@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.processor.TaskId;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

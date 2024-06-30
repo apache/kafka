@@ -16,7 +16,21 @@
  */
 package org.apache.kafka.streams.processor.assignment.assignors;
 
-import static java.util.Collections.unmodifiableMap;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils.RackAwareOptimizationParams;
+import org.apache.kafka.streams.processor.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.assignment.TaskInfo;
+import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
+import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -31,20 +45,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.assignment.ApplicationState;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
-import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
-import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils.RackAwareOptimizationParams;
-import org.apache.kafka.streams.processor.assignment.TaskAssignor;
-import org.apache.kafka.streams.processor.assignment.TaskInfo;
-import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
-import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static java.util.Collections.unmodifiableMap;
 
 
 public class StickyTaskAssignor implements TaskAssignor {

@@ -57,6 +57,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockClientSupplier;
+
 import org.apache.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
