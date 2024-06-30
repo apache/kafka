@@ -19,9 +19,13 @@ package org.apache.kafka.coordinator.group.assignor;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.consumer.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.consumer.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
@@ -30,6 +34,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -46,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RangeAssignorTest {
-    private final RangeAssignor assignor = new RangeAssignor();
+    private final RangeAssignorV2 assignor = new RangeAssignorV2();
     private final Uuid topic1Uuid = Uuid.randomUuid();
     private final String topic1Name = "topic1";
     private final Uuid topic2Uuid = Uuid.randomUuid();
@@ -75,6 +80,7 @@ public class RangeAssignorTest {
             memberA,
             new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
+                Optional.empty(),
                 Collections.emptySet(),
                 Assignment.EMPTY
             )
@@ -91,7 +97,10 @@ public class RangeAssignorTest {
             subscribedTopicMetadata
         );
 
-        assertEquals(Collections.emptyMap(), groupAssignment.members());
+        Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, new MemberAssignmentImpl(Collections.emptyMap()));
+
+        assertEquals(expectedAssignment, groupAssignment.members());
     }
 
     @Test
@@ -111,6 +120,7 @@ public class RangeAssignorTest {
         Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
             memberA,
             new MemberSubscriptionAndAssignmentImpl(
+                Optional.empty(),
                 Optional.empty(),
                 mkSet(topic2Uuid),
                 Assignment.EMPTY
@@ -147,11 +157,13 @@ public class RangeAssignorTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             Assignment.EMPTY
@@ -208,17 +220,20 @@ public class RangeAssignorTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic3Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic2Uuid, topic3Uuid),
             Assignment.EMPTY
@@ -272,17 +287,20 @@ public class RangeAssignorTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             Assignment.EMPTY
@@ -311,10 +329,80 @@ public class RangeAssignorTest {
             mkTopicAssignment(topic3Uuid, 1)
         ));
         expectedAssignment.put(memberC, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 2)
+            mkTopicAssignment(topic1Uuid, 2),
+            mkTopicAssignment(topic3Uuid)
         ));
 
         assertAssignment(expectedAssignment, computedAssignment);
+    }
+
+    @Test
+    public void testStaticMembership() throws PartitionAssignorException {
+        SubscribedTopicDescriber subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            Collections.singletonMap(
+                topic1Uuid,
+                new TopicMetadata(
+                    topic1Uuid,
+                    topic1Name,
+                    3,
+                    Collections.emptyMap()
+                )
+            )
+        );
+
+        // Initial members with instance IDs
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.of("instanceA"),
+            Collections.singleton(topic1Uuid),
+            Assignment.EMPTY
+        ));
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.of("instanceB"),
+            Collections.singleton(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            SubscriptionType.HOMOGENEOUS,
+            invertedTargetAssignment(members)
+        );
+
+        // First assignment
+        GroupAssignment initialAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+
+        // Remove memberA and add it back with a different member ID but same instance ID
+        members.remove(memberA);
+        members.put("memberA1", new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.of("instanceA"),
+            Collections.singleton(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        groupSpec = new GroupSpecImpl(
+            members,
+            SubscriptionType.HOMOGENEOUS,
+            invertedTargetAssignment(members)
+        );
+
+        // Reassignment
+        GroupAssignment reassignedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+
+        // Assert that the assignment did not change
+        assertEquals(
+            initialAssignment.members().get(memberA).partitions(),
+            reassignedAssignment.members().get("memberA1").partitions()
+        );
     }
 
     @Test
@@ -337,6 +425,7 @@ public class RangeAssignorTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0),
@@ -345,6 +434,7 @@ public class RangeAssignorTest {
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -355,6 +445,7 @@ public class RangeAssignorTest {
 
         // Add a new consumer to trigger a re-assignment
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             Assignment.EMPTY
@@ -408,6 +499,7 @@ public class RangeAssignorTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1),
@@ -416,6 +508,7 @@ public class RangeAssignorTest {
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -469,6 +562,7 @@ public class RangeAssignorTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1),
@@ -477,6 +571,7 @@ public class RangeAssignorTest {
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -487,6 +582,7 @@ public class RangeAssignorTest {
 
         // Add a new consumer to trigger a re-assignment
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             Assignment.EMPTY
@@ -542,6 +638,7 @@ public class RangeAssignorTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1),
@@ -550,6 +647,7 @@ public class RangeAssignorTest {
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -560,6 +658,7 @@ public class RangeAssignorTest {
 
         // Add a new consumer to trigger a re-assignment
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid),
             Assignment.EMPTY
@@ -614,6 +713,7 @@ public class RangeAssignorTest {
         // Consumer A was removed
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -671,6 +771,7 @@ public class RangeAssignorTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1, 2),
@@ -680,6 +781,7 @@ public class RangeAssignorTest {
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid, topic3Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic2Uuid, 1)
@@ -687,6 +789,7 @@ public class RangeAssignorTest {
         ));
 
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic2Uuid),
             new Assignment(mkAssignment(
@@ -730,7 +833,20 @@ public class RangeAssignorTest {
         assertEquals(expectedAssignment.size(), computedGroupAssignment.members().size());
         for (String memberId : computedGroupAssignment.members().keySet()) {
             Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(memberId).partitions();
-            assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
+            Map<Uuid, Set<Integer>> expectedAssignmentForMember = expectedAssignment.get(memberId);
+
+            // Compare the content of the maps by entries
+            assertEquals(expectedAssignmentForMember.size(), computedAssignmentForMember.size());
+            for (Map.Entry<Uuid, Set<Integer>> entry : expectedAssignmentForMember.entrySet()) {
+                Set<Integer> expectedSet = entry.getValue();
+                Set<Integer> computedSet = computedAssignmentForMember.get(entry.getKey());
+
+                // Convert both sets to HashSet for comparison
+                Set<Integer> normalizedExpectedSet = new HashSet<>(expectedSet);
+                Set<Integer> normalizedComputedSet = new HashSet<>(computedSet);
+
+                assertEquals(normalizedExpectedSet, normalizedComputedSet);
+            }
         }
     }
 }

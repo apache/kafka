@@ -35,6 +35,13 @@ public interface MemberSubscription {
     Optional<String> rackId();
 
     /**
+     * Gets the instance Id if present.
+     *
+     * @return An Optional containing the instance Id, or an empty Optional if not present.
+     */
+    Optional<String> instanceId();
+
+    /**
      * Gets the set of subscribed topic Ids.
      *
      * @return The set of subscribed topic Ids.
