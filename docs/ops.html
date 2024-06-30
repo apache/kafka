@@ -3971,7 +3971,10 @@ zookeeper.connect=localhost:2181
 
 # KRaft controller quorum configuration
 controller.quorum.voters=3000@localhost:9093
-controller.listener.names=CONTROLLER</code></pre>
+controller.listener.names=CONTROLLER
+
+# If the ZK broker is using a generated broker ID, disable broker ID generation
+broker.id.generation.enable=false</code></pre>
 
   <p>
     <em>Note: Once the final ZK broker has been restarted with the necessary configuration, the migration will automatically begin.</em>
