@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A container that holds the list {@link ConsumerRecord} per partition for a
@@ -64,6 +65,28 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
             if (entry.getKey().topic().equals(topic))
                 recs.add(entry.getValue());
         }
+        return new ConcatenatedIterable<>(recs);
+    }
+
+    public Iterable<ConsumerRecord<K, V>> recordsForEach(String topic) {
+        if (topic == null)
+            throw new IllegalArgumentException("Topic must be non-null.");
+        List<List<ConsumerRecord<K, V>>> recs = new ArrayList<>();
+        records.forEach((key, value) -> {
+            if (key.topic().equals(topic))
+                recs.add(value);
+        });
+        return new ConcatenatedIterable<>(recs);
+    }
+
+    public Iterable<ConsumerRecord<K, V>> recordsWithEntrySetAndStream(String topic) {
+        if (topic == null)
+            throw new IllegalArgumentException("Topic must be non-null.");
+        List<List<ConsumerRecord<K, V>>> recs = records.entrySet()
+            .stream()
+            .filter(entry -> entry.getKey().topic().equals(topic))
+            .map(Map.Entry::getValue)
+            .collect(Collectors.toList());
         return new ConcatenatedIterable<>(recs);
     }
 
