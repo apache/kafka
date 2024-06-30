@@ -142,26 +142,28 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
                 protected ConsumerRecord<K, V> makeNext() {
                     while (true) {
-                        while (current == null || !current.hasNext()) {
-                            if (iters.hasNext()) {
-                                current = iters.next().iterator();
-                            } else {
+                        if (current == null || !current.hasNext()) {
+                            if (!advanceToNextIterator()) {
                                 return allDone();
                             }
                         }
 
                         ConsumerRecord<K, V> next = current.next();
 
-                        if (predicate != null) {
-                            if (predicate.test(next)) {
-                                return next;
-                            } else {
-                                continue;
-                            }
-                        } else {
+                        if (predicate == null || predicate.test(next)) {
                             return next;
                         }
                     }
+                }
+
+                private boolean advanceToNextIterator() {
+                    while (iters.hasNext()) {
+                        current = iters.next().iterator();
+                        if (current.hasNext()) {
+                            return true;
+                        }
+                    }
+                    return false;
                 }
             };
         }
