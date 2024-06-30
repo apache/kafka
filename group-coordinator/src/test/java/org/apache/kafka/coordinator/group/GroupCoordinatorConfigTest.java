@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
@@ -27,12 +28,19 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SuppressWarnings("deprecation")
 public class GroupCoordinatorConfigTest {
+    private static final List<ConfigDef> GROUP_COORDINATOR_CONFIG_DEFS = Arrays.asList(
+            GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
+            GroupCoordinatorConfig.NEW_GROUP_CONFIG_DEF,
+            GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
+            GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF);
+
     @Test
     public void testConfigs() {
         Map<String, Object> configs = new HashMap<>();
@@ -62,7 +70,8 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 111);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 222);
 
-        GroupCoordinatorConfig config = new GroupCoordinatorConfig(new GroupCoordinatorTestConfig(configs));
+        GroupCoordinatorConfig config = new GroupCoordinatorConfig(
+                new AbstractConfig(Utils.mergeConfigs(GROUP_COORDINATOR_CONFIG_DEFS), configs, false));
 
         assertEquals(10, config.numThreads());
         assertEquals(30, config.consumerGroupSessionTimeoutMs());
@@ -116,20 +125,7 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.DISABLED.name());
         configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, (int) CompressionType.NONE.id);
 
-        return new GroupCoordinatorConfig(new GroupCoordinatorTestConfig(configs));
-    }
-
-    private static class GroupCoordinatorTestConfig extends AbstractConfig {
-
-        public GroupCoordinatorTestConfig(Map<?, ?> originals) {
-            super(
-                    Utils.mergeConfigs(Arrays.asList(
-                            GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
-                            GroupCoordinatorConfig.NEW_GROUP_CONFIG_DEF,
-                            GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
-                            GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF)),
-                    originals,
-                    true);
-        }
+        return new GroupCoordinatorConfig(
+                new AbstractConfig(Utils.mergeConfigs(GROUP_COORDINATOR_CONFIG_DEFS), configs, false));
     }
 }
