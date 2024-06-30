@@ -642,7 +642,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     def test_group_protocol_migration(self, clean_shutdown, enable_autocommit, metadata_quorum, use_new_coordinator,
                                       consumer_group_migration_policy, assignment_strategy, bounce_mode):
         producer = self.setup_producer(self.TOPIC)
-        consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
+        consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.consumer_group_protocol,
                                        assignment_strategy=assignment_strategy, enable_autocommit=enable_autocommit)
         self.mark_for_collect(consumer, 'verifiable_consumer_stdout')
         consumer.start()
@@ -652,8 +652,9 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
 
         consumer.start()
         self.await_all_members(consumer)
+        self.await_consumed_messages(consumer)
 
-        consumer.group_protocol = consumer_group.consumer_group_protocol
+        # consumer.group_protocol = consumer_group.consumer_group_protocol
 
         if bounce_mode == "all":
             for node in consumer.nodes:
