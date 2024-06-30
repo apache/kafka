@@ -1752,8 +1752,7 @@ public class StreamsConfig extends AbstractConfig {
         }
 
         validateProducerPropertyMap(props);
-
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
+        
         overwritePropertyMap(
             props,
             ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, 
