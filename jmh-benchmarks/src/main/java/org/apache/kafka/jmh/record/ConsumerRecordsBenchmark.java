@@ -15,7 +15,8 @@ import java.util.concurrent.TimeUnit;
 @Fork(value = 1)
 @Warmup(iterations = 5)
 @Measurement(iterations = 10)
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@OutputTimeUnit(TimeUnit.NANOSECONDS)
+@BenchmarkMode(Mode.AverageTime)
 public class ConsumerRecordsBenchmark {
     private ConsumerRecords<Integer, String> records;
 
@@ -53,5 +54,10 @@ public class ConsumerRecordsBenchmark {
     @Benchmark
     public void recordsWithEntrySetAndStream() {
         records.recordsWithEntrySetAndStream("topic2");
+    }
+
+    @Benchmark
+    public void recordsWithFilterIterator() {
+        records.recordsWithFilterIterator("topic2");
     }
 }

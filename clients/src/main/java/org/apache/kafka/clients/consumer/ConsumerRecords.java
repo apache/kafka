@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -90,6 +91,12 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         return new ConcatenatedIterable<>(recs);
     }
 
+    public Iterable<ConsumerRecord<K, V>> recordsWithFilterIterator(String topic) {
+        if (topic == null)
+            throw new IllegalArgumentException("Topic must be non-null.");
+        return new ConcatenatedIterable<>(records.values(), record -> record.topic().equals(topic));
+    }
+
     /**
      * Get the partitions which have records contained in this record set.
      * @return the set of partitions with data in this record set (may be empty if no data was returned)
@@ -116,9 +123,15 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     private static class ConcatenatedIterable<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
         private final Iterable<? extends Iterable<ConsumerRecord<K, V>>> iterables;
+        private Predicate<ConsumerRecord<K, V>> predicate = null;
 
         public ConcatenatedIterable(Iterable<? extends Iterable<ConsumerRecord<K, V>>> iterables) {
             this.iterables = iterables;
+        }
+
+        public ConcatenatedIterable(Iterable<? extends Iterable<ConsumerRecord<K, V>>> iterables, Predicate<ConsumerRecord<K, V>> predicate) {
+            this.iterables = iterables;
+            this.predicate = predicate;
         }
 
         @Override
@@ -128,13 +141,27 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
                 Iterator<ConsumerRecord<K, V>> current;
 
                 protected ConsumerRecord<K, V> makeNext() {
-                    while (current == null || !current.hasNext()) {
-                        if (iters.hasNext())
-                            current = iters.next().iterator();
-                        else
-                            return allDone();
+                    while (true) {
+                        while (current == null || !current.hasNext()) {
+                            if (iters.hasNext()) {
+                                current = iters.next().iterator();
+                            } else {
+                                return allDone();
+                            }
+                        }
+
+                        ConsumerRecord<K, V> next = current.next();
+
+                        if (predicate != null) {
+                            if (predicate.test(next)) {
+                                return next;
+                            } else {
+                                continue;
+                            }
+                        } else {
+                            return next;
+                        }
                     }
-                    return current.next();
                 }
             };
         }
