@@ -1545,8 +1545,6 @@ public class StreamsConfig extends AbstractConfig {
             for (final Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED.entrySet()) {
                 overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
             }
-            verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
-
         } else {
             for (final Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS.entrySet()) {
                 overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
