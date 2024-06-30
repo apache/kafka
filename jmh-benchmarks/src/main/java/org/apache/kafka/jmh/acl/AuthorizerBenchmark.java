@@ -95,17 +95,21 @@ public class AuthorizerBenchmark {
         }
     }
 
-    @Param({"10000", "50000", "200000"})
+    @Param({"5000", "10000"})
     private int resourceCount;
     //no. of. rules per resource
-    @Param({"10", "50"})
+    @Param({"10", "20"})
     private int aclCount;
 
-    @Param({"0", "20", "50", "90", "99", "99.9", "99.99", "100"})
+    @Param({"20"})
     private double denyPercentage;
 
     @Param({"ACL", "KRAFT"})
     private AuthorizerType authorizerType;
+
+    private long startTime;
+
+    private long endTime;
 
     private final int hostPreCount = 1000;
     private final String resourceNamePrefix = "foo-bar35_resource-";
@@ -122,6 +126,8 @@ public class AuthorizerBenchmark {
 
     @Setup(Level.Trial)
     public void setup() throws Exception {
+        startTime = System.currentTimeMillis() / 1000L;
+        System.out.println("start time: " + startTime);
         authorizer = authorizerType.newAuthorizer();
         prepareAclCache();
         prepareAclToUpdate();
@@ -256,6 +262,9 @@ public class AuthorizerBenchmark {
     @TearDown(Level.Trial)
     public void tearDown() throws IOException {
         authorizer.close();
+        endTime = System.currentTimeMillis() / 1000L;
+        System.out.println("end time: " + endTime);
+        System.out.println("duration: " + (endTime - startTime));
     }
 
     @Benchmark
