@@ -988,10 +988,6 @@ public class StreamsConfig extends AbstractConfig {
                     (name, value) -> verifyTopologyOptimizationConfigs((String) value),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
-            .define(ProducerConfig.PARTITIONER_CLASS_CONFIG,
-                    Type.CLASS,
-                    null,
-                    Importance.MEDIUM, "")
 
             // LOW
 
@@ -1175,7 +1171,6 @@ public class StreamsConfig extends AbstractConfig {
                     WINDOW_SIZE_MS_DOC);
     }
 
-    // KS_DEFAULT_PRODUCER_CONFIGS - default producer configs for Kafka Streams
     private static final Map<String, Object> KS_DEFAULT_PRODUCER_CONFIGS;
     static {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
@@ -1184,17 +1179,16 @@ public class StreamsConfig extends AbstractConfig {
         KS_DEFAULT_PRODUCER_CONFIGS = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
-    // KS_DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED - default producer configs for Kafka Streams with EOS enabled
     private static final Map<String, Object> KS_DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED;
     static {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>(KS_DEFAULT_PRODUCER_CONFIGS);
         tempProducerDefaultOverrides.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
+        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
         tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, DEFAULT_TRANSACTION_TIMEOUT);
 
         KS_DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
-    // KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED - Kafka Streams producer configs that cannot be overridden by the user with EOS enabled
     private static final Map<String, Object> KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED;
     static {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
@@ -1204,7 +1198,6 @@ public class StreamsConfig extends AbstractConfig {
         KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
-    // KS_DEFAULT_CONSUMER_CONFIGS - default consumer configs for Kafka Streams
     private static final Map<String, Object> KS_DEFAULT_CONSUMER_CONFIGS;
     static {
         final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>();
@@ -1215,7 +1208,6 @@ public class StreamsConfig extends AbstractConfig {
         KS_DEFAULT_CONSUMER_CONFIGS = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
-    // KS_CONTROLLED_CONSUMER_CONFIGS - Kafka Streams consumer configs that cannot be overridden by the user
     private static final Map<String, Object> KS_CONTROLLED_CONSUMER_CONFIGS;
     static {
         final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>();
@@ -1225,7 +1217,6 @@ public class StreamsConfig extends AbstractConfig {
         KS_CONTROLLED_CONSUMER_CONFIGS = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
-    // KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED - Kafka Streams consumer configs that cannot be overridden by the user with EOS enabled
     private static final Map<String, Object> KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED;
     static {
         final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>(KS_CONTROLLED_CONSUMER_CONFIGS);
@@ -1516,14 +1507,14 @@ public class StreamsConfig extends AbstractConfig {
         });
     }
 
-    private void overwritePropertyMap(final Map<String, Object> props, final String key, final Object value, final String config) {
-        final String overwritePropertyLogMessage = "Unexpected %s config: %s found. User setting (%s) will be ignored and the Streams default setting (%s) will be used";
+    private void overwritePropertyMap(final Map<String, Object> props, final String key, final Object unmodifiableDefaultValue, final String config) {
+        final String overwritePropertyLogMessage = "Unexpected %s config `%s` found. User setting (%s) will be ignored and the Kafka Streams default setting (%s) will be used";
         
-        if (props.containsKey(key) && (!Objects.equals(props.get(key), value))) {
-            log.warn(String.format(overwritePropertyLogMessage, config, key, props.get(key), value));
+        if (props.containsKey(key) && (!Objects.equals(props.get(key), unmodifiableDefaultValue))) {
+            log.warn(String.format(overwritePropertyLogMessage, config, key, props.get(key), unmodifiableDefaultValue));
         }
 
-        props.put(key, value);
+        props.put(key, unmodifiableDefaultValue);
     }
 
     private Map<String, Object> getCommonConsumerConfigs() {
@@ -1551,14 +1542,12 @@ public class StreamsConfig extends AbstractConfig {
 
     private void validateConsumerPropertyMap(final Map<String, Object> props) {
         if (eosEnabled) {
-            // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED and override values if set
             for (final Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED.entrySet()) {
                 overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
             }
             verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
 
         } else {
-            // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS and override values if set
             for (final Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS.entrySet()) {
                 overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
             }
@@ -1567,20 +1556,10 @@ public class StreamsConfig extends AbstractConfig {
 
     private void validateProducerPropertyMap(final Map<String, Object> props) {
         if (eosEnabled) {
-            // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED and override values if set
             for (final Map.Entry<String, Object> entry : KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED.entrySet()) {
                 overwritePropertyMap(props, entry.getKey(), entry.getValue(), "producer");
             }
             verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
-
-        }
-
-        if (props.containsKey(ProducerConfig.PARTITIONER_CLASS_CONFIG)) {
-            final Class<?> c = (Class<?>) props.get(ProducerConfig.PARTITIONER_CLASS_CONFIG);
-            if (!StreamPartitioner.class.isAssignableFrom(c)) {
-                props.remove(ProducerConfig.PARTITIONER_CLASS_CONFIG);
-                log.warn(String.format("Unexpected producer config: partitioner.class found. User setting (%s) will be ignored", c.getName()));
-            }
         }
     }
 
