@@ -78,8 +78,7 @@ def contributors(from_rev, to_rev, **kwargs):
     line = "git shortlog -sn --group=author --group=trailer:co-authored-by"
     line += f" --group=trailer:Reviewers --no-merges {from_rev}..{to_rev}"
     line += " | cut -f2 | sort --ignore-case | uniq"
-    return execute(line, **kwargs).split('\n')
-
+    return [str(x) for x in filter(None, execute(line, **kwargs).split('\n'))]
 
 def branches(**kwargs):
     output = execute('git branch')
