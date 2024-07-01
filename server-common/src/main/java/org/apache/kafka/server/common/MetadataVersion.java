@@ -202,7 +202,6 @@ public enum MetadataVersion {
     IBP_3_7_IV4(19, "3.7", "IV4", false),
 
     // New version for the Kafka 3.8.0 release.
-    // Add ELR related supports (KIP-966).
     IBP_3_8_IV0(20, "3.8", "IV0", false),
 
     //
