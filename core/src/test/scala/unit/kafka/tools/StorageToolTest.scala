@@ -137,7 +137,7 @@ Found problem:
           "version=1",
           "node.id=1",
           "cluster.id=XcZZOzUqS4yHOjhMQB6JLQ")).
-            getBytes(StandardCharsets.UTF_8))
+          getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
         infoCommand(new PrintStream(stream), false, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
@@ -190,32 +190,14 @@ Found problem:
       val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata,
-<<<<<<< HEAD
-<<<<<<< HEAD
           MetadataVersion.latestTesting(), ignoreFormatted = false,
           advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null))
-=======
-          MetadataVersion.latestTesting(), ignoreFormatted = false, standaloneMode = false,
-=======
-          MetadataVersion.latestTesting(), ignoreFormatted = false,
->>>>>>> 484aa1a709 (From review)
-          advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint]))
->>>>>>> b626dbfe9d (Update voterset, test)
       assertTrue(stringAfterFirstLine(stream.toString()).startsWith("Formatting %s".format(tempDir)))
 
       try assertEquals(1, StorageTool.
         formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties,
-<<<<<<< HEAD
-<<<<<<< HEAD
           bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false,
           advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null)) catch {
-=======
-          bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false, standaloneMode = false,
-=======
-          bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false,
->>>>>>> 484aa1a709 (From review)
-          advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint])) catch {
->>>>>>> b626dbfe9d (Update voterset, test)
         case e: TerseFailure => assertEquals(s"Log directory ${tempDir} is already " +
           "formatted. Use --ignore-formatted to ignore this directory and format the " +
           "others.", e.getMessage)
@@ -224,17 +206,8 @@ Found problem:
       val stream2 = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, bootstrapMetadata,
-<<<<<<< HEAD
-<<<<<<< HEAD
           MetadataVersion.latestTesting(), ignoreFormatted = true,
           advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null))
-=======
-          MetadataVersion.latestTesting(), ignoreFormatted = true, standaloneMode = false,
-=======
-          MetadataVersion.latestTesting(), ignoreFormatted = true,
->>>>>>> 484aa1a709 (From review)
-          advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint]))
->>>>>>> b626dbfe9d (Update voterset, test)
       assertEquals("All of the log directories are already formatted.%n".format(), stringAfterFirstLine(stream2.toString()))
     } finally Utils.delete(tempDir)
   }
@@ -259,28 +232,11 @@ Found problem:
 
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata,
-<<<<<<< HEAD
-<<<<<<< HEAD
           MetadataVersion.latestTesting(), ignoreFormatted = false,
           updatedAdvertisedListenerEndpoints, null))
       val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
       assertTrue(stringAfterFirstLine(stream.toString()).contains("Snapshot written to %s".format(checkpointDir)))
       val checkpointFilePath = Snapshots.snapshotPath(Paths.get(checkpointDir), BOOTSTRAP_SNAPSHOT_ID)
-=======
-          MetadataVersion.latestTesting(), ignoreFormatted = false, standaloneMode = true,
-          updatedAdvertisedListenerEndpoints))
-      val checkpointDir = tempDir + clusterMetadataDir
-      assertTrue(stringAfterFirstLine(stream.toString()).startsWith("Snapshot written to %s".format(checkpointDir) +
-        "\n" + "Formatting %s".format(tempDir)))
-      val checkpointFilePath = Paths.get(checkpointDir + "/"+ checkpointFileName)
->>>>>>> b626dbfe9d (Update voterset, test)
-=======
-          MetadataVersion.latestTesting(), ignoreFormatted = false,
-          updatedAdvertisedListenerEndpoints))
-      val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
-      assertTrue(stringAfterFirstLine(stream.toString()).contains("Snapshot written to %s".format(checkpointDir)))
-      val checkpointFilePath = Snapshots.snapshotPath(Paths.get(checkpointDir), BOOTSTRAP_SNAPSHOT_ID)
->>>>>>> 484aa1a709 (From review)
       assertTrue(checkpointFilePath.toFile.exists)
       assertTrue(Utils.readFileAsString(checkpointFilePath.toFile.getPath).contains(host))
     } finally Utils.delete(tempDir)
@@ -299,17 +255,8 @@ Found problem:
       build()
     val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
     StorageTool.formatCommand(new PrintStream(stream), directories, metaProperties, bootstrapMetadata,
-<<<<<<< HEAD
-<<<<<<< HEAD
       MetadataVersion.latestTesting(), ignoreFormatted,
       advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null)
-=======
-      MetadataVersion.latestTesting(), ignoreFormatted, standaloneMode = false,
-=======
-      MetadataVersion.latestTesting(), ignoreFormatted,
->>>>>>> 484aa1a709 (From review)
-      advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint])
->>>>>>> b626dbfe9d (Update voterset, test)
   }
 
   @Test
@@ -363,8 +310,8 @@ Found problem:
     val config = new KafkaConfig(newSelfManagedProperties())
     assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
       "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
-        "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
-          () => StorageTool.buildMetadataProperties("invalid", config)).getMessage)
+      "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
+      () => StorageTool.buildMetadataProperties("invalid", config)).getMessage)
   }
 
   @Test
@@ -576,9 +523,9 @@ Found problem:
 
     // Validate we can add multiple SCRAM creds.
     scramRecords = parseAddScram("-S",
-    "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]",
-    "-S",
-    "SCRAM-SHA-256=[name=george,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]")
+      "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]",
+      "-S",
+      "SCRAM-SHA-256=[name=george,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]")
 
     assertEquals(2, scramRecords.get.size)
 
@@ -691,7 +638,7 @@ Found problem:
       StorageTool.main(args)
     } catch {
       case e: StorageToolTestException => assertEquals("", exitString)
-      assertEquals(0, exitStatus)
+        assertEquals(0, exitStatus)
     } finally {
       Exit.resetExitProcedure()
     }
@@ -709,23 +656,14 @@ Found problem:
         buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties,
-<<<<<<< HEAD
-<<<<<<< HEAD
           bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false,
           advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint], null))
-=======
-          bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false, standaloneMode = false,
-=======
-          bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false,
->>>>>>> 484aa1a709 (From review)
-          advertisedListenerEndpoints = scala.collection.Seq.empty[kafka.cluster.EndPoint]))
->>>>>>> b626dbfe9d (Update voterset, test)
 
       val metaPropertiesFile = Paths.get(tempDir.toURI).resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME).toFile
       assertTrue(metaPropertiesFile.exists())
       val metaProps = new MetaProperties.Builder(
         PropertiesUtils.readPropertiesFile(metaPropertiesFile.getAbsolutePath())).
-          build()
+        build()
       assertTrue(metaProps.directoryId().isPresent())
       assertFalse(DirectoryId.reserved(metaProps.directoryId().get()))
     } finally Utils.delete(tempDir)

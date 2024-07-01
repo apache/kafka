@@ -416,12 +416,17 @@ public final class VoterSet {
     }
 
     /**
-     * Creates a voter set from a map of socket addresses.
+     * Creates a voter set from endpoints, node id and directory id.
      *
-     * @param voters the VoterNode by voter id
+     * @param endpoints endpoints
+     * @param nodeId node id
+     * @param directoryId directory id
      * @return the voter set
      */
-    public static VoterSet fromMap(Map<Integer, VoterNode> voters) {
+    public static VoterSet fromMap(Endpoints endpoints, int nodeId, Uuid directoryId) {
+        Map<Integer, VoterSet.VoterNode> voters = new HashMap<>();
+        voters.put(nodeId, new VoterSet.VoterNode(ReplicaKey.of(nodeId, directoryId), endpoints,
+                new SupportedVersionRange((short) 0, (short) 1)));
         return new VoterSet(voters);
     }
 }
