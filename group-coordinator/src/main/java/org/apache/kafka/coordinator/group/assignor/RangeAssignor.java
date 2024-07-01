@@ -238,9 +238,15 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         GroupSpec groupSpec
     ) {
         List<String> sortedMemberIds = new ArrayList<>(groupSpec.memberIds());
+        Map<String, Optional<String>> instanceIdCache = new HashMap<>();
+
+        for (String memberId : sortedMemberIds) {
+            instanceIdCache.put(memberId, groupSpec.memberSubscription(memberId).instanceId());
+        }
+
         sortedMemberIds.sort((memberId1, memberId2) -> {
-            Optional<String> instanceId1 = groupSpec.memberSubscription(memberId1).instanceId();
-            Optional<String> instanceId2 = groupSpec.memberSubscription(memberId2).instanceId();
+            Optional<String> instanceId1 = instanceIdCache.get(memberId1);
+            Optional<String> instanceId2 = instanceIdCache.get(memberId2);
 
             if (instanceId1.isPresent() && instanceId2.isPresent()) {
                 return instanceId1.get().compareTo(instanceId2.get());
