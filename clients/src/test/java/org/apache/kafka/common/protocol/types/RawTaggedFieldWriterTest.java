@@ -18,6 +18,7 @@
 package org.apache.kafka.common.protocol.types;
 
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

@@ -30,16 +30,6 @@ public class RequestTargetException extends ConnectException {
         this.forwardUrl = forwardUrl;
     }
 
-    public RequestTargetException(String s, Throwable throwable, String forwardUrl) {
-        super(s, throwable);
-        this.forwardUrl = forwardUrl;
-    }
-
-    public RequestTargetException(Throwable throwable, String forwardUrl) {
-        super(throwable);
-        this.forwardUrl = forwardUrl;
-    }
-
     public String forwardUrl() {
         return forwardUrl;
     }

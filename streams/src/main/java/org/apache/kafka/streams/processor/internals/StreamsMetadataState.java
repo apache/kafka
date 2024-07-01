@@ -16,34 +16,35 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Comparator;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyQueryMetadata;
+import org.apache.kafka.streams.StreamsMetadata;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.HostInfo;
-import org.apache.kafka.streams.StreamsMetadata;
 import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 
 import org.slf4j.Logger;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.producer.RecordMetadata.UNKNOWN_PARTITION;
 
@@ -314,10 +315,9 @@ public class StreamsMetadataState {
                                final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap,
                                final Map<TopicPartition, PartitionInfo> topicPartitionInfo) {
         this.partitionsByTopic = new HashMap<>();
-        topicPartitionInfo.entrySet().forEach(entry -> this.partitionsByTopic
-                .computeIfAbsent(entry.getKey().topic(), topic -> new ArrayList<>())
-                .add(entry.getValue())
-        );
+        topicPartitionInfo.forEach((key, value) -> this.partitionsByTopic
+                .computeIfAbsent(key.topic(), topic -> new ArrayList<>())
+                .add(value));
 
         rebuildMetadata(activePartitionHostMap, standbyPartitionHostMap);
     }

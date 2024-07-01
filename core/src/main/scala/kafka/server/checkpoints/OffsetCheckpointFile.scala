@@ -68,7 +68,7 @@ class OffsetCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureCh
   def write(offsets: Map[TopicPartition, Long]): Unit = {
     val list: java.util.List[(TopicPartition, Long)] = new java.util.ArrayList[(TopicPartition, Long)](offsets.size)
     offsets.foreach(x => list.add(x))
-    checkpoint.write(list, true)
+    checkpoint.write(list)
   }
 
   def read(): Map[TopicPartition, Long] = {

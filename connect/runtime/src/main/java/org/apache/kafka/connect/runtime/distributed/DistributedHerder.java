@@ -78,12 +78,9 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.TemporaryStage;
+
 import org.slf4j.Logger;
 
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -111,6 +108,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
@@ -1096,54 +1098,82 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         log.trace("Submitting connector config write request {}", connName);
         addRequest(
             () -> {
-                validateConnectorConfig(config, callback.chainStaging((error, configInfos) -> {
-                    if (error != null) {
-                        callback.onCompletion(error, null);
-                        return;
-                    }
-
-                    // Complete the connector config write via another herder request in order to
-                    // perform the write to the backing store (or forward to the leader) during
-                    // the "external request" portion of the tick loop
-                    addRequest(
-                        () -> {
-                            if (maybeAddConfigErrors(configInfos, callback)) {
-                                return null;
-                            }
-
-                            log.trace("Handling connector config request {}", connName);
-                            if (!isLeader()) {
-                                callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
-                                return null;
-                            }
-                            boolean exists = configState.contains(connName);
-                            if (!allowReplace && exists) {
-                                callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
-                                return null;
-                            }
-
-                            log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
-                            writeToConfigTopicAsLeader(
-                                    "writing a config for connector " + connName + " to the config topic",
-                                    () -> configBackingStore.putConnectorConfig(connName, config, targetState)
-                            );
-
-                            // Note that we use the updated connector config despite the fact that we don't have an updated
-                            // snapshot yet. The existing task info should still be accurate.
-                            ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
-                                connectorType(config));
-                            callback.onCompletion(null, new Created<>(!exists, info));
-                            return null;
-                        },
-                        forwardErrorAndTickThreadStages(callback)
-                    );
-                }));
+                doPutConnectorConfig(connName, config, targetState, allowReplace, callback);
                 return null;
             },
             forwardErrorAndTickThreadStages(callback)
         );
     }
 
+    @Override
+    public void patchConnectorConfig(String connName, Map<String, String> configPatch, Callback<Created<ConnectorInfo>> callback) {
+        log.trace("Submitting connector config patch request {}", connName);
+        addRequest(() -> {
+            // This reduces (but not completely eliminates) the chance for race conditions.
+            if (!isLeader()) {
+                callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+                return null;
+            }
+
+            ConnectorInfo connectorInfo = connectorInfo(connName);
+            if (connectorInfo == null) {
+                callback.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
+            } else {
+                Map<String, String> patchedConfig = ConnectUtils.patchConfig(connectorInfo.config(), configPatch);
+                doPutConnectorConfig(connName, patchedConfig, null, true, callback);
+            }
+            return null;
+        }, forwardErrorAndTickThreadStages(callback));
+    }
+
+    private void doPutConnectorConfig(
+            String connName,
+            Map<String, String> config,
+            TargetState targetState, boolean allowReplace,
+            Callback<Created<ConnectorInfo>> callback) {
+        validateConnectorConfig(config, callback.chainStaging((error, configInfos) -> {
+            if (error != null) {
+                callback.onCompletion(error, null);
+                return;
+            }
+
+            // Complete the connector config write via another herder request in order to
+            // perform the write to the backing store (or forward to the leader) during
+            // the "external request" portion of the tick loop
+            addRequest(
+                    () -> {
+                        if (maybeAddConfigErrors(configInfos, callback)) {
+                            return null;
+                        }
+
+                        log.trace("Handling connector config request {}", connName);
+                        if (!isLeader()) {
+                            callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+                            return null;
+                        }
+                        boolean exists = configState.contains(connName);
+                        if (!allowReplace && exists) {
+                            callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
+                            return null;
+                        }
+
+                        log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
+                        writeToConfigTopicAsLeader(
+                                "writing a config for connector " + connName + " to the config topic",
+                                () -> configBackingStore.putConnectorConfig(connName, config, targetState)
+                        );
+
+                        // Note that we use the updated connector config despite the fact that we don't have an updated
+                        // snapshot yet. The existing task info should still be accurate.
+                        ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
+                                connectorType(config));
+                        callback.onCompletion(null, new Created<>(!exists, info));
+                        return null;
+                    },
+                    forwardErrorAndTickThreadStages(callback)
+            );
+        }));
+    }
     @Override
     public void stopConnector(final String connName, final Callback<Void> callback) {
         log.trace("Submitting request to transition connector {} to STOPPED state", connName);
@@ -1768,7 +1798,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         long now = time.milliseconds();
         if (scheduledRebalance <= now) {
             log.debug("Requesting rebalance because scheduled rebalance timeout has been reached "
-                    + "(now: {} scheduledRebalance: {}", scheduledRebalance, now);
+                    + "now: {} scheduledRebalance: {}", now, scheduledRebalance);
 
             needsRejoin = true;
             scheduledRebalance = Long.MAX_VALUE;
@@ -2201,11 +2231,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void publishConnectorTaskConfigs(String connName, List<Map<String, String>> taskProps, Callback<Void> cb) {
-        if (!taskConfigsChanged(configState, connName, taskProps)) {
+        List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
+        if (!taskConfigsChanged(configState, connName, rawTaskProps)) {
             return;
         }
 
-        List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
         if (isLeader()) {
             writeTaskConfigs(connName, rawTaskProps);
             cb.onCompletion(null, null);
@@ -2702,6 +2732,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             } else {
                 log.info("Wasn't able to resume work after last rebalance, can skip stopping connectors and tasks");
             }
+        }
+
+        @Override
+        public void onPollTimeoutExpiry() {
+            log.warn("worker poll timeout has expired. The last known action being performed by the worker is : {} and may contribute to the timeout. " +
+                "Please review the last action (if known) for any corrective actions. " +
+                "One of the ways of addressing this can be increasing the rebalance.timeout.ms configuration value. Please note that " +
+                "rebalance.timeout.ms also controls the maximum allowed time for each worker to join the group once a " +
+                "rebalance has begun so the set value should not be very high", tickThreadStage == null ? "not known" : tickThreadStage.description());
         }
 
         private void resetActiveTopics(Collection<String> connectors, Collection<ConnectorTaskId> tasks) {

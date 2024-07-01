@@ -18,7 +18,6 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.internals.QuotaConfigs;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.protocol.Errors;
@@ -27,6 +26,8 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.config.QuotaConfigs;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -227,19 +228,19 @@ public class ClientQuotaControlManagerTest {
                 new EntityData().setEntityType("user").setEntityName("user-3"),
                 new EntityData().setEntityType("client-id").setEntityName(null))).
                     setKey("request_percentage").setValue(55.55).setRemove(false), (short) 0),
-            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
                 new EntityData().setEntityType("user").setEntityName("user-1"))).
                     setKey("request_percentage").setValue(56.56).setRemove(false), (short) 0),
-            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
                 new EntityData().setEntityType("user").setEntityName("user-2"))).
                     setKey("request_percentage").setValue(57.57).setRemove(false), (short) 0),
-            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
                 new EntityData().setEntityType("user").setEntityName("user-3"))).
                     setKey("request_percentage").setValue(58.58).setRemove(false), (short) 0),
-            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
                 new EntityData().setEntityType("user").setEntityName(null))).
                     setKey("request_percentage").setValue(59.59).setRemove(false), (short) 0),
-            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+            new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
                 new EntityData().setEntityType("client-id").setEntityName("client-id-2"))).
                     setKey("request_percentage").setValue(60.60).setRemove(false), (short) 0));
         records = new ArrayList<>(records);
@@ -322,7 +323,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithUser() {
-        testConfigKeysForEntityType(Arrays.asList(ClientQuotaEntity.USER),
+        testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.USER),
             Arrays.asList(
                 "producer_byte_rate",
                 "consumer_byte_rate",
@@ -333,7 +334,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithClientId() {
-        testConfigKeysForEntityType(Arrays.asList(ClientQuotaEntity.CLIENT_ID),
+        testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.CLIENT_ID),
             Arrays.asList(
                 "producer_byte_rate",
                 "consumer_byte_rate",
@@ -355,8 +356,8 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithIp() {
-        testConfigKeysForEntityType(Arrays.asList(ClientQuotaEntity.IP),
-            Arrays.asList(
+        testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.IP),
+            Collections.singletonList(
                 "connection_creation_rate"
             ));
     }
@@ -385,7 +386,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEmptyEntity() {
-        testConfigKeysError(Arrays.asList(),
+        testConfigKeysError(Collections.emptyList(),
             new ApiError(Errors.INVALID_REQUEST, "Invalid empty client quota entity"));
     }
 
@@ -421,12 +422,12 @@ public class ClientQuotaControlManagerTest {
         assertEquals(expectedError, ClientQuotaControlManager.configKeysForEntityType(entity, output));
     }
 
-    private final static HashMap<String, ConfigDef.ConfigKey> VALID_CLIENT_ID_QUOTA_KEYS;
+    private static final HashMap<String, ConfigDef.ConfigKey> VALID_CLIENT_ID_QUOTA_KEYS;
 
     static {
         VALID_CLIENT_ID_QUOTA_KEYS = new HashMap<>();
         assertEquals(ApiError.NONE, ClientQuotaControlManager.configKeysForEntityType(
-                keysToEntity(Arrays.asList(ClientQuotaEntity.CLIENT_ID)), VALID_CLIENT_ID_QUOTA_KEYS));
+                keysToEntity(Collections.singletonList(ClientQuotaEntity.CLIENT_ID)), VALID_CLIENT_ID_QUOTA_KEYS));
     }
 
     @Test

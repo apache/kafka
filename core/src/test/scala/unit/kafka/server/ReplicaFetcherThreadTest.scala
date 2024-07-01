@@ -24,6 +24,7 @@ import kafka.server.epoch.util.MockBlockingSender
 import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.{FetchResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
@@ -33,7 +34,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, RecordValidationStats, SimpleRecord}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMetadataRequest}
-import org.apache.kafka.common.utils.{LogContext, SystemTime}
+import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.storage.internals.log.LogAppendInfo
@@ -119,15 +121,20 @@ class ReplicaFetcherThreadTest {
 
   @Test
   def shouldSendLatestRequestVersionsByDefault(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    val config = KafkaConfig.fromProps(props)
-
-    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
-
-    assertEquals(ApiKeys.FETCH.latestVersion, config.interBrokerProtocolVersion.fetchRequestVersion())
-    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, config.interBrokerProtocolVersion.offsetForLeaderEpochRequestVersion)
-    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, config.interBrokerProtocolVersion.listOffsetRequestVersion)
+    // Check unstable versions
+    val testingVersion = MetadataVersion.latestTesting
+    assertEquals(
+      ApiKeys.FETCH.latestVersion(true),
+      testingVersion.fetchRequestVersion
+    )
+    assertEquals(
+      ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(true),
+      testingVersion.offsetForLeaderEpochRequestVersion
+    )
+    assertEquals(
+      ApiKeys.LIST_OFFSETS.latestVersion(true),
+      testingVersion.listOffsetRequestVersion
+    )
   }
 
   @Test
@@ -166,7 +173,7 @@ class ReplicaFetcherThreadTest {
       t1p1 -> newOffsetForLeaderPartitionResult(t1p1, leaderEpoch, 1)).asJava
 
     //Create the fetcher thread
-    val mockNetwork = new MockBlockingSender(offsets, brokerEndPoint, new SystemTime())
+    val mockNetwork = new MockBlockingSender(offsets, brokerEndPoint, Time.SYSTEM)
 
     val thread = createReplicaFetcherThread(
       "bob",
@@ -282,7 +289,7 @@ class ReplicaFetcherThreadTest {
 
   private def verifyFetchLeaderEpochOnFirstFetch(ibp: MetadataVersion, epochFetchCount: Int = 1): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, ibp.version)
+    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, ibp.version)
     val config = KafkaConfig.fromProps(props)
 
     metadataCache = new ZkMetadataCache(0, ibp, BrokerFeatures.createEmpty())
@@ -315,7 +322,7 @@ class ReplicaFetcherThreadTest {
       t1p1 -> newOffsetForLeaderPartitionResult(t1p1, leaderEpoch, 1)).asJava
 
     //Create the fetcher thread
-    val mockNetwork = new MockBlockingSender(offsets, brokerEndPoint, new SystemTime())
+    val mockNetwork = new MockBlockingSender(offsets, brokerEndPoint, Time.SYSTEM)
     val thread = createReplicaFetcherThread(
       "bob",
       0,
@@ -381,7 +388,7 @@ class ReplicaFetcherThreadTest {
       t2p1 -> newOffsetForLeaderPartitionResult(t2p1, leaderEpoch, 172)).asJava
 
     //Create the thread
-    val mockNetwork = new MockBlockingSender(offsetsReply, brokerEndPoint, new SystemTime())
+    val mockNetwork = new MockBlockingSender(offsetsReply, brokerEndPoint, Time.SYSTEM)
     val thread = createReplicaFetcherThread(
       "bob",
       0,
@@ -441,7 +448,7 @@ class ReplicaFetcherThreadTest {
       t2p1 -> newOffsetForLeaderPartitionResult(t2p1, leaderEpochAtLeader, 202)).asJava
 
     //Create the thread
-    val mockNetwork = new MockBlockingSender(offsetsReply, brokerEndPoint, new SystemTime())
+    val mockNetwork = new MockBlockingSender(offsetsReply, brokerEndPoint, Time.SYSTEM)
     val thread = createReplicaFetcherThread(
       "bob",
       0,
@@ -504,7 +511,7 @@ class ReplicaFetcherThreadTest {
       t1p1 -> newOffsetForLeaderPartitionResult(t1p1, 4, 143)).asJava
 
     // Create the fetcher thread
-    val mockNetwork = new MockBlockingSender(offsets, brokerEndPoint, new SystemTime())
+    val mockNetwork = new MockBlockingSender(offsets, brokerEndPoint, Time.SYSTEM)
     val thread = createReplicaFetcherThread(
       "bob",
       0,
@@ -582,7 +589,7 @@ class ReplicaFetcherThreadTest {
     stub(partition, replicaManager, log)
 
     // Create the fetcher thread
-    val mockNetwork = new MockBlockingSender(Collections.emptyMap(), brokerEndPoint, new SystemTime())
+    val mockNetwork = new MockBlockingSender(Collections.emptyMap(), brokerEndPoint, Time.SYSTEM)
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockNetwork, fetchSessionHandler, config,
@@ -692,7 +699,7 @@ class ReplicaFetcherThreadTest {
     val mockNetwork = new MockBlockingSender(
       Collections.emptyMap(),
       brokerEndPoint,
-      new SystemTime()
+      Time.SYSTEM
     )
 
     val leader = new RemoteLeaderEndPoint(
@@ -785,7 +792,7 @@ class ReplicaFetcherThreadTest {
     val mockNetwork = new MockBlockingSender(
       Collections.emptyMap(),
       brokerEndPoint,
-      new SystemTime()
+      Time.SYSTEM
     )
 
     val leader = new RemoteLeaderEndPoint(
@@ -845,7 +852,7 @@ class ReplicaFetcherThreadTest {
     val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.11.0")
+    props.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "0.11.0")
     val config = KafkaConfig.fromProps(props)
 
     // Setup all dependencies
@@ -881,7 +888,7 @@ class ReplicaFetcherThreadTest {
       t1p1 -> newOffsetForLeaderPartitionResult(t1p1, UNDEFINED_EPOCH, 143)).asJava
 
     // Create the fetcher thread
-    val mockNetwork = new MockBlockingSender(offsets, brokerEndPoint, new SystemTime())
+    val mockNetwork = new MockBlockingSender(offsets, brokerEndPoint, Time.SYSTEM)
     val thread = createReplicaFetcherThread(
       "bob",
       0,
@@ -945,7 +952,7 @@ class ReplicaFetcherThreadTest {
       t1p0 -> newOffsetForLeaderPartitionResult(t1p0, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)).asJava
 
     //Create the thread
-    val mockNetwork = new MockBlockingSender(offsetsReply, brokerEndPoint, new SystemTime())
+    val mockNetwork = new MockBlockingSender(offsetsReply, brokerEndPoint, Time.SYSTEM)
     val thread = createReplicaFetcherThread(
       "bob",
       0,
@@ -1006,7 +1013,7 @@ class ReplicaFetcherThreadTest {
     ).asJava
 
     //Create the thread
-    val mockNetwork = new MockBlockingSender(offsetsReply, brokerEndPoint, new SystemTime())
+    val mockNetwork = new MockBlockingSender(offsetsReply, brokerEndPoint, Time.SYSTEM)
     val thread = createReplicaFetcherThread(
       "bob",
       0,
@@ -1068,7 +1075,7 @@ class ReplicaFetcherThreadTest {
     ).asJava
 
     //Create the fetcher thread
-    val mockNetwork = new MockBlockingSender(offsetsReply, brokerEndPoint, new SystemTime())
+    val mockNetwork = new MockBlockingSender(offsetsReply, brokerEndPoint, Time.SYSTEM)
     val thread = createReplicaFetcherThread(
       "bob",
       0,
@@ -1128,7 +1135,7 @@ class ReplicaFetcherThreadTest {
     ).asJava
 
     //Create the fetcher thread
-    val mockNetwork = new MockBlockingSender(offsetsReply, brokerEndPoint, new SystemTime())
+    val mockNetwork = new MockBlockingSender(offsetsReply, brokerEndPoint, Time.SYSTEM)
     val thread = createReplicaFetcherThread(
       "bob",
       0,
@@ -1330,7 +1337,7 @@ class ReplicaFetcherThreadTest {
 
     val tp0 = new TopicPartition("testTopic", 0)
     val tp1 = new TopicPartition("testTopic", 1)
-    val records = MemoryRecords.withRecords(CompressionType.NONE,
+    val records = MemoryRecords.withRecords(Compression.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     val partitionData = new FetchResponseData.PartitionData()
       .setRecords(records)
@@ -1379,7 +1386,7 @@ class ReplicaFetcherThreadTest {
     when(mockBlockingSend.brokerEndPoint()).thenReturn(brokerEndPoint)
 
     val log: UnifiedLog = mock(classOf[UnifiedLog])
-    val records = MemoryRecords.withRecords(CompressionType.NONE,
+    val records = MemoryRecords.withRecords(Compression.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     when(log.maybeUpdateHighWatermark(hw = 0)).thenReturn(None)
 
@@ -1432,7 +1439,7 @@ class ReplicaFetcherThreadTest {
 
   private def kafkaConfigNoTruncateOnFetch: KafkaConfig = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_6_IV0.version)
+    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, IBP_2_6_IV0.version)
     KafkaConfig.fromProps(props)
   }
 }

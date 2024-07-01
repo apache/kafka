@@ -21,10 +21,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 import java.io.File;
 import java.util.Map;
-import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 public class StateManagerStub implements StateManager {
 

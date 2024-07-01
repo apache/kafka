@@ -20,8 +20,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.processor.TaskId;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 import java.util.Optional;
@@ -68,7 +69,7 @@ public class ThreadMetadataImplTest {
 
     private ThreadMetadata threadMetadata;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         threadMetadata = new ThreadMetadataImpl(
             THREAD_NAME,

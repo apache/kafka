@@ -19,12 +19,13 @@ package org.apache.kafka.common.security.oauthbearer.internals;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.utils.Utils;
 
-import javax.security.sasl.SaslException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import javax.security.sasl.SaslException;
 
 public class OAuthBearerClientInitialResponse {
     static final String SEPARATOR = "\u0001";
@@ -34,7 +35,7 @@ public class OAuthBearerClientInitialResponse {
     private static final String VALUE = "[\\x21-\\x7E \t\r\n]+";
 
     private static final String KVPAIRS = String.format("(%s=%s%s)*", KEY, VALUE, SEPARATOR);
-    private static final Pattern AUTH_PATTERN = Pattern.compile("(?<scheme>[\\w]+)[ ]+(?<token>[-_\\.a-zA-Z0-9]+)");
+    private static final Pattern AUTH_PATTERN = Pattern.compile("(?<scheme>[\\w]+)[ ]+(?<token>[-_~+/\\.a-zA-Z0-9]+([=]*))");
     private static final Pattern CLIENT_INITIAL_RESPONSE_PATTERN = Pattern.compile(
             String.format("n,(a=(?<authzid>%s))?,%s(?<kvpairs>%s)%s", SASLNAME, SEPARATOR, KVPAIRS, SEPARATOR));
     public static final String AUTH_KEY = "auth";
@@ -123,7 +124,7 @@ public class OAuthBearerClientInitialResponse {
     public byte[] toBytes() {
         String authzid = authorizationId.isEmpty() ? "" : "a=" + authorizationId;
         String extensions = extensionsMessage();
-        if (extensions.length() > 0)
+        if (!extensions.isEmpty())
             extensions = SEPARATOR + extensions;
 
         String message = String.format("n,%s,%sauth=Bearer %s%s%s%s", authzid,

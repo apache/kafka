@@ -298,7 +298,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         case Some(s) =>
           throw new IllegalStateException(s"Compaction for partition $topicPartition cannot be aborted and paused since it is in $s state.")
       }
-      while(!isCleaningInStatePaused(topicPartition))
+      while (!isCleaningInStatePaused(topicPartition))
         pausedCleaningCond.await(100, TimeUnit.MILLISECONDS)
     }
   }

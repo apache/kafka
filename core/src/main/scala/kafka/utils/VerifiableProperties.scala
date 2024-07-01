@@ -44,7 +44,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
   def getProperty(name: String): String = {
     val value = props.getProperty(name)
     referenceSet.add(name)
-    if(value == null) value else value.trim()
+    if (value == null) value else value.trim()
   }
 
   /**
@@ -75,7 +75,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    */
   private def getIntInRange(name: String, default: Int, range: (Int, Int)): Int = {
     val v =
-      if(containsKey(name))
+      if (containsKey(name))
         getProperty(name).toInt
       else
         default
@@ -85,7 +85,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
 
  private def getShortInRange(name: String, default: Short, range: (Short, Short)): Short = {
     val v =
-      if(containsKey(name))
+      if (containsKey(name))
         getProperty(name).toShort
       else
         default
@@ -118,7 +118,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    */
   private def getLongInRange(name: String, default: Long, range: (Long, Long)): Long = {
     val v =
-      if(containsKey(name))
+      if (containsKey(name))
         getProperty(name).toLong
       else
         default
@@ -140,7 +140,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @param default The default value for the property if not present
    */
   def getDouble(name: String, default: Double): Double = {
-    if(containsKey(name))
+    if (containsKey(name))
       getDouble(name)
     else
       default
@@ -153,7 +153,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @return the boolean value
    */
   def getBoolean(name: String, default: Boolean): Boolean = {
-    if(!containsKey(name))
+    if (!containsKey(name))
       default
     else {
       val v = getProperty(name)
@@ -168,7 +168,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * Get a string property, or, if no such property is defined, return the given default value
    */
   def getString(name: String, default: String): String = {
-    if(containsKey(name))
+    if (containsKey(name))
       getProperty(name)
     else
       default
@@ -190,7 +190,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
       val m = Csv.parseCsvMap(getString(name, "")).asScala
       m.foreach {
         case(key, value) => 
-          if(!valid(value))
+          if (!valid(value))
             throw new IllegalArgumentException("Invalid entry '%s' = '%s' for property '%s'".format(key, value, name))
       }
       m
@@ -202,7 +202,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
   def verify(): Unit = {
     info("Verifying properties")
     val propNames = Collections.list(props.propertyNames).asScala.map(_.toString).sorted
-    for(key <- propNames) {
+    for (key <- propNames) {
       if (!referenceSet.contains(key) && !key.startsWith("external"))
         warn("Property %s is not valid".format(key))
       else

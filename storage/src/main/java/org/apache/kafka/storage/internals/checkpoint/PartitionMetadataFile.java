@@ -63,9 +63,9 @@ public class PartitionMetadataFile {
     public void record(Uuid topicId) {
         // Topic IDs should not differ, but we defensively check here to fail earlier in the case that the IDs somehow differ.
         dirtyTopicIdOpt.ifPresent(dirtyTopicId -> {
-            if (dirtyTopicId != topicId) {
-                throw new InconsistentTopicIdException("Tried to record topic ID $topicId to file " +
-                    "but had already recorded $dirtyTopicId");
+            if (!dirtyTopicId.equals(topicId)) {
+                throw new InconsistentTopicIdException("Tried to record topic ID " + topicId + " to file " +
+                        "but had already recorded " + dirtyTopicId);
             }
         });
         dirtyTopicIdOpt = Optional.of(topicId);

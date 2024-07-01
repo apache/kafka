@@ -17,17 +17,15 @@
 package kafka.server
 
 import kafka.test.ClusterInstance
-import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
-import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
-import kafka.utils.{NotNothing, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.util.Comparator
@@ -36,21 +34,9 @@ import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
-  private def brokers(): Seq[KafkaBroker] = {
-    if (cluster.isKRaftTest) {
-      cluster.asInstanceOf[RaftClusterInstance].brokers.collect(Collectors.toList[KafkaBroker]).asScala.toSeq
-    } else {
-      cluster.asInstanceOf[ZkClusterInstance].servers.collect(Collectors.toList[KafkaBroker]).asScala.toSeq
-    }
-  }
+  private def brokers(): Seq[KafkaBroker] = cluster.brokers.values().stream().collect(Collectors.toList[KafkaBroker]).asScala.toSeq
 
-  private def controllerServers(): Seq[ControllerServer] = {
-    if (cluster.isKRaftTest) {
-      cluster.asInstanceOf[RaftClusterInstance].controllerServers().asScala.toSeq
-    } else {
-      Seq.empty
-    }
-  }
+  private def controllerServers(): Seq[ControllerServer] = cluster.controllers().values().asScala.toSeq
 
   protected def createOffsetsTopic(): Unit = {
     TestUtils.createOffsetsTopicWithAdmin(
@@ -74,11 +60,12 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def isUnstableApiEnabled: Boolean = {
-    cluster.config.serverProperties.getProperty("unstable.api.versions.enable") == "true"
+    cluster.config.serverProperties.get("unstable.api.versions.enable") == "true"
   }
 
   protected def isNewGroupCoordinatorEnabled: Boolean = {
-    cluster.config.serverProperties.getProperty("group.coordinator.new.enable") == "true"
+    cluster.config.serverProperties.get("group.coordinator.new.enable") == "true" ||
+      cluster.config.serverProperties.get("group.coordinator.rebalance.protocols").contains("consumer")
   }
 
   protected def commitOffset(
@@ -405,11 +392,13 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def listGroups(
     statesFilter: List[String],
-    version: Short
+    typesFilter: List[String],
+    version: Short = ApiKeys.LIST_GROUPS.latestVersion(isUnstableApiEnabled)
   ): List[ListGroupsResponseData.ListedGroup] = {
     val request = new ListGroupsRequest.Builder(
       new ListGroupsRequestData()
         .setStatesFilter(statesFilter.asJava)
+        .setTypesFilter(typesFilter.asJava)
     ).build(version)
 
     val response = connectAndReceive[ListGroupsResponse](request)
@@ -428,6 +417,21 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     val describeGroupsResponse = connectAndReceive[DescribeGroupsResponse](describeGroupsRequest)
 
     describeGroupsResponse.data.groups.asScala.toList
+  }
+
+  protected def consumerGroupDescribe(
+    groupIds: List[String],
+    includeAuthorizedOperations: Boolean,
+    version: Short = ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)
+  ): List[ConsumerGroupDescribeResponseData.DescribedGroup] = {
+    val consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
+      new ConsumerGroupDescribeRequestData()
+        .setGroupIds(groupIds.asJava)
+        .setIncludeAuthorizedOperations(includeAuthorizedOperations)
+    ).build(version)
+
+    val consumerGroupDescribeResponse = connectAndReceive[ConsumerGroupDescribeResponse](consumerGroupDescribeRequest)
+    consumerGroupDescribeResponse.data.groups.asScala.toList
   }
 
   protected def heartbeat(
@@ -461,7 +465,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     rebalanceTimeoutMs: Int = -1,
     serverAssignor: String = null,
     subscribedTopicNames: List[String] = null,
-    topicPartitions: List[ConsumerGroupHeartbeatRequestData.TopicPartitions] = null
+    topicPartitions: List[ConsumerGroupHeartbeatRequestData.TopicPartitions] = null,
+    expectedError: Errors = Errors.NONE
   ): ConsumerGroupHeartbeatResponseData = {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
       new ConsumerGroupHeartbeatRequestData()
@@ -482,7 +487,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponse = null
     TestUtils.waitUntilTrue(() => {
       consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
-      consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+      consumerGroupHeartbeatResponse.data.errorCode == expectedError.code
     }, msg = s"Could not heartbeat successfully. Last response $consumerGroupHeartbeatResponse.")
 
     consumerGroupHeartbeatResponse.data
@@ -505,7 +510,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     groupInstanceIds: List[String] = null,
     expectedLeaveGroupError: Errors,
     expectedMemberErrors: List[Errors],
-    version: Short
+    version: Short = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
   ): Unit = {
     val leaveGroupRequest = new LeaveGroupRequest.Builder(
       groupId,
@@ -573,7 +578,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest
-  )(implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
+  )(implicit classTag: ClassTag[T]): T = {
     IntegrationTestUtils.connectAndReceive[T](
       request,
       cluster.anyBrokerSocketServer(),

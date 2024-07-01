@@ -17,19 +17,21 @@
 
 package org.apache.kafka.common.network;
 
-import static java.util.Arrays.asList;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.test.TestSslUtils;
+
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.test.TestSslUtils;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class Tls12SelectorTest extends SslSelectorTest {
 
@@ -38,7 +40,7 @@ public class Tls12SelectorTest extends SslSelectorTest {
         throws GeneralSecurityException, IOException {
         Map<String, Object> configs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT,
             trustStoreFile, "client");
-        configs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, asList("TLSv1.2"));
+        configs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.2"));
         return configs;
     }
 

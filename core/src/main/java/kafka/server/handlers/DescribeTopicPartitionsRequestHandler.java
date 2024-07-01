@@ -21,6 +21,7 @@ import kafka.network.RequestChannel;
 import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
 import kafka.server.metadata.KRaftMetadataCache;
+
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
@@ -30,13 +31,14 @@ import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.Descr
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeTopicPartitionsRequest;
 import org.apache.kafka.common.resource.Resource;
-import scala.collection.JavaConverters;
 
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
+
+import scala.collection.JavaConverters;
 
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
@@ -82,6 +84,11 @@ public class DescribeTopicPartitionsRequestHandler {
             }
         }
 
+        if (cursor != null && cursor.partitionIndex() < 0) {
+            // The partition id in cursor must be valid.
+            throw new InvalidRequestException("DescribeTopicPartitionsRequest cursor partition must be valid: " + cursor);
+        }
+
         // Do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
         Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata = new HashSet<>();
 
@@ -101,7 +108,7 @@ public class DescribeTopicPartitionsRequestHandler {
             JavaConverters.asScalaIterator(authorizedTopicsStream.iterator()),
             abstractRequest.context().listenerName,
             (String topicName) -> topicName.equals(cursorTopicName) ? cursor.partitionIndex() : 0,
-            Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()),
+            Math.max(Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()), 1),
             fetchAllTopics
         );
 

@@ -16,15 +16,17 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.internals.ReplicaKey;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Collections;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,15 +41,14 @@ class VotedStateTest {
     private final int electionTimeoutMs = 10000;
 
     private VotedState newVotedState(
-        Set<Integer> voters,
-        Optional<LogOffsetMetadata> highWatermark
+        Uuid votedDirectoryId
     ) {
         return new VotedState(
             time,
             epoch,
-            votedId,
-            voters,
-            highWatermark,
+            ReplicaKey.of(votedId, votedDirectoryId),
+            Collections.emptySet(),
+            Optional.empty(),
             electionTimeoutMs,
             logContext
         );
@@ -55,13 +56,15 @@ class VotedStateTest {
 
     @Test
     public void testElectionTimeout() {
-        Set<Integer> voters = Utils.mkSet(1, 2, 3);
-
-        VotedState state = newVotedState(voters, Optional.empty());
+        VotedState state = newVotedState(ReplicaKey.NO_DIRECTORY_ID);
+        ReplicaKey votedKey  = ReplicaKey.of(votedId, ReplicaKey.NO_DIRECTORY_ID);
 
         assertEquals(epoch, state.epoch());
-        assertEquals(votedId, state.votedId());
-        assertEquals(ElectionState.withVotedCandidate(epoch, votedId, voters), state.election());
+        assertEquals(votedKey, state.votedKey());
+        assertEquals(
+            ElectionState.withVotedCandidate(epoch, votedKey, Collections.emptySet()),
+            state.election()
+        );
         assertEquals(electionTimeoutMs, state.remainingElectionTimeMs(time.milliseconds()));
         assertFalse(state.hasElectionTimeoutExpired(time.milliseconds()));
 
@@ -76,14 +79,45 @@ class VotedStateTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testGrantVote(boolean isLogUpToDate) {
-        VotedState state = newVotedState(
-            Utils.mkSet(1, 2, 3),
-            Optional.empty()
+    public void testCanGrantVoteWithoutDirectoryId(boolean isLogUpToDate) {
+        VotedState state = newVotedState(ReplicaKey.NO_DIRECTORY_ID);
+
+        assertTrue(
+            state.canGrantVote(ReplicaKey.of(votedId, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+        );
+        assertTrue(
+            state.canGrantVote(
+                ReplicaKey.of(votedId, Uuid.randomUuid()),
+                isLogUpToDate
+            )
         );
 
-        assertTrue(state.canGrantVote(1, isLogUpToDate));
-        assertFalse(state.canGrantVote(2, isLogUpToDate));
-        assertFalse(state.canGrantVote(3, isLogUpToDate));
+        assertFalse(
+            state.canGrantVote(ReplicaKey.of(votedId + 1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+        );
+    }
+
+    @Test
+    void testCanGrantVoteWithDirectoryId() {
+        Uuid votedDirectoryId = Uuid.randomUuid();
+        VotedState state = newVotedState(votedDirectoryId);
+
+        assertTrue(state.canGrantVote(ReplicaKey.of(votedId, votedDirectoryId), false));
+
+        assertFalse(
+            state.canGrantVote(ReplicaKey.of(votedId, Uuid.randomUuid()), false)
+        );
+        assertFalse(state.canGrantVote(ReplicaKey.of(votedId, ReplicaKey.NO_DIRECTORY_ID), false));
+
+        assertFalse(state.canGrantVote(ReplicaKey.of(votedId + 1, votedDirectoryId), false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(votedId + 1, ReplicaKey.NO_DIRECTORY_ID), false));
+    }
+
+    @Test
+    void testLeaderEndpoints() {
+        Uuid votedDirectoryId = Uuid.randomUuid();
+        VotedState state = newVotedState(votedDirectoryId);
+
+        assertEquals(Endpoints.empty(), state.leaderEndpoints());
     }
 }

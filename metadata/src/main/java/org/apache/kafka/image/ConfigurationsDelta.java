@@ -71,11 +71,12 @@ public final class ConfigurationsDelta {
     public void replay(RemoveTopicRecord record, String topicName) {
         ConfigResource resource =
             new ConfigResource(Type.TOPIC, topicName);
-        ConfigurationImage configImage = image.resourceData().getOrDefault(resource,
-                new ConfigurationImage(resource, Collections.emptyMap()));
-        ConfigurationDelta delta = changes.computeIfAbsent(resource,
-            __ -> new ConfigurationDelta(configImage));
-        delta.deleteAll();
+        if (image.resourceData().containsKey(resource)) {
+            ConfigurationImage configImage = image.resourceData().get(resource);
+            ConfigurationDelta delta = changes.computeIfAbsent(resource,
+                __ -> new ConfigurationDelta(configImage));
+            delta.deleteAll();
+        }
     }
 
     public ConfigurationsImage apply() {

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 import java.io.File;
@@ -31,9 +32,11 @@ class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment
     KeyValueSegment(final String segmentName,
                     final String windowName,
                     final long id,
+                    final Position position,
                     final RocksDBMetricsRecorder metricsRecorder) {
         super(segmentName, windowName, metricsRecorder);
         this.id = id;
+        this.position = position;
     }
 
     @Override

@@ -68,12 +68,10 @@ class AclApis(authHelper: AuthHelper,
           describeAclsRequest.version))
       case Some(auth) =>
         val filter = describeAclsRequest.filter
-        val returnedAcls = new util.HashSet[AclBinding]()
-        auth.acls(filter).forEach(returnedAcls.add)
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           new DescribeAclsResponse(new DescribeAclsResponseData()
             .setThrottleTimeMs(requestThrottleMs)
-            .setResources(DescribeAclsResponse.aclsResources(returnedAcls)),
+            .setResources(DescribeAclsResponse.aclsResources(auth.acls(filter))),
           describeAclsRequest.version))
     }
     CompletableFuture.completedFuture[Unit](())

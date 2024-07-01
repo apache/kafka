@@ -28,11 +28,11 @@ import org.junit.jupiter.api.extension.ExtendWith
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.KRAFT, brokers = 1)
+@ClusterTestDefaults(types = Array(Type.KRAFT))
 @Tag("integration")
 class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
@@ -40,8 +40,8 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     testLeaveGroup()
   }
 
-  @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
+  @ClusterTest(types = Array(Type.ZK, Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))

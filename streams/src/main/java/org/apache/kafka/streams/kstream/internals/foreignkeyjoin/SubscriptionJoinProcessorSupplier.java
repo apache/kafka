@@ -107,7 +107,11 @@ public class SubscriptionJoinProcessorSupplier<K, KO, VO>
 
                         context().forward(
                             record.withKey(record.key().getPrimaryKey())
-                                .withValue(new SubscriptionResponseWrapper<>(value.getHash(), valueToSend, value.getPrimaryPartition()))
+                                .withValue(new SubscriptionResponseWrapper<>(
+                                        value.getHash(),
+                                        valueToSend,
+                                        value.getPrimaryPartition()
+                                ))
                                 .withTimestamp(resultTimestamp)
                         );
                         break;

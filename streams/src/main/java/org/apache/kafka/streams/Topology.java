@@ -739,6 +739,88 @@ public class Topology {
     }
 
     /**
+     * Adds a read-only {@link StateStore} to the topology.
+     * <p>
+     * A read-only {@link StateStore} does not create a dedicated changelog topic but uses it's input topic as
+     * changelog; thus, the used topic should be configured with log compaction.
+     * <p>
+     * The <code>auto.offset.reset</code> property will be set to <code>earliest</code> for this topic.
+     * <p>
+     * The provided {@link ProcessorSupplier} will be used to create a processor for all messages received
+     * from the given topic. This processor should contain logic to keep the {@link StateStore} up-to-date.
+     *
+     * @param storeBuilder          user defined store builder
+     * @param sourceName            name of the {@link SourceNode} that will be automatically added
+     * @param timestampExtractor    the stateless timestamp extractor used for this source,
+     *                              if not specified the default extractor defined in the configs will be used
+     * @param keyDeserializer       the {@link Deserializer} to deserialize keys with
+     * @param valueDeserializer     the {@link Deserializer} to deserialize values with
+     * @param topic                 the topic to source the data from
+     * @param processorName         the name of the {@link ProcessorSupplier}
+     * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
+     * @return itself
+     * @throws TopologyException if the processor of state is already registered
+     */
+    public synchronized <KIn, VIn> Topology addReadOnlyStateStore(final StoreBuilder<?> storeBuilder,
+                                                                  final String sourceName,
+                                                                  final TimestampExtractor timestampExtractor,
+                                                                  final Deserializer<KIn> keyDeserializer,
+                                                                  final Deserializer<VIn> valueDeserializer,
+                                                                  final String topic,
+                                                                  final String processorName,
+                                                                  final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+        storeBuilder.withLoggingDisabled();
+
+        internalTopologyBuilder.addSource(AutoOffsetReset.EARLIEST, sourceName, timestampExtractor, keyDeserializer, valueDeserializer, topic);
+        internalTopologyBuilder.addProcessor(processorName, stateUpdateSupplier, sourceName);
+        internalTopologyBuilder.addStateStore(storeBuilder, processorName);
+        internalTopologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topic);
+
+        return this;
+    }
+
+    /**
+     * Adds a read-only {@link StateStore} to the topology.
+     * <p>
+     * A read-only {@link StateStore} does not create a dedicated changelog topic but uses it's input topic as
+     * changelog; thus, the used topic should be configured with log compaction.
+     * <p>
+     * The <code>auto.offset.reset</code> property will be set to <code>earliest</code> for this topic.
+     * <p>
+     * The provided {@link ProcessorSupplier} will be used to create a processor for all messages received
+     * from the given topic. This processor should contain logic to keep the {@link StateStore} up-to-date.
+     * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
+     *
+     * @param storeBuilder          user defined store builder
+     * @param sourceName            name of the {@link SourceNode} that will be automatically added
+     * @param keyDeserializer       the {@link Deserializer} to deserialize keys with
+     * @param valueDeserializer     the {@link Deserializer} to deserialize values with
+     * @param topic                 the topic to source the data from
+     * @param processorName         the name of the {@link ProcessorSupplier}
+     * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
+     * @return itself
+     * @throws TopologyException if the processor of state is already registered
+     */
+    public synchronized <KIn, VIn> Topology addReadOnlyStateStore(final StoreBuilder<?> storeBuilder,
+                                                                  final String sourceName,
+                                                                  final Deserializer<KIn> keyDeserializer,
+                                                                  final Deserializer<VIn> valueDeserializer,
+                                                                  final String topic,
+                                                                  final String processorName,
+                                                                  final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+        return addReadOnlyStateStore(
+                storeBuilder,
+                sourceName,
+                null,
+                keyDeserializer,
+                valueDeserializer,
+                topic,
+                processorName,
+                stateUpdateSupplier
+        );
+    }
+
+    /**
      * Adds a global {@link StateStore} to the topology.
      * The {@link StateStore} sources its data from all partitions of the provided input topic.
      * There will be exactly one instance of this {@link StateStore} per Kafka Streams instance.
@@ -783,7 +865,8 @@ public class Topology {
             valueDeserializer,
             topic,
             processorName,
-            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
+            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get()),
+            true
         );
         return this;
     }
@@ -835,7 +918,8 @@ public class Topology {
             valueDeserializer,
             topic,
             processorName,
-            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
+            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get()),
+            true
         );
         return this;
     }
@@ -878,7 +962,8 @@ public class Topology {
             valueDeserializer,
             topic,
             processorName,
-            stateUpdateSupplier
+            stateUpdateSupplier,
+            true
         );
         return this;
     }
@@ -923,7 +1008,8 @@ public class Topology {
             valueDeserializer,
             topic,
             processorName,
-            stateUpdateSupplier
+            stateUpdateSupplier,
+            true
         );
         return this;
     }

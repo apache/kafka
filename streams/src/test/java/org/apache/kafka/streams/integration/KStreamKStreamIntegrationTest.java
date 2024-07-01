@@ -27,12 +27,14 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -61,17 +63,17 @@ import static org.hamcrest.core.IsEqual.equalTo;
 @Timeout(600)
 @Tag("integration")
 public class KStreamKStreamIntegrationTest {
-    private final static int NUM_BROKERS = 1;
+    private static final int NUM_BROKERS = 1;
 
-    public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
-    private final static MockTime MOCK_TIME = CLUSTER.time;
-    private final static String LEFT_STREAM = "leftStream";
-    private final static String RIGHT_STREAM = "rightStream";
-    private final static String OUTPUT = "output";
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private static final MockTime MOCK_TIME = CLUSTER.time;
+    private static final String LEFT_STREAM = "leftStream";
+    private static final String RIGHT_STREAM = "rightStream";
+    private static final String OUTPUT = "output";
     private Properties streamsConfig;
     private KafkaStreams streams;
-    private final static Properties CONSUMER_CONFIG = new Properties();
-    private final static Properties PRODUCER_CONFIG = new Properties();
+    private static final Properties CONSUMER_CONFIG = new Properties();
+    private static final Properties PRODUCER_CONFIG = new Properties();
 
     @BeforeAll
     public static void startCluster() throws Exception {
@@ -99,6 +101,7 @@ public class KStreamKStreamIntegrationTest {
         final String safeTestName = safeUniqueTestName(testInfo);
         streamsConfig = getStreamsConfig(safeTestName);
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath);
+        streamsConfig.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, 0L);
     }
 
     @AfterEach

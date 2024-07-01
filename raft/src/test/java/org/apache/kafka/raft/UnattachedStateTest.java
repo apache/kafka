@@ -19,6 +19,8 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.internals.ReplicaKey;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -76,12 +78,31 @@ public class UnattachedStateTest {
     @ValueSource(booleans = {true, false})
     public void testGrantVote(boolean isLogUpToDate) {
         UnattachedState state = newUnattachedState(
-                Utils.mkSet(1, 2, 3),
-                Optional.empty()
+            Utils.mkSet(1, 2, 3),
+            Optional.empty()
         );
 
-        assertEquals(isLogUpToDate, state.canGrantVote(1, isLogUpToDate));
-        assertEquals(isLogUpToDate, state.canGrantVote(2, isLogUpToDate));
-        assertEquals(isLogUpToDate, state.canGrantVote(3, isLogUpToDate));
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+        );
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+        );
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+        );
+    }
+
+    @Test
+    void testLeaderEndpoints() {
+        UnattachedState state = newUnattachedState(
+            Utils.mkSet(1, 2, 3),
+            Optional.empty()
+        );
+
+        assertEquals(Endpoints.empty(), state.leaderEndpoints());
     }
 }

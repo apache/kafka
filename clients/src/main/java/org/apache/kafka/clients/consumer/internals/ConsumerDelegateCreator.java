@@ -91,8 +91,7 @@ public class ConsumerDelegateCreator {
                     valueDeserializer,
                     client,
                     subscriptions,
-                    metadata,
-                    assignors
+                    metadata
                 );
             else
                 return new LegacyKafkaConsumer<>(

@@ -383,12 +383,19 @@ class LocalLog(@volatile private var _dir: File,
           val segment = segmentOpt.get
           val baseOffset = segment.baseOffset
 
-          val maxPosition =
-          // Use the max offset position if it is on this segment; otherwise, the segment size is the limit.
-            if (maxOffsetMetadata.segmentBaseOffset == segment.baseOffset) maxOffsetMetadata.relativePositionInSegment
-            else segment.size
+          // 1. If `maxOffsetMetadata#segmentBaseOffset < segment#baseOffset`, then return maxPosition as empty.
+          // 2. Use the max-offset position if it is on this segment; otherwise, the segment size is the limit.
+          // 3. When maxOffsetMetadata is message-offset-only, then we don't know the relativePositionInSegment so
+          //    return maxPosition as empty to avoid reading beyond the max-offset
+          val maxPositionOpt: Optional[java.lang.Long] =
+            if (segment.baseOffset < maxOffsetMetadata.segmentBaseOffset)
+              Optional.of(segment.size)
+            else if (segment.baseOffset == maxOffsetMetadata.segmentBaseOffset && !maxOffsetMetadata.messageOffsetOnly())
+              Optional.of(maxOffsetMetadata.relativePositionInSegment)
+            else
+              Optional.empty()
 
-          fetchDataInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
+          fetchDataInfo = segment.read(startOffset, maxLength, maxPositionOpt, minOneMessage)
           if (fetchDataInfo != null) {
             if (includeAbortedTxns)
               fetchDataInfo = addAbortedTransactions(startOffset, segment, fetchDataInfo)
@@ -485,7 +492,7 @@ class LocalLog(@volatile private var _dir: File,
             s" =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already exists. Existing " +
             s"segment is ${segments.get(newOffset)}.")
         }
-      } else if (!segments.isEmpty && newOffset < activeSegment.baseOffset) {
+      } else if (segments.nonEmpty && newOffset < activeSegment.baseOffset) {
         throw new KafkaException(
           s"Trying to roll a new log segment for topic partition $topicPartition with " +
             s"start offset $newOffset =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) lower than start offset of the active segment $activeSegment")

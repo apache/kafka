@@ -41,6 +41,7 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,6 +67,7 @@ public final class ConsumerUtils {
     public static final String CONSUMER_JMX_PREFIX = "kafka.consumer";
     public static final String CONSUMER_METRIC_GROUP_PREFIX = "consumer";
     public static final String COORDINATOR_METRICS_SUFFIX = "-coordinator-metrics";
+    public static final String CONSUMER_METRICS_SUFFIX = "-metrics";
 
     /**
      * A fixed, large enough value will suffice for max.

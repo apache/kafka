@@ -43,8 +43,12 @@ public class WakeupTrigger {
                 return new WakeupFuture();
             } else if (task instanceof ActiveFuture) {
                 ActiveFuture active = (ActiveFuture) task;
-                active.future().completeExceptionally(new WakeupException());
-                return null;
+                boolean wasTriggered = active.future().completeExceptionally(new WakeupException());
+
+                // If the Future was *already* completed when we invoke completeExceptionally, the WakeupException
+                // will be ignored. If it was already completed, we then need to return a new WakeupFuture so that the
+                // next call to setActiveTask will throw the WakeupException.
+                return wasTriggered ? null : new WakeupFuture();
             } else if (task instanceof FetchAction) {
                 FetchAction fetchAction = (FetchAction) task;
                 fetchAction.fetchBuffer().wakeup();
@@ -73,6 +77,8 @@ public class WakeupTrigger {
             } else if (task instanceof WakeupFuture) {
                 currentTask.completeExceptionally(new WakeupException());
                 return null;
+            } else if (task instanceof DisabledWakeups) {
+                return task;
             }
             // last active state is still active
             throw new KafkaException("Last active task is still active");
@@ -88,6 +94,8 @@ public class WakeupTrigger {
             } else if (task instanceof WakeupFuture) {
                 throwWakeupException.set(true);
                 return null;
+            } else if (task instanceof DisabledWakeups) {
+                return task;
             }
             // last active state is still active
             throw new IllegalStateException("Last active task is still active");
@@ -95,6 +103,10 @@ public class WakeupTrigger {
         if (throwWakeupException.get()) {
             throw new WakeupException();
         }
+    }
+
+    public void disableWakeups() {
+        pendingTask.set(new DisabledWakeups());
     }
 
     public void clearTask() {
@@ -130,6 +142,9 @@ public class WakeupTrigger {
     }
 
     interface Wakeupable { }
+
+    // Set to block wakeups from happening and pending actions to be registered.
+    static class DisabledWakeups implements Wakeupable { }
 
     static class ActiveFuture implements Wakeupable {
         private final CompletableFuture<?> future;

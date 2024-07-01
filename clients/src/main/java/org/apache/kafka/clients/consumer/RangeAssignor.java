@@ -170,7 +170,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
     private void assignWithRackMatching(Collection<TopicAssignmentState> assignmentStates,
                                         Map<String, List<TopicPartition>> assignment) {
 
-        assignmentStates.stream().collect(Collectors.groupingBy(t -> t.consumers)).forEach((consumers, states) -> {
+        assignmentStates.stream().collect(Collectors.groupingBy(t -> t.consumers)).forEach((consumers, states) ->
             states.stream().collect(Collectors.groupingBy(t -> t.partitionRacks.size())).forEach((numPartitions, coPartitionedStates) -> {
                 if (coPartitionedStates.size() > 1)
                     assignCoPartitionedWithRackMatching(consumers, numPartitions, coPartitionedStates, assignment);
@@ -179,8 +179,8 @@ public class RangeAssignor extends AbstractPartitionAssignor {
                     if (state.needsRackAwareAssignment)
                         assignRanges(state, state::racksMatch, assignment);
                 }
-            });
-        });
+            })
+        );
     }
 
     private void assignCoPartitionedWithRackMatching(LinkedHashMap<String, Optional<String>> consumers,

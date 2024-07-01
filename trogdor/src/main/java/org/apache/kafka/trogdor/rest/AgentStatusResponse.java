@@ -33,7 +33,7 @@ public class AgentStatusResponse extends Message {
     public AgentStatusResponse(@JsonProperty("serverStartMs") long serverStartMs,
             @JsonProperty("workers") TreeMap<Long, WorkerState> workers) {
         this.serverStartMs = serverStartMs;
-        this.workers = workers == null ? new TreeMap<Long, WorkerState>() : workers;
+        this.workers = workers == null ? new TreeMap<>() : workers;
     }
 
     @JsonProperty

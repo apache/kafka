@@ -144,7 +144,7 @@ class ConfigAdminManager(nodeId: Int,
             case BROKER =>
               // The resource name must be either blank (if setting a cluster config) or
               // the ID of this specific broker.
-              if (!configResource.name().isEmpty) {
+              if (configResource.name().nonEmpty) {
                 validateResourceNameIsCurrentNodeId(resource.resourceName())
               }
               validateBrokerConfigChange(resource, configResource)
@@ -168,7 +168,7 @@ class ConfigAdminManager(nodeId: Int,
     resource: IAlterConfigsResource,
     configResource: ConfigResource
   ): Unit = {
-    val perBrokerConfig = !configResource.name().isEmpty
+    val perBrokerConfig = configResource.name().nonEmpty
     val persistentProps = configRepository.config(configResource)
     val configProps = conf.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
     val alterConfigOps = resource.configs().asScala.map {
@@ -193,7 +193,7 @@ class ConfigAdminManager(nodeId: Int,
     configResource: ConfigResource
   ): Unit = {
     try {
-      conf.dynamicConfig.validate(props, !configResource.name().isEmpty)
+      conf.dynamicConfig.validate(props, configResource.name().nonEmpty)
     } catch {
       case e: ApiException => throw e
       //KAFKA-13609: InvalidRequestException is not really the right exception here if the
@@ -243,7 +243,7 @@ class ConfigAdminManager(nodeId: Int,
           }
           resourceType match {
             case BROKER =>
-              if (!configResource.name().isEmpty) {
+              if (configResource.name().nonEmpty) {
                 validateResourceNameIsCurrentNodeId(resource.resourceName())
               }
               validateBrokerConfigChange(resource, configResource)

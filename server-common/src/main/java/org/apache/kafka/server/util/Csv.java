@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.server.util;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Csv {
 
@@ -29,7 +33,7 @@ public class Csv {
      */
     public static Map<String, String> parseCsvMap(String str) {
         Map<String, String> map = new HashMap<>();
-        if (str == null || "".equals(str))
+        if (str == null || str.isEmpty())
             return map;
         String[] keyVals = str.split("\\s*,\\s*");
         for (String s : keyVals) {
@@ -37,5 +41,17 @@ public class Csv {
             map.put(s.substring(0, lio).trim(), s.substring(lio + 1).trim());
         }
         return map;
+    }
+
+    /**
+     * Parse a comma separated string into a sequence of strings.
+     * Whitespace surrounding the comma will be removed.
+     */
+    public static List<String> parseCsvList(String csvList) {
+        if (csvList == null || csvList.isEmpty()) {
+            return Collections.emptyList();
+        } else {
+            return Stream.of(csvList.split("\\s*,\\s*")).filter(v -> !v.isEmpty()).collect(Collectors.toList());
+        }
     }
 }

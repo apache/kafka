@@ -24,9 +24,10 @@ import java.util.regex.Pattern
 import java.util.Collections
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Record, SimpleRecord}
+import org.apache.kafka.common.record.{MemoryRecords, Record, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.util.{MockTime, Scheduler}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments}
@@ -58,9 +59,7 @@ class LocalLogTest {
     try {
       log.close()
     } catch {
-      case _: KafkaStorageException => {
-        // ignore
-      }
+      case _: KafkaStorageException => // ignore
     }
     Utils.delete(tmpDir)
   }
@@ -101,7 +100,7 @@ class LocalLogTest {
     log.append(lastOffset = initialOffset + records.size - 1,
       largestTimestamp = records.head.timestamp,
       shallowOffsetOfMaxTimestamp = initialOffset,
-      records = MemoryRecords.withRecords(initialOffset, CompressionType.NONE, 0, records.toList : _*))
+      records = MemoryRecords.withRecords(initialOffset, Compression.NONE, 0, records.toList : _*))
   }
 
   private def readRecords(log: LocalLog = log,
@@ -371,6 +370,43 @@ class LocalLogTest {
     assertEquals(10L, log.logEndOffset)
     val fetchDataInfo = readRecords(startOffset = 10L)
     assertTrue(fetchDataInfo.records.records.asScala.isEmpty)
+  }
+
+  @Test
+  def testWhenFetchOffsetHigherThanMaxOffset(): Unit = {
+    val record = new SimpleRecord(mockTime.milliseconds, "a".getBytes)
+    for (offset <- 0 to 4) {
+      appendRecords(List(record), initialOffset = offset)
+      if (offset % 2 != 0)
+        log.roll()
+    }
+    assertEquals(3, log.segments.numberOfSegments)
+
+    // case-0: valid case, `startOffset` < `maxOffsetMetadata.offset`
+    var fetchDataInfo = readRecords(startOffset = 3L, maxOffsetMetadata = new LogOffsetMetadata(4L, 4L, 0))
+    assertEquals(1, fetchDataInfo.records.records.asScala.size)
+    assertEquals(new LogOffsetMetadata(3, 2L, 69), fetchDataInfo.fetchOffsetMetadata)
+
+    // case-1: `startOffset` == `maxOffsetMetadata.offset`
+    fetchDataInfo = readRecords(startOffset = 4L, maxOffsetMetadata = new LogOffsetMetadata(4L, 4L, 0))
+    assertTrue(fetchDataInfo.records.records.asScala.isEmpty)
+    assertEquals(new LogOffsetMetadata(4L, 4L, 0), fetchDataInfo.fetchOffsetMetadata)
+
+    // case-2: `startOffset` > `maxOffsetMetadata.offset`
+    fetchDataInfo = readRecords(startOffset = 5L, maxOffsetMetadata = new LogOffsetMetadata(4L, 4L, 0))
+    assertTrue(fetchDataInfo.records.records.asScala.isEmpty)
+    assertEquals(new LogOffsetMetadata(5L, 4L, 69), fetchDataInfo.fetchOffsetMetadata)
+
+    // case-3: `startOffset` < `maxMessageOffset.offset` but `maxMessageOffset.messageOnlyOffset` is true
+    fetchDataInfo = readRecords(startOffset = 3L, maxOffsetMetadata = new LogOffsetMetadata(4L, -1L, -1))
+    assertTrue(fetchDataInfo.records.records.asScala.isEmpty)
+    assertEquals(new LogOffsetMetadata(3L, 2L, 69), fetchDataInfo.fetchOffsetMetadata)
+
+    // case-4: `startOffset` < `maxMessageOffset.offset`, `maxMessageOffset.messageOnlyOffset` is false, but
+    // `maxOffsetMetadata.segmentBaseOffset` < `startOffset.segmentBaseOffset`
+    fetchDataInfo = readRecords(startOffset = 3L, maxOffsetMetadata = new LogOffsetMetadata(4L, 0L, 40))
+    assertTrue(fetchDataInfo.records.records.asScala.isEmpty)
+    assertEquals(new LogOffsetMetadata(3L, 2L, 69), fetchDataInfo.fetchOffsetMetadata)
   }
 
   @Test

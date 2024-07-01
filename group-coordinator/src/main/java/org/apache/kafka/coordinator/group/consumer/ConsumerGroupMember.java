@@ -18,14 +18,17 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,14 +36,14 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * ConsumerGroupMember contains all the information related to a member
  * within a consumer group. This class is immutable and is fully backed
  * by records stored in the __consumer_offsets topic.
  */
-public class ConsumerGroupMember {
+public class ConsumerGroupMember extends ModernGroupMember {
+
     /**
      * A builder that facilitates the creation of a new member or the update of
      * an existing one.
@@ -52,31 +55,36 @@ public class ConsumerGroupMember {
         private final String memberId;
         private int memberEpoch = 0;
         private int previousMemberEpoch = -1;
-        private int targetMemberEpoch = 0;
+        private MemberState state = MemberState.STABLE;
         private String instanceId = null;
         private String rackId = null;
         private int rebalanceTimeoutMs = -1;
         private String clientId = "";
         private String clientHost = "";
-        private List<String> subscribedTopicNames = Collections.emptyList();
+        private Set<String> subscribedTopicNames = Collections.emptySet();
         private String subscribedTopicRegex = "";
         private String serverAssignorName = null;
-        private List<ClientAssignor> clientAssignors = Collections.emptyList();
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
         private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Collections.emptyMap();
-        private Map<Uuid, Set<Integer>> partitionsPendingAssignment = Collections.emptyMap();
+        private ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata = null;
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
         }
 
         public Builder(ConsumerGroupMember member) {
+            this(
+                Objects.requireNonNull(member),
+                member.memberId
+            );
+        }
+
+        public Builder(ConsumerGroupMember member, String newMemberId) {
             Objects.requireNonNull(member);
 
-            this.memberId = member.memberId;
+            this.memberId = Objects.requireNonNull(newMemberId);
             this.memberEpoch = member.memberEpoch;
             this.previousMemberEpoch = member.previousMemberEpoch;
-            this.targetMemberEpoch = member.targetMemberEpoch;
             this.instanceId = member.instanceId;
             this.rackId = member.rackId;
             this.rebalanceTimeoutMs = member.rebalanceTimeoutMs;
@@ -85,10 +93,17 @@ public class ConsumerGroupMember {
             this.subscribedTopicNames = member.subscribedTopicNames;
             this.subscribedTopicRegex = member.subscribedTopicRegex;
             this.serverAssignorName = member.serverAssignorName;
-            this.clientAssignors = member.clientAssignors;
+            this.state = member.state;
             this.assignedPartitions = member.assignedPartitions;
             this.partitionsPendingRevocation = member.partitionsPendingRevocation;
-            this.partitionsPendingAssignment = member.partitionsPendingAssignment;
+            this.classicMemberMetadata = member.classicMemberMetadata;
+        }
+
+        public Builder updateMemberEpoch(int memberEpoch) {
+            int currentMemberEpoch = this.memberEpoch;
+            this.memberEpoch = memberEpoch;
+            this.previousMemberEpoch = currentMemberEpoch;
+            return this;
         }
 
         public Builder setMemberEpoch(int memberEpoch) {
@@ -98,11 +113,6 @@ public class ConsumerGroupMember {
 
         public Builder setPreviousMemberEpoch(int previousMemberEpoch) {
             this.previousMemberEpoch = previousMemberEpoch;
-            return this;
-        }
-
-        public Builder setTargetMemberEpoch(int targetMemberEpoch) {
-            this.targetMemberEpoch = targetMemberEpoch;
             return this;
         }
 
@@ -146,15 +156,13 @@ public class ConsumerGroupMember {
             return this;
         }
 
-        public Builder setSubscribedTopicNames(List<String> subscribedTopicNames) {
-            this.subscribedTopicNames = subscribedTopicNames;
-            this.subscribedTopicNames.sort(Comparator.naturalOrder());
+        public Builder setSubscribedTopicNames(List<String> subscribedTopicList) {
+            if (subscribedTopicNames != null) this.subscribedTopicNames = new HashSet<>(subscribedTopicList);
             return this;
         }
 
-        public Builder maybeUpdateSubscribedTopicNames(Optional<List<String>> subscribedTopicNames) {
-            this.subscribedTopicNames = subscribedTopicNames.orElse(this.subscribedTopicNames);
-            this.subscribedTopicNames.sort(Comparator.naturalOrder());
+        public Builder maybeUpdateSubscribedTopicNames(Optional<List<String>> subscribedTopicList) {
+            subscribedTopicList.ifPresent(list -> this.subscribedTopicNames = new HashSet<>(list));
             return this;
         }
 
@@ -178,13 +186,8 @@ public class ConsumerGroupMember {
             return this;
         }
 
-        public Builder setClientAssignors(List<ClientAssignor> clientAssignors) {
-            this.clientAssignors = clientAssignors;
-            return this;
-        }
-
-        public Builder maybeUpdateClientAssignors(Optional<List<ClientAssignor>> clientAssignors) {
-            this.clientAssignors = clientAssignors.orElse(this.clientAssignors);
+        public Builder setState(MemberState state) {
+            this.state = state;
             return this;
         }
 
@@ -198,8 +201,8 @@ public class ConsumerGroupMember {
             return this;
         }
 
-        public Builder setPartitionsPendingAssignment(Map<Uuid, Set<Integer>> partitionsPendingAssignment) {
-            this.partitionsPendingAssignment = partitionsPendingAssignment;
+        public Builder setClassicMemberMetadata(ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata) {
+            this.classicMemberMetadata = classicMemberMetadata;
             return this;
         }
 
@@ -212,45 +215,24 @@ public class ConsumerGroupMember {
             setSubscribedTopicRegex(record.subscribedTopicRegex());
             setRebalanceTimeoutMs(record.rebalanceTimeoutMs());
             setServerAssignorName(record.serverAssignor());
-            setClientAssignors(record.assignors().stream()
-                .map(ClientAssignor::fromRecord)
-                .collect(Collectors.toList()));
+            setClassicMemberMetadata(record.classicMemberMetadata());
             return this;
         }
 
         public Builder updateWith(ConsumerGroupCurrentMemberAssignmentValue record) {
             setMemberEpoch(record.memberEpoch());
             setPreviousMemberEpoch(record.previousMemberEpoch());
-            setTargetMemberEpoch(record.targetMemberEpoch());
-            setAssignedPartitions(assignmentFromTopicPartitions(record.assignedPartitions()));
-            setPartitionsPendingRevocation(assignmentFromTopicPartitions(record.partitionsPendingRevocation()));
-            setPartitionsPendingAssignment(assignmentFromTopicPartitions(record.partitionsPendingAssignment()));
+            setState(MemberState.fromValue(record.state()));
+            setAssignedPartitions(Utils.assignmentFromTopicPartitions(record.assignedPartitions()));
+            setPartitionsPendingRevocation(Utils.assignmentFromTopicPartitions(record.partitionsPendingRevocation()));
             return this;
         }
 
-        private Map<Uuid, Set<Integer>> assignmentFromTopicPartitions(
-            List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitionsList
-        ) {
-            return topicPartitionsList.stream().collect(Collectors.toMap(
-                ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
-                topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
-        }
-
         public ConsumerGroupMember build() {
-            MemberState state;
-            if (!partitionsPendingRevocation.isEmpty()) {
-                state = MemberState.REVOKING;
-            } else if (!partitionsPendingAssignment.isEmpty()) {
-                state = MemberState.ASSIGNING;
-            } else {
-                state = MemberState.STABLE;
-            }
-
             return new ConsumerGroupMember(
                 memberId,
                 memberEpoch,
                 previousMemberEpoch,
-                targetMemberEpoch,
                 instanceId,
                 rackId,
                 rebalanceTimeoutMs,
@@ -259,87 +241,14 @@ public class ConsumerGroupMember {
                 subscribedTopicNames,
                 subscribedTopicRegex,
                 serverAssignorName,
-                clientAssignors,
                 state,
                 assignedPartitions,
                 partitionsPendingRevocation,
-                partitionsPendingAssignment
+                classicMemberMetadata
             );
         }
     }
 
-    /**
-     * The various states that a member can be in. For their definition,
-     * refer to the documentation of {{@link CurrentAssignmentBuilder}}.
-     */
-    public enum MemberState {
-        REVOKING("revoking"),
-        ASSIGNING("assigning"),
-        STABLE("stable");
-
-        private final String name;
-
-        MemberState(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
-
-    /**
-     * The member id.
-     */
-    private final String memberId;
-
-    /**
-     * The current member epoch.
-     */
-    private final int memberEpoch;
-
-    /**
-     * The previous member epoch.
-     */
-    private final int previousMemberEpoch;
-
-    /**
-     * The next member epoch. This corresponds to the target
-     * assignment epoch used to compute the current assigned,
-     * revoking and assigning partitions.
-     */
-    private final int targetMemberEpoch;
-
-    /**
-     * The instance id provided by the member.
-     */
-    private final String instanceId;
-
-    /**
-     * The rack id provided by the member.
-     */
-    private final String rackId;
-
-    /**
-     * The rebalance timeout provided by the member.
-     */
-    private final int rebalanceTimeoutMs;
-
-    /**
-     * The client id reported by the member.
-     */
-    private final String clientId;
-
-    /**
-     * The host reported by the member.
-     */
-    private final String clientHost;
-
-    /**
-     * The list of subscriptions (topic names) configured by the member.
-     */
-    private final List<String> subscribedTopicNames;
 
     /**
      * The subscription pattern configured by the member.
@@ -352,138 +261,49 @@ public class ConsumerGroupMember {
     private final String serverAssignorName;
 
     /**
-     * The states of the client side assignors of the member.
-     */
-    private final List<ClientAssignor> clientAssignors;
-
-    /**
-     * The member state.
-     */
-    private final MemberState state;
-
-    /**
-     * The partitions assigned to this member.
-     */
-    private final Map<Uuid, Set<Integer>> assignedPartitions;
-
-    /**
      * The partitions being revoked by this member.
      */
     private final Map<Uuid, Set<Integer>> partitionsPendingRevocation;
 
     /**
-     * The partitions waiting to be assigned to this
-     * member. They will be assigned when they are
-     * released by their previous owners.
+     * The classic member metadata if the consumer uses the classic protocol.
      */
-    private final Map<Uuid, Set<Integer>> partitionsPendingAssignment;
+    private final ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata;
 
     private ConsumerGroupMember(
         String memberId,
         int memberEpoch,
         int previousMemberEpoch,
-        int targetMemberEpoch,
         String instanceId,
         String rackId,
         int rebalanceTimeoutMs,
         String clientId,
         String clientHost,
-        List<String> subscribedTopicNames,
+        Set<String> subscribedTopicNames,
         String subscribedTopicRegex,
         String serverAssignorName,
-        List<ClientAssignor> clientAssignors,
         MemberState state,
         Map<Uuid, Set<Integer>> assignedPartitions,
         Map<Uuid, Set<Integer>> partitionsPendingRevocation,
-        Map<Uuid, Set<Integer>> partitionsPendingAssignment
+        ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata
     ) {
-        this.memberId = memberId;
-        this.memberEpoch = memberEpoch;
-        this.previousMemberEpoch = previousMemberEpoch;
-        this.targetMemberEpoch = targetMemberEpoch;
-        this.instanceId = instanceId;
-        this.rackId = rackId;
-        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
-        this.clientId = clientId;
-        this.clientHost = clientHost;
-        this.subscribedTopicNames = subscribedTopicNames;
+        super(
+            memberId,
+            memberEpoch,
+            previousMemberEpoch,
+            instanceId,
+            rackId,
+            rebalanceTimeoutMs,
+            clientId,
+            clientHost,
+            subscribedTopicNames,
+            state,
+            assignedPartitions
+        );
         this.subscribedTopicRegex = subscribedTopicRegex;
         this.serverAssignorName = serverAssignorName;
-        this.clientAssignors = clientAssignors;
-        this.state = state;
-        this.assignedPartitions = assignedPartitions;
         this.partitionsPendingRevocation = partitionsPendingRevocation;
-        this.partitionsPendingAssignment = partitionsPendingAssignment;
-    }
-
-    /**
-     * @return The member id.
-     */
-    public String memberId() {
-        return memberId;
-    }
-
-    /**
-     * @return The current member epoch.
-     */
-    public int memberEpoch() {
-        return memberEpoch;
-    }
-
-    /**
-     * @return The previous member epoch.
-     */
-    public int previousMemberEpoch() {
-        return previousMemberEpoch;
-    }
-
-    /**
-     * @return The target member epoch.
-     */
-    public int targetMemberEpoch() {
-        return targetMemberEpoch;
-    }
-
-    /**
-     * @return The instance id.
-     */
-    public String instanceId() {
-        return instanceId;
-    }
-
-    /**
-     * @return The rack id.
-     */
-    public String rackId() {
-        return rackId;
-    }
-
-    /**
-     * @return The rebalance timeout in millis.
-     */
-    public int rebalanceTimeoutMs() {
-        return rebalanceTimeoutMs;
-    }
-
-    /**
-     * @return The client id.
-     */
-    public String clientId() {
-        return clientId;
-    }
-
-    /**
-     * @return The client host.
-     */
-    public String clientHost() {
-        return clientHost;
-    }
-
-    /**
-     * @return The list of subscribed topic names.
-     */
-    public List<String> subscribedTopicNames() {
-        return subscribedTopicNames;
+        this.classicMemberMetadata = classicMemberMetadata;
     }
 
     /**
@@ -501,27 +321,6 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @return The list of client side assignors.
-     */
-    public List<ClientAssignor> clientAssignors() {
-        return clientAssignors;
-    }
-
-    /**
-     * @return The current state.
-     */
-    public MemberState state() {
-        return state;
-    }
-
-    /**
-     * @return The set of assigned partitions.
-     */
-    public Map<Uuid, Set<Integer>> assignedPartitions() {
-        return assignedPartitions;
-    }
-
-    /**
      * @return The set of partitions awaiting revocation from the member.
      */
     public Map<Uuid, Set<Integer>> partitionsPendingRevocation() {
@@ -529,24 +328,48 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @return The set of partitions awaiting assignment to the member.
+     * @return The supported classic protocols converted to JoinGroupRequestProtocolCollection.
      */
-    public Map<Uuid, Set<Integer>> partitionsPendingAssignment() {
-        return partitionsPendingAssignment;
+    public JoinGroupRequestData.JoinGroupRequestProtocolCollection supportedJoinGroupRequestProtocols() {
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
+        supportedClassicProtocols().ifPresent(classicProtocols -> classicProtocols.forEach(protocol ->
+            protocols.add(
+                new JoinGroupRequestData.JoinGroupRequestProtocol()
+                    .setName(protocol.name())
+                    .setMetadata(protocol.metadata())
+            )
+        ));
+        return protocols;
     }
 
     /**
-     * @return A string representation of the current assignment state.
+     * @return The session timeout if the member uses the classic protocol.
      */
-    public String currentAssignmentSummary() {
-        return "CurrentAssignment(memberEpoch=" + memberEpoch +
-            ", previousMemberEpoch=" + previousMemberEpoch +
-            ", targetMemberEpoch=" + targetMemberEpoch +
-            ", state=" + state +
-            ", assignedPartitions=" + assignedPartitions +
-            ", partitionsPendingRevocation=" + partitionsPendingRevocation +
-            ", partitionsPendingAssignment=" + partitionsPendingAssignment +
-            ')';
+    public Optional<Integer> classicProtocolSessionTimeout() {
+        if (useClassicProtocol()) {
+            return Optional.ofNullable(classicMemberMetadata.sessionTimeoutMs());
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * @return The classicMemberMetadata if the consumer uses the classic protocol.
+     */
+    public Optional<ConsumerGroupMemberMetadataValue.ClassicMemberMetadata> classicMemberMetadata() {
+        return Optional.ofNullable(classicMemberMetadata);
+    }
+
+    /**
+     * @return The list of protocols if the consumer uses the classic protocol.
+     */
+    public Optional<List<ConsumerGroupMemberMetadataValue.ClassicProtocol>> supportedClassicProtocols() {
+        if (useClassicProtocol()) {
+            return Optional.ofNullable(classicMemberMetadata.supportedProtocols());
+        } else {
+            return Optional.empty();
+        }
     }
 
     /**
@@ -572,7 +395,7 @@ public class ConsumerGroupMember {
             .setClientId(clientId)
             .setInstanceId(instanceId)
             .setRackId(rackId)
-            .setSubscribedTopicNames(subscribedTopicNames)
+            .setSubscribedTopicNames(subscribedTopicNames == null ? null : new ArrayList<>(subscribedTopicNames))
             .setSubscribedTopicRegex(subscribedTopicRegex);
     }
 
@@ -582,27 +405,42 @@ public class ConsumerGroupMember {
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            String topicName = lookupTopicNameById(topicId, topicsImage);
-            if (topicName != null) {
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            if (topicImage != null) {
                 topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
                     .setTopicId(topicId)
-                    .setTopicName(topicName)
+                    .setTopicName(topicImage.name())
                     .setPartitions(new ArrayList<>(partitionSet)));
             }
         });
         return topicPartitions;
     }
 
-    private static String lookupTopicNameById(
-        Uuid topicId,
-        TopicsImage topicsImage
+    /**
+     * Converts the JoinGroupRequestProtocolCollection to a list of ClassicProtocol.
+     *
+     * @param protocols The JoinGroupRequestProtocolCollection.
+     * @return The converted list of ClassicProtocol.
+     */
+    public static List<ConsumerGroupMemberMetadataValue.ClassicProtocol> classicProtocolListFromJoinRequestProtocolCollection(
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols
     ) {
-        TopicImage topicImage = topicsImage.getTopic(topicId);
-        if (topicImage != null) {
-            return topicImage.name();
-        } else {
-            return null;
-        }
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> newSupportedProtocols = new ArrayList<>();
+        protocols.forEach(protocol ->
+            newSupportedProtocols.add(
+                new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                    .setName(protocol.name())
+                    .setMetadata(protocol.metadata())
+            )
+        );
+        return newSupportedProtocols;
+    }
+
+    /**
+     * @return A boolean indicating whether the member uses the classic protocol.
+     */
+    public boolean useClassicProtocol() {
+        return classicMemberMetadata != null;
     }
 
     @Override
@@ -612,7 +450,7 @@ public class ConsumerGroupMember {
         ConsumerGroupMember that = (ConsumerGroupMember) o;
         return memberEpoch == that.memberEpoch
             && previousMemberEpoch == that.previousMemberEpoch
-            && targetMemberEpoch == that.targetMemberEpoch
+            && state == that.state
             && rebalanceTimeoutMs == that.rebalanceTimeoutMs
             && Objects.equals(memberId, that.memberId)
             && Objects.equals(instanceId, that.instanceId)
@@ -622,10 +460,9 @@ public class ConsumerGroupMember {
             && Objects.equals(subscribedTopicNames, that.subscribedTopicNames)
             && Objects.equals(subscribedTopicRegex, that.subscribedTopicRegex)
             && Objects.equals(serverAssignorName, that.serverAssignorName)
-            && Objects.equals(clientAssignors, that.clientAssignors)
             && Objects.equals(assignedPartitions, that.assignedPartitions)
             && Objects.equals(partitionsPendingRevocation, that.partitionsPendingRevocation)
-            && Objects.equals(partitionsPendingAssignment, that.partitionsPendingAssignment);
+            && Objects.equals(classicMemberMetadata, that.classicMemberMetadata);
     }
 
     @Override
@@ -633,7 +470,7 @@ public class ConsumerGroupMember {
         int result = memberId != null ? memberId.hashCode() : 0;
         result = 31 * result + memberEpoch;
         result = 31 * result + previousMemberEpoch;
-        result = 31 * result + targetMemberEpoch;
+        result = 31 * result + Objects.hashCode(state);
         result = 31 * result + Objects.hashCode(instanceId);
         result = 31 * result + Objects.hashCode(rackId);
         result = 31 * result + rebalanceTimeoutMs;
@@ -642,10 +479,9 @@ public class ConsumerGroupMember {
         result = 31 * result + Objects.hashCode(subscribedTopicNames);
         result = 31 * result + Objects.hashCode(subscribedTopicRegex);
         result = 31 * result + Objects.hashCode(serverAssignorName);
-        result = 31 * result + Objects.hashCode(clientAssignors);
         result = 31 * result + Objects.hashCode(assignedPartitions);
         result = 31 * result + Objects.hashCode(partitionsPendingRevocation);
-        result = 31 * result + Objects.hashCode(partitionsPendingAssignment);
+        result = 31 * result + Objects.hashCode(classicMemberMetadata);
         return result;
     }
 
@@ -655,7 +491,7 @@ public class ConsumerGroupMember {
             "memberId='" + memberId + '\'' +
             ", memberEpoch=" + memberEpoch +
             ", previousMemberEpoch=" + previousMemberEpoch +
-            ", targetMemberEpoch=" + targetMemberEpoch +
+            ", state='" + state + '\'' +
             ", instanceId='" + instanceId + '\'' +
             ", rackId='" + rackId + '\'' +
             ", rebalanceTimeoutMs=" + rebalanceTimeoutMs +
@@ -664,11 +500,9 @@ public class ConsumerGroupMember {
             ", subscribedTopicNames=" + subscribedTopicNames +
             ", subscribedTopicRegex='" + subscribedTopicRegex + '\'' +
             ", serverAssignorName='" + serverAssignorName + '\'' +
-            ", clientAssignors=" + clientAssignors +
-            ", state=" + state +
             ", assignedPartitions=" + assignedPartitions +
             ", partitionsPendingRevocation=" + partitionsPendingRevocation +
-            ", partitionsPendingAssignment=" + partitionsPendingAssignment +
+            ", classicMemberMetadata='" + classicMemberMetadata + '\'' +
             ')';
     }
 }

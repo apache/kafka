@@ -16,14 +16,17 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+
 import org.slf4j.Logger;
 
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 
@@ -31,6 +34,7 @@ public class FollowerState implements EpochState {
     private final int fetchTimeoutMs;
     private final int epoch;
     private final int leaderId;
+    private final Endpoints endpoints;
     private final Set<Integer> voters;
     // Used for tracking the expiration of both the Fetch and FetchSnapshot requests
     private final Timer fetchTimer;
@@ -38,7 +42,7 @@ public class FollowerState implements EpochState {
     /* Used to track the currently fetching snapshot. When fetching snapshot regular
      * Fetch request are paused
      */
-    private Optional<RawSnapshotWriter> fetchingSnapshot;
+    private Optional<RawSnapshotWriter> fetchingSnapshot = Optional.empty();
 
     private final Logger log;
 
@@ -46,6 +50,7 @@ public class FollowerState implements EpochState {
         Time time,
         int epoch,
         int leaderId,
+        Endpoints endpoints,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
         int fetchTimeoutMs,
@@ -54,26 +59,26 @@ public class FollowerState implements EpochState {
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.epoch = epoch;
         this.leaderId = leaderId;
+        this.endpoints = endpoints;
         this.voters = voters;
         this.fetchTimer = time.timer(fetchTimeoutMs);
         this.highWatermark = highWatermark;
-        this.fetchingSnapshot = Optional.empty();
         this.log = logContext.logger(FollowerState.class);
     }
 
     @Override
     public ElectionState election() {
-        return new ElectionState(
-            epoch,
-            OptionalInt.of(leaderId),
-            OptionalInt.empty(),
-            voters
-        );
+        return ElectionState.withElectedLeader(epoch, leaderId, voters);
     }
 
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public Endpoints leaderEndpoints() {
+        return endpoints;
     }
 
     @Override
@@ -88,6 +93,26 @@ public class FollowerState implements EpochState {
 
     public int leaderId() {
         return leaderId;
+    }
+
+    public Node leaderNode(ListenerName listener) {
+        /* KAFKA-16529 is going to change this so that the leader is not required to be in the set
+         * of voters. In other words, don't throw an IllegalStateException if the leader is not in
+         * the set of voters.
+         */
+        return endpoints
+            .address(listener)
+            .map(address -> new Node(leaderId, address.getHostString(), address.getPort()))
+            .orElseThrow(() ->
+                new IllegalArgumentException(
+                    String.format(
+                        "Unknown endpoint for leader %d and listener %s, known endpoints are %s",
+                        leaderId,
+                        listener,
+                        endpoints
+                    )
+                )
+            );
     }
 
     public boolean hasFetchTimeoutExpired(long currentTimeMs) {
@@ -158,22 +183,29 @@ public class FollowerState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        log.debug("Rejecting vote request from candidate {} since we already have a leader {} in epoch {}",
-                candidateId, leaderId(), epoch);
+    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
+        log.debug(
+            "Rejecting vote request from candidate ({}) since we already have a leader {} in epoch {}",
+            candidateKey,
+            leaderId,
+            epoch
+        );
         return false;
     }
 
     @Override
     public String toString() {
-        return "FollowerState(" +
-            "fetchTimeoutMs=" + fetchTimeoutMs +
-            ", epoch=" + epoch +
-            ", leaderId=" + leaderId +
-            ", voters=" + voters +
-            ", highWatermark=" + highWatermark +
-            ", fetchingSnapshot=" + fetchingSnapshot +
-            ')';
+        return String.format(
+            "FollowerState(fetchTimeoutMs=%d, epoch=%d, leader=%d, endpoints=%s, voters=%s, highWatermark=%s, " +
+            "fetchingSnapshot=%s)",
+            fetchTimeoutMs,
+            epoch,
+            leaderId,
+            endpoints,
+            voters,
+            highWatermark,
+            fetchingSnapshot
+        );
     }
 
     @Override

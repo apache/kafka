@@ -67,7 +67,7 @@ class ThrottledChannelExpirationTest {
       delayQueue.add(channel4)
       assertEquals(4, numCallbacksForStartThrottling)
 
-      for(itr <- 1 to 3) {
+      for (itr <- 1 to 3) {
         time.sleep(10)
         reaper.doWork()
         assertEquals(itr, numCallbacksForEndThrottling)
@@ -91,7 +91,7 @@ class ThrottledChannelExpirationTest {
     assertEquals(20, t2.throttleTimeMs)
     assertEquals(20, t3.throttleTimeMs)
 
-    for(itr <- 0 to 2) {
+    for (itr <- 0 to 2) {
       assertEquals(10 - 10*itr, t1.getDelay(TimeUnit.MILLISECONDS))
       assertEquals(20 - 10*itr, t2.getDelay(TimeUnit.MILLISECONDS))
       assertEquals(20 - 10*itr, t3.getDelay(TimeUnit.MILLISECONDS))

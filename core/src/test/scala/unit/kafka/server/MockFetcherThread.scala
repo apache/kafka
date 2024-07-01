@@ -83,7 +83,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     // Now check message's crc
     val batches = FetchResponse.recordsOrFail(partitionData).batches.asScala
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
-    var offsetOfMaxTimestamp = -1L
+    var shallowOffsetOfMaxTimestamp = -1L
     var lastOffset = state.logEndOffset
     var lastEpoch: OptionalInt = OptionalInt.empty()
 
@@ -91,7 +91,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       batch.ensureValid()
       if (batch.maxTimestamp > maxTimestamp) {
         maxTimestamp = batch.maxTimestamp
-        offsetOfMaxTimestamp = batch.baseOffset
+        shallowOffsetOfMaxTimestamp = batch.baseOffset
       }
       state.log.append(batch)
       state.logEndOffset = batch.nextOffset
@@ -106,7 +106,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       lastOffset,
       lastEpoch,
       maxTimestamp,
-      offsetOfMaxTimestamp,
+      shallowOffsetOfMaxTimestamp,
       Time.SYSTEM.milliseconds(),
       state.logStartOffset,
       RecordValidationStats.EMPTY,

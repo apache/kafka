@@ -17,29 +17,31 @@
 
 package kafka.api
 
-import java.lang.{Long => JLong}
-import java.nio.charset.StandardCharsets
-import java.time.Duration
-import java.util.concurrent.TimeUnit
-import java.util.{Optional, Properties}
-import kafka.server.KafkaConfig
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.TestUtils.{consumeRecords, waitUntilTrue}
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerGroupMetadata, OffsetAndMetadata}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerGroupMetadata, ConsumerRecord, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
+import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.lang.{Long => JLong}
+import java.nio.charset.StandardCharsets
+import java.time.Duration
 import java.util
+import java.util.concurrent.TimeUnit
+import java.util.{Optional, Properties}
 import scala.annotation.nowarn
-import scala.collection.Seq
-import scala.jdk.CollectionConverters._
-import scala.collection.mutable.{Buffer, ListBuffer}
+import scala.collection.{Seq, mutable}
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.concurrent.ExecutionException
+import scala.jdk.CollectionConverters._
 
 class TransactionsTest extends IntegrationTestHarness {
   override def brokerCount = 3
@@ -52,29 +54,23 @@ class TransactionsTest extends IntegrationTestHarness {
   val topic2 = "topic2"
   val numPartitions = 4
 
-  val transactionalProducers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
-  val transactionalConsumers = Buffer[Consumer[Array[Byte], Array[Byte]]]()
-  val nonTransactionalConsumers = Buffer[Consumer[Array[Byte], Array[Byte]]]()
+  val transactionalProducers = mutable.Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
+  val transactionalConsumers = mutable.Buffer[Consumer[Array[Byte], Array[Byte]]]()
+  val nonTransactionalConsumers = mutable.Buffer[Consumer[Array[Byte], Array[Byte]]]()
 
   def overridingProps(): Properties = {
     val props = new Properties()
-    props.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+    props.put(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
      // Set a smaller value for the number of partitions for the __consumer_offsets topic + // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
-    props.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
-    props.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
-    props.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
-    props.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)
-    props.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-    props.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
-    props.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
-    props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-    props.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
-
-    // The new group coordinator does not support verifying transactions yet.
-    if (isNewGroupCoordinatorEnabled()) {
-      props.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "false")
-    }
-
+    props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 1.toString)
+    props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 3.toString)
+    props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, 2.toString)
+    props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, 2.toString)
+    props.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, true.toString)
+    props.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, false.toString)
+    props.put(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
+    props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
+    props.put(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, "200")
     props
   }
 
@@ -89,7 +85,7 @@ class TransactionsTest extends IntegrationTestHarness {
 
   def topicConfig(): Properties = {
     val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
+    topicConfig.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
     topicConfig
   }
 
@@ -115,7 +111,7 @@ class TransactionsTest extends IntegrationTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testBasicTransactions(quorum: String): Unit = {
     val producer = transactionalProducers.head
@@ -176,7 +172,7 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testReadCommittedConsumerShouldNotSeeUndecidedData(quorum: String): Unit = {
     val producer1 = transactionalProducers.head
@@ -244,7 +240,7 @@ class TransactionsTest extends IntegrationTestHarness {
     assertNull(readCommittedOffsetsForTimes.get(tp2))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDelayedFetchIncludesAbortedTransaction(quorum: String): Unit = {
     val producer1 = transactionalProducers.head
@@ -303,14 +299,14 @@ class TransactionsTest extends IntegrationTestHarness {
   }
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testSendOffsetsWithGroupId(quorum: String): Unit = {
     sendOffset((producer, groupId, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testSendOffsetsWithGroupMetadata(quorum: String): Unit = {
     sendOffset((producer, _, consumer) =>
@@ -318,7 +314,7 @@ class TransactionsTest extends IntegrationTestHarness {
   }
 
   private def sendOffset(commit: (KafkaProducer[Array[Byte], Array[Byte]],
-    String, Consumer[Array[Byte], Array[Byte]]) => Unit) = {
+    String, Consumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
 
     // The basic plan for the test is as follows:
     //  1. Seed topic1 with 500 unique, numbered, messages.
@@ -390,7 +386,7 @@ class TransactionsTest extends IntegrationTestHarness {
     assertEquals(valueSeq.size, valueSet.size, s"Expected ${valueSeq.size} unique messages in $topic2.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testFencingOnCommit(quorum: String): Unit = {
     val producer1 = transactionalProducers(0)
@@ -420,7 +416,7 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testFencingOnSendOffsets(quorum: String): Unit = {
     val producer1 = transactionalProducers(0)
@@ -452,7 +448,7 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testOffsetMetadataInSendOffsetsToTransaction(quorum: String): Unit = {
     val tp = new TopicPartition(topic1, 0)
@@ -478,29 +474,29 @@ class TransactionsTest extends IntegrationTestHarness {
     TestUtils.waitUntilTrue(() => offsetAndMetadata.equals(consumer.committed(Set(tp).asJava).get(tp)), "cannot read committed offset")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testInitTransactionsTimeout(quorum: String): Unit = {
-    testTimeout(false, producer => producer.initTransactions())
+    testTimeout(needInitAndSendMsg = false, producer => producer.initTransactions())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testSendOffsetsToTransactionTimeout(quorum: String): Unit = {
-    testTimeout(true, producer => producer.sendOffsetsToTransaction(
+    testTimeout(needInitAndSendMsg = true, producer => producer.sendOffsetsToTransaction(
       Map(new TopicPartition(topic1, 0) -> new OffsetAndMetadata(0)).asJava, new ConsumerGroupMetadata("test-group")))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testCommitTransactionTimeout(quorum: String): Unit = {
-    testTimeout(true, producer => producer.commitTransaction())
+    testTimeout(needInitAndSendMsg = true, producer => producer.commitTransaction())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testAbortTransactionTimeout(quorum: String): Unit = {
-    testTimeout(true, producer => producer.abortTransaction())
+    testTimeout(needInitAndSendMsg = true, producer => producer.abortTransaction())
   }
 
   private def testTimeout(needInitAndSendMsg: Boolean,
@@ -518,7 +514,7 @@ class TransactionsTest extends IntegrationTestHarness {
     producer.close(Duration.ZERO)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testFencingOnSend(quorum: String): Unit = {
     val producer1 = transactionalProducers(0)
@@ -563,7 +559,7 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testFencingOnAddPartitions(quorum: String): Unit = {
     val producer1 = transactionalProducers(0)
@@ -610,7 +606,7 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testFencingOnTransactionExpiration(quorum: String): Unit = {
     val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 100)
@@ -649,11 +645,11 @@ class TransactionsTest extends IntegrationTestHarness {
     val transactionalConsumer = transactionalConsumers.head
     transactionalConsumer.subscribe(List(topic1).asJava)
 
-    val transactionalRecords = TestUtils.consumeRecordsFor(transactionalConsumer, 1000)
+    val transactionalRecords = consumeRecordsFor(transactionalConsumer)
     assertTrue(transactionalRecords.isEmpty)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testMultipleMarkersOneLeader(quorum: String): Unit = {
     val firstProducer = transactionalProducers.head
@@ -691,7 +687,7 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testConsecutivelyRunInitTransactions(quorum: String): Unit = {
     val producer = createTransactionalProducer(transactionalId = "normalProducer")
@@ -700,7 +696,7 @@ class TransactionsTest extends IntegrationTestHarness {
     assertThrows(classOf[IllegalStateException], () => producer.initTransactions())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testBumpTransactionalEpoch(quorum: String): Unit = {
     val producer = createTransactionalProducer("transactionalProducer",
@@ -762,7 +758,7 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testFailureToFenceEpoch(quorum: String): Unit = {
     val producer1 = transactionalProducers.head
@@ -886,6 +882,25 @@ class TransactionsTest extends IntegrationTestHarness {
         }
       })
     }, s"log start offset doesn't change to the expected position: $partitionStartOffsets, current position: $offsets")
+  }
+
+  /**
+   * Will consume all the records for the given consumer for the specified duration. If you want to drain all the
+   * remaining messages in the partitions the consumer is subscribed to, the duration should be set high enough so
+   * that the consumer has enough time to poll everything. This would be based on the number of expected messages left
+   * in the topic, and should not be too large (ie. more than a second) in our tests.
+   *
+   * @return All the records consumed by the consumer within the specified duration.
+   */
+  private def consumeRecordsFor[K, V](consumer: Consumer[K, V]): Seq[ConsumerRecord[K, V]] = {
+    val duration = 1000
+    val startTime = System.currentTimeMillis()
+    val records = new ArrayBuffer[ConsumerRecord[K, V]]()
+    waitUntilTrue(() => {
+      records ++= consumer.poll(Duration.ofMillis(50)).asScala
+      System.currentTimeMillis() - startTime > duration
+    }, s"The timeout $duration was greater than the maximum wait time.")
+    records
   }
 
   @throws(classOf[InterruptedException])

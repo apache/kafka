@@ -56,7 +56,7 @@ class ZkMigrationFailoverTest extends Logging {
       new RuntimeException(cause)
     }
 
-    def checkAndClear(verifier: (Seq[Throwable]) => Unit): Unit = {
+    def checkAndClear(verifier: Seq[Throwable] => Unit): Unit = {
       val faultsSoFar = faults.toSeq
       try {
         verifier.apply(faultsSoFar)

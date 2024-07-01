@@ -24,7 +24,7 @@ import java.util.{Collections, Properties}
 
 import kafka.network.SocketServer
 import kafka.utils.Implicits._
-import kafka.utils.{NotNothing, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, NewTopic}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.ApiKeys
@@ -32,7 +32,6 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, Requ
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
@@ -70,7 +69,7 @@ object IntegrationTestUtils {
   }
 
   def receive[T <: AbstractResponse](socket: Socket, apiKey: ApiKeys, version: Short)
-                                    (implicit classTag: ClassTag[T], @nowarn("cat=unused") nn: NotNothing[T]): T = {
+                                    (implicit classTag: ClassTag[T]): T = {
     val incoming = new DataInputStream(socket.getInputStream)
     val len = incoming.readInt()
 
@@ -91,7 +90,7 @@ object IntegrationTestUtils {
                                             socket: Socket,
                                             clientId: String = "client-id",
                                             correlationId: Option[Int] = None)
-                                           (implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
+                                           (implicit classTag: ClassTag[T]): T = {
     send(request, socket, clientId, correlationId)
     receive[T](socket, request.apiKey, request.version)
   }
@@ -99,7 +98,7 @@ object IntegrationTestUtils {
   def connectAndReceive[T <: AbstractResponse](request: AbstractRequest,
                                                destination: SocketServer,
                                                listenerName: ListenerName)
-                                              (implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
+                                              (implicit classTag: ClassTag[T]): T = {
     val socket = connect(destination, listenerName)
     try sendAndReceive[T](request, socket)
     finally socket.close()

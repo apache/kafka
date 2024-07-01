@@ -66,7 +66,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
-  override def isTruncationOnFetchSupported = metadataVersionSupplier().isTruncationOnFetchSupported
+  override def isTruncationOnFetchSupported: Boolean = metadataVersionSupplier().isTruncationOnFetchSupported
 
   override def initiateClose(): Unit = blockingSender.initiateClose()
 

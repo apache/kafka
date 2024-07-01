@@ -34,6 +34,7 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -120,8 +121,13 @@ public class CachingKeyValueStore
     public Position getPosition() {
         // We return the merged position since the query uses the merged position as well
         final Position mergedPosition = Position.emptyPosition();
-        mergedPosition.merge(position);
-        mergedPosition.merge(wrapped().getPosition());
+        final Position wrappedPosition = wrapped().getPosition();
+        synchronized (position) {
+            synchronized (wrappedPosition) {
+                mergedPosition.merge(position);
+                mergedPosition.merge(wrappedPosition);
+            }
+        }
         return mergedPosition;
     }
 
@@ -183,25 +189,27 @@ public class CachingKeyValueStore
 
         final Bytes key = keyQuery.getKey();
 
-        if (context.cache() != null) {
-            final LRUCacheEntry lruCacheEntry = context.cache().get(cacheName, key);
-            if (lruCacheEntry != null) {
-                final byte[] rawValue;
-                if (timestampedSchema && !WrappedStateStore.isTimestamped(wrapped()) && !StoreQueryUtils.isAdapter(wrapped())) {
-                    rawValue = ValueAndTimestampDeserializer.rawValue(lruCacheEntry.value());
-                } else {
-                    rawValue = lruCacheEntry.value();
+        synchronized (mergedPosition) {
+            if (context.cache() != null) {
+                final LRUCacheEntry lruCacheEntry = context.cache().get(cacheName, key);
+                if (lruCacheEntry != null) {
+                    final byte[] rawValue;
+                    if (timestampedSchema && !WrappedStateStore.isTimestamped(wrapped()) && !StoreQueryUtils.isAdapter(wrapped())) {
+                        rawValue = ValueAndTimestampDeserializer.rawValue(lruCacheEntry.value());
+                    } else {
+                        rawValue = lruCacheEntry.value();
+                    }
+                    result = (QueryResult<R>) QueryResult.forResult(rawValue);
                 }
-                result = (QueryResult<R>) QueryResult.forResult(rawValue);
             }
-        }
 
-        // We don't need to check the position at the state store since we already performed the check on
-        // the merged position above
-        if (result == null) {
-            result = wrapped().query(query, PositionBound.unbounded(), config);
+            // We don't need to check the position at the state store since we already performed the check on
+            // the merged position above
+            if (result == null) {
+                result = wrapped().query(query, PositionBound.unbounded(), config);
+            }
+            result.setPosition(mergedPosition.copy());
         }
-        result.setPosition(mergedPosition);
         return result;
     }
 
@@ -276,19 +284,21 @@ public class CachingKeyValueStore
 
     private void putInternal(final Bytes key,
                              final byte[] value) {
-        context.cache().put(
-            cacheName,
-            key,
-            new LRUCacheEntry(
-                value,
-                context.headers(),
-                true,
-                context.offset(),
-                context.timestamp(),
-                context.partition(),
-                context.topic()));
+        synchronized (position) {
+            context.cache().put(
+                cacheName,
+                key,
+                new LRUCacheEntry(
+                    value,
+                    context.headers(),
+                    true,
+                    context.offset(),
+                    context.timestamp(),
+                    context.partition(),
+                    context.topic()));
 
-        StoreQueryUtils.updatePosition(position, context);
+            StoreQueryUtils.updatePosition(position, context);
+        }
     }
 
     @Override

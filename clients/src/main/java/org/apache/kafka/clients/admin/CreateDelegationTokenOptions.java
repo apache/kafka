@@ -17,12 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
-
-import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 /**
  * Options for {@link Admin#createDelegationToken(CreateDelegationTokenOptions)}.

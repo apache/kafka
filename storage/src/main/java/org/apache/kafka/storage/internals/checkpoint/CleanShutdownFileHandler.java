@@ -17,15 +17,17 @@
 
 package org.apache.kafka.storage.internals.checkpoint;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.Json;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import org.slf4j.Logger;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.BufferedWriter;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -54,7 +56,7 @@ public class CleanShutdownFileHandler {
         public int version;
         public Long brokerEpoch;
 
-        public Content() {};
+        public Content() {}
 
         public Content(int version, Long brokerEpoch) {
             this.version = version;
@@ -86,7 +88,6 @@ public class CleanShutdownFileHandler {
         }
     }
 
-    @SuppressWarnings("unchecked")
     public OptionalLong read() {
         try {
             String text = Utils.readFileAsString(cleanShutdownFile.toPath().toString());

@@ -29,7 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
-import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -66,6 +66,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -96,7 +97,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshC
  * This class manages the coordination process with the consumer coordinator.
  */
 public final class ConsumerCoordinator extends AbstractCoordinator {
-    private final static TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
+    private static final TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
 
     private final GroupRebalanceConfig rebalanceConfig;
     private final Logger log;
@@ -235,7 +236,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             logContext,
             subscriptions,
             time,
-            new RebalanceCallbackMetrics(metrics, metricGrpPrefix)
+            new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix)
         );
         this.metadata.requestUpdate(true);
     }
@@ -1554,24 +1555,23 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private class ConsumerCoordinatorMetrics {
-        private final String metricGrpName;
         private final Sensor commitSensor;
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            this.metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
+            String metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
 
             this.commitSensor = metrics.sensor("commit-latency");
             this.commitSensor.add(metrics.metricName("commit-latency-avg",
-                this.metricGrpName,
+                metricGrpName,
                 "The average time taken for a commit request"), new Avg());
             this.commitSensor.add(metrics.metricName("commit-latency-max",
-                this.metricGrpName,
+                metricGrpName,
                 "The max time taken for a commit request"), new Max());
             this.commitSensor.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
 
             Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
             metrics.addMetric(metrics.metricName("assigned-partitions",
-                this.metricGrpName,
+                metricGrpName,
                 "The number of partitions currently assigned to this consumer"), numParts);
         }
     }

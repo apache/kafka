@@ -51,10 +51,7 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
     private final EventType type;
     private final RemoteLogSegmentId segmentId;
     private final int timestamp;
-    private final Optional<RemoteLogSegmentFileset> fileset;
     private final Optional<RemoteLogSegmentMetadata> metadata;
-    private final int startPosition;
-    private final int endPosition;
     private final Optional<Exception> exception;
 
     /**
@@ -124,10 +121,7 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
         this.type = builder.eventType;
         this.segmentId = builder.segmentId;
         this.timestamp = builder.timestamp;
-        this.fileset = ofNullable(builder.fileset);
         this.metadata = ofNullable(builder.metadata);
-        this.startPosition = builder.startPosition;
-        this.endPosition = builder.endPosition;
         this.exception = ofNullable(builder.exception);
     }
 
@@ -137,10 +131,10 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
     }
 
     public static class Builder {
-        private int brokerId;
-        private EventType eventType;
-        private RemoteLogSegmentId segmentId;
-        private int timestamp;
+        private final int brokerId;
+        private final EventType eventType;
+        private final RemoteLogSegmentId segmentId;
+        private final int timestamp;
         private RemoteLogSegmentFileset fileset;
         private RemoteLogSegmentMetadata metadata;
         private int startPosition;

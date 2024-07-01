@@ -413,7 +413,7 @@ public interface FieldType {
             default:
                 if (string.startsWith(ARRAY_PREFIX)) {
                     String elementTypeString = string.substring(ARRAY_PREFIX.length());
-                    if (elementTypeString.length() == 0) {
+                    if (elementTypeString.isEmpty()) {
                         throw new RuntimeException("Can't parse array type " + string +
                             ".  No element type found.");
                     }
@@ -497,7 +497,7 @@ public interface FieldType {
     }
 
     /**
-     * Gets the fixed length of the field, or None if the field is variable-length.
+     * Gets the fixed length of the field, or Empty if the field is variable-length.
      */
     default Optional<Integer> fixedLength() {
         return Optional.empty();

@@ -23,16 +23,16 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
-
-import java.time.Instant;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 
+import java.time.Instant;
+
 public class SmokeTestUtil {
 
-    final static int END = Integer.MAX_VALUE;
+    static final int END = Integer.MAX_VALUE;
 
     static ProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic) {
         return printProcessorSupplier(topic, "");

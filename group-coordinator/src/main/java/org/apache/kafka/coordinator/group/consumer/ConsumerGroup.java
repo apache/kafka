@@ -19,28 +19,33 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
-import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.Record;
-import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.Utils;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.image.ClusterImage;
-import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.ModernGroup;
+import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineObject;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -48,6 +53,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.Utils.toOptional;
+import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.RECONCILING;
@@ -57,7 +64,7 @@ import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.Consumer
  * A Consumer Group. All the metadata in this class are backed by
  * records in the __consumer_offsets partitions.
  */
-public class ConsumerGroup implements Group {
+public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
     public enum ConsumerGroupState {
         EMPTY("Empty"),
@@ -85,44 +92,10 @@ public class ConsumerGroup implements Group {
         }
     }
 
-    public static class DeadlineAndEpoch {
-        static final DeadlineAndEpoch EMPTY = new DeadlineAndEpoch(0L, 0);
-
-        public final long deadlineMs;
-        public final int epoch;
-
-        DeadlineAndEpoch(long deadlineMs, int epoch) {
-            this.deadlineMs = deadlineMs;
-            this.epoch = epoch;
-        }
-    }
-
-    /**
-     * The snapshot registry.
-     */
-    private final SnapshotRegistry snapshotRegistry;
-
-    /**
-     * The group id.
-     */
-    private final String groupId;
-
     /**
      * The group state.
      */
     private final TimelineObject<ConsumerGroupState> state;
-
-    /**
-     * The group epoch. The epoch is incremented whenever the subscriptions
-     * are updated and it will trigger the computation of a new assignment
-     * for the group.
-     */
-    private final TimelineInteger groupEpoch;
-
-    /**
-     * The group members.
-     */
-    private final TimelineHashMap<String, ConsumerGroupMember> members;
 
     /**
      * The static group members.
@@ -135,69 +108,32 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, Integer> serverAssignors;
 
     /**
-     * The number of subscribers per topic.
-     */
-    private final TimelineHashMap<String, Integer> subscribedTopicNames;
-
-    /**
-     * The metadata associated with each subscribed topic name.
-     */
-    private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
-
-    /**
-     * The target assignment epoch. An assignment epoch smaller than the group epoch
-     * means that a new assignment is required. The assignment epoch is updated when
-     * a new assignment is installed.
-     */
-    private final TimelineInteger targetAssignmentEpoch;
-
-    /**
-     * The target assignment per member id.
-     */
-    private final TimelineHashMap<String, Assignment> targetAssignment;
-
-    /**
-     * The current partition epoch maps each topic-partitions to their current epoch where
-     * the epoch is the epoch of their owners. When a member revokes a partition, it removes
-     * its epochs from this map. When a member gets a partition, it adds its epochs to this map.
-     */
-    private final TimelineHashMap<Uuid, TimelineHashMap<Integer, Integer>> currentPartitionEpoch;
-
-    /**
      * The coordinator metrics.
      */
     private final GroupCoordinatorMetricsShard metrics;
 
     /**
-     * The metadata refresh deadline. It consists of a timestamp in milliseconds together with
-     * the group epoch at the time of setting it. The metadata refresh time is considered as a
-     * soft state (read that it is not stored in a timeline data structure). It is like this
-     * because it is not persisted to the log. The group epoch is here to ensure that the
-     * metadata refresh deadline is invalidated if the group epoch does not correspond to
-     * the current group epoch. This can happen if the metadata refresh deadline is updated
-     * after having refreshed the metadata but the write operation failed. In this case, the
-     * time is not automatically rolled back.
+     * The number of members that use the classic protocol.
      */
-    private DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
+    private final TimelineInteger numClassicProtocolMembers;
+
+    /**
+     * Map of protocol names to the number of members that use classic protocol and support them.
+     */
+    private final TimelineHashMap<String, Integer> classicProtocolMembersSupportedProtocols;
 
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
         String groupId,
         GroupCoordinatorMetricsShard metrics
     ) {
-        this.snapshotRegistry = Objects.requireNonNull(snapshotRegistry);
-        this.groupId = Objects.requireNonNull(groupId);
+        super(snapshotRegistry, groupId);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
-        this.groupEpoch = new TimelineInteger(snapshotRegistry);
-        this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
-        this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
+        this.numClassicProtocolMembers = new TimelineInteger(snapshotRegistry);
+        this.classicProtocolMembersSupportedProtocols = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
@@ -206,6 +142,14 @@ public class ConsumerGroup implements Group {
     @Override
     public GroupType type() {
         return GroupType.CONSUMER;
+    }
+
+    /**
+     * @return The group protocol type (consumer).
+     */
+    @Override
+    public String protocolType() {
+        return ConsumerProtocol.PROTOCOL_TYPE;
     }
 
     /**
@@ -224,24 +168,6 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return the group formatted as a list group response based on the committed offset.
-     */
-    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
-        return new ListGroupsResponseData.ListedGroup()
-            .setGroupId(groupId)
-            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-            .setGroupState(state.get(committedOffset).toString());
-    }
-
-    /**
-     * @return The group id.
-     */
-    @Override
-    public String groupId() {
-        return groupId;
-    }
-
-    /**
      * @return The current state.
      */
     public ConsumerGroupState state() {
@@ -256,37 +182,12 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return The group epoch.
-     */
-    public int groupEpoch() {
-        return groupEpoch.get();
-    }
-
-    /**
-     * Sets the group epoch.
+     * Sets the number of members using the classic protocol.
      *
-     * @param groupEpoch The new group epoch.
+     * @param numClassicProtocolMembers The new NumClassicProtocolMembers.
      */
-    public void setGroupEpoch(int groupEpoch) {
-        this.groupEpoch.set(groupEpoch);
-        maybeUpdateGroupState();
-    }
-
-    /**
-     * @return The target assignment epoch.
-     */
-    public int assignmentEpoch() {
-        return targetAssignmentEpoch.get();
-    }
-
-    /**
-     * Sets the assignment epoch.
-     *
-     * @param targetAssignmentEpoch The new assignment epoch.
-     */
-    public void setTargetAssignmentEpoch(int targetAssignmentEpoch) {
-        this.targetAssignmentEpoch.set(targetAssignmentEpoch);
-        maybeUpdateGroupState();
+    public void setNumClassicProtocolMembers(int numClassicProtocolMembers) {
+        this.numClassicProtocolMembers.set(numClassicProtocolMembers);
     }
 
     /**
@@ -298,11 +199,13 @@ public class ConsumerGroup implements Group {
      * @return The member id corresponding to the given instance id or null if it does not exist
      */
     public String staticMemberId(String groupInstanceId) {
+        if (groupInstanceId == null) return null;
         return staticMembers.get(groupInstanceId);
     }
 
     /**
-     * Gets or creates a member.
+     * Gets or creates a new member but without adding it to the group. Adding a member
+     * is done via the {@link ConsumerGroup#updateMember(ConsumerGroupMember)} method.
      *
      * @param memberId          The member id.
      * @param createIfNotExists Booleans indicating whether the member must be
@@ -315,16 +218,15 @@ public class ConsumerGroup implements Group {
         boolean createIfNotExists
     ) {
         ConsumerGroupMember member = members.get(memberId);
-        if (member == null) {
-            if (!createIfNotExists) {
-                throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
-                    memberId, groupId));
-            }
-            member = new ConsumerGroupMember.Builder(memberId).build();
-            members.put(memberId, member);
+        if (member != null) return member;
+
+        if (!createIfNotExists) {
+            throw new UnknownMemberIdException(
+                String.format("Member %s is not a member of group %s.", memberId, groupId)
+            );
         }
 
-        return member;
+        return new ConsumerGroupMember.Builder(memberId).build();
     }
 
     /**
@@ -340,20 +242,52 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Updates the member.
+     * Returns true if the static member exists.
      *
-     * @param newMember The new member state.
+     * @param instanceId The instance id.
+     *
+     * @return A boolean indicating whether the member exists or not.
      */
+    public boolean hasStaticMember(String instanceId) {
+        if (instanceId == null) return false;
+        return staticMembers.containsKey(instanceId);
+    }
+
+    /**
+     * Returns the target assignment associated to the provided member id if
+     * the instance id is null; otherwise returns the target assignment associated
+     * to the instance id.
+     *
+     * @param memberId      The member id.
+     * @param instanceId    The instance id.
+     *
+     * @return The Assignment or EMPTY if it does not exist.
+     */
+    public Assignment targetAssignment(String memberId, String instanceId) {
+        if (instanceId == null) {
+            return targetAssignment(memberId);
+        } else {
+            String previousMemberId = staticMemberId(instanceId);
+            if (previousMemberId != null) {
+                return targetAssignment(previousMemberId);
+            }
+        }
+        return Assignment.EMPTY;
+    }
+
+    @Override
     public void updateMember(ConsumerGroupMember newMember) {
         if (newMember == null) {
             throw new IllegalArgumentException("newMember cannot be null.");
         }
         ConsumerGroupMember oldMember = members.put(newMember.memberId(), newMember);
-        maybeUpdateSubscribedTopicNames(oldMember, newMember);
+        maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, newMember);
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
         updateStaticMember(newMember);
         maybeUpdateGroupState();
+        maybeUpdateNumClassicProtocolMembers(oldMember, newMember);
+        maybeUpdateClassicProtocolMembersSupportedProtocols(oldMember, newMember);
     }
 
     /**
@@ -367,18 +301,16 @@ public class ConsumerGroup implements Group {
         }
     }
 
-    /**
-     * Remove the member from the group.
-     *
-     * @param memberId The member id to remove.
-     */
+    @Override
     public void removeMember(String memberId) {
         ConsumerGroupMember oldMember = members.remove(memberId);
-        maybeUpdateSubscribedTopicNames(oldMember, null);
+        maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, null);
         maybeUpdateServerAssignors(oldMember, null);
         maybeRemovePartitionEpoch(oldMember);
         removeStaticMember(oldMember);
         maybeUpdateGroupState();
+        maybeUpdateNumClassicProtocolMembers(oldMember, null);
+        maybeUpdateClassicProtocolMembersSupportedProtocols(oldMember, null);
     }
 
     /**
@@ -393,28 +325,17 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Returns true if the member exists.
-     *
-     * @param memberId The member id.
-     *
-     * @return A boolean indicating whether the member exists or not.
+     * @return The number of members that use the classic protocol.
      */
-    public boolean hasMember(String memberId) {
-        return members.containsKey(memberId);
+    public int numClassicProtocolMembers() {
+        return numClassicProtocolMembers.get();
     }
 
     /**
-     * @return The number of members.
+     * @return The map of the protocol name and the number of members using the classic protocol that support it.
      */
-    public int numMembers() {
-        return members.size();
-    }
-
-    /**
-     * @return An immutable Map containing all the members keyed by their id.
-     */
-    public Map<String, ConsumerGroupMember> members() {
-        return Collections.unmodifiableMap(members);
+    public Map<String, Integer> classicMembersSupportedProtocols() {
+        return Collections.unmodifiableMap(classicProtocolMembersSupportedProtocols);
     }
 
     /**
@@ -422,81 +343,6 @@ public class ConsumerGroup implements Group {
      */
     public Map<String, String> staticMembers() {
         return Collections.unmodifiableMap(staticMembers);
-    }
-
-    /**
-     * @return An immutable Set containing all the subscribed topic names.
-     */
-    public Set<String> subscribedTopicNames() {
-        return Collections.unmodifiableSet(subscribedTopicNames.keySet());
-    }
-
-    /**
-     * Returns true if the consumer group is actively subscribed to the topic.
-     *
-     * @param topic  The topic name.
-     *
-     * @return Whether the group is subscribed to the topic.
-     */
-    @Override
-    public boolean isSubscribedToTopic(String topic) {
-        return subscribedTopicNames.containsKey(topic);
-    }
-
-    /**
-     * Returns the target assignment of the member.
-     *
-     * @return The ConsumerGroupMemberAssignment or an EMPTY one if it does not
-     *         exist.
-     */
-    public Assignment targetAssignment(String memberId) {
-        return targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
-    }
-
-    /**
-     * Updates target assignment of a member.
-     *
-     * @param memberId              The member id.
-     * @param newTargetAssignment   The new target assignment.
-     */
-    public void updateTargetAssignment(String memberId, Assignment newTargetAssignment) {
-        targetAssignment.put(memberId, newTargetAssignment);
-    }
-
-    /**
-     * Removes the target assignment of a member.
-     *
-     * @param memberId The member id.
-     */
-    public void removeTargetAssignment(String memberId) {
-        targetAssignment.remove(memberId);
-    }
-
-    /**
-     * @return An immutable Map containing all the target assignment keyed by member id.
-     */
-    public Map<String, Assignment> targetAssignment() {
-        return Collections.unmodifiableMap(targetAssignment);
-    }
-
-    /**
-     * Returns the current epoch of a partition or -1 if the partition
-     * does not have one.
-     *
-     * @param topicId       The topic id.
-     * @param partitionId   The partition id.
-     *
-     * @return The epoch or -1.
-     */
-    public int currentPartitionEpoch(
-        Uuid topicId, int partitionId
-    ) {
-        Map<Integer, Integer> partitions = currentPartitionEpoch.get(topicId);
-        if (partitions == null) {
-            return -1;
-        } else {
-            return partitions.getOrDefault(partitionId, -1);
-        }
     }
 
     /**
@@ -540,120 +386,6 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return An immutable Map of subscription metadata for
-     *         each topic that the consumer group is subscribed to.
-     */
-    public Map<String, TopicMetadata> subscriptionMetadata() {
-        return Collections.unmodifiableMap(subscribedTopicMetadata);
-    }
-
-    /**
-     * Updates the subscription metadata. This replaces the previous one.
-     *
-     * @param subscriptionMetadata The new subscription metadata.
-     */
-    public void setSubscriptionMetadata(
-        Map<String, TopicMetadata> subscriptionMetadata
-    ) {
-        this.subscribedTopicMetadata.clear();
-        this.subscribedTopicMetadata.putAll(subscriptionMetadata);
-    }
-
-    /**
-     * Computes the subscription metadata based on the current subscription and
-     * an updated member.
-     *
-     * @param oldMember     The old member of the consumer group.
-     * @param newMember     The updated member of the consumer group.
-     * @param topicsImage   The current metadata for all available topics.
-     * @param clusterImage  The current metadata for the Kafka cluster.
-     *
-     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
-     */
-    public Map<String, TopicMetadata> computeSubscriptionMetadata(
-        ConsumerGroupMember oldMember,
-        ConsumerGroupMember newMember,
-        TopicsImage topicsImage,
-        ClusterImage clusterImage
-    ) {
-        // Copy and update the current subscriptions.
-        Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
-        maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
-
-        // Create the topic metadata for each subscribed topic.
-        Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
-
-        subscribedTopicNames.forEach((topicName, count) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicName);
-            if (topicImage != null) {
-                Map<Integer, Set<String>> partitionRacks = new HashMap<>();
-                topicImage.partitions().forEach((partition, partitionRegistration) -> {
-                    Set<String> racks = new HashSet<>();
-                    for (int replica : partitionRegistration.replicas) {
-                        Optional<String> rackOptional = clusterImage.broker(replica).rack();
-                        // Only add the rack if it is available for the broker/replica.
-                        rackOptional.ifPresent(racks::add);
-                    }
-                    // If rack information is unavailable for all replicas of this partition,
-                    // no corresponding entry will be stored for it in the map.
-                    if (!racks.isEmpty())
-                        partitionRacks.put(partition, racks);
-                });
-
-                newSubscriptionMetadata.put(topicName, new TopicMetadata(
-                    topicImage.id(),
-                    topicImage.name(),
-                    topicImage.partitions().size(),
-                    partitionRacks)
-                );
-            }
-        });
-
-        return Collections.unmodifiableMap(newSubscriptionMetadata);
-    }
-
-    /**
-     * Updates the metadata refresh deadline.
-     *
-     * @param deadlineMs The deadline in milliseconds.
-     * @param groupEpoch The associated group epoch.
-     */
-    public void setMetadataRefreshDeadline(
-        long deadlineMs,
-        int groupEpoch
-    ) {
-        this.metadataRefreshDeadline = new DeadlineAndEpoch(deadlineMs, groupEpoch);
-    }
-
-    /**
-     * Requests a metadata refresh.
-     */
-    public void requestMetadataRefresh() {
-        this.metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
-    }
-
-    /**
-     * Checks if a metadata refresh is required. A refresh is required in two cases:
-     * 1) The deadline is smaller or equal to the current time;
-     * 2) The group epoch associated with the deadline is larger than
-     *    the current group epoch. This means that the operations which updated
-     *    the deadline failed.
-     *
-     * @param currentTimeMs The current time in milliseconds.
-     * @return A boolean indicating whether a refresh is required or not.
-     */
-    public boolean hasMetadataExpired(long currentTimeMs) {
-        return currentTimeMs >= metadataRefreshDeadline.deadlineMs || groupEpoch() < metadataRefreshDeadline.epoch;
-    }
-
-    /**
-     * @return The metadata refresh deadline.
-     */
-    public DeadlineAndEpoch metadataRefreshDeadline() {
-        return metadataRefreshDeadline;
-    }
-
-    /**
      * Validates the OffsetCommit request.
      *
      * @param memberId          The member id.
@@ -661,21 +393,36 @@ public class ConsumerGroup implements Group {
      * @param memberEpoch       The member epoch.
      * @param isTransactional   Whether the offset commit is transactional or not. It has no
      *                          impact when a consumer group is used.
+     * @param apiVersion        The api version.
+     * @throws UnknownMemberIdException     If the member is not found.
+     * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
+     *                                      member epoch doesn't match the actual member epoch.
+     * @throws IllegalGenerationException   If the member uses the classic protocol and the provided
+     *                                      generation id is not equal to the member epoch.
      */
     @Override
     public void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int memberEpoch,
-        boolean isTransactional
-    ) throws UnknownMemberIdException, StaleMemberEpochException {
+        boolean isTransactional,
+        short apiVersion
+    ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
         // the request can commit offsets if the group is empty.
         if (memberEpoch < 0 && members().isEmpty()) return;
 
         final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
-        validateMemberEpoch(memberEpoch, member.memberEpoch());
+
+        // If the commit is not transactional and the member uses the new consumer protocol (KIP-848),
+        // the member should be using the OffsetCommit API version >= 9.
+        if (!isTransactional && !member.useClassicProtocol() && apiVersion < 9) {
+            throw new UnsupportedVersionException("OffsetCommit version 9 or above must be used " +
+                "by members using the modern group protocol");
+        }
+
+        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
     }
 
     /**
@@ -684,13 +431,18 @@ public class ConsumerGroup implements Group {
      * @param memberId              The member id for consumer groups.
      * @param memberEpoch           The member epoch for consumer groups.
      * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * @throws UnknownMemberIdException     If the member is not found.
+     * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
+     *                                      member epoch doesn't match the actual member epoch.
+     * @throws IllegalGenerationException   If the member uses the classic protocol and the provided
+     *                                      generation id is not equal to the member epoch.
      */
     @Override
     public void validateOffsetFetch(
         String memberId,
         int memberEpoch,
         long lastCommittedOffset
-    ) throws UnknownMemberIdException, StaleMemberEpochException {
+    ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
         // When the member id is null and the member epoch is -1, the request either comes
         // from the admin client or from a client which does not provide them. In this case,
         // the fetch request is accepted.
@@ -701,14 +453,16 @@ public class ConsumerGroup implements Group {
             throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
                 memberId, groupId));
         }
-        validateMemberEpoch(memberEpoch, member.memberEpoch());
+        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
     }
 
     /**
      * Validates the OffsetDelete request.
      */
     @Override
-    public void validateOffsetDelete() {}
+    public void validateOffsetDelete() {
+        // Do nothing.
+    }
 
     /**
      * Validates the DeleteGroups request.
@@ -726,10 +480,22 @@ public class ConsumerGroup implements Group {
      * @param records The list of records.
      */
     @Override
-    public void createGroupTombstoneRecords(List<Record> records) {
-        records.add(RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
-        records.add(RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
-        records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
+    public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
+        members().forEach((memberId, member) ->
+            records.add(CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId(), memberId))
+        );
+
+        members().forEach((memberId, member) ->
+            records.add(CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId(), memberId))
+        );
+        records.add(CoordinatorRecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
+
+        members().forEach((memberId, member) ->
+            records.add(CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId(), memberId))
+        );
+
+        records.add(CoordinatorRecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(CoordinatorRecordHelpers.newGroupEpochTombstoneRecord(groupId()));
     }
 
     @Override
@@ -753,23 +519,32 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Throws a StaleMemberEpochException if the received member epoch does not match
-     * the expected member epoch.
+     * Throws an exception if the received member epoch does not match the expected member epoch.
+     *
+     * @param receivedMemberEpoch   The received member epoch or generation id.
+     * @param expectedMemberEpoch   The expected member epoch.
+     * @param useClassicProtocol    The boolean indicating whether the checked member uses the classic protocol.
+     * @throws StaleMemberEpochException    if the member with unmatched member epoch uses the consumer protocol.
+     * @throws IllegalGenerationException   if the member with unmatched generation id uses the classic protocol.
      */
     private void validateMemberEpoch(
         int receivedMemberEpoch,
-        int expectedMemberEpoch
-    ) throws StaleMemberEpochException {
+        int expectedMemberEpoch,
+        boolean useClassicProtocol
+    ) throws StaleMemberEpochException, IllegalGenerationException {
         if (receivedMemberEpoch != expectedMemberEpoch) {
-            throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
-                + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
+            if (useClassicProtocol) {
+                throw new IllegalGenerationException(String.format("The received generation id %d does not match " +
+                    "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
+            } else {
+                throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
+                    + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
+            }
         }
     }
 
-    /**
-     * Updates the current state of the group.
-     */
-    private void maybeUpdateGroupState() {
+    @Override
+    protected void maybeUpdateGroupState() {
         ConsumerGroupState previousState = state.get();
         ConsumerGroupState newState = STABLE;
         if (members.isEmpty()) {
@@ -777,8 +552,8 @@ public class ConsumerGroup implements Group {
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
             newState = ASSIGNING;
         } else {
-            for (ConsumerGroupMember member : members.values()) {
-                if (member.targetMemberEpoch() != targetAssignmentEpoch.get() || member.state() != ConsumerGroupMember.MemberState.STABLE) {
+            for (ModernGroupMember member : members.values()) {
+                if (!member.isReconciledTo(targetAssignmentEpoch.get())) {
                     newState = RECONCILING;
                     break;
                 }
@@ -816,50 +591,58 @@ public class ConsumerGroup implements Group {
     ) {
         if (oldMember != null) {
             oldMember.serverAssignorName().ifPresent(name ->
-                serverAssignorCount.compute(name, ConsumerGroup::decValue)
+                serverAssignorCount.compute(name, Utils::decValue)
             );
         }
         if (newMember != null) {
             newMember.serverAssignorName().ifPresent(name ->
-                serverAssignorCount.compute(name, ConsumerGroup::incValue)
+                serverAssignorCount.compute(name, Utils::incValue)
             );
         }
     }
 
     /**
-     * Updates the subscribed topic names count.
+     * Updates the number of the members that use the classic protocol.
      *
      * @param oldMember The old member.
      * @param newMember The new member.
      */
-    private void maybeUpdateSubscribedTopicNames(
+    private void maybeUpdateNumClassicProtocolMembers(
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
-        maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
+        int delta = 0;
+        if (oldMember != null && oldMember.useClassicProtocol()) {
+            delta--;
+        }
+        if (newMember != null && newMember.useClassicProtocol()) {
+            delta++;
+        }
+        setNumClassicProtocolMembers(numClassicProtocolMembers() + delta);
     }
 
     /**
-     * Updates the subscription count.
+     * Updates the supported protocol count of the members that use the classic protocol.
      *
-     * @param subscribedTopicCount  The map to update.
-     * @param oldMember             The old member.
-     * @param newMember             The new member.
+     * @param oldMember The old member.
+     * @param newMember The new member.
      */
-    private static void maybeUpdateSubscribedTopicNames(
-        Map<String, Integer> subscribedTopicCount,
+    private void maybeUpdateClassicProtocolMembersSupportedProtocols(
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
         if (oldMember != null) {
-            oldMember.subscribedTopicNames().forEach(topicName ->
-                subscribedTopicCount.compute(topicName, ConsumerGroup::decValue)
+            oldMember.supportedClassicProtocols().ifPresent(protocols ->
+                protocols.forEach(protocol ->
+                    classicProtocolMembersSupportedProtocols.compute(protocol.name(), Utils::decValue)
+                )
             );
         }
-
         if (newMember != null) {
-            newMember.subscribedTopicNames().forEach(topicName ->
-                subscribedTopicCount.compute(topicName, ConsumerGroup::incValue)
+            newMember.supportedClassicProtocols().ifPresent(protocols ->
+                protocols.forEach(protocol ->
+                    classicProtocolMembersSupportedProtocols.compute(protocol.name(), Utils::incValue)
+                )
             );
         }
     }
@@ -960,22 +743,6 @@ public class ConsumerGroup implements Group {
         });
     }
 
-    /**
-     * Decrements value by 1; returns null when reaching zero. This helper is
-     * meant to be used with Map#compute.
-     */
-    private static Integer decValue(String key, Integer value) {
-        if (value == null) return null;
-        return value == 1 ? null : value - 1;
-    }
-
-    /**
-     * Increments value by 1; This helper is meant to be used with Map#compute.
-     */
-    private static Integer incValue(String key, Integer value) {
-        return value == null ? 1 : value + 1;
-    }
-
     public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(
         long committedOffset,
         String defaultAssignor,
@@ -996,5 +763,152 @@ public class ConsumerGroup implements Group {
             )
         );
         return describedGroup;
+    }
+
+    /**
+     * Create a new consumer group according to the given classic group.
+     *
+     * @param snapshotRegistry  The SnapshotRegistry.
+     * @param metrics           The GroupCoordinatorMetricsShard.
+     * @param classicGroup      The converted classic group.
+     * @param topicsImage       The TopicsImage for topic id and topic name conversion.
+     * @return  The created ConsumerGruop.
+     */
+    public static ConsumerGroup fromClassicGroup(
+        SnapshotRegistry snapshotRegistry,
+        GroupCoordinatorMetricsShard metrics,
+        ClassicGroup classicGroup,
+        TopicsImage topicsImage
+    ) {
+        String groupId = classicGroup.groupId();
+        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+        consumerGroup.setGroupEpoch(classicGroup.generationId());
+        consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
+
+        classicGroup.allMembers().forEach(classicGroupMember -> {
+            Map<Uuid, Set<Integer>> assignedPartitions = toTopicPartitionMap(
+                ConsumerProtocol.deserializeConsumerProtocolAssignment(
+                    ByteBuffer.wrap(classicGroupMember.assignment())
+                ),
+                topicsImage
+            );
+            ConsumerProtocolSubscription subscription = ConsumerProtocol.deserializeConsumerProtocolSubscription(
+                ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().get()))
+            );
+
+            // The target assignment and the assigned partitions of each member are set based on the last
+            // assignment of the classic group. All the members are put in the Stable state. If the classic
+            // group was in Preparing Rebalance or Completing Rebalance states, the classic members are
+            // asked to rejoin the group to re-trigger a rebalance or collect their assignments.
+            ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(classicGroupMember.memberId())
+                .setMemberEpoch(classicGroup.generationId())
+                .setState(MemberState.STABLE)
+                .setPreviousMemberEpoch(classicGroup.generationId())
+                .setInstanceId(classicGroupMember.groupInstanceId().orElse(null))
+                .setRackId(toOptional(subscription.rackId()).orElse(null))
+                .setRebalanceTimeoutMs(classicGroupMember.rebalanceTimeoutMs())
+                .setClientId(classicGroupMember.clientId())
+                .setClientHost(classicGroupMember.clientHost())
+                .setSubscribedTopicNames(subscription.topics())
+                .setAssignedPartitions(assignedPartitions)
+                .setClassicMemberMetadata(
+                    new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                        .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())
+                        .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                            classicGroupMember.supportedProtocols()
+                        ))
+                )
+                .build();
+            consumerGroup.updateTargetAssignment(newMember.memberId(), new Assignment(assignedPartitions));
+            consumerGroup.updateMember(newMember);
+        });
+
+        return consumerGroup;
+    }
+
+    /**
+     * Populate the record list with the records needed to create the given consumer group.
+     *
+     * @param records The list to which the new records are added.
+     */
+    public void createConsumerGroupRecords(
+        List<CoordinatorRecord> records
+    ) {
+        members().forEach((__, consumerGroupMember) ->
+            records.add(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId(), consumerGroupMember))
+        );
+
+        records.add(CoordinatorRecordHelpers.newGroupEpochRecord(groupId(), groupEpoch()));
+
+        members().forEach((consumerGroupMemberId, consumerGroupMember) ->
+            records.add(CoordinatorRecordHelpers.newTargetAssignmentRecord(
+                groupId(),
+                consumerGroupMemberId,
+                targetAssignment(consumerGroupMemberId).partitions()
+            ))
+        );
+
+        records.add(CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId(), groupEpoch()));
+
+        members().forEach((__, consumerGroupMember) ->
+            records.add(CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId(), consumerGroupMember))
+        );
+    }
+
+    /**
+     * Checks whether at least one of the given protocols can be supported. A
+     * protocol can be supported if it is supported by all members that use the
+     * classic protocol.
+     *
+     * @param memberProtocolType  The member protocol type.
+     * @param memberProtocols     The set of protocol names.
+     *
+     * @return A boolean based on the condition mentioned above.
+     */
+    public boolean supportsClassicProtocols(String memberProtocolType, Set<String> memberProtocols) {
+        if (ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType)) {
+            if (isEmpty()) {
+                return !memberProtocols.isEmpty();
+            } else {
+                return memberProtocols.stream().anyMatch(
+                    name -> classicProtocolMembersSupportedProtocols.getOrDefault(name, 0) == numClassicProtocolMembers()
+                );
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks whether all the members use the classic protocol except the given member.
+     *
+     * @param memberId The member to remove.
+     * @return A boolean indicating whether all the members use the classic protocol.
+     */
+    public boolean allMembersUseClassicProtocolExcept(String memberId) {
+        return numClassicProtocolMembers() == members().size() - 1 &&
+            !getOrMaybeCreateMember(memberId, false).useClassicProtocol();
+    }
+
+    /**
+     * Checks whether the member has any unreleased partition.
+     *
+     * @param member The member to check.
+     * @return A boolean indicating whether the member has partitions in the target
+     *         assignment that hasn't been revoked by other members.
+     */
+    public boolean waitingOnUnreleasedPartition(ConsumerGroupMember member) {
+        if (member.state() == MemberState.UNRELEASED_PARTITIONS) {
+            for (Map.Entry<Uuid, Set<Integer>> entry : targetAssignment().get(member.memberId()).partitions().entrySet()) {
+                Uuid topicId = entry.getKey();
+                Set<Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Collections.emptySet());
+
+                for (int partition : entry.getValue()) {
+                    if (!assignedPartitions.contains(partition) && currentPartitionEpoch(topicId, partition) != -1) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }

@@ -21,6 +21,7 @@ import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -277,40 +278,30 @@ public class Metrics implements Closeable {
                 }
             }
         }
-        
         StringBuilder b = new StringBuilder();
-        b.append("<table class=\"data-table\"><tbody>\n");
-    
+        b.append("<table class=\"data-table\">\n<tbody>\n");
+        b.append("<tr>\n");
+        b.append("<th>Metric/Attribute name</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("<th>Mbean name</th>\n");
+        b.append("</tr>\n");
         for (Entry<String, Map<String, String>> e : beansAndAttributes.entrySet()) {
-            b.append("<tr>\n");
-            b.append("<td colspan=3 class=\"mbeanName\" style=\"background-color:#ccc; font-weight: bold;\">");
-            b.append(e.getKey());
-            b.append("</td>");
-            b.append("</tr>\n");
-            
-            b.append("<tr>\n");
-            b.append("<th style=\"width: 90px\"></th>\n");
-            b.append("<th>Attribute name</th>\n");
-            b.append("<th>Description</th>\n");
-            b.append("</tr>\n");
-            
             for (Entry<String, String> e2 : e.getValue().entrySet()) {
                 b.append("<tr>\n");
-                b.append("<td></td>");
                 b.append("<td>");
                 b.append(e2.getKey());
-                b.append("</td>");
+                b.append("</td>\n");
                 b.append("<td>");
                 b.append(e2.getValue());
-                b.append("</td>");
+                b.append("</td>\n");
+                b.append("<td>");
+                b.append(e.getKey());
+                b.append("</td>\n");
                 b.append("</tr>\n");
             }
-    
         }
         b.append("</tbody></table>");
-    
         return b.toString();
-    
     }
 
     public MetricConfig config() {
@@ -402,7 +393,7 @@ public class Metrics implements Closeable {
      * receive every value recorded with this sensor.
      * @param name The name of the sensor
      * @param config A default configuration to use for this sensor for metrics that don't have their own config
-     * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
+     * @param inactiveSensorExpirationTimeSeconds If no value is recorded on the Sensor for this duration of time,
      *                                        it is eligible for removal
      * @param parents The parent sensors
      * @param recordingLevel The recording level.
@@ -429,7 +420,7 @@ public class Metrics implements Closeable {
      * receive every value recorded with this sensor. This uses a default recording level of INFO.
      * @param name The name of the sensor
      * @param config A default configuration to use for this sensor for metrics that don't have their own config
-     * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
+     * @param inactiveSensorExpirationTimeSeconds If no value is recorded on the Sensor for this duration of time,
      *                                        it is eligible for removal
      * @param parents The parent sensors
      * @return The sensor that is created

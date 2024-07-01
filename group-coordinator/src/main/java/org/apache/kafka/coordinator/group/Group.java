@@ -19,9 +19,14 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Interface common for all groups.
@@ -29,7 +34,8 @@ import java.util.Set;
 public interface Group {
     enum GroupType {
         CONSUMER("consumer"),
-        CLASSIC("classic");
+        CLASSIC("classic"),
+        UNKNOWN("unknown");
 
         private final String name;
 
@@ -40,6 +46,24 @@ public interface Group {
         @Override
         public String toString() {
             return name;
+        }
+
+        private static final Map<String, GroupType> NAME_TO_ENUM = Arrays.stream(values())
+            .collect(Collectors.toMap(type -> type.name.toLowerCase(Locale.ROOT), Function.identity()));
+
+        /**
+         * Parse a string into the corresponding {@code GroupType} enum value, in a case-insensitive manner.
+         *
+         * @return The {{@link GroupType}} according to the string passed. Unknown group type is returned if
+         * the string doesn't correspond to a valid group type.
+         */
+        public static GroupType parse(String name) {
+            if (name == null) {
+                return UNKNOWN;
+            }
+            GroupType type = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
+
+            return type == null ? UNKNOWN : type;
         }
     }
 
@@ -76,12 +100,15 @@ public interface Group {
      * @param generationIdOrMemberEpoch The generation id for genetic groups or the member epoch
      *                                  for consumer groups.
      * @param isTransactional           Whether the offset commit is transactional or not.
+     * @param apiVersion                The api version.
      */
     void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int generationIdOrMemberEpoch,
-        boolean isTransactional
+        boolean isTransactional,
+        short apiVersion
+
     ) throws KafkaException;
 
     /**
@@ -121,7 +148,7 @@ public interface Group {
      *
      * @param records The list of records.
      */
-    void createGroupTombstoneRecords(List<Record> records);
+    void createGroupTombstoneRecords(List<CoordinatorRecord> records);
 
     /**
      * @return Whether the group is in Empty state.
@@ -142,4 +169,20 @@ public interface Group {
      * @return true if the state includes, false otherwise.
      */
     boolean isInStates(Set<String> statesFilter, long committedOffset);
+
+    /**
+     * Returns true if the member exists.
+     *
+     * @param memberId The member id.
+     *
+     * @return A boolean indicating whether the member exists or not.
+     */
+    boolean hasMember(String memberId);
+
+    /**
+     * Returns number of members in the group.
+     *
+     * @return The number of members.
+     */
+    int numMembers();
 }

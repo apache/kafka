@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.TopicPartition;
 
-import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -94,22 +93,6 @@ public interface CoordinatorLoader<U> extends AutoCloseable {
                 ", numRecords=" + numRecords +
                 ", numBytes=" + numBytes + ")";
         }
-    }
-
-    /**
-     * Deserializer to translates bytes to T.
-     *
-     * @param <T> The record type.
-     */
-    interface Deserializer<T> {
-        /**
-         * Deserializes the key and the value.
-         *
-         * @param key   The key or null if not present.
-         * @param value The value or null if not present.
-         * @return The record.
-         */
-        T deserialize(ByteBuffer key, ByteBuffer value) throws RuntimeException;
     }
 
     /**

@@ -22,7 +22,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.server.{ActionQueue, DelayedOperationPurgatory, HostedPartition, KafkaConfig, KafkaRequestHandler, ReplicaManager, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, OffsetFetchResponse, TransactionResult}
@@ -36,7 +36,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.coordinator.group.OffsetConfig
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, VerificationGuard}
@@ -99,10 +99,10 @@ class GroupCoordinatorTest {
   @BeforeEach
   def setUp(): Unit = {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
-    props.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, GroupMinSessionTimeout.toString)
-    props.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, GroupMaxSessionTimeout.toString)
-    props.setProperty(KafkaConfig.GroupMaxSizeProp, GroupMaxSize.toString)
-    props.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, GroupInitialRebalanceDelay.toString)
+    props.setProperty(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, GroupMinSessionTimeout.toString)
+    props.setProperty(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, GroupMaxSessionTimeout.toString)
+    props.setProperty(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG, GroupMaxSize.toString)
+    props.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupInitialRebalanceDelay.toString)
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
     val ret = mutable.Map[String, Map[Int, Seq[Int]]]()
     ret += (Topic.GROUP_METADATA_TOPIC_NAME -> Map(0 -> Seq(1), 1 -> Seq(1)))
@@ -121,7 +121,7 @@ class GroupCoordinatorTest {
     val rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
     groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, new Metrics())
-    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
+    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.groupCoordinatorConfig.offsetsTopicPartitions),
       enableMetadataExpiration = false)
 
     // add the partition into the owned partition list
@@ -177,7 +177,7 @@ class GroupCoordinatorTest {
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, describeGroupError)
 
     // ListGroups
-    val (listGroupsError, _) = groupCoordinator.handleListGroups(Set())
+    val (listGroupsError, _) = groupCoordinator.handleListGroups(Set(), Set())
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, listGroupsError)
 
     // DeleteGroups
@@ -199,7 +199,7 @@ class GroupCoordinatorTest {
   @Test
   def testOffsetsRetentionMsIntegerOverflow(): Unit = {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
-    props.setProperty(KafkaConfig.OffsetsRetentionMinutesProp, Integer.MAX_VALUE.toString)
+    props.setProperty(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG, Integer.MAX_VALUE.toString)
     val config = KafkaConfig.fromProps(props)
     val offsetConfig = GroupCoordinator.offsetConfig(config)
     assertEquals(offsetConfig.offsetsRetentionMs, Integer.MAX_VALUE * 60L * 1000L)
@@ -3301,10 +3301,10 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    val (error, groups) = groupCoordinator.handleListGroups(Set())
+    val (error, groups) = groupCoordinator.handleListGroups(Set(), Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer", Stable.toString), groups.head)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups.head)
   }
 
   @Test
@@ -3313,10 +3313,10 @@ class GroupCoordinatorTest {
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    val (error, groups) = groupCoordinator.handleListGroups(Set())
+    val (error, groups) = groupCoordinator.handleListGroups(Set(), Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer", CompletingRebalance.toString), groups.head)
+    assertEquals(GroupOverview("groupId", "consumer", CompletingRebalance.toString, "classic"), groups.head)
   }
 
   @Test
@@ -3331,10 +3331,10 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, joinGroupResult.error)
 
     // The group should be in CompletingRebalance
-    val (error, groups) = groupCoordinator.handleListGroups(Set(CompletingRebalance.toString))
+    val (error, groups) = groupCoordinator.handleListGroups(Set(CompletingRebalance.toString), Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    val (error2, groups2) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == CompletingRebalance.toString))
+    val (error2, groups2) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == CompletingRebalance.toString), Set())
     assertEquals(Errors.NONE, error2)
     assertEquals(0, groups2.size)
 
@@ -3343,10 +3343,10 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, syncGroupResult.error)
 
     // The group is now stable
-    val (error3, groups3) = groupCoordinator.handleListGroups(Set(Stable.toString))
+    val (error3, groups3) = groupCoordinator.handleListGroups(Set(Stable.toString), Set())
     assertEquals(Errors.NONE, error3)
     assertEquals(1, groups3.size)
-    val (error4, groups4) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Stable.toString))
+    val (error4, groups4) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Stable.toString), Set())
     assertEquals(Errors.NONE, error4)
     assertEquals(0, groups4.size)
 
@@ -3355,12 +3355,52 @@ class GroupCoordinatorTest {
     verifyLeaveGroupResult(leaveGroupResults)
 
     // The group is now empty
-    val (error5, groups5) = groupCoordinator.handleListGroups(Set(Empty.toString))
+    val (error5, groups5) = groupCoordinator.handleListGroups(Set(Empty.toString), Set())
     assertEquals(Errors.NONE, error5)
     assertEquals(1, groups5.size)
-    val (error6, groups6) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Empty.toString))
+    val (error6, groups6) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Empty.toString), Set())
     assertEquals(Errors.NONE, error6)
     assertEquals(0, groups6.size)
+  }
+
+  @Test
+  def testListGroupsWithTypes(): Unit = {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+    val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
+    val assignedMemberId = joinGroupResult.memberId
+    val generationId = joinGroupResult.generationId
+    assertEquals(Errors.NONE, joinGroupResult.error)
+
+    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
+    assertEquals(Errors.NONE, syncGroupResult.error)
+
+    // When a group type filter is specified:
+    // All groups are returned if the type is classic, else nothing is returned.
+    val (error1, groups1) = groupCoordinator.handleListGroups(Set(), Set("classic"))
+    assertEquals(Errors.NONE, error1)
+    assertEquals(1, groups1.size)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups1.head)
+
+    val (error2, groups2) = groupCoordinator.handleListGroups(Set(), Set("consumer"))
+    assertEquals(Errors.NONE, error2)
+    assertEquals(0, groups2.size)
+
+    // No groups are returned when an incorrect group type is passed.
+    val (error3, groups3) = groupCoordinator.handleListGroups(Set(), Set("Invalid"))
+    assertEquals(Errors.NONE, error3)
+    assertEquals(0, groups3.size)
+
+    // When no group type filter is specified, all groups are returned with classic group type.
+    val (error4, groups4) = groupCoordinator.handleListGroups(Set(), Set())
+    assertEquals(Errors.NONE, error4)
+    assertEquals(1, groups4.size)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups4.head)
+
+    // Check that group type is case-insensitive.
+    val (error5, groups5) = groupCoordinator.handleListGroups(Set(), Set("Classic"))
+    assertEquals(Errors.NONE, error5)
+    assertEquals(1, groups5.size)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups5.head)
   }
 
   @Test
@@ -3804,6 +3844,7 @@ class GroupCoordinatorTest {
 
     verifyErrors(Errors.INVALID_PRODUCER_ID_MAPPING, Errors.INVALID_PRODUCER_ID_MAPPING)
     verifyErrors(Errors.INVALID_TXN_STATE, Errors.INVALID_TXN_STATE)
+    verifyErrors(Errors.NETWORK_EXCEPTION, Errors.COORDINATOR_LOAD_IN_PROGRESS)
     verifyErrors(Errors.NOT_ENOUGH_REPLICAS, Errors.COORDINATOR_NOT_AVAILABLE)
     verifyErrors(Errors.NOT_LEADER_OR_FOLLOWER, Errors.NOT_COORDINATOR)
     verifyErrors(Errors.KAFKA_STORAGE_ERROR, Errors.NOT_COORDINATOR)
@@ -3817,7 +3858,7 @@ class GroupCoordinatorTest {
     val producerEpoch: Short = 3
 
     val offsets = Map(
-      tip -> OffsetAndMetadata(offset, "s" * (OffsetConfig.DEFAULT_MAX_METADATA_SIZE + 1), 0)
+      tip -> OffsetAndMetadata(offset, "s" * (GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_DEFAULT + 1), 0)
     )
 
     val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, offsets)
@@ -4133,7 +4174,8 @@ class GroupCoordinatorTest {
       ArgumentMatchers.eq(producerId),
       ArgumentMatchers.eq(producerEpoch),
       any(),
-      postVerificationCallback.capture()
+      postVerificationCallback.capture(),
+      any()
     )).thenAnswer(
       _ => postVerificationCallback.getValue()((verificationError, VerificationGuard.SENTINEL))
     )
@@ -4158,7 +4200,7 @@ class GroupCoordinatorTest {
     when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
     groupCoordinator.handleTxnCommitOffsets(groupId, transactionalId, producerId, producerEpoch,
-      memberId, groupInstanceId, generationId, offsets, responseCallback)
+      memberId, groupInstanceId, generationId, offsets, responseCallback, RequestLocal.NoCaching, ApiKeys.TXN_OFFSET_COMMIT.latestVersion())
     val result = Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
     result
   }

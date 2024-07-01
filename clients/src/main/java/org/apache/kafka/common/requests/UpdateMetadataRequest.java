@@ -30,7 +30,6 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.FlattenedIterator;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -38,10 +37,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
 
-public class UpdateMetadataRequest extends AbstractControlRequest {
+public final class UpdateMetadataRequest extends AbstractControlRequest {
 
     public static class Builder extends AbstractControlRequest.Builder<UpdateMetadataRequest> {
         private final List<UpdateMetadataPartitionState> partitionStates;
@@ -133,23 +133,21 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type: UpdateMetadataRequest=").
-                append(", controllerId=").append(controllerId).
-                append(", controllerEpoch=").append(controllerEpoch).
-                append(", kraftController=").append(kraftController).
-                append(", type=").append(updateType).
-                append(", brokerEpoch=").append(brokerEpoch).
-                append(", partitionStates=").append(partitionStates).
-                append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
-                append(")");
-            return bld.toString();
+            return "(type: UpdateMetadataRequest=" +
+                    ", controllerId=" + controllerId +
+                    ", controllerEpoch=" + controllerEpoch +
+                    ", kraftController=" + kraftController +
+                    ", type=" + updateType +
+                    ", brokerEpoch=" + brokerEpoch +
+                    ", partitionStates=" + partitionStates +
+                    ", liveBrokers=" + liveBrokers.stream().map(UpdateMetadataBroker::toString).collect(Collectors.joining(", ")) +
+                    ")";
         }
     }
 
     private final UpdateMetadataRequestData data;
 
-    UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
+    public UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
         super(ApiKeys.UPDATE_METADATA, version);
         this.data = data;
         // Do this from the constructor to make it thread-safe (even though it's only needed when some methods are called)

@@ -28,7 +28,7 @@ public class SupportedVersionRange {
 
     /**
      * Raises an exception unless the following conditions are met:
-     *  1 <= minVersion <= maxVersion.
+     *  0 <= minVersion <= maxVersion.
      *
      * @param minVersion           The minimum version value.
      * @param maxVersion           The maximum version value.
@@ -79,4 +79,3 @@ public class SupportedVersionRange {
         return String.format("SupportedVersionRange[min_version:%d, max_version:%d]", minVersion, maxVersion);
     }
 }
-

@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.OffsetFetchRequest.Builder;
 import org.apache.kafka.common.requests.OffsetFetchRequest.NoBatchedOffsetFetchRequestException;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -52,7 +53,7 @@ public class OffsetFetchRequestTest {
     private final String group3 = "group3";
     private final String group4 = "group4";
     private final String group5 = "group5";
-    private List<String> groups = Arrays.asList(group1, group2, group3, group4, group5);
+    private final List<String> groups = Arrays.asList(group1, group2, group3, group4, group5);
 
     private final List<Integer> listOfVersionsNonBatchOffsetFetch = Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7);
 
