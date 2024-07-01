@@ -47,7 +47,7 @@ object ApiVersionsRequestTest {
     List(ClusterConfig.defaultBuilder()
       .setTypes(java.util.Collections.singleton(Type.ZK))
       .setServerProperties(serverProperties)
-      .setMetadataVersion(MetadataVersion.IBP_3_8_IV0)
+      .setMetadataVersion(MetadataVersion.latestTesting())
       .build()).asJava
   }
 
@@ -67,7 +67,7 @@ object ApiVersionsRequestTest {
     serverProperties.put("unstable.feature.versions.enable", "false")
     List(ClusterConfig.defaultBuilder()
       .setTypes(java.util.Collections.singleton(Type.ZK))
-      .setMetadataVersion(MetadataVersion.IBP_3_8_IV0)
+      .setMetadataVersion(MetadataVersion.latestProduction())
       .build()).asJava
   }
 
@@ -83,7 +83,7 @@ object ApiVersionsRequestTest {
 class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
 
   @ClusterTemplate("testApiVersionsRequestTemplate")
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_3_8_IV0, serverProperties = Array(
+  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_3_9_IV0, serverProperties = Array(
     new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "true")
   ))
@@ -94,7 +94,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   }
 
   @ClusterTemplate("testApiVersionsRequestIncludesUnreleasedApisTemplate")
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
+  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_3_9_IV0, serverProperties = Array(
     new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "true"),
   ))
@@ -108,10 +108,10 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   def testApiVersionsRequestThroughControlPlaneListener(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request, cluster.controlPlaneListenerName().get())
-    validateApiVersionsResponse(apiVersionsResponse, cluster.controlPlaneListenerName().get())
+    validateApiVersionsResponse(apiVersionsResponse, cluster.controlPlaneListenerName().get(), true)
   }
 
-  @ClusterTest(types = Array(Type.KRAFT))
+  @ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_9_IV0)
   def testApiVersionsRequestThroughControllerListener(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request, cluster.controllerListenerName.get())
@@ -131,6 +131,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
     assertEquals(ApiKeys.API_VERSIONS.latestVersion(), apiVersion.maxVersion())
   }
 
+  // Use the latest production MV for this test
   @ClusterTemplate("testApiVersionsRequestValidationV0Template")
   @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_3_8_IV0, serverProperties = Array(
       new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
@@ -139,14 +140,16 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   def testApiVersionsRequestValidationV0(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
     val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.clientListener())
-    validateApiVersionsResponse(apiVersionsResponse, apiVersion = 0)
+    validateApiVersionsResponse(apiVersionsResponse, apiVersion = 0,
+      enableUnstableLastVersion = !"false".equals(
+        cluster.config().serverProperties().get("unstable.api.versions.enable")))
   }
 
   @ClusterTemplate("zkApiVersionsRequest")
   def testApiVersionsRequestValidationV0ThroughControlPlaneListener(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
     val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.controlPlaneListenerName().get())
-    validateApiVersionsResponse(apiVersionsResponse, cluster.controlPlaneListenerName().get())
+    validateApiVersionsResponse(apiVersionsResponse, cluster.controlPlaneListenerName().get(), true)
   }
 
   @ClusterTest(types = Array(Type.KRAFT))

@@ -210,6 +210,7 @@ public enum MetadataVersion {
     // If users attempt to use an unstable MetadataVersion, they will get an error.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
+    // Add ELR related supports (KIP-966).
     IBP_3_9_IV0(21, "3.9", "IV0", false);
 
     // NOTES when adding a new version:
@@ -335,7 +336,7 @@ public enum MetadataVersion {
     }
 
     public boolean isElrSupported() {
-        return this.isAtLeast(IBP_3_8_IV0);
+        return this.isAtLeast(IBP_3_9_IV0);
     }
 
     public boolean isKRaftSupported() {
