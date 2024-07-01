@@ -186,7 +186,7 @@ def command_release_announcement_email():
         validate_release_num(previous_release_version_num)
     if release_version_num < previous_release_version_num :
         fail("Current release version number can't be less than previous release version number")
-    contributors = ", ".join(git.contributors(previous_release_version_num, release_version_num))
+    contributors = git.contributors(previous_release_version_num, release_version_num)
     release_announcement_email = templates.release_announcement_email(release_version_num, contributors)
     print(templates.release_announcement_email_instructions(release_announcement_email))
     sys.exit(0)

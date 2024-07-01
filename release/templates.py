@@ -74,6 +74,8 @@ Do you have all of of these setup?"""
 
 
 def release_announcement_email(release_version, contributors):
+    contributors_str = ", ".join(contributors)
+    num_contributors = len(contributors)
     return f"""
 To: announce@apache.org, dev@kafka.apache.org, users@kafka.apache.org, kafka-clients@googlegroups.com
 Subject: [ANNOUNCE] Apache Kafka {release_version}
@@ -125,9 +127,9 @@ Apache Kafka is in use at large and small companies worldwide, including
 Capital One, Goldman Sachs, ING, LinkedIn, Netflix, Pinterest, Rabobank,
 Target, The New York Times, Uber, Yelp, and Zalando, among others.
 
-A big thank you for the following {len(contributors)} contributors to this release! (Please report an unintended omission)
+A big thank you for the following {num_contributors} contributors to this release! (Please report an unintended omission)
 
-{contributors}
+{contributors_str}
 
 We welcome your help and feedback. For more information on how to
 report problems, and to get involved, visit the project website at
