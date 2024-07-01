@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import kafka.log.UnifiedLog;
-import kafka.server.BrokerTopicStats;
 import kafka.server.RequestLocal;
 
 import org.apache.kafka.common.InvalidRecordException;
@@ -44,12 +42,9 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult;
 import org.apache.kafka.test.TestUtils;
-
-import com.yammer.metrics.core.MetricName;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -61,7 +56,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -81,8 +75,35 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class LogValidatorTest {
     private final Time time = Time.SYSTEM;
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
-    private final Set<MetricName> metricsKeySet = KafkaYammerMetrics.defaultRegistry().allMetrics().keySet();
-    private final LogValidator.MetricsRecorder metricsRecorder = UnifiedLog.newValidatorMetricsRecorder(new BrokerTopicStats(false).allTopicsStats());
+    private final MetricsRecorder metricsRecorder = new MetricsRecorder();
+
+    static class MetricsRecorder implements LogValidator.MetricsRecorder {
+        public int recordInvalidMagicCount = 0;
+        public int recordInvalidOffsetCount = 0;
+        public int recordInvalidChecksumsCount = 0;
+        public int recordInvalidSequenceCount = 0;
+        public int recordNoKeyCompactedTopicCount = 0;
+
+        public void recordInvalidMagic() {
+            recordInvalidMagicCount += 1;
+        }
+
+        public void recordInvalidOffset() {
+            recordInvalidOffsetCount += 1;
+        }
+
+        public void recordInvalidSequence() {
+            recordInvalidSequenceCount += 1;
+        }
+
+        public void recordInvalidChecksums() {
+            recordInvalidChecksumsCount += 1;
+        }
+
+        public void recordNoKeyCompactedTopic() {
+            recordNoKeyCompactedTopicCount += 1;
+        }
+    }
 
     @Test
     public void testOnlyOneBatch() {
@@ -205,10 +226,7 @@ public class LogValidatorTest {
         assertThrows(RecordValidationException.class,
                 () -> validateMessages(recordsWithInvalidInnerMagic(batchMagic, recordMagic, compression), batchMagic, compression.type(), compression));
 
-        assertEquals(metricsKeySet.stream()
-                .filter(metric -> metric.getMBeanName().endsWith("InvalidMagicNumberRecordsPerSec"))
-                .count(), 1);
-        assertTrue(meterCount("InvalidMagicNumberRecordsPerSec") > 0);
+        assertTrue(metricsRecorder.recordInvalidMagicCount > 0);
     }
 
     @Test
@@ -1559,8 +1577,8 @@ public class LogValidatorTest {
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ));
-        assertEquals(metricsKeySet.stream().filter(m -> m.getMBeanName().endsWith(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec())).count(), 1);
-        assertTrue(meterCount(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec()) > 0);
+
+        assertEquals(metricsRecorder.recordInvalidOffsetCount, 1);
     }
 
     @Test
@@ -2155,11 +2173,5 @@ public class LogValidatorTest {
             assertTrue(tempBytes > 0, "Temp bytes not updated");
         else
             assertEquals(0, tempBytes);
-    }
-
-    private Long meterCount(String metricName) {
-        return KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream().filter(
-                s -> s.getKey().getMBeanName().endsWith(metricName)
-        ).count();
     }
 }
