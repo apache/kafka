@@ -798,15 +798,20 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
     static class BalancedIterator<E> implements Iterator<E> {
 
-        Map<String, Iterator<E>> grouped;
-        List<String> keys;
-        int k;
+        private final Map<String, Iterator<E>> grouped;
+        private final List<String> keys;
+
+        private int k;
 
         public BalancedIterator(Collection<E> collection, Function<E, String> allocationGrouper) {
             this.k = 0;
-            this.grouped = collection.stream()
-                .collect(Collectors.groupingBy(item -> allocationGrouper.apply(item)))
-                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().iterator()));
+            this.grouped = collection.stream().collect(Collectors.groupingBy(
+                    allocationGrouper,
+                    Collectors.collectingAndThen(
+                            Collectors.toList(),
+                            List::iterator
+                    )
+            ));
             this.keys = new ArrayList<>(grouped.keySet());
         }
 
@@ -837,10 +842,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
      * @param tasks the tasks to be assigned
      */
     protected void assignTasks(List<WorkerLoad> workerAssignment, Collection<ConnectorTaskId> tasks) {
-
         WorkerLoad first = workerAssignment.get(0);
 
-        Iterator<ConnectorTaskId> load = new BalancedIterator<ConnectorTaskId>(tasks, ConnectorTaskId::connector);
+        Iterator<ConnectorTaskId> load = new BalancedIterator<>(tasks, ConnectorTaskId::connector);
         while (load.hasNext()) {
             int firstLoad = first.tasksSize();
             int upTo = IntStream.range(0, workerAssignment.size())
