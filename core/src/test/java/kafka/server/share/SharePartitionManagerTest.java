@@ -1377,11 +1377,10 @@ public class SharePartitionManagerTest {
 
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp), sp);
-
-        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
-
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap).build();
+
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
         acknowledgeTopics.put(tp, Arrays.asList(
             new ShareAcknowledgementBatch(12, 20, Collections.singletonList((byte) 1)),
             new ShareAcknowledgementBatch(24, 56, Collections.singletonList((byte) 1))
@@ -1459,10 +1458,10 @@ public class SharePartitionManagerTest {
 
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp), sp);
-        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
-
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
                 .withPartitionCacheMap(partitionCacheMap).build();
+
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
         acknowledgeTopics.put(tp, Arrays.asList(
             new ShareAcknowledgementBatch(12, 20, Collections.singletonList((byte) 1)),
             new ShareAcknowledgementBatch(24, 56, Collections.singletonList((byte) 1))
@@ -1488,10 +1487,10 @@ public class SharePartitionManagerTest {
         ));
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp), sp);
-        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
-
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
                 .withPartitionCacheMap(partitionCacheMap).build();
+
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
         acknowledgeTopics.put(tp, Arrays.asList(
             new ShareAcknowledgementBatch(12, 20, Collections.singletonList((byte) 1)),
             new ShareAcknowledgementBatch(24, 56, Collections.singletonList((byte) 1))
@@ -1512,9 +1511,9 @@ public class SharePartitionManagerTest {
         String memberId = Uuid.randomUuid().toString();
 
         TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo4", 3));
-        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
-
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder().build();
+
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
         acknowledgeTopics.put(tp, Arrays.asList(
                 new ShareAcknowledgementBatch(78, 90, Collections.singletonList((byte) 2)),
                 new ShareAcknowledgementBatch(94, 99, Collections.singletonList((byte) 2))
