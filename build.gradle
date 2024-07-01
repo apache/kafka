@@ -44,7 +44,7 @@ plugins {
   // be dropped from gradle/resources/dependencycheck-suppressions.xml
   id "com.github.spotbugs" version '5.1.3' apply false
   id 'org.scoverage' version '8.0.3' apply false
-  id 'io.github.goooler.shadow' version '8.1.7' apply false
+  id 'io.github.goooler.shadow' version '8.1.3' apply false
   //  Spotless 6.13.0 has issue with Java 21 (see https://github.com/diffplug/spotless/pull/1920), and Spotless 6.14.0+ requires JRE 11
   //  We are going to drop JDK8 support. Hence, the spotless is upgrade to newest version and be applied only if the build env is compatible with JDK 11.
   //  spotless 6.15.0+ has issue in runtime with JDK8 even through we define it with `apply:false`. see https://github.com/diffplug/spotless/issues/2156 for more details
