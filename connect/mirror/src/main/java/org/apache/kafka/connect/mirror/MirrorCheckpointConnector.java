@@ -111,10 +111,10 @@ public class MirrorCheckpointConnector extends SourceConnector {
     @Override
     public Config validate(Map<String, String> connectorConfigs) {
         List<ConfigValue> configValues = super.validate(connectorConfigs).configValues();
-        MirrorCheckpointConfig.validate(connectorConfigs).entrySet().forEach(invalidConfig ->
+        MirrorCheckpointConfig.validate(connectorConfigs).forEach((config, errorMsg) ->
                 configValues.stream()
-                        .filter(conf -> conf.name().equals(invalidConfig.getKey()))
-                        .forEach(conf -> conf.errorMessages().add(invalidConfig.getValue())));
+                        .filter(conf -> conf.name().equals(config))
+                        .forEach(conf -> conf.errorMessages().add(errorMsg)));
 
         return new Config(configValues);
     }
