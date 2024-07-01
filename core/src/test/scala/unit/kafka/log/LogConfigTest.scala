@@ -405,7 +405,7 @@ class LogConfigTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("retain", "delete"))
+  @ValueSource(strings = Array(TopicConfig.REMOTE_LOG_DISABLE_POLICY_RETAIN, TopicConfig.REMOTE_LOG_DISABLE_POLICY_DELETE))
   def testValidRemoteLogDisablePolicy(policy: String): Unit = {
     val logProps = new Properties
     logProps.put(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG, policy)

@@ -101,6 +101,9 @@ public class TopicConfig {
             "thresholds. If delete is selected then the data will be made inaccessible immediately by advancing the log start offset and will be " +
             "deleted asynchronously.";
 
+    public static final String REMOTE_LOG_DISABLE_POLICY_RETAIN = "retain";
+    public static final String REMOTE_LOG_DISABLE_POLICY_DELETE = "delete";
+
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
         "The largest record batch size allowed by Kafka (after compression if compression is enabled). " +
