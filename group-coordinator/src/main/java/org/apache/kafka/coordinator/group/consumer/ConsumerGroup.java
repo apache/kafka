@@ -199,6 +199,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @return The member id corresponding to the given instance id or null if it does not exist
      */
     public String staticMemberId(String groupInstanceId) {
+        if (groupInstanceId == null) return null;
         return staticMembers.get(groupInstanceId);
     }
 
@@ -238,6 +239,40 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     public ConsumerGroupMember staticMember(String instanceId) {
         String existingMemberId = staticMemberId(instanceId);
         return existingMemberId == null ? null : getOrMaybeCreateMember(existingMemberId, false);
+    }
+
+    /**
+     * Returns true if the static member exists.
+     *
+     * @param instanceId The instance id.
+     *
+     * @return A boolean indicating whether the member exists or not.
+     */
+    public boolean hasStaticMember(String instanceId) {
+        if (instanceId == null) return false;
+        return staticMembers.containsKey(instanceId);
+    }
+
+    /**
+     * Returns the target assignment associated to the provided member id if
+     * the instance id is null; otherwise returns the target assignment associated
+     * to the instance id.
+     *
+     * @param memberId      The member id.
+     * @param instanceId    The instance id.
+     *
+     * @return The Assignment or EMPTY if it does not exist.
+     */
+    public Assignment targetAssignment(String memberId, String instanceId) {
+        if (instanceId == null) {
+            return targetAssignment(memberId);
+        } else {
+            String previousMemberId = staticMemberId(instanceId);
+            if (previousMemberId != null) {
+                return targetAssignment(previousMemberId);
+            }
+        }
+        return Assignment.EMPTY;
     }
 
     @Override
