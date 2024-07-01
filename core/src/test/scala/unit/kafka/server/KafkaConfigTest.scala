@@ -1280,7 +1280,7 @@ class KafkaConfigTest {
     assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
     assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
     assertEquals(123L, config.logFlushIntervalMs)
-    assertEquals(CompressionType.SNAPPY, config.offsetsTopicCompressionType)
+    assertEquals(CompressionType.SNAPPY, config.groupCoordinatorConfig.offsetTopicCompressionType)
     assertEquals(Sensor.RecordingLevel.DEBUG.toString, config.metricRecordingLevel)
     assertEquals(false, config.tokenAuthEnabled)
     assertEquals(7 * 24 * 60L * 60L * 1000L, config.delegationTokenMaxLifeMs)
@@ -1969,14 +1969,14 @@ class KafkaConfigTest {
     ConsumerGroupMigrationPolicy.values.foreach { policy =>
       props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, policy.toString)
       val config = KafkaConfig.fromProps(props)
-      assertEquals(policy, config.consumerGroupMigrationPolicy)
+      assertEquals(policy, config.groupCoordinatorConfig.consumerGroupMigrationPolicy)
     }
 
     // The config is case-insensitive.
     ConsumerGroupMigrationPolicy.values.foreach { policy =>
       props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, policy.toString.toUpperCase())
       val config = KafkaConfig.fromProps(props)
-      assertEquals(policy, config.consumerGroupMigrationPolicy)
+      assertEquals(policy, config.groupCoordinatorConfig.consumerGroupMigrationPolicy)
     }
   }
 
