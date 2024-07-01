@@ -85,7 +85,7 @@ class ConsumerEventHandler(object):
 
     def handle_records_consumed(self, event, logger):
         assert self.state == ConsumerState.Joined, \
-            "Consumed records should only be received when joined (current state: %s, node: %s)" % (str(self.state), str(self.node))
+            "Consumed records should only be received when joined (current state: %s)" % str(self.state)
 
         for record_batch in event["partitions"]:
             tp = _create_partition_from_dict(record_batch)
@@ -93,8 +93,8 @@ class ConsumerEventHandler(object):
             max_offset = record_batch["maxOffset"]
 
             assert tp in self.assignment, \
-                "Consumed records for partition %s which is not assigned (current assignment: %s, node: %s)" % \
-                (str(tp), str(self.assignment), str(self.node))
+                "Consumed records for partition %s which is not assigned (current assignment: %s)" % \
+                (str(tp), str(self.assignment))
             if tp not in self.position or self.position[tp] == min_offset:
                 self.position[tp] = max_offset + 1
             else:
@@ -159,12 +159,12 @@ class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
         for topic_partition in event["partitions"]:
             tp = _create_partition_from_dict(topic_partition)
             assert tp in self.assignment, \
-                "Incremental: Topic partition %s cannot be revoked from %s as it was not previously assigned to that consumer" % \
+                "Topic partition %s cannot be revoked from %s as it was not previously assigned to that consumer" % \
                 (tp, node.account.hostname)
             self.assignment.remove(tp)
             revoked.append(tp)
 
-        logger.debug("Incremental: Partitions %s revoked from %s" % (revoked, node.account.hostname))
+        logger.debug("Partitions %s revoked from %s" % (revoked, node.account.hostname))
 
     def handle_partitions_assigned(self, event, node, logger):
         self.assigned_count += 1
@@ -173,7 +173,7 @@ class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
         for topic_partition in event["partitions"]:
             tp = _create_partition_from_dict(topic_partition)
             assignment.append(tp)
-        logger.debug("Incremental: Partitions %s assigned to %s" % (assignment, node.account.hostname))
+        logger.debug("Partitions %s assigned to %s" % (assignment, node.account.hostname))
         self.assignment.extend(assignment)
 
 # This needs to be used for consumer protocol
@@ -344,8 +344,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             if tp in self.global_committed:
                 # verify that the position never gets behind the current commit.
                 if self.global_committed[tp] > consumed_partition["minOffset"]:
-                    msg = "Node: %s: Consumed position %d is behind the current committed offset %d for partition %s" % \
-                          (str(node), consumed_partition["minOffset"], self.global_committed[tp], str(tp))
+                    msg = "Consumed position %d is behind the current committed offset %d for partition %s" % \
+                          (consumed_partition["minOffset"], self.global_committed[tp], str(tp))
                     if self.verify_offsets:
                         raise AssertionError(msg)
                     else:
