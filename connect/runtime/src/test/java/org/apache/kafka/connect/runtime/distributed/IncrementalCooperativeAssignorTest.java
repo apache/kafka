@@ -150,6 +150,7 @@ public class IncrementalCooperativeAssignorTest {
             assertEquals(countsByConnector.size(), 2);
             countsByConnector.forEach((k2, v2) -> assertEquals(v2.size(), 4));
         });
+        assertBalancedAndCompleteAllocation();
     }
 
     @Test

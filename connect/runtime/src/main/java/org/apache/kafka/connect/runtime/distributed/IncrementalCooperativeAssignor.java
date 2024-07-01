@@ -739,24 +739,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             Set<E> revokedFromWorker = new LinkedHashSet<>();
             result.put(worker.worker(), revokedFromWorker);
 
-            Map<String, List<E>> currentWorkerAllocationByPrefix = workerAllocation.apply(worker).stream().collect(
-                   Collectors.groupingBy(item -> allocationGrouper.apply(item)));
-            List<String> keys = new ArrayList<>(currentWorkerAllocationByPrefix.keySet());
-            Map<String, Iterator<E>> currentWokrerAllocationByPrefixIterator = currentWorkerAllocationByPrefix.entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().iterator()));
-            Map<String, Boolean> exhausted = currentWorkerAllocationByPrefix.keySet().stream().collect(Collectors.toMap(Function.identity(), k -> false));
+            Iterator<E> currentWorkerAllocation = new BalancedIterator<E>(workerAllocation.apply(worker), allocationGrouper);
             // Revoke resources from the worker until it isn't allocated any more than it should be
-            int numRevoked = 0;
-            for (int i = 0; currentAllocationSizeForWorker - numRevoked > maxAllocationForWorker; i++) {
-                Iterator<E> currentWorkerAllocation = currentWokrerAllocationByPrefixIterator.get(keys.get(i % keys.size()));
-                if (currentWorkerAllocation.hasNext()) {
-                    E revocation = currentWorkerAllocation.next();
-                    revokedFromWorker.add(revocation);
-                    numRevoked++;
-                } else {
-                    exhausted.put(keys.get(i % keys.size()), true);
-                }
-                if (exhausted.values().stream().allMatch(v -> v)) {
+            for (int numRevoked = 0; currentAllocationSizeForWorker - numRevoked > maxAllocationForWorker; numRevoked++) {
+                if (!currentWorkerAllocation.hasNext()) {
                     // Should never happen, but better to log a warning and move on than die and fail the whole rebalance if it does
                     log.warn(
                             "Unexpectedly ran out of {}s to revoke from worker {} while performing load-balancing revocations; " +
@@ -768,6 +754,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     );
                     break;
                 }
+                E revocation = currentWorkerAllocation.next();
+                revokedFromWorker.add(revocation);
             }
         }
         return result;
@@ -808,6 +796,38 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         }
     }
 
+    static class BalancedIterator<E> implements Iterator<E> {
+
+        Map<String, Iterator<E>> grouped;
+        List<String> keys;
+        int k;
+
+        public BalancedIterator(Collection<E> collection, Function<E, String> allocationGrouper) {
+            this.k = 0;
+            this.grouped = collection.stream()
+                .collect(Collectors.groupingBy(item -> allocationGrouper.apply(item)))
+                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().iterator()));
+            this.keys = new ArrayList<>(grouped.keySet());
+        }
+
+        @Override
+        public boolean hasNext() {
+            return grouped.values().stream().anyMatch(Iterator::hasNext);
+        }
+
+        @Override
+        public E next() {
+            for (; k < k + this.keys.size(); ) {
+                Iterator<E> iterator = grouped.get(this.keys.get(k % this.keys.size()));
+                k++;
+                if (iterator.hasNext()) {
+                    return iterator.next();
+                }
+            }
+            return null;
+        }
+    }
+
     /**
      * Perform a round-robin assignment of tasks to workers with existing worker load. This
      * assignment tries to balance the load between workers, by assigning tasks to workers that
@@ -817,10 +837,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
      * @param tasks the tasks to be assigned
      */
     protected void assignTasks(List<WorkerLoad> workerAssignment, Collection<ConnectorTaskId> tasks) {
-        workerAssignment.sort(WorkerLoad.taskComparator());
+
         WorkerLoad first = workerAssignment.get(0);
 
-        Iterator<ConnectorTaskId> load = tasks.iterator();
+        Iterator<ConnectorTaskId> load = new BalancedIterator<ConnectorTaskId>(tasks, ConnectorTaskId::connector);
         while (load.hasNext()) {
             int firstLoad = first.tasksSize();
             int upTo = IntStream.range(0, workerAssignment.size())
