@@ -44,6 +44,7 @@ import java.util.Set;
 public class ResignedState implements EpochState {
     private final int localId;
     private final int epoch;
+    private final Endpoints endpoints;
     private final Set<Integer> voters;
     private final long electionTimeoutMs;
     private final Set<Integer> unackedVoters;
@@ -58,6 +59,7 @@ public class ResignedState implements EpochState {
         Set<Integer> voters,
         long electionTimeoutMs,
         List<Integer> preferredSuccessors,
+        Endpoints endpoints,
         LogContext logContext
     ) {
         this.localId = localId;
@@ -68,6 +70,7 @@ public class ResignedState implements EpochState {
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
         this.preferredSuccessors = preferredSuccessors;
+        this.endpoints = endpoints;
         this.log = logContext.logger(ResignedState.class);
     }
 
@@ -79,6 +82,11 @@ public class ResignedState implements EpochState {
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public Endpoints leaderEndpoints() {
+        return endpoints;
     }
 
     /**

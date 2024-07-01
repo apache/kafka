@@ -23,6 +23,7 @@ import org.apache.kafka.connect.transforms.predicates.HasHeaderKey;
 import org.apache.kafka.connect.transforms.predicates.RecordIsTombstone;
 import org.apache.kafka.connect.transforms.predicates.TopicNameMatches;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
-
-public interface IntegrationTest {
-}
+/**
+ * Provides APIs for the MirrorMaker connectors and utilities to manage MirrorMaker resources.
+ */
+package org.apache.kafka.connect.mirror;

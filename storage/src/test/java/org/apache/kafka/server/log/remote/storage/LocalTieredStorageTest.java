@@ -358,7 +358,7 @@ public final class LocalTieredStorageTest {
 
     private RemoteLogSegmentMetadata newRemoteLogSegmentMetadata(final RemoteLogSegmentId id) {
         return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, 1000L,
-                1024, Collections.singletonMap(0, 0L));
+                1024, Collections.singletonMap(0, 0L), 0);
     }
 
     private RemoteLogSegmentId newRemoteLogSegmentId() {
@@ -539,7 +539,7 @@ public final class LocalTieredStorageTest {
 
         private RemoteLogSegmentMetadata newMetadata(final RemoteLogSegmentId id) {
             return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, 1000,
-                    1024, Collections.singletonMap(0, 0L));
+                    1024, Collections.singletonMap(0, 0L), 0);
         }
 
         private String getStorageRootDirectory() {

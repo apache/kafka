@@ -34,6 +34,7 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
