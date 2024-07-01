@@ -93,9 +93,9 @@ public class ApiKeysTest {
         String html = ApiKeys.toHtml();
         for (ApiKeys apiKeys : ApiKeys.clientApis()) {
             if (apiKeys.messageType.latestVersionUnstable()) {
-                assertFalse(html.contains(apiKeys.name), "Html should not contain unstable api: " + apiKeys.name);
+                assertFalse(html.contains("The_Messages_" + apiKeys.name), "Html should not contain unstable api: " + apiKeys.name);
             } else {
-                assertTrue(html.contains(apiKeys.name), "Html should contain stable api: " + apiKeys.name);
+                assertTrue(html.contains("The_Messages_" + apiKeys.name), "Html should contain stable api: " + apiKeys.name);
             }
         }
     }
