@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
-import static java.util.Collections.unmodifiableMap;
+import org.apache.kafka.streams.processor.TaskId;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -25,7 +25,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.apache.kafka.streams.processor.TaskId;
+
+import static java.util.Collections.unmodifiableMap;
 
 /**
  * A simple container class for the assignor to return the desired placement of active and standby tasks on

@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

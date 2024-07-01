@@ -28,6 +28,7 @@ import org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytes
 import org.apache.kafka.streams.state.internals.RocksDBTimestampedStore;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+
 import org.junit.jupiter.api.Test;
 
 import static java.time.Duration.ZERO;
