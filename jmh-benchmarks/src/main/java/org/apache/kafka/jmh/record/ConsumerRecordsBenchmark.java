@@ -34,6 +34,7 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -74,13 +75,13 @@ public class ConsumerRecordsBenchmark {
     }
 
     @Benchmark
-    public void records() {
+    public void records(Blackhole blackhole) {
         // original one
-        records.recordsWithNestedList("topic2");
+        blackhole.consume(records.recordsWithNestedList("topic2"));
     }
 
     @Benchmark
-    public void recordsWithFilterIterator() {
-        records.records("topic2");
+    public void recordsWithFilterIterator(Blackhole blackhole) {
+        blackhole.consume(records.records("topic2"));
     }
 }
