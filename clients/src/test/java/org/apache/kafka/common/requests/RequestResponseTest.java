@@ -473,8 +473,8 @@ public class RequestResponseTest {
     @Test
     public void testProduceRequestPartitionSize() {
         Uuid topicId = Uuid.fromString("e9TvBGX5JkYAB0AQorYD4w");
-        TopicIdPartition tp0 = new TopicIdPartition(topicId, 0, "test");
-        TopicIdPartition tp1 = new TopicIdPartition(topicId, 1, "test");
+        TopicIdPartition tp0 = createTopicIdPartition(topicId, 0);
+        TopicIdPartition tp1 = createTopicIdPartition(topicId, 1);
         MemoryRecords records0 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
             Compression.NONE, new SimpleRecord("woot".getBytes()));
         MemoryRecords records1 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
@@ -2584,6 +2584,10 @@ public class RequestResponseTest {
             topicProduceData.setName(tp.topic());
         }
         return topicProduceData;
+    }
+
+    private static TopicIdPartition createTopicIdPartition(Uuid topicId, int partitionIndex) {
+        return new TopicIdPartition(topicId, partitionIndex, "");
     }
 
     @SuppressWarnings("deprecation")
