@@ -665,7 +665,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 configured.tasks().size(),
                 workers,
                 WorkerLoad::tasks,
-                x -> x.connector()
+                ConnectorTaskId::connector
         );
 
         connectorRevocations.forEach((worker, revoked) ->
