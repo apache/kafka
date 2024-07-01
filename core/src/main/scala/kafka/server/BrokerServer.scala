@@ -149,8 +149,6 @@ class BrokerServer(
 
   var clientMetricsManager: ClientMetricsManager = _
 
-  var groupConfigManager: GroupConfigManager = _
-
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
     try {
@@ -335,8 +333,6 @@ class BrokerServer(
       tokenManager = new DelegationTokenManager(config, tokenCache, time)
       tokenManager.startup()
 
-      groupConfigManager = new GroupConfigManager(config.extractGroupConfigMap)
-
       groupCoordinator = createGroupCoordinator()
 
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
@@ -360,7 +356,7 @@ class BrokerServer(
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
         ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
         ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
-        ConfigType.GROUP -> new GroupConfigHandler(groupConfigManager))
+        ConfigType.GROUP -> new GroupConfigHandler(groupCoordinator))
 
       val featuresRemapped = brokerFeatures.supportedFeatures.features().asScala.map {
         case (k: String, v: SupportedVersionRange) =>
@@ -606,6 +602,13 @@ class BrokerServer(
       val writer = new CoordinatorPartitionWriter(
         replicaManager
       )
+      val groupConfigManager = new GroupConfigManager(
+        config.extractGroupConfigMap,
+        config.consumerGroupMinSessionTimeoutMs,
+        config.consumerGroupMaxSessionTimeoutMs,
+        config.consumerGroupMinHeartbeatIntervalMs,
+        config.consumerGroupMaxHeartbeatIntervalMs
+      )
       new GroupCoordinatorService.Builder(config.brokerId, groupCoordinatorConfig)
         .withTime(time)
         .withTimer(timer)
@@ -722,8 +725,6 @@ class BrokerServer(
         CoreUtils.swallow(socketServer.shutdown(), this)
       if (brokerTopicStats != null)
         CoreUtils.swallow(brokerTopicStats.close(), this)
-      if (groupConfigManager != null)
-        CoreUtils.swallow(groupConfigManager.close(), this)
 
       isShuttingDown.set(false)
 

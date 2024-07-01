@@ -85,7 +85,9 @@ import java.net.InetAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -96,6 +98,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -139,6 +143,17 @@ public class GroupCoordinatorServiceTest {
         );
     }
 
+    private GroupConfigManager createConfigManager() {
+        Map<String, String> defaultConfig = new HashMap<>();
+        defaultConfig.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT));
+        defaultConfig.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT));
+        return new GroupConfigManager(defaultConfig,
+            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT,
+            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT,
+            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT,
+            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT);
+    }
+
     @Test
     public void testStartupShutdown() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
@@ -146,7 +161,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         service.startup(() -> 1);
@@ -162,7 +178,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         ConsumerGroupHeartbeatRequestData request = new ConsumerGroupHeartbeatRequestData()
@@ -187,7 +204,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         ConsumerGroupHeartbeatRequestData request = new ConsumerGroupHeartbeatRequestData()
@@ -238,7 +256,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         ConsumerGroupHeartbeatRequestData request = new ConsumerGroupHeartbeatRequestData()
@@ -273,7 +292,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         assertThrows(CoordinatorNotAvailableException.class,
@@ -291,7 +311,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         Properties expectedProperties = new Properties();
@@ -309,7 +330,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         assertThrows(CoordinatorNotAvailableException.class,
@@ -331,7 +353,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         assertThrows(CoordinatorNotAvailableException.class,
@@ -353,7 +376,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         service.startup(() -> 1);
@@ -372,7 +396,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         JoinGroupRequestData request = new JoinGroupRequestData()
@@ -406,7 +431,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         JoinGroupRequestData request = new JoinGroupRequestData()
@@ -442,7 +468,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         service.startup(() -> 1);
@@ -488,7 +515,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         JoinGroupRequestData request = new JoinGroupRequestData()
@@ -516,7 +544,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             config,
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         service.startup(() -> 1);
 
@@ -546,7 +575,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         SyncGroupRequestData request = new SyncGroupRequestData()
@@ -579,7 +609,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         SyncGroupRequestData request = new SyncGroupRequestData()
@@ -615,7 +646,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         service.startup(() -> 1);
@@ -644,7 +676,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         SyncGroupRequestData request = new SyncGroupRequestData()
@@ -670,7 +703,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         HeartbeatRequestData request = new HeartbeatRequestData()
@@ -703,7 +737,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         HeartbeatRequestData request = new HeartbeatRequestData()
@@ -736,7 +771,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         HeartbeatRequestData request = new HeartbeatRequestData()
@@ -772,7 +808,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         HeartbeatRequestData request = new HeartbeatRequestData()
@@ -797,7 +834,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         service.startup(() -> 3);
 
@@ -844,7 +882,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         service.startup(() -> 3);
 
@@ -886,7 +925,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         service.startup(() -> 3);
 
@@ -918,7 +958,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         int partitionCount = 0;
         service.startup(() -> partitionCount);
@@ -943,7 +984,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         ListGroupsRequestData request = new ListGroupsRequestData();
@@ -967,7 +1009,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            mock(GroupCoordinatorMetrics.class)
+            mock(GroupCoordinatorMetrics.class),
+            createConfigManager()
         );
         int partitionCount = 2;
         service.startup(() -> partitionCount);
@@ -1009,7 +1052,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            mock(GroupCoordinatorMetrics.class)
+            mock(GroupCoordinatorMetrics.class),
+            createConfigManager()
         );
         int partitionCount = 1;
         service.startup(() -> partitionCount);
@@ -1042,7 +1086,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            mock(GroupCoordinatorMetrics.class)
+            mock(GroupCoordinatorMetrics.class),
+            createConfigManager()
         );
         int partitionCount = 1;
         service.startup(() -> partitionCount);
@@ -1074,7 +1119,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> future = service.describeGroups(
@@ -1101,7 +1147,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         service.startup(() -> 1);
@@ -1156,7 +1203,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         OffsetFetchRequestData.OffsetFetchRequestGroup request =
@@ -1190,7 +1238,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         service.startup(() -> 1);
@@ -1242,7 +1291,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         OffsetFetchRequestData.OffsetFetchRequestGroup request =
@@ -1270,7 +1320,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         LeaveGroupRequestData request = new LeaveGroupRequestData()
@@ -1303,7 +1354,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         LeaveGroupRequestData request = new LeaveGroupRequestData()
@@ -1357,7 +1409,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         LeaveGroupRequestData request = new LeaveGroupRequestData()
@@ -1382,7 +1435,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         int partitionCount = 2;
         service.startup(() -> partitionCount);
@@ -1424,7 +1478,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         int partitionCount = 1;
         service.startup(() -> partitionCount);
@@ -1458,7 +1513,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         int partitionCount = 1;
         service.startup(() -> partitionCount);
@@ -1490,7 +1546,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("consumer-group-describe"),
@@ -1519,7 +1576,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            mock(GroupCoordinatorMetrics.class)
+            mock(GroupCoordinatorMetrics.class),
+            createConfigManager()
         );
         service.startup(() -> 1);
 
@@ -1570,7 +1628,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            mock(GroupCoordinatorMetrics.class)
+            mock(GroupCoordinatorMetrics.class),
+            createConfigManager()
         );
         service.startup(() -> 1);
 
@@ -1616,7 +1675,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            mock(GroupCoordinatorMetrics.class)
+            mock(GroupCoordinatorMetrics.class),
+            createConfigManager()
         );
         service.startup(() -> 1);
 
@@ -1659,7 +1719,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         OffsetDeleteRequestData request = new OffsetDeleteRequestData()
@@ -1685,7 +1746,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            mock(GroupCoordinatorMetrics.class)
+            mock(GroupCoordinatorMetrics.class),
+            createConfigManager()
         );
         service.startup(() -> 3);
 
@@ -1758,7 +1820,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            mock(GroupCoordinatorMetrics.class)
+            mock(GroupCoordinatorMetrics.class),
+            createConfigManager()
         );
         service.startup(() -> 1);
 
@@ -1793,7 +1856,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            mock(GroupCoordinatorMetrics.class)
+            mock(GroupCoordinatorMetrics.class),
+            createConfigManager()
         );
 
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = service.deleteGroups(
@@ -1820,7 +1884,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         TxnOffsetCommitRequestData request = new TxnOffsetCommitRequestData()
@@ -1860,7 +1925,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         service.startup(() -> 1);
 
@@ -1899,7 +1965,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         service.startup(() -> 1);
 
@@ -1957,7 +2024,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         service.startup(() -> 1);
 
@@ -2008,7 +2076,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         service.startup(() -> 1);
 
@@ -2041,7 +2110,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         CompletableFuture<Void> future = service.completeTransaction(
@@ -2063,7 +2133,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         service.startup(() -> 1);
 
@@ -2086,7 +2157,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         service.startup(() -> 3);
 
@@ -2116,7 +2188,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         assertThrows(CoordinatorNotAvailableException.class, () -> service.onPartitionsDeleted(

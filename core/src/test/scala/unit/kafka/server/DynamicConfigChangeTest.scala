@@ -36,7 +36,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.coordinator.group.{GroupConfig, GroupConfigManager}
+import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
 import org.apache.kafka.server.config.{ConfigType, QuotaConfigs, ServerLogConfigs, ZooKeeperInternals}
 import org.junit.jupiter.api.Assertions._
@@ -59,7 +59,14 @@ import scala.jdk.CollectionConverters._
 
 @Timeout(100)
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
-  def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnectOrNull)))
+  override def generateConfigs: Seq[KafkaConfig] = {
+    val cfg = TestUtils.createBrokerConfig(0, zkConnectOrNull)
+    if (isNewGroupCoordinatorEnabled()) {
+      cfg.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true")
+      cfg.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
+    }
+    List(KafkaConfig.fromProps(cfg))
+  }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
@@ -568,7 +575,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
+  @ValueSource(strings = Array("kraft+kip848"))
   def testDynamicGroupConfigChange(quorum: String): Unit = {
     val newSessionTimeoutMs = 50000
     val consumerGroupId = "group-foo"
@@ -583,16 +590,17 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
 
     TestUtils.retry(10000) {
-      val configOpt = brokerServers.head.groupConfigManager.getGroupConfig(consumerGroupId)
+      brokers.head.groupCoordinator.groupMetadataTopicConfigs()
+      val configOpt = brokerServers.head.groupCoordinator.groupConfig(consumerGroupId)
       assertTrue(configOpt.isPresent)
     }
 
-    val groupConfig = brokerServers.head.groupConfigManager.getGroupConfig(consumerGroupId).get()
+    val groupConfig = brokerServers.head.groupCoordinator.groupConfig(consumerGroupId).get()
     assertEquals(newSessionTimeoutMs, groupConfig.sessionTimeoutMs)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
+  @ValueSource(strings = Array("kraft+kip848"))
   def testIncrementalAlterDefaultGroupConfig(quorum: String): Unit = {
     val admin = createAdminClient()
     try {
@@ -733,14 +741,5 @@ class DynamicConfigChangeUnitTest {
     val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null, None)
     configHandler.maybeBootstrapRemoteLogComponents(topic, Seq(log0), isRemoteLogEnabledBeforeUpdate)
     verify(rlm, never()).onLeadershipChange(any(), any(), any())
-  }
-
-  @Test
-  def testGroupHandlerInvalidGroupId(): Unit = {
-    val configHandler = new GroupConfigHandler(new GroupConfigManager(new util.HashMap[String, String]))
-    val props: Properties = new Properties()
-    props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "45000")
-
-    assertThrows(classOf[InvalidRequestException], () => configHandler.processConfigChanges("", props))
   }
 }

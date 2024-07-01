@@ -107,9 +107,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private TopicPartition topicPartition;
 
         public Builder(
-            GroupCoordinatorConfig config
+            GroupCoordinatorConfig config,
+            GroupConfigManager groupConfigManager
         ) {
             this.config = config;
+            this.groupConfigManager = groupConfigManager;
         }
 
         @Override

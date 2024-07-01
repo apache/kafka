@@ -30,8 +30,6 @@ import java.util.Properties;
 
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupConfig.DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS;
-import static org.apache.kafka.coordinator.group.GroupConfig.DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -61,7 +59,7 @@ public class GroupConfigManagerTest {
 
     @Test
     public void testGetNonExistentGroupConfig() {
-        Optional<GroupConfig> groupConfig = configManager.getGroupConfig("foo");
+        Optional<GroupConfig> groupConfig = configManager.groupConfig("foo");
         assertFalse(groupConfig.isPresent());
     }
 
@@ -69,22 +67,26 @@ public class GroupConfigManagerTest {
     public void testUpdateGroupConfig() {
         String groupId = "foo";
         Properties props = new Properties();
-        props.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "20");
+        props.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, 50000);
+        props.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, 6000);
         configManager.updateGroupConfig(groupId, props);
 
-        Optional<GroupConfig> configOptional = configManager.getGroupConfig(groupId);
+        Optional<GroupConfig> configOptional = configManager.groupConfig(groupId);
         assertTrue(configOptional.isPresent());
 
         GroupConfig config = configOptional.get();
-        assertEquals(20, config.getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
-        assertEquals(DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS, config.getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
+        assertEquals(50000, config.getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
+        assertEquals(6000, config.getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
     }
 
     private GroupConfigManager createConfigManager() {
         Map<String, String> defaultConfig = new HashMap<>();
-        defaultConfig.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS));
-        defaultConfig.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
-            String.valueOf(DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS));
-        return new GroupConfigManager(defaultConfig);
+        defaultConfig.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT));
+        defaultConfig.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT));
+        return new GroupConfigManager(defaultConfig,
+            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT,
+            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT,
+            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT,
+            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT);
     }
 }

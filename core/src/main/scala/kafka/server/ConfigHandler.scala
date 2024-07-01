@@ -26,12 +26,12 @@ import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.server.config.{ReplicationConfigs, QuotaConfigs, ZooKeeperInternals}
+import org.apache.kafka.server.config.{QuotaConfigs, ReplicationConfigs, ZooKeeperInternals}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.coordinator.group.GroupConfigManager
+import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.storage.internals.log.ThrottledReplicaListValidator
@@ -271,8 +271,8 @@ class ClientMetricsConfigHandler(private val clientMetricsManager: ClientMetrics
 /**
  * The GroupConfigHandler will process individual group config changes.
  */
-class GroupConfigHandler(private val groupConfigManager: GroupConfigManager) extends ConfigHandler with Logging {
+class GroupConfigHandler(private val groupCoordinator: GroupCoordinator) extends ConfigHandler with Logging {
   override def processConfigChanges(groupId: String, properties: Properties): Unit = {
-    groupConfigManager.updateGroupConfig(groupId, properties)
+    groupCoordinator.updateGroupConfig(groupId, properties)
   }
 }

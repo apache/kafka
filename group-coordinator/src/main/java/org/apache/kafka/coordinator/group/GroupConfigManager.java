@@ -27,15 +27,27 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * The group config manager is responsible for config modification and cleaning.
  */
-public class GroupConfigManager {
+public class GroupConfigManager implements AutoCloseable {
 
     private final GroupConfig defaultConfig;
 
     private final Map<String, GroupConfig> configMap;
 
-    public GroupConfigManager(Map<?, ?>  defaultConfig) {
+    private static final Properties GROUP_CONFIG_BOUNDS = new Properties();
+
+    public GroupConfigManager(
+        Map<?, ?> defaultConfig,
+        int consumerGroupMinSessionTimeoutMs,
+        int consumerGroupMaxSessionTimeoutMs,
+        int consumerGroupMinHeartbeatIntervalMs,
+        int consumerGroupMaxHeartbeatIntervalMs
+    ) {
         this.configMap = new ConcurrentHashMap<>();
         this.defaultConfig = new GroupConfig(defaultConfig);
+        GROUP_CONFIG_BOUNDS.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, consumerGroupMinSessionTimeoutMs);
+        GROUP_CONFIG_BOUNDS.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, consumerGroupMaxSessionTimeoutMs);
+        GROUP_CONFIG_BOUNDS.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupMinHeartbeatIntervalMs);
+        GROUP_CONFIG_BOUNDS.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupMaxHeartbeatIntervalMs);
     }
 
     /**
@@ -50,10 +62,12 @@ public class GroupConfigManager {
         }
 
         // Validate the configuration
-        GroupConfig.validate(newGroupConfig);
+        validate(newGroupConfig, defaultConfig.originals());
 
-        final GroupConfig newConfig = GroupConfig.fromProps(defaultConfig.originals(),
-            newGroupConfig);
+        final GroupConfig newConfig = GroupConfig.fromProps(
+            defaultConfig.originals(),
+            newGroupConfig
+        );
         configMap.put(groupId, newConfig);
     }
 
@@ -63,11 +77,15 @@ public class GroupConfigManager {
      * @param groupId  The group id.
      * @return The group config.
      */
-    public Optional<GroupConfig> getGroupConfig(String groupId) {
-        if (configMap.containsKey(groupId))
-            return Optional.of(configMap.get(groupId));
+    public Optional<GroupConfig> groupConfig(String groupId) {
+        return Optional.ofNullable(configMap.get(groupId));
+    }
 
-        return Optional.empty();
+    public static void validate(Properties newGroupConfig, Map<?, ?> configuredProps) {
+        Properties combinedConfigs = new Properties();
+        combinedConfigs.putAll(configuredProps);
+        combinedConfigs.putAll(newGroupConfig);
+        GroupConfig.validate(combinedConfigs, GROUP_CONFIG_BOUNDS);
     }
 
     /**

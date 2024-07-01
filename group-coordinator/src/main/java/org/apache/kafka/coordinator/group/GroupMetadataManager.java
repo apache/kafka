@@ -277,9 +277,8 @@ public class GroupMetadataManager {
                 throw new IllegalArgumentException("Assignors must be set before building.");
             if (metrics == null)
                 throw new IllegalArgumentException("GroupCoordinatorMetricsShard must be set.");
-            if (groupConfigManager == null) {
+            if (groupConfigManager == null)
                 throw new IllegalArgumentException("GroupConfigManager must be set.");
-            }
 
             return new GroupMetadataManager(
                 snapshotRegistry,
@@ -1526,7 +1525,7 @@ public class GroupMetadataManager {
         ConsumerGroupHeartbeatResponseData response = new ConsumerGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(getConsumerGroupHeartbeatIntervalMs(groupId));
+            .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs(groupId));
 
         // The assignment is only provided in the following cases:
         // 1. The member sent a full request. It does so when joining or rejoining the group with zero
@@ -2064,7 +2063,7 @@ public class GroupMetadataManager {
         String groupId,
         String memberId
     ) {
-        scheduleConsumerGroupSessionTimeout(groupId, memberId, getConsumerGroupSessionTimeoutMs(groupId));
+        scheduleConsumerGroupSessionTimeout(groupId, memberId, consumerGroupSessionTimeoutMs(groupId));
     }
 
     /**
@@ -4805,8 +4804,8 @@ public class GroupMetadataManager {
     /**
      * Get the session timeout of the provided group.
      */
-    private int getConsumerGroupSessionTimeoutMs(String groupId) {
-        Optional<GroupConfig> groupConfig = groupConfigManager.getGroupConfig(groupId);
+    private int consumerGroupSessionTimeoutMs(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         return groupConfig.map(GroupConfig::sessionTimeoutMs)
             .orElse(consumerGroupSessionTimeoutMs);
     }
@@ -4814,8 +4813,8 @@ public class GroupMetadataManager {
     /**
      * Get the heartbeat interval of the provided group.
      */
-    private int getConsumerGroupHeartbeatIntervalMs(String groupId) {
-        Optional<GroupConfig> groupConfig = groupConfigManager.getGroupConfig(groupId);
+    private int consumerGroupHeartbeatIntervalMs(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         return groupConfig.map(GroupConfig::heartbeatIntervalMs)
             .orElse(consumerGroupHeartbeatIntervalMs);
     }

@@ -24,7 +24,7 @@ import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRIC
 import org.apache.kafka.controller.ConfigurationValidator
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.coordinator.group.GroupConfigManager
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
@@ -71,7 +71,8 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
   }
 
   private def validateGroupName(
-    name: String): Unit = {
+    name: String
+  ): Unit = {
     if (name.isEmpty) {
       throw new InvalidRequestException("Default group resources are not allowed.")
     }
@@ -126,18 +127,18 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
         validateGroupName(resource.name())
         val properties = new Properties()
         val nullGroupConfigs = new mutable.ArrayBuffer[String]()
-        config.entrySet().forEach(e => {
-          if (e.getValue == null) {
-            nullGroupConfigs += e.getKey
+        config.forEach((key, value) => {
+          if (value == null) {
+            nullGroupConfigs += key
           } else {
-            properties.setProperty(e.getKey, e.getValue)
+            properties.setProperty(key, value)
           }
         })
         if (nullGroupConfigs.nonEmpty) {
           throw new InvalidConfigurationException("Null value not supported for group configs: " +
             nullGroupConfigs.mkString(","))
         }
-        GroupConfig.validate(properties)
+        GroupConfigManager.validate(properties, kafkaConfig.extractGroupConfigMap)
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

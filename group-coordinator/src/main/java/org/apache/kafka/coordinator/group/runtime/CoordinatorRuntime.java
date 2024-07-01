@@ -37,7 +37,6 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
 import org.apache.kafka.deferred.DeferredEvent;
@@ -119,7 +118,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private CoordinatorMetrics coordinatorMetrics;
         private Serializer<U> serializer;
         private Compression compression;
-        private GroupConfigManager groupConfigManager;
         private int appendLingerMs;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
@@ -192,11 +190,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
-        public Builder<S, U> withGroupConfigManager(GroupConfigManager groupConfigManager) {
-            this.groupConfigManager = groupConfigManager;
-            return this;
-        }
-
         public CoordinatorRuntime<S, U> build() {
             if (logPrefix == null)
                 logPrefix = "";
@@ -224,8 +217,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 compression = Compression.NONE;
             if (appendLingerMs < 0)
                 throw new IllegalArgumentException("AppendLinger must be >= 0");
-            if (groupConfigManager == null)
-                throw new IllegalArgumentException("GroupManager must be set.");
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -241,8 +232,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 coordinatorMetrics,
                 serializer,
                 compression,
-                appendLingerMs,
-                groupConfigManager
+                appendLingerMs
             );
         }
     }
@@ -646,7 +636,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             .withTimer(timer)
                             .withCoordinatorMetrics(coordinatorMetrics)
                             .withTopicPartition(tp)
-                            .withGroupConfigManager(groupConfigManager)
                             .build(),
                         tp
                     );
@@ -1837,11 +1826,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final int appendLingerMs;
 
     /**
-     * The group config manager.
-     */
-    private final GroupConfigManager groupConfigManager;
-
-    /**
      * Atomic boolean indicating whether the runtime is running.
      */
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
@@ -1868,7 +1852,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param serializer                        The serializer.
      * @param compression                       The compression codec.
      * @param appendLingerMs                    The append linger time in ms.
-     * @param groupConfigManager                The group config manager.
      */
     @SuppressWarnings("checkstyle:ParameterNumber")
     private CoordinatorRuntime(
@@ -1885,8 +1868,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorMetrics coordinatorMetrics,
         Serializer<U> serializer,
         Compression compression,
-        int appendLingerMs,
-        GroupConfigManager groupConfigManager
+        int appendLingerMs
     ) {
         this.logPrefix = logPrefix;
         this.logContext = logContext;
@@ -1904,7 +1886,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.serializer = serializer;
         this.compression = compression;
         this.appendLingerMs = appendLingerMs;
-        this.groupConfigManager = groupConfigManager;
     }
 
     /**

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 
 import org.junit.jupiter.api.Test;
@@ -54,18 +53,24 @@ public class GroupConfigTest {
 
     @Test
     public void testInvalidProps() {
-        // Check for invalid sessionTimeoutMs, < 0
-        doTestInvalidProps(-1, 10);
+        // Check for invalid sessionTimeoutMs, < MIN
+        doTestInvalidProps(9, 10);
 
-        // Check for invalid heartbeatIntervalMs, < 0
-        doTestInvalidProps(10, -1);
+        // Check for invalid sessionTimeoutMs, > MAX
+        doTestInvalidProps(101, 10);
+
+        // Check for invalid heartbeatIntervalMs, < MIN
+        doTestInvalidProps(10, 9);
+
+        // Check for invalid heartbeatIntervalMs, > MAX
+        doTestInvalidProps(10, 101);
     }
 
     private void doTestInvalidProps(int sessionTimeoutMs, int heartbeatIntervalMs) {
         Properties props = new Properties();
-        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(sessionTimeoutMs));
-        props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(heartbeatIntervalMs));
-        assertThrows(ConfigException.class, () -> GroupConfig.validate(props));
+        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, sessionTimeoutMs);
+        props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, heartbeatIntervalMs);
+        assertThrows(IllegalArgumentException.class, () -> GroupConfig.validate(props, createGroupConfigBounds()));
     }
 
     @Test
@@ -87,6 +92,15 @@ public class GroupConfigTest {
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         props.put("invalid.config.name", "10");
-        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props));
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupConfigBounds()));
+    }
+
+    private Properties createGroupConfigBounds() {
+        Properties bounds = new Properties();
+        bounds.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 10);
+        bounds.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, 100);
+        bounds.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 10);
+        bounds.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        return bounds;
     }
 }
