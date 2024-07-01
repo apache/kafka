@@ -68,10 +68,12 @@ public class PurgeRepartitionTopicIntegrationTest {
     private static KafkaStreams kafkaStreams;
     private static final Integer PURGE_INTERVAL_MS = 10;
     private static final Integer PURGE_SEGMENT_BYTES = 2000;
+    private static final Integer INITIAL_TASK_DELAY_MS = 0;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, new Properties() {
         {
             put("log.retention.check.interval.ms", PURGE_INTERVAL_MS);
+            put("log.initial.task.delay.ms", INITIAL_TASK_DELAY_MS);
             put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, 0);
         }
     });
