@@ -210,9 +210,7 @@ public enum MetadataVersion {
     // If users attempt to use an unstable MetadataVersion, they will get an error.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
-
-    // Introduce version 1 of the GroupVersion feature (KIP-848).
-    IBP_4_0_IV0(21, "4.0", "IV0", false);
+    IBP_3_9_IV0(21, "3.9", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
