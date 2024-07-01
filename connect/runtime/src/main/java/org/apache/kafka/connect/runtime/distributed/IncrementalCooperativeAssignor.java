@@ -658,7 +658,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 configured.connectors().size(),
                 workers,
                 WorkerLoad::connectors,
-                x -> x.toString()
+                Function.identity()
         );
         Map<String, Set<ConnectorTaskId>> taskRevocations = loadBalancingRevocations(
                 "task",
