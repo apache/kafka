@@ -558,14 +558,13 @@ public class TestUtils {
      */
     public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
         try {
-            future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.SECONDS);
+            future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS);
             fail("Future should throw expected exception " + exceptionCauseClass.getSimpleName() + " but succeed.");
         } catch (TimeoutException | InterruptedException | ExecutionException e) {
-            assertInstanceOf(exceptionCauseClass, e.getCause(),
-                    "Unexpected exception cause " + e.getCause());
+            assertInstanceOf(exceptionCauseClass, e.getCause(), "Expected a" + exceptionCauseClass.getSimpleName() + "but got" + e.getCause());
             return exceptionCauseClass.cast(e.getCause());
         }
-        return null;
+        throw new RuntimeException("Future should throw expected exception but unexpected error happened.");
     }
 
     public static <T extends Throwable> void assertFutureThrows(
@@ -580,7 +579,7 @@ public class TestUtils {
     public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
         throws InterruptedException {
         try {
-            future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.SECONDS);
+            future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS);
             fail("Expected a " + exceptionClass.getSimpleName() + " exception, but got success.");
         } catch (ExecutionException ee) {
             assertInstanceOf(exceptionClass, ee.getCause(), "Expected a" + exceptionClass.getSimpleName() + "but got" + ee.getCause());
