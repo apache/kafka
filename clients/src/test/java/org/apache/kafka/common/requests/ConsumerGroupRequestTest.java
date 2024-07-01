@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.protocol.Errors;
 
 import org.junit.jupiter.api.Test;
@@ -28,40 +29,57 @@ import java.util.List;
 import static org.apache.kafka.common.requests.ConsumerGroupDescribeRequest.getErrorDescribedGroupList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ConsumerGroupDescribeRequestTest {
+public class ConsumerGroupRequestTest {
+    private static final int THROTTLE_TIME_MS = 1000;
 
     @Test
-    void testGetErrorResponse() {
+    void testGetErrorConsumerGroupHeartbeatResponse() {
+        ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
+        ConsumerGroupHeartbeatRequest request = new ConsumerGroupHeartbeatRequest.Builder(data).build();
+        Throwable e = Errors.UNSUPPORTED_VERSION.exception();
+        ConsumerGroupHeartbeatResponse response = request.getErrorResponse(THROTTLE_TIME_MS, e);
+
+        assertEquals(THROTTLE_TIME_MS, response.throttleTimeMs());
+        ApiError apiError = ApiError.fromThrowable(e);
+        assertEquals(apiError.code(), response.data().errorCode());
+        assertEquals(e.getMessage(), response.data().errorMessage());
+    }
+
+    @Test
+    void testGetErrorConsumerGroupDescribeResponse() {
         List<String> groupIds = Arrays.asList("group0", "group1");
         ConsumerGroupDescribeRequestData data = new ConsumerGroupDescribeRequestData();
         data.groupIds().addAll(groupIds);
         ConsumerGroupDescribeRequest request = new ConsumerGroupDescribeRequest.Builder(data, true)
             .build();
         Throwable e = Errors.GROUP_AUTHORIZATION_FAILED.exception();
-        int throttleTimeMs = 1000;
+        ConsumerGroupDescribeResponse response = request.getErrorResponse(THROTTLE_TIME_MS, e);
 
-        ConsumerGroupDescribeResponse response = request.getErrorResponse(throttleTimeMs, e);
-
-        assertEquals(throttleTimeMs, response.throttleTimeMs());
+        assertEquals(THROTTLE_TIME_MS, response.throttleTimeMs());
+        ApiError apiError = ApiError.fromThrowable(e);
         for (int i = 0; i < groupIds.size(); i++) {
             ConsumerGroupDescribeResponseData.DescribedGroup group = response.data().groups().get(i);
             assertEquals(groupIds.get(i), group.groupId());
-            assertEquals(Errors.forException(e).code(), group.errorCode());
+            assertEquals(apiError.code(), group.errorCode());
+            assertEquals(e.getMessage(), group.errorMessage());
         }
     }
 
     @Test
-    public void testGetErrorDescribedGroupList() {
+    public void testGetErrorDescribedGroupListResponse() {
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expectedDescribedGroupList = Arrays.asList(
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id-1")
-                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code()),
+                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                .setErrorMessage(Errors.COORDINATOR_LOAD_IN_PROGRESS.message()),
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id-2")
-                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code()),
+                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                .setErrorMessage(Errors.COORDINATOR_LOAD_IN_PROGRESS.message()),
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id-3")
                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                .setErrorMessage(Errors.COORDINATOR_LOAD_IN_PROGRESS.message())
         );
 
         List<ConsumerGroupDescribeResponseData.DescribedGroup> describedGroupList = getErrorDescribedGroupList(

@@ -63,12 +63,14 @@ public class ConsumerGroupDescribeRequest extends AbstractRequest {
     public ConsumerGroupDescribeResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ConsumerGroupDescribeResponseData data = new ConsumerGroupDescribeResponseData()
             .setThrottleTimeMs(throttleTimeMs);
+        ApiError apiError = ApiError.fromThrowable(e);
         // Set error for each group
         this.data.groupIds().forEach(
             groupId -> data.groups().add(
                 new ConsumerGroupDescribeResponseData.DescribedGroup()
                     .setGroupId(groupId)
-                    .setErrorCode(Errors.forException(e).code())
+                    .setErrorCode(apiError.code())
+                    .setErrorMessage(apiError.messageWithFallback())
             )
         );
         return new ConsumerGroupDescribeResponse(data);
@@ -94,6 +96,7 @@ public class ConsumerGroupDescribeRequest extends AbstractRequest {
             .map(groupId -> new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId(groupId)
                 .setErrorCode(error.code())
+                .setErrorMessage(error.message())
             ).collect(Collectors.toList());
     }
 }
