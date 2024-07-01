@@ -9,7 +9,7 @@ import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 
-public class PcfTruststoreUtility {
+public class TruststoreUtility {
 
     public static final String CRT = "CRT";
 
