@@ -877,6 +877,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          * @param records           The records to append.
          * @param replay            A boolean indicating whether the records
          *                          must be replayed or not.
+         * @param isAtomic          A boolean indicating whether the records
+         *                          must be written atomically or not.
          * @param event             The event that must be completed when the
          *                          records are written.
          */
@@ -886,6 +888,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             VerificationGuard verificationGuard,
             List<U> records,
             boolean replay,
+            boolean isAtomic,
             DeferredEvent event
         ) {
             if (state != CoordinatorState.ACTIVE) {
@@ -912,7 +915,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                 // If the current write operation is transactional, the current batch
                 // is written before proceeding with it.
-                if (producerId != RecordBatch.NO_PRODUCER_ID) {
+                boolean isTransactional = producerId != RecordBatch.NO_PRODUCER_ID;
+                if (isTransactional) {
+                    isAtomic = true;
                     // If flushing fails, we don't catch the exception in order to let
                     // the caller fail the current operation.
                     flushCurrentBatch();
@@ -936,62 +941,90 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     ));
                 }
 
-                // Compute the estimated size of the records.
-                int estimatedSize = AbstractRecords.estimateSizeInBytes(
-                    currentBatch.builder.magic(),
-                    compression.type(),
-                    recordsToAppend
-                );
-
-                // Check if the current batch has enough space. We check is before
-                // replaying the records in order to avoid having to revert back
-                // changes if the records do not fit within a batch.
-                if (estimatedSize > currentBatch.builder.maxAllowedBytes()) {
-                    throw new RecordTooLargeException("Message batch size is " + estimatedSize +
-                        " bytes in append to partition " + tp + " which exceeds the maximum " +
-                        "configured size of " + currentBatch.maxBatchSize + ".");
-                }
-
-                if (!currentBatch.builder.hasRoomFor(estimatedSize)) {
-                    // Otherwise, we write the current batch, allocate a new one and re-verify
-                    // whether the records fit in it.
-                    // If flushing fails, we don't catch the exception in order to let
-                    // the caller fail the current operation.
-                    flushCurrentBatch();
-                    maybeAllocateNewBatch(
-                        producerId,
-                        producerEpoch,
-                        verificationGuard,
-                        currentTimeMs
+                if (isAtomic) {
+                    // Compute the estimated size of the records.
+                    int estimatedSize = AbstractRecords.estimateSizeInBytes(
+                        currentBatch.builder.magic(),
+                        compression.type(),
+                        recordsToAppend
                     );
-                }
 
-                // Add the event to the list of pending events associated with the batch.
-                currentBatch.deferredEvents.add(event);
+                    // Check if the current batch has enough space. We check is before
+                    // replaying the records in order to avoid having to revert back
+                    // changes if the records do not fit within a batch.
+                    if (estimatedSize > currentBatch.builder.maxAllowedBytes()) {
+                        throw new RecordTooLargeException("Message batch size is " + estimatedSize +
+                            " bytes in append to partition " + tp + " which exceeds the maximum " +
+                            "configured size of " + currentBatch.maxBatchSize + ".");
+                    }
+
+                    if (!currentBatch.builder.hasRoomFor(estimatedSize)) {
+                        // Otherwise, we write the current batch, allocate a new one and re-verify
+                        // whether the records fit in it.
+                        // If flushing fails, we don't catch the exception in order to let
+                        // the caller fail the current operation.
+                        flushCurrentBatch();
+                        maybeAllocateNewBatch(
+                            producerId,
+                            producerEpoch,
+                            verificationGuard,
+                            currentTimeMs
+                        );
+                    }
+                }
 
                 try {
-                    // Apply record to the state machine.
-                    if (replay) {
-                        for (int i = 0; i < records.size(); i++) {
-                            // We compute the offset of the record based on the last written offset. The
-                            // coordinator is the single writer to the underlying partition so we can
-                            // deduce it like this.
+                    for (int i = 0; i < records.size(); i++) {
+                        U recordToReplay = records.get(i);
+                        SimpleRecord recordToAppend = recordsToAppend.get(i);
+
+                        if (replay) {
                             coordinator.replay(
-                                currentBatch.nextOffset + i,
+                                currentBatch.nextOffset,
                                 producerId,
                                 producerEpoch,
-                                records.get(i)
+                                recordToReplay
                             );
                         }
-                    }
 
-                    // Append to the batch.
-                    for (SimpleRecord record : recordsToAppend) {
-                        currentBatch.builder.append(record);
+                        if (!isAtomic) {
+                            boolean hasRoomFor = currentBatch.builder.hasRoomFor(
+                                recordToAppend.timestamp(),
+                                recordToAppend.key(),
+                                recordToAppend.value(),
+                                recordToAppend.headers()
+                            );
+
+                            if (!hasRoomFor) {
+                                if (currentBatch.builder.numRecords() == 0) {
+                                    throw new RecordTooLargeException("Record " + recordToAppend + " in append to partition " + tp +
+                                        " exceeds exceeds the maximum configured size of " + currentBatch.maxBatchSize + ".");
+                                }
+
+                                // If the current batch is not empty, we flush it and allocate a new batch.
+                                flushCurrentBatch();
+                                maybeAllocateNewBatch(
+                                    producerId,
+                                    producerEpoch,
+                                    verificationGuard,
+                                    currentTimeMs
+                                );
+                            }
+                        }
+
+                        currentBatch.builder.append(recordToAppend);
                         currentBatch.nextOffset++;
                     }
+
+                    // Add the event to the list of pending events associated with the batch.
+                    currentBatch.deferredEvents.add(event);
                 } catch (Throwable t) {
                     log.error("Replaying records to {} failed due to: {}.", tp, t.getMessage());
+
+                    // Add the event to the list of pending events associated with the last
+                    // batch in order to fail it too.
+                    currentBatch.deferredEvents.add(event);
+
                     // If an exception is thrown, we fail the entire batch. Exceptions should be
                     // really exceptional in this code path and they would usually be the results
                     // of bugs preventing records to be replayed.
@@ -1260,6 +1293,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         verificationGuard,
                         result.records(),
                         result.replayRecords(),
+                        result.isAtomic(),
                         this
                     );
 
