@@ -65,12 +65,6 @@ public class MirrorCheckpointConnectorTest {
         assertEquals(0, new MirrorCheckpointConnector(knownConsumerGroups, config).taskConfigs(1).size(), "MirrorCheckpointConnector not disabled");
     }
 
-    private void assertMirrorCheckpointConnectorDisabled(MirrorCheckpointConnector connector) {
-        // MirrorCheckpointConnector as minimum to run taskConfig()
-        // expect no task will be created
-        assertEquals(0, connector.taskConfigs(1).size(), "MirrorCheckpointConnector not disabled");
-    }
-
     @Test
     public void testMirrorCheckpointConnectorEnabled() {
         // enable the checkpoint emission

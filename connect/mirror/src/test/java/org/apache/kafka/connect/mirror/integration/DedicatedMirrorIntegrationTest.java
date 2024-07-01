@@ -228,7 +228,7 @@ public class DedicatedMirrorIntegrationTest {
             // Bring up a single-node cluster
             final MirrorMaker mm = startMirrorMaker("no-offset-syncing", mmProps);
             final SourceAndTarget sourceAndTarget = new SourceAndTarget(a, b);
-            awaitMirrorMakerStart(mm, sourceAndTarget, CONNECTOR_CLASSES);
+            awaitMirrorMakerStart(mm, sourceAndTarget);
 
             // wait for mirror source and heartbeat connectors to start a task
             awaitConnectorTasksStart(mm, MirrorHeartbeatConnector.class, sourceAndTarget);
@@ -393,13 +393,9 @@ public class DedicatedMirrorIntegrationTest {
         }
     }
     private void awaitMirrorMakerStart(final MirrorMaker mm, final SourceAndTarget sourceAndTarget) throws InterruptedException {
-        awaitMirrorMakerStart(mm, sourceAndTarget, CONNECTOR_CLASSES);
-    }
-
-    private void awaitMirrorMakerStart(final MirrorMaker mm, final SourceAndTarget sourceAndTarget, final  List<Class<?>> connectorClasses) throws InterruptedException {
         waitForCondition(() -> {
             try {
-                return connectorClasses.stream().allMatch(
+                return CONNECTOR_CLASSES.stream().allMatch(
                     connectorClazz -> isConnectorRunningForMirrorMaker(connectorClazz, mm, sourceAndTarget));
             } catch (Exception ex) {
                 log.error("Something unexpected occurred. Unable to check for startup status for mirror maker {}", mm, ex);

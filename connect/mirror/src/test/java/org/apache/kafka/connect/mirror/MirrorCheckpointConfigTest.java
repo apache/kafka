@@ -98,27 +98,34 @@ public class MirrorCheckpointConfigTest {
     }
 
     @Test
-    public void testValidate() {
-        Map<String, String> configValues = new MirrorCheckpointConfig(makeProps(
-                MirrorConnectorConfig.ENABLED, "false"))
-                .validate();
+    public void testSkipValidationIfConnectorDisabled() {
+        Map<String, String> configValues = MirrorCheckpointConfig.validate(makeProps(
+                MirrorConnectorConfig.ENABLED, "false",
+                MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "false",
+                MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED, "false"));
         assertTrue(configValues.isEmpty());
 
-        configValues = new MirrorCheckpointConfig(makeProps(
+        configValues = MirrorCheckpointConfig.validate(makeProps(
+                MirrorConnectorConfig.ENABLED, "false",
+                MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
+                MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"));
+        assertTrue(configValues.isEmpty());
+    }
+
+    @Test
+    public void testValidateIfConnectorEnabled() {
+        Map<String, String> configValues = MirrorCheckpointConfig.validate(makeProps(
                 MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "false",
-                MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED, "false"))
-                .validate();
+                MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED, "false"));
         assertEquals(configValues.keySet(), Utils.mkSet(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED));
 
-        configValues = new MirrorCheckpointConfig(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
-                MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"))
-                .validate();
+        configValues = MirrorCheckpointConfig.validate(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
+                MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"));
         assertEquals(configValues.keySet(), Utils.mkSet(MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED));
 
-        configValues = new MirrorCheckpointConfig(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
+        configValues = MirrorCheckpointConfig.validate(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
                 MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
-                MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "true"))
-                .validate();
+                MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "true"));
         assertTrue(configValues.isEmpty());
     }
 }

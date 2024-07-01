@@ -172,23 +172,25 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }
 
-    public Map<String, String> validate() {
+    public static Map<String, String> validate(Map<String, String> configs) {
         Map<String, String> invalidConfigs = new HashMap<>();
 
         // No point to validate when connector is disabled.
-        if (!getBoolean(ENABLED)) {
+        if ("false".equals(Optional.ofNullable(configs.get(ENABLED)).orElse("true"))) {
             return invalidConfigs;
         }
 
-        if (!this.getBoolean(EMIT_CHECKPOINTS_ENABLED) && !this.getBoolean(SYNC_GROUP_OFFSETS_ENABLED)) {
+        boolean emitCheckpointDisabled = "false".equals(Optional.ofNullable(configs.get(EMIT_CHECKPOINTS_ENABLED)).orElse("true"));
+        boolean syncGroupOffsetsDisabled = "false".equals(Optional.ofNullable(configs.get(SYNC_GROUP_OFFSETS_ENABLED)).orElse("true"));
+
+        if (emitCheckpointDisabled && syncGroupOffsetsDisabled) {
             Arrays.asList(SYNC_GROUP_OFFSETS_ENABLED, EMIT_CHECKPOINTS_ENABLED).forEach(configName -> {
-                invalidConfigs.putIfAbsent(configName, "MirrorCheckpointConnector can't run without both " + SYNC_GROUP_OFFSETS_ENABLED + ", " +
-                            EMIT_CHECKPOINTS_ENABLED + " set to false");
+                invalidConfigs.putIfAbsent(configName, "MirrorCheckpointConnector can't run with both " + SYNC_GROUP_OFFSETS_ENABLED + " and " +
+                        EMIT_CHECKPOINTS_ENABLED + " set to false");
             });
         }
-        if ("false".equals(Optional.ofNullable(this.originals().get(EMIT_OFFSET_SYNCS_ENABLED)).orElse("true"))) {
-            invalidConfigs.put(EMIT_OFFSET_SYNCS_ENABLED, "MirrorCheckpointConnector can't run with " + EMIT_OFFSET_SYNCS_ENABLED + " set to false while, " +
-                    EMIT_CHECKPOINTS_ENABLED  + " and/or" + SYNC_GROUP_OFFSETS_ENABLED + " set to true");
+        if ("false".equals(Optional.ofNullable(configs.get(EMIT_OFFSET_SYNCS_ENABLED)).orElse("true"))) {
+            invalidConfigs.put(EMIT_OFFSET_SYNCS_ENABLED, "MirrorCheckpointConnector can't run without offset syncs");
         }
 
         return invalidConfigs;
