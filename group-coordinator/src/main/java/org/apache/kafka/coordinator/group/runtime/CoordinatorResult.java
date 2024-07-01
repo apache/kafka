@@ -56,7 +56,7 @@ public class CoordinatorResult<T, U> {
     private final boolean isAtomic;
 
     /**
-     * Constructs a Result with records and a response.
+     * Constructs a Result with records.
      *
      * @param records   A non-null list of records.
      */
@@ -64,6 +64,19 @@ public class CoordinatorResult<T, U> {
         List<U> records
     ) {
         this(records, null, null, true, true);
+    }
+
+    /**
+     * Constructs a Result with records.
+     *
+     * @param records   A non-null list of records.
+     * @param isAtomic  A boolean indicating whether the result is atomic or not.
+     */
+    public CoordinatorResult(
+        List<U> records,
+        boolean isAtomic
+    ) {
+        this(records, null, null, true, isAtomic);
     }
 
     /**
