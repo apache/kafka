@@ -17,14 +17,12 @@
 package kafka.server
 
 import kafka.network.SocketServer
-import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse}
-import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -41,18 +39,26 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
-    if(!isKRaftTest())
-      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestAuthorizer].getName)
-    else
-      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
+    if(isKRaftTest())
+      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestStandardAuthorizer].getName)
+    else {
+      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG,  classOf[AlterCredentialsTest.TestAuthorizer].getName)
+    }
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
+  }
+
+  override def kraftControllerConfigs(): collection.Seq[Properties] = {
+    val controllerConfigs = super.kraftControllerConfigs()
+    controllerConfigs.head.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestStandardAuthorizer].getName)
+    controllerConfigs.head.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
+    controllerConfigs
   }
 
   private val user1 = "user1"
   private val user2 = "user2"
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft", "zk"))
   def testAlterNothingNotAuthorized(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
@@ -64,8 +70,8 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
     assertEquals(0, results.size)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft", "zk"))
   def testAlterSomethingNotAuthorized(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
@@ -75,12 +81,7 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
 
     val results = response.data.results
     assertEquals(2, results.size)
-    if(!isKRaftTest())
-      checkAllErrorsAlteringCredentials(results, Errors.CLUSTER_AUTHORIZATION_FAILED, "when not authorized")
-    else{
-      checkErrorAlteringCredentials(results, Errors.RESOURCE_NOT_FOUND, 1, "when not authorized")
-      checkErrorAlteringCredentials(results, Errors.UNACCEPTABLE_CREDENTIAL, 1, "when not authorized")
-    }
+    checkAllErrorsAlteringCredentials(results, Errors.CLUSTER_AUTHORIZATION_FAILED, "when not authorized")
   }
 
   private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = adminSocketServer): AlterUserScramCredentialsResponse = {
@@ -90,10 +91,5 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
   private def checkAllErrorsAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult], expectedError: Errors, contextMsg: String): Unit = {
     assertEquals(0, resultsToCheck.asScala.filterNot(_.errorCode == expectedError.code).size,
       s"Expected all '${expectedError.name}' errors when altering credentials $contextMsg")
-  }
-
-  private def checkErrorAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult], expectedError: Errors, expectedCount:Int, contextMsg: String): Unit = {
-    assertEquals(expectedCount, resultsToCheck.asScala.count(_.errorCode == expectedError.code),
-      s"Expected '${expectedError.name}' errors when altering credentials $contextMsg")
   }
 }
