@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -41,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NavigableMap;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -181,10 +183,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
         final Bytes to = Bytes.increment(from);
 
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.subMap(from, true, to, false).keySet(), true)
-        );
+        return new InMemoryKeyValueIterator(map.subMap(from, true, to, false).keySet(), true);
     }
 
     @Override
@@ -221,7 +220,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     private KeyValueIterator<Bytes, byte[]> getKeyValueIterator(final Set<Bytes> rangeSet, final boolean forward) {
-        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator(rangeSet, forward));
+        return new InMemoryKeyValueIterator(rangeSet, forward);
     }
 
     @Override
@@ -231,9 +230,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> reverseAll() {
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.keySet(), false));
+        return new InMemoryKeyValueIterator(map.keySet(), false);
     }
 
     @Override
@@ -254,6 +251,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
         private final Iterator<Bytes> iter;
+        private Bytes currentKey;
+        private volatile Boolean open = true;
 
         private InMemoryKeyValueIterator(final Set<Bytes> keySet, final boolean forward) {
             if (forward) {
@@ -265,23 +264,45 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         @Override
         public boolean hasNext() {
-            return iter.hasNext();
+            if (!open) {
+                throw new InvalidStateStoreException(String.format("Store %s has closed", name));
+            }
+            if (currentKey != null) {
+                if (map.containsKey(currentKey)) {
+                    return true;
+                } else {
+                    currentKey = null;
+                    return hasNext();
+                }
+            }
+            if (!iter.hasNext()) {
+                return false;
+            }
+            currentKey = iter.next();
+            return hasNext();
         }
 
         @Override
         public KeyValue<Bytes, byte[]> next() {
-            final Bytes key = iter.next();
-            return new KeyValue<>(key, map.get(key));
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            final KeyValue<Bytes, byte[]> ret = new KeyValue<>(currentKey, map.get(currentKey));
+            currentKey = null;
+            return ret;
         }
 
         @Override
         public void close() {
-            // do nothing
+            open = false;
         }
 
         @Override
         public Bytes peekNextKey() {
-            throw new UnsupportedOperationException("peekNextKey() not supported in " + getClass().getName());
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return currentKey;
         }
     }
 }
