@@ -44,7 +44,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     CONNECT_REST_PORT = 8083
     HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "connect_heap_dump.bin")
 
-    # Currently the Connect worker supports waiting on four modes:
+    # Currently the Connect worker supports waiting on a few different modes:
     STARTUP_MODE_INSTANT = 'INSTANT'
     """STARTUP_MODE_INSTANT: Start Connect worker and return immediately"""
     STARTUP_MODE_LOAD = 'LOAD'
@@ -53,6 +53,9 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     """STARTUP_MODE_LISTEN: Start Connect worker and return after opening the REST port."""
     STARTUP_MODE_JOIN = 'JOIN'
     """STARTUP_MODE_JOIN: Start Connect worker and return after joining the group."""
+    STARTUP_MODE_HEALTH_CHECK = 'HEALTH_CHECK'
+    """STARTUP_MODE_HEALTH_CHECK: Start Connect worker and return after its health check endpoint
+    reports that it is healthy """
 
     logs = {
         "connect_log": {
@@ -75,7 +78,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
         self.files = files
-        self.startup_mode = self.STARTUP_MODE_LISTEN
+        self.startup_mode = self.STARTUP_MODE_HEALTH_CHECK
         self.startup_timeout_sec = startup_timeout_sec
         self.environment = {}
         self.external_config_template_func = None
@@ -151,6 +154,12 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
             monitor.wait_until('Joined group', timeout_sec=self.startup_timeout_sec,
                                err_msg="Never saw message indicating Kafka Connect joined group on node: " +
                                        "%s in condition mode: %s" % (str(node.account), self.startup_mode))
+
+    def start_and_wait_for_health_check(self, node, worker_type, remote_connector_configs):
+        self.start_and_return_immediately(node, worker_type, remote_connector_configs)
+        wait_until(lambda: self.is_healthy(node), timeout_sec=self.startup_timeout_sec,
+                   err_msg="Kafka Connect failed to start and become healthy on node: " +
+                           " %s in condition mode %s" % (str(node.account), self.startup_mode))
 
     def stop_node(self, node, clean_shutdown=True, await_shutdown=None):
         if await_shutdown is None:
@@ -255,6 +264,43 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         if scope is not None:
             path += '?scope=' + scope
         return self._rest(path, set_request, node, "PUT")
+
+    def health_check(self, node):
+        return self._rest('/health', node=node)
+
+    def is_healthy(self, node):
+        try:
+            resp = self.health_check(node)
+            status = str(resp.get('status'))
+            if status.lower() == 'healthy':
+                return True
+            else:
+                self.logger.debug("Worker %s failed health check; reported status is '%s'" % (str(node.account), status))
+                return False
+        except ConnectRestError as e:
+            # Jetty returns a static 404 response page with raw HTML when no resources have been configured yet
+            if e.status == 404 and '<title>Error 404 Not Found</title>' in e.message:
+                self.logger.debug(
+                    "Worker %s is probably still starting; received default Jetty 404 page during health check"
+                    % str(node.account)
+                )
+            elif e.status == 503:
+                self.logger.debug("Worker %s is still starting" % str(node.account))
+            elif e.status == 500:
+                self.logger.debug("Worker %s is unhealthy: %s" % (str(node.account), str(e)))
+            else:
+                self.logger.warn(
+                    "Unexpected error with status %d while checking health of worker %s: %s"
+                    % (e.status, str(node.account), e.message)
+                )
+        except requests.exceptions.ConnectionError as e:
+            if 'Connection refused' in str(e):
+                self.logger.debug("Worker %s has not started its REST server yet" % str(node.account))
+            else:
+                self.logger.warn("Failed to check health of worker %s: %s" % (str(node.account), str(e)))
+        except Exception as e:
+            self.logger.warn("Failed to check health of worker %s: %s" % (str(node.account), str(e)))
+        return False
 
     def _rest(self, path, body=None, node=None, method="GET"):
         if node is None:
@@ -376,11 +422,16 @@ class ConnectStandaloneService(ConnectServiceBase):
             self.start_and_wait_to_load_plugins(node, 'standalone', remote_connector_configs)
         elif self.startup_mode == self.STARTUP_MODE_INSTANT:
             self.start_and_return_immediately(node, 'standalone', remote_connector_configs)
+        elif self.startup_mode == self.STARTUP_MODE_LISTEN:
+            self.start_and_wait_to_start_listening(node, 'standalone', remote_connector_configs)
         elif self.startup_mode == self.STARTUP_MODE_JOIN:
             self.start_and_wait_to_join_group(node, 'standalone', remote_connector_configs)
-        else:
+        elif self.startup_mode is None or self.startup_mode == self.STARTUP_MODE_HEALTH_CHECK:
             # The default mode is to wait until the complete startup of the worker
-            self.start_and_wait_to_start_listening(node, 'standalone', remote_connector_configs)
+            # as reported by its health check endpoint
+            self.start_and_wait_for_health_check(node, 'standalone', remote_connector_configs)
+        else:
+            raise Exception("Unrecognized startup mode: %s", self.startup_mode)
 
         if not self.pids(node):
             raise RuntimeError("No process ids recorded")
@@ -393,7 +444,6 @@ class ConnectDistributedService(ConnectServiceBase):
                  configs_topic="connect-configs", status_topic="connect-status", startup_timeout_sec=60,
                  include_filestream_connectors=False):
         super(ConnectDistributedService, self).__init__(context, num_nodes, kafka, files, startup_timeout_sec, include_filestream_connectors)
-        self.startup_mode = self.STARTUP_MODE_JOIN
         self.offsets_topic = offsets_topic
         self.configs_topic = configs_topic
         self.status_topic = status_topic
@@ -432,9 +482,14 @@ class ConnectDistributedService(ConnectServiceBase):
             self.start_and_return_immediately(node, 'distributed', '')
         elif self.startup_mode == self.STARTUP_MODE_LISTEN:
             self.start_and_wait_to_start_listening(node, 'distributed', '')
-        else:
-            # The default mode is to wait until the complete startup of the worker
+        elif self.startup_mode == self.STARTUP_MODE_JOIN:
             self.start_and_wait_to_join_group(node, 'distributed', '')
+        elif self.startup_mode is None or self.startup_mode == self.STARTUP_MODE_HEALTH_CHECK:
+            # The default mode is to wait until the complete startup of the worker
+            # as reported by its health check endpoint
+            self.start_and_wait_for_health_check(node, 'distributed', '')
+        else:
+            raise Exception("Unrecognized startup mode: %s", self.startup_mode)
 
         if not self.pids(node):
             raise RuntimeError("No process ids recorded")
