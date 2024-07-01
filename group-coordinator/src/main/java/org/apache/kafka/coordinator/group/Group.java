@@ -35,6 +35,7 @@ public interface Group {
     enum GroupType {
         CONSUMER("consumer"),
         CLASSIC("classic"),
+        SHARE("share"),
         UNKNOWN("unknown");
 
         private final String name;
