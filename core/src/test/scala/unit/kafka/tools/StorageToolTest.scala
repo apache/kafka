@@ -19,7 +19,7 @@ package kafka.tools
 
 import kafka.cluster.EndPoint
 
-import java.io.{ByteArrayOutputStream, PrintStream}
+import java.io.{ByteArrayOutputStream, File, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util
@@ -225,7 +225,7 @@ Found problem:
       val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None,
         "test format command")
       val advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint] = Seq.empty[EndPoint]
-      val host = "PLAINTEXT"
+      val host = "localhost"
       val newEndPoint = new EndPoint(host = host, port = 9092, listenerName = new ListenerName("PLAINTEXT"),
         SecurityProtocol.PLAINTEXT)
       val updatedAdvertisedListenerEndpoints: scala.collection.Seq[EndPoint] = advertisedListenerEndpoints :+ newEndPoint
@@ -245,6 +245,38 @@ Found problem:
   def stringAfterFirstLine(input: String): String = {
     val firstNewline = input.indexOf("\n")
     input.substring(firstNewline + 1)
+  }
+
+  @Test
+  def testFormatEmptyDirectoryWithControllerQuorumVoters(): Unit = {
+    val tempDir = TestUtils.tempDir()
+    val nodeId = 2
+    try {
+      val metaProperties = new MetaProperties.Builder().
+        setVersion(MetaPropertiesVersion.V1).
+        setClusterId("XcZZOzUqS5yHOjhMQB2JLS").
+        setNodeId(nodeId).
+        build()
+      val stream = new ByteArrayOutputStream()
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None,
+        "test format command")
+      val advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint] = Seq.empty[EndPoint]
+      val host = "localhost"
+      val port = 9092
+      val newEndPoint = new EndPoint(host = host, port = port, listenerName = new ListenerName("PLAINTEXT"),
+        SecurityProtocol.PLAINTEXT)
+      val updatedAdvertisedListenerEndpoints: scala.collection.Seq[EndPoint] = advertisedListenerEndpoints :+ newEndPoint
+
+      assertEquals(0, StorageTool.
+        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata,
+          MetadataVersion.latestTesting(), ignoreFormatted = false,
+          updatedAdvertisedListenerEndpoints, nodeId + "@" + host + ":" + port))
+      val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
+      assertTrue(stringAfterFirstLine(stream.toString()).contains("Snapshot written to %s".format(checkpointDir)))
+      val checkpointFilePath = Snapshots.snapshotPath(Paths.get(checkpointDir), BOOTSTRAP_SNAPSHOT_ID)
+      assertTrue(checkpointFilePath.toFile.exists)
+      assertTrue(Utils.readFileAsString(checkpointFilePath.toFile.getPath).contains(host))
+    } finally Utils.delete(tempDir)
   }
 
   private def runFormatCommand(stream: ByteArrayOutputStream, directories: Seq[String], ignoreFormatted: Boolean = false): Int = {
@@ -328,6 +360,40 @@ Found problem:
     val mv = StorageTool.getMetadataVersion(namespace, Map.empty, defaultVersionString = Some(MetadataVersion.IBP_3_3_IV2.toString))
     assertEquals(MetadataVersion.IBP_3_3_IV2.featureLevel(), mv.featureLevel(),
       "Expected the default metadata.version to be 3.3-IV2")
+  }
+
+  @Test
+  def testStandaloneModeWithArguments(): Unit = {
+    val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yPOjhMQB6JAT",
+    "-s"))
+    val config = Mockito.spy(new KafkaConfig(TestUtils.createBrokerConfig(1, null)))
+    val exitCode = StorageTool.runFormatCommand(namespace, config)
+    val tempDirs = config.logDirs
+    tempDirs.foreach(tempDir => {
+      val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
+      val checkpointFilePath = Snapshots.snapshotPath(Paths.get(checkpointDir), BOOTSTRAP_SNAPSHOT_ID)
+      assertTrue(checkpointFilePath.toFile.exists)
+      assertTrue(Utils.readFileAsString(checkpointFilePath.toFile.getPath).contains("localhost"))
+      Utils.delete(new File(tempDir))
+    })
+    assertEquals(0, exitCode)
+  }
+
+  @Test
+  def testControllerQuorumVotersWithArguments(): Unit = {
+    val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yPOjhMQB6JAT",
+      "--controller-quorum-voters", "1@localhost:9092"))
+    val config = Mockito.spy(new KafkaConfig(TestUtils.createBrokerConfig(1, null)))
+    val exitCode = StorageTool.runFormatCommand(namespace, config)
+    val tempDirs = config.logDirs
+    tempDirs.foreach(tempDir => {
+      val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
+      val checkpointFilePath = Snapshots.snapshotPath(Paths.get(checkpointDir), BOOTSTRAP_SNAPSHOT_ID)
+      assertTrue(checkpointFilePath.toFile.exists)
+      assertTrue(Utils.readFileAsString(checkpointFilePath.toFile.getPath).contains("localhost"))
+      Utils.delete(new File(tempDir))
+    })
+    assertEquals(0, exitCode)
   }
 
   @Test
