@@ -145,7 +145,7 @@ class ConsumerEventHandler(object):
         else:
             return None
 
-# This needs to be used for cooperative and consumer protocol
+# This needs to be used for cooperative protocol
 class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
     def __init__(self, node, verify_offsets, idx):
         super().__init__(node, verify_offsets, idx)
@@ -176,6 +176,32 @@ class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
         logger.debug("Incremental: Partitions %s assigned to %s" % (assignment, node.account.hostname))
         self.assignment.extend(assignment)
 
+# This needs to be used for consumer protocol
+class ConsumerProtocolConsumerEventHandler(IncrementalAssignmentConsumerEventHandler):
+    def __init__(self, node, verify_offsets, idx):
+        super().__init__(node, verify_offsets, idx)
+
+    def handle_records_consumed(self, event, logger):
+        for record_batch in event["partitions"]:
+            tp = _create_partition_from_dict(record_batch)
+            min_offset = record_batch["minOffset"]
+            max_offset = record_batch["maxOffset"]
+
+            assert tp in self.assignment, \
+                "Consumed records for partition %s which is not assigned (current assignment: %s, node: %s)" % \
+                (str(tp), str(self.assignment), str(self.node))
+            if tp not in self.position or self.position[tp] == min_offset:
+                self.position[tp] = max_offset + 1
+            else:
+                msg = "Consumed from an unexpected offset (%d, %d) for partition %s" % \
+                      (self.position.get(tp), min_offset, str(tp))
+                if self.verify_offsets:
+                    raise AssertionError(msg)
+                else:
+                    if tp in self.position:
+                        self.position[tp] = max_offset + 1
+                    logger.warn(msg)
+        self.total_consumed += event["count"]
 
 class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
     """This service wraps org.apache.kafka.tools.VerifiableConsumer for use in
@@ -250,6 +276,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             if node not in self.event_handlers:
                 if self.is_eager():
                     self.event_handlers[node] = ConsumerEventHandler(node, self.verify_offsets, idx)
+                elif self.group_protocol == consumer_group.consumer_group_protocol:
+                    self.event_handlers[node] = ConsumerProtocolConsumerEventHandler(node, self.verify_offsets, idx)
                 else:
                     self.event_handlers[node] = IncrementalAssignmentConsumerEventHandler(node, self.verify_offsets, idx)
             handler = self.event_handlers[node]

@@ -639,7 +639,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         assignment_strategy=all_assignment_strategies,
         bounce_mode=["all", "rolling"]
     )
-    def test_group_protocol_migration(self, clean_shutdown, enable_autocommit, metadata_quorum, use_new_coordinator,
+    def test_boucing_consumer(self, clean_shutdown, enable_autocommit, metadata_quorum, use_new_coordinator,
                                       consumer_group_migration_policy, assignment_strategy, bounce_mode):
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.consumer_group_protocol,
