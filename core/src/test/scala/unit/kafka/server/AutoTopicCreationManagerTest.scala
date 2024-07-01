@@ -356,7 +356,7 @@ class AutoTopicCreationManagerTest {
     val newTopic = if (isInternal) {
       topicName match {
         case Topic.GROUP_METADATA_TOPIC_NAME => getNewTopic(topicName,
-          numPartitions = config.offsetsTopicPartitions, replicationFactor = config.offsetsTopicReplicationFactor)
+          numPartitions = config.groupCoordinatorConfig.offsetsTopicPartitions, replicationFactor = config.groupCoordinatorConfig.offsetsTopicReplicationFactor)
         case Topic.TRANSACTION_STATE_TOPIC_NAME => getNewTopic(topicName,
           numPartitions = config.transactionTopicPartitions, replicationFactor = config.transactionTopicReplicationFactor)
       }
