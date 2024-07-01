@@ -181,27 +181,20 @@ class ConsumerProtocolConsumerEventHandler(IncrementalAssignmentConsumerEventHan
     def __init__(self, node, verify_offsets, idx):
         super().__init__(node, verify_offsets, idx)
 
-    def handle_records_consumed(self, event, logger):
-        for record_batch in event["partitions"]:
-            tp = _create_partition_from_dict(record_batch)
-            min_offset = record_batch["minOffset"]
-            max_offset = record_batch["maxOffset"]
+    def handle_partitions_revoked(self, event, node, logger):
+        self.revoked_count += 1
+        self.position = {}
+        revoked = []
 
+        for topic_partition in event["partitions"]:
+            tp = _create_partition_from_dict(topic_partition)
             assert tp in self.assignment, \
-                "Consumed records for partition %s which is not assigned (current assignment: %s, node: %s)" % \
-                (str(tp), str(self.assignment), str(self.node))
-            if tp not in self.position or self.position[tp] == min_offset:
-                self.position[tp] = max_offset + 1
-            else:
-                msg = "Consumed from an unexpected offset (%d, %d) for partition %s" % \
-                      (self.position.get(tp), min_offset, str(tp))
-                if self.verify_offsets:
-                    raise AssertionError(msg)
-                else:
-                    if tp in self.position:
-                        self.position[tp] = max_offset + 1
-                    logger.warn(msg)
-        self.total_consumed += event["count"]
+                "Topic partition %s cannot be revoked from %s as it was not previously assigned to that consumer" % \
+                (tp, node.account.hostname)
+            self.assignment.remove(tp)
+            revoked.append(tp)
+
+        logger.debug("Partitions %s revoked from %s" % (revoked, node.account.hostname))
 
 class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
     """This service wraps org.apache.kafka.tools.VerifiableConsumer for use in
