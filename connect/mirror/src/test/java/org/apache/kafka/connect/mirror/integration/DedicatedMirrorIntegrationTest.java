@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.NotFoundException;
-import org.apache.kafka.connect.mirror.MirrorCheckpointConnector;
 import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
 import org.apache.kafka.connect.mirror.MirrorMaker;
 import org.apache.kafka.connect.mirror.MirrorSourceConfig;
@@ -37,7 +36,6 @@ import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.NoRetryException;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -46,7 +44,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -63,7 +60,6 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorMaker.CONNECTOR_CLASSES;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
@@ -206,7 +202,6 @@ public class DedicatedMirrorIntegrationTest {
             final String a = "A";
             final String b = "B";
             final String ab = a + "->" + b;
-            final String ba = b + "->" + a;
             final String testTopicPrefix = "test-topic-";
 
             Map<String, String> mmProps = new HashMap<String, String>() {{
@@ -232,11 +227,10 @@ public class DedicatedMirrorIntegrationTest {
             // Bring up a single-node cluster
             final MirrorMaker mm = startMirrorMaker("no-offset-syncing", mmProps);
             final SourceAndTarget sourceAndTarget = new SourceAndTarget(a, b);
-            awaitMirrorMakerStart(mm, sourceAndTarget, Arrays.asList(MirrorSourceConnector.class, MirrorHeartbeatConnector.class));
+            awaitMirrorMakerStart(mm, sourceAndTarget, CONNECTOR_CLASSES);
 
             // wait for mirror source and heartbeat connectors to start a task
             awaitConnectorTasksStart(mm, MirrorHeartbeatConnector.class, sourceAndTarget);
-            assertThrows(NotFoundException.class, () -> isTaskRunningForMirrorMakerConnector(MirrorCheckpointConnector.class, mm, sourceAndTarget));
 
             final int numMessages = 10;
             String topic = testTopicPrefix + "1";

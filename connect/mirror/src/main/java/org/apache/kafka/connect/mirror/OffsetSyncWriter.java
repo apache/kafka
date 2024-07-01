@@ -45,7 +45,7 @@ class OffsetSyncWriter implements AutoCloseable {
     private final KafkaProducer<byte[], byte[]> offsetProducer;
     private final String offsetSyncsTopic;
     private final long maxOffsetLag;
-    private Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
+    private final Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
 
 
     public OffsetSyncWriter(MirrorSourceTaskConfig config) {
