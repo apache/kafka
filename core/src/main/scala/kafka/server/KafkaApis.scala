@@ -530,7 +530,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizedTopicsRequest.foreach { topic =>
       topic.partitions.forEach { partition =>
         val error = try {
-          if (partition.committedMetadata != null && partition.committedMetadata.length > config.offsetMetadataMaxSize) {
+          if (partition.committedMetadata != null && partition.committedMetadata.length > config.groupCoordinatorConfig.offsetMetadataMaxSize) {
             Errors.OFFSET_METADATA_TOO_LARGE
           } else {
             zkSupport.zkClient.setOrCreateConsumerOffset(
