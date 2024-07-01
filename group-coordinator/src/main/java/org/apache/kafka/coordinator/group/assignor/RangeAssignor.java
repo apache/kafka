@@ -21,40 +21,65 @@ import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAss
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.MemberAssignmentImpl;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
-import static java.lang.Math.min;
-import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
-
 /**
- * This Range Assignor inherits properties of both the range assignor and the sticky assignor.
- * The properties are as follows:
- * <ol>
- *      <li> Each member must get at least one partition from every topic that it is subscribed to.
- *           The only exception is when the number of subscribed members is greater than the
- *           number of partitions for that topic. (Range) </li>
- *      <li> Partitions should be assigned to members in a way that facilitates the join operation when required. (Range)
- *           This can only be done if every member is subscribed to the same topics and the topics are co-partitioned.
- *           Two streams are co-partitioned if the following conditions are met:
- *           <ul>
- *              <li> The keys must have the same schemas. </li>
- *              <li> The topics involved must have the same number of partitions. </li>
- *           </ul>
- *      </li>
- *      <li> Members should retain as much of their previous assignment as possible to reduce the number of partition
- *           movements during reassignment. (Sticky) </li>
- * </ol>
+ * A range assignor assigns contiguous partition ranges to members of a consumer group such that :
+ * 1. Each subscribed member receives at least one partition from that topic.
+ * 2. Each member receives the same partition number from every subscribed topic when co-partitioning is possible.
+ *
+ * Co-partitioning is possible when the below conditions are satisfied:
+ * 1. ALl the members are subscribed to the same set of topics.
+ * 2. All the topics have the same number of partitions.
+ *
+ * Co-partitioning is useful in performing joins on data streams.
+ *
+ * <p>For example, suppose there are two members M0 and M1, two topics T1 and T2, and each topic has 3 partitions.
+ *
+ * <p>The co-partitioned assignment will be:
+ * <ul>
+ * <li<code>    M0: [T1P0, T1P1, T2P0, T2P1]    </code></li>
+ * <li><code>   M1: [T1P2, T2P2]                </code></li>
+ * </ul>
+ *
+ * Since the introduction of static membership, we could leverage <code>member.instance.id</code> to make the
+ * assignment behavior more sticky.
+ * For the above example, after one rolling bounce, the group coordinator will attempt to assign new member Ids towards
+ * members, for example if <code>M0</code> -&gt; <code>M3</code> <code>M1</code> -&gt; <code>M2</code>.
+ *
+ * <p>The assignment could be completely shuffled to:
+ * <ul>
+ * <li><code>   M3 (was M0): [T1P2, T2P2]               (before it was [T1P0, T1P1, T2P0, T2P1])  </code>
+ * <li><code>   M2 (was M1): [T1P0, T1P1, T2P0, T2P1]   (before it was [T1P2, T2P2])  </code>
+ * </ul>
+ *
+ * The assignment change was caused by the change of <code>member.id</code> relative order, and
+ * can be avoided by setting the instance.id.
+ * Members will have individual instance Ids <code>I0</code>, <code>I1</code>. As long as
+ * 1. Number of members remain the same.
+ * 2. Topic metadata doesn't change.
+ * 3. Subscription pattern doesn't change for any member.
+ *
+ * <p>The assignment will always be:
+ * <ul>
+ * <li><code>   I0: [T1P0, T1P1, T2P0, T2P1]    </code>
+ * <li><code>   I1: [T1P2, T2P2]                </code>
+ * </ul>
+ * <p>
  */
 public class RangeAssignor implements ConsumerGroupPartitionAssignor {
     public static final String RANGE_ASSIGNOR_NAME = "range";
@@ -64,192 +89,189 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         return RANGE_ASSIGNOR_NAME;
     }
 
-    /**
-     * Pair of memberId and remaining partitions to meet the quota.
-     */
-    private static class MemberWithRemainingAssignments {
-        /**
-         * Member Id.
-         */
-        private final String memberId;
+    private static class TopicMetadata {
+        public Uuid topicId;
+        public int numPartitions;
+        public int numMembers;
 
-        /**
-         * Number of partitions required to meet the assignment quota.
-         */
-        private final int remaining;
+        public int quota = -1;
+        public int extra = -1;
+        public int nextRange = 0;
 
-        public MemberWithRemainingAssignments(String memberId, int remaining) {
-            this.memberId = memberId;
-            this.remaining = remaining;
+        void maybeComputeQuota() {
+            if (quota != -1) return;
+
+            quota = numPartitions / numMembers;
+            extra = numPartitions % numMembers;
+        }
+
+        @Override
+        public String toString() {
+            return "TopicMetadata{" +
+                "topicId=" + topicId +
+                ", numPartitions=" + numPartitions +
+                ", numMembers=" + numMembers +
+                ", quota=" + quota +
+                ", extra=" + extra +
+                ", nextRange=" + nextRange +
+                '}';
         }
     }
 
     /**
-     * Returns a map of topic Ids to a list of members subscribed to them,
-     * based on the given assignment specification and metadata.
-     *
-     * @param groupSpec                     The specification required for group assignments.
-     * @param subscribedTopicDescriber      The metadata describer for subscribed topics and clusters.
-     * @return A map of topic Ids to a list of member Ids subscribed to them.
-     *
-     * @throws PartitionAssignorException If a member is subscribed to a non-existent topic.
+     * Assigns partitions to members of a homogeneous group. All members are subscribed to the same set of topics.
+     * Assignment will be co-partitioned when all the topics have an equal number of partitions.
      */
-    private Map<Uuid, Collection<String>> membersPerTopic(
-        final GroupSpec groupSpec,
-        final SubscribedTopicDescriber subscribedTopicDescriber
-    ) {
-        Map<Uuid, Collection<String>> membersPerTopic = new HashMap<>();
+    private GroupAssignment assignHomogeneousGroup(
+        GroupSpec groupSpec,
+        SubscribedTopicDescriber subscribedTopicDescriber
+    ) throws PartitionAssignorException {
+        List<String> memberIds = sortMemberIds(groupSpec);
 
-        if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
-            Collection<String> allMembers = groupSpec.memberIds();
-            Collection<Uuid> topics = groupSpec.memberSubscription(groupSpec.memberIds().iterator().next())
-                .subscribedTopicIds();
+        MemberSubscription subs = groupSpec.memberSubscription(memberIds.get(0));
+        Set<Uuid> subscribedTopics = new HashSet<>(subs.subscribedTopicIds());
+        List<TopicMetadata> topics = new ArrayList<>(subscribedTopics.size());
+        int numMembers = groupSpec.memberIds().size();
 
-            for (Uuid topicId : topics) {
-                if (subscribedTopicDescriber.numPartitions(topicId) == -1) {
-                    throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
-                }
-                membersPerTopic.put(topicId, allMembers);
+        for (Uuid topicId : subscribedTopics) {
+            TopicMetadata m = new TopicMetadata();
+            m.topicId = topicId;
+            m.numPartitions = subscribedTopicDescriber.numPartitions(topicId);
+            if (m.numPartitions == -1) {
+                throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
             }
-        } else {
-            groupSpec.memberIds().forEach(memberId -> {
-                Collection<Uuid> topics = groupSpec.memberSubscription(memberId).subscribedTopicIds();
-                for (Uuid topicId : topics) {
-                    if (subscribedTopicDescriber.numPartitions(topicId) == -1) {
+            m.numMembers = numMembers;
+            topics.add(m);
+        }
+
+        Map<String, MemberAssignment> assignments = new HashMap<>((int) ((groupSpec.memberIds().size() / 0.75f) + 1));
+
+        for (String memberId : memberIds) {
+            Map<Uuid, Set<Integer>> assignment = new HashMap<>((int) ((subscribedTopics.size() / 0.75f) + 1));
+            for (TopicMetadata metadata : topics) {
+                metadata.maybeComputeQuota();
+
+                if (metadata.nextRange >= metadata.numPartitions) {
+                    assignment.put(metadata.topicId, Collections.emptySet());
+                } else {
+                    int start = metadata.nextRange;
+                    int end = Math.min(start + metadata.quota, metadata.numPartitions);
+                    if (metadata.extra > 0) {
+                        end++;
+                        metadata.extra--;
+                    }
+                    metadata.nextRange = end;
+                    assignment.put(metadata.topicId, new RangeSet(start, end));
+                }
+            }
+            assignments.put(memberId, new MemberAssignmentImpl(assignment));
+        }
+
+        return new GroupAssignment(assignments);
+    }
+
+    /**
+     * Assigns partitions to members of a heterogeneous group. Not all members are subscribed to the same topics.
+     */
+    private GroupAssignment assignHeterogeneousGroup(
+        GroupSpec groupSpec,
+        SubscribedTopicDescriber subscribedTopicDescriber
+    ) throws PartitionAssignorException {
+
+        List<String> memberIds = sortMemberIds(groupSpec);
+
+        Map<Uuid, TopicMetadata> topics = new HashMap<>();
+
+        for (String memberId : memberIds) {
+            MemberSubscription subs = groupSpec.memberSubscription(memberId);
+            for (Uuid topicId : subs.subscribedTopicIds()) {
+                TopicMetadata metadata = topics.computeIfAbsent(topicId, __ -> {
+                    TopicMetadata m = new TopicMetadata();
+                    m.topicId = topicId;
+                    m.numPartitions = subscribedTopicDescriber.numPartitions(topicId);
+                    if (m.numPartitions == -1) {
                         throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
                     }
-                    membersPerTopic
-                        .computeIfAbsent(topicId, k -> new ArrayList<>())
-                        .add(memberId);
-                }
-            });
+                    return m;
+                });
+                metadata.numMembers++;
+            }
         }
 
-        return membersPerTopic;
+        Map<String, MemberAssignment> assignments = new HashMap<>((int) ((groupSpec.memberIds().size() / 0.75f) + 1));
+
+        for (String memberId : memberIds) {
+            MemberSubscription subs = groupSpec.memberSubscription(memberId);
+            Map<Uuid, Set<Integer>> assignment = new HashMap<>(subs.subscribedTopicIds().size());
+            for (Uuid topicId : subs.subscribedTopicIds()) {
+                TopicMetadata metadata = topics.get(topicId);
+                metadata.maybeComputeQuota();
+
+                if (metadata.nextRange >= metadata.numPartitions) {
+                    assignment.put(metadata.topicId, Collections.emptySet());
+                } else {
+                    int start = metadata.nextRange;
+                    int end = Math.min(start + metadata.quota, metadata.numPartitions);
+                    if (metadata.extra > 0) {
+                        end++;
+                        metadata.extra--;
+                    }
+                    metadata.nextRange = end;
+                    assignment.put(metadata.topicId, new RangeSet(start, end));
+                }
+            }
+            assignments.put(memberId, new MemberAssignmentImpl(assignment));
+        }
+
+        return new GroupAssignment(assignments);
     }
 
     /**
-     * The algorithm includes the following steps:
-     * <ol>
-     *      <li> Generate a map of members per topic using the given member subscriptions. </li>
-     *      <li> Generate a list of members called potentially unfilled members, which consists of members that have not
-     *           met the minimum required quota of partitions for the assignment AND get a list called assigned sticky
-     *           partitions for topic, which has the partitions that will be retained in the new assignment. </li>
-     *      <li> Generate a list of unassigned partitions by calculating the difference between the total partitions
-     *           for the topic and the assigned (sticky) partitions. </li>
-     *      <li> Find members from the potentially unfilled members list that haven't met the total required quota
-     *           i.e. minRequiredQuota + 1, if the member is designated to receive one of the excess partitions OR
-     *           minRequiredQuota otherwise. </li>
-     *      <li> Assign partitions to them in ranges from the unassigned partitions per topic
-     *           based on the remaining partitions value. </li>
-     * </ol>
+     * Sorts the member Ids in the group based on their instance Id if present, otherwise by member Id.
+     * This is done to ensure that the relative ordering of members doesn't change with static members
+     * thus resulting in a sticky assignment.
+     *
+     * @param groupSpec     The group specification containing the member information.
+     * @return a sorted list of member Ids.
+     */
+    private List<String> sortMemberIds(
+        GroupSpec groupSpec
+    ) {
+        List<String> sortedMemberIds = new ArrayList<>(groupSpec.memberIds());
+        sortedMemberIds.sort((memberId1, memberId2) -> {
+            Optional<String> instanceId1 = groupSpec.memberSubscription(memberId1).instanceId();
+            Optional<String> instanceId2 = groupSpec.memberSubscription(memberId2).instanceId();
+
+            if (instanceId1.isPresent() && instanceId2.isPresent()) {
+                return instanceId1.get().compareTo(instanceId2.get());
+            } else if (instanceId1.isPresent()) {
+                return -1;
+            } else if (instanceId2.isPresent()) {
+                return 1;
+            } else {
+                return memberId1.compareTo(memberId2);
+            }
+        });
+        return sortedMemberIds;
+    }
+
+    /**
+     * Assigns partitions to members based on their topic subscriptions and the properties of a range assignor:
+     *
+     * @param groupSpec                     The group specification containing the member information.
+     * @param subscribedTopicDescriber      The describer for subscribed topics to get the number of partitions.
+     * @return The group's assignment with the partition assignments for each member.
+     * @throws PartitionAssignorException if any member is subscribed to a non-existent topic.
      */
     @Override
     public GroupAssignment assign(
-        final GroupSpec groupSpec,
-        final SubscribedTopicDescriber subscribedTopicDescriber
+        GroupSpec groupSpec,
+        SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
-
-        Map<String, MemberAssignment> newTargetAssignment = new HashMap<>();
-
-        // Step 1
-        Map<Uuid, Collection<String>> membersPerTopic = membersPerTopic(
-            groupSpec,
-            subscribedTopicDescriber
-        );
-
-        membersPerTopic.forEach((topicId, membersForTopic) -> {
-            int numPartitionsForTopic = subscribedTopicDescriber.numPartitions(topicId);
-            int minRequiredQuota = numPartitionsForTopic / membersForTopic.size();
-            // Each member can get only ONE extra partition per topic after receiving the minimum quota.
-            int numMembersWithExtraPartition = numPartitionsForTopic % membersForTopic.size();
-
-            // Step 2
-            Set<Integer> assignedStickyPartitionsForTopic = new HashSet<>();
-            List<MemberWithRemainingAssignments> potentiallyUnfilledMembers = new ArrayList<>();
-
-            for (String memberId : membersForTopic) {
-                Set<Integer> assignedPartitionsForTopic = groupSpec
-                    .memberAssignment(memberId)
-                    .partitions()
-                    .getOrDefault(topicId, Collections.emptySet());
-
-                int currentAssignmentSize = assignedPartitionsForTopic.size();
-                List<Integer> currentAssignmentListForTopic = new ArrayList<>(assignedPartitionsForTopic);
-
-                // If there were partitions from this topic that were previously assigned to this member, retain as many as possible.
-                // Sort the current assignment in ascending order since we want the same partition numbers from each topic
-                // to go to the same member, in order to facilitate joins in case of co-partitioned topics.
-                if (currentAssignmentSize > 0) {
-                    int retainedPartitionsCount = min(currentAssignmentSize, minRequiredQuota);
-                    Collections.sort(currentAssignmentListForTopic);
-                    for (int i = 0; i < retainedPartitionsCount; i++) {
-                        assignedStickyPartitionsForTopic
-                            .add(currentAssignmentListForTopic.get(i));
-                        newTargetAssignment.computeIfAbsent(memberId, k -> new MemberAssignmentImpl(new HashMap<>()))
-                            .partitions()
-                            .computeIfAbsent(topicId, k -> new HashSet<>())
-                            .add(currentAssignmentListForTopic.get(i));
-                    }
-                }
-
-                // Number of partitions required to meet the minRequiredQuota.
-                // There are 3 cases w.r.t the value of remaining:
-                // 1) remaining < 0: this means that the member has more than the min required amount.
-                // 2) If remaining = 0: member has the minimum required partitions, but it may get an extra partition, so it is a potentially unfilled member.
-                // 3) If remaining > 0: member doesn't have the minimum required partitions, so it should be added to potentiallyUnfilledMembers.
-                int remaining = minRequiredQuota - currentAssignmentSize;
-
-                // Retain extra partitions as well when applicable.
-                if (remaining < 0 && numMembersWithExtraPartition > 0) {
-                    numMembersWithExtraPartition--;
-                    // Since we already added the minimumRequiredQuota of partitions in the previous step (until minReq - 1), we just need to
-                    // add the extra partition that will be present at the index right after min quota was satisfied.
-                    assignedStickyPartitionsForTopic
-                        .add(currentAssignmentListForTopic.get(minRequiredQuota));
-                    newTargetAssignment.computeIfAbsent(memberId, k -> new MemberAssignmentImpl(new HashMap<>()))
-                        .partitions()
-                        .computeIfAbsent(topicId, k -> new HashSet<>())
-                        .add(currentAssignmentListForTopic.get(minRequiredQuota));
-                } else {
-                    MemberWithRemainingAssignments newPair = new MemberWithRemainingAssignments(memberId, remaining);
-                    potentiallyUnfilledMembers.add(newPair);
-                }
-            }
-
-            // Step 3
-            // Find the difference between the total partitions per topic and the already assigned sticky partitions for the topic to get the unassigned partitions.
-            // List of unassigned partitions for topic contains the partitions in ascending order.
-            List<Integer> unassignedPartitionsForTopic = new ArrayList<>();
-            for (int i = 0; i < numPartitionsForTopic; i++) {
-                if (!assignedStickyPartitionsForTopic.contains(i)) {
-                    unassignedPartitionsForTopic.add(i);
-                }
-            }
-
-            // Step 4 and Step 5
-            // Account for the extra partitions if necessary and increase the required quota by 1.
-            // If remaining > 0 after increasing the required quota, assign the remaining number of partitions from the unassigned partitions list.
-            int unassignedPartitionsListStartPointer = 0;
-            for (MemberWithRemainingAssignments pair : potentiallyUnfilledMembers) {
-                String memberId = pair.memberId;
-                int remaining = pair.remaining;
-                if (numMembersWithExtraPartition > 0) {
-                    remaining++;
-                    numMembersWithExtraPartition--;
-                }
-                if (remaining > 0) {
-                    List<Integer> partitionsToAssign = unassignedPartitionsForTopic
-                        .subList(unassignedPartitionsListStartPointer, unassignedPartitionsListStartPointer + remaining);
-                    unassignedPartitionsListStartPointer += remaining;
-                    newTargetAssignment.computeIfAbsent(memberId, k -> new MemberAssignmentImpl(new HashMap<>()))
-                        .partitions()
-                        .computeIfAbsent(topicId, k -> new HashSet<>())
-                        .addAll(partitionsToAssign);
-                }
-            }
-        });
-
-        return new GroupAssignment(newTargetAssignment);
+        if (groupSpec.subscriptionType() == SubscriptionType.HOMOGENEOUS) {
+            return assignHomogeneousGroup(groupSpec, subscribedTopicDescriber);
+        } else {
+            return assignHeterogeneousGroup(groupSpec, subscribedTopicDescriber);
+        }
     }
 }
