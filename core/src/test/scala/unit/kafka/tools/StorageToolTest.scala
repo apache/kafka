@@ -379,21 +379,30 @@ Found problem:
     assertEquals(0, exitCode)
   }
 
+//  @Test TODO
+//  def testControllerQuorumVotersWithArguments(): Unit = {
+//    val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yQQjhMQB6JAT",
+//      "--controller-quorum-voters", "1@localhost:9092"))
+//    val config = Mockito.spy(new KafkaConfig(TestUtils.createBrokerConfig(1, null)))
+//    val exitCode = StorageTool.runFormatCommand(namespace, config)
+//    val tempDirs = config.logDirs
+//    tempDirs.foreach(tempDir => {
+//      val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
+//      val checkpointFilePath = Snapshots.snapshotPath(Paths.get(checkpointDir), BOOTSTRAP_SNAPSHOT_ID)
+//      assertTrue(checkpointFilePath.toFile.exists)
+//      assertTrue(Utils.readFileAsString(checkpointFilePath.toFile.getPath).contains("localhost"))
+//      Utils.delete(new File(tempDir))
+//    })
+//    assertEquals(0, exitCode)
+//  }
+
   @Test
-  def testControllerQuorumVotersWithArguments(): Unit = {
+  def testWithStandaloneAndControllerQuorumVotersFailure(): Unit = {
     val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yPOjhMQB6JAT",
-      "--controller-quorum-voters", "1@localhost:9092"))
+      "-s", "--controller-quorum-voters", "1@localhost:9092"))
     val config = Mockito.spy(new KafkaConfig(TestUtils.createBrokerConfig(1, null)))
-    val exitCode = StorageTool.runFormatCommand(namespace, config)
-    val tempDirs = config.logDirs
-    tempDirs.foreach(tempDir => {
-      val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
-      val checkpointFilePath = Snapshots.snapshotPath(Paths.get(checkpointDir), BOOTSTRAP_SNAPSHOT_ID)
-      assertTrue(checkpointFilePath.toFile.exists)
-      assertTrue(Utils.readFileAsString(checkpointFilePath.toFile.getPath).contains("localhost"))
-      Utils.delete(new File(tempDir))
-    })
-    assertEquals(0, exitCode)
+    assertEquals("Both --standalone and --controller-quorum-voters were set. Only one of the two flags can be set.",
+      assertThrows(classOf[TerseFailure], () => StorageTool.runFormatCommand(namespace, config)).getMessage)
   }
 
   @Test

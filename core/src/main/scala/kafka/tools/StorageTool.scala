@@ -260,7 +260,7 @@ object StorageTool extends Logging {
       action(storeTrue())
     formatParser.addArgument("--controller-quorum-voters", "-q").
       help("This flag will bootstrap a controller cluster with more than one controller.").
-      action(append())
+      action(store())
 
     parser.parseArgsOrFail(args)
   }
@@ -610,9 +610,12 @@ object StorageTool extends Logging {
           controllerQuorumVoterMap.keySet().forEach(replicaId => {
             if (nodeId.getAsInt == replicaId){
               val listenerNameOption = advertisedListenerEndpoints.
-                find(endpoint =>
-                endpoint.port == controllerQuorumVoterMap.get(replicaId).getPort &&
-                endpoint.host == controllerQuorumVoterMap.get(replicaId).getHostString).
+                find {
+                  endpoint =>
+                    endpoint.port == controllerQuorumVoterMap.get(replicaId).getPort &&
+                      (controllerQuorumVoterMap.get(replicaId).getHostString.split("//").contains(endpoint.host)
+                    || (endpoint.host == null && controllerQuorumVoterMap.get(replicaId).getHostString.contains("localhost")))
+                }.
                 map(_.listenerName)
               listenerNameOption match {
                 case Some(listenerName) =>
