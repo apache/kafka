@@ -192,9 +192,9 @@ public class SaslConfigs {
             + " be inspected for the standard OAuth \"iss\" claim and if this value is set, the broker will match it exactly against what is in the JWT's \"iss\" claim. If there is no"
             + " match, the broker will reject the JWT and authentication will fail.";
 
-    public static final String SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE = "sasl.oauthbearer.header.urlencode.enable";
-    public static final boolean DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE = false;
-    public static final String SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE_DOC = "The (optional) setting to enable the OAuth client to URL-encode the client_id and client_secret in the authorization header"
+    public static final String SASL_OAUTHBEARER_HEADER_URLENCODE = "sasl.oauthbearer.header.urlencode";
+    public static final boolean DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE = false;
+    public static final String SASL_OAUTHBEARER_HEADER_URLENCODE_DOC = "The (optional) setting to enable the OAuth client to URL-encode the client_id and client_secret in the authorization header"
             + " in accordance with RFC6749, see https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1 for more detail. The default value is set to 'false' for backward compatibility";
     public static void addClientSaslSupport(ConfigDef config) {
         config.define(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SaslConfigs.SASL_KERBEROS_SERVICE_NAME_DOC)
@@ -225,6 +225,6 @@ public class SaslConfigs {
                 .define(SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, ConfigDef.Type.INT, DEFAULT_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, ConfigDef.Type.LIST, null, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC)
-                .define(SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE, ConfigDef.Type.BOOLEAN, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE_DOC);
+                .define(SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE, ConfigDef.Type.BOOLEAN, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_HEADER_URLENCODE_DOC);
     }
 }

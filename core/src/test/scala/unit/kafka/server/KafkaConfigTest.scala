@@ -1026,7 +1026,6 @@ class KafkaConfigTest {
         case BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG => // ignore string
 
         //Sasl Configs
-<<<<<<< HEAD
         case KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG => // ignore
         case BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG => // ignore
         case BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG =>
