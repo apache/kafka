@@ -97,7 +97,7 @@ public class CoordinatorResult<T, U> {
      *
      * @param records       A non-null list of records.
      * @param appendFuture  The future to complete once the records are committed.
-     * @param replayRecords The replayRecords.
+     * @param replayRecords The records to replay.
      */
     public CoordinatorResult(
         List<U> records,
@@ -113,7 +113,7 @@ public class CoordinatorResult<T, U> {
      * @param records       A non-null list of records.
      * @param response      A response.
      * @param appendFuture  The future to complete once the records are committed.
-     * @param replayRecords The replayRecords.
+     * @param replayRecords The records to replay.
      */
     public CoordinatorResult(
         List<U> records,
@@ -130,7 +130,7 @@ public class CoordinatorResult<T, U> {
      * @param records       A non-null list of records.
      * @param response      A response.
      * @param appendFuture  The future to complete once the records are committed.
-     * @param replayRecords The replayRecords.
+     * @param replayRecords The records to replay.
      * @param isAtomic      A boolean indicating whether the result is atomic or not.
      */
     public CoordinatorResult(

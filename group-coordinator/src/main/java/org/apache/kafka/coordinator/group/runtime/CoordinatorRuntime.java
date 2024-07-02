@@ -915,8 +915,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                 // If the current write operation is transactional, the current batch
                 // is written before proceeding with it.
-                boolean isTransactional = producerId != RecordBatch.NO_PRODUCER_ID;
-                if (isTransactional) {
+                if (producerId != RecordBatch.NO_PRODUCER_ID) {
                     isAtomic = true;
                     // If flushing fails, we don't catch the exception in order to let
                     // the caller fail the current operation.
@@ -949,7 +948,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         recordsToAppend
                     );
 
-                    // Check if the current batch has enough space. We check is before
+                    // Check if the current batch has enough space. We check this before
                     // replaying the records in order to avoid having to revert back
                     // changes if the records do not fit within a batch.
                     if (estimatedSize > currentBatch.builder.maxAllowedBytes()) {
@@ -978,16 +977,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         U recordToReplay = records.get(i);
                         SimpleRecord recordToAppend = recordsToAppend.get(i);
 
-                        if (replay) {
-                            coordinator.replay(
-                                currentBatch.nextOffset,
-                                producerId,
-                                producerEpoch,
-                                recordToReplay
-                            );
-                        }
-
                         if (!isAtomic) {
+                            // Check if the current batch has enough space. We check this before
+                            // replaying the record in order to avoid having to revert back
+                            // changes if the record do not fit within a batch.
                             boolean hasRoomFor = currentBatch.builder.hasRoomFor(
                                 recordToAppend.timestamp(),
                                 recordToAppend.key(),
@@ -996,12 +989,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             );
 
                             if (!hasRoomFor) {
-                                if (currentBatch.builder.numRecords() == 0) {
-                                    throw new RecordTooLargeException("Record " + recordToAppend + " in append to partition " + tp +
-                                        " exceeds exceeds the maximum configured size of " + currentBatch.maxBatchSize + ".");
-                                }
-
-                                // If the current batch is not empty, we flush it and allocate a new batch.
                                 flushCurrentBatch();
                                 maybeAllocateNewBatch(
                                     producerId,
@@ -1010,6 +997,15 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                     currentTimeMs
                                 );
                             }
+                        }
+
+                        if (replay) {
+                            coordinator.replay(
+                                currentBatch.nextOffset,
+                                producerId,
+                                producerEpoch,
+                                recordToReplay
+                            );
                         }
 
                         currentBatch.builder.append(recordToAppend);
