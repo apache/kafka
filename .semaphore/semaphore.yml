@@ -1,0 +1,129 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+version: v1.0
+name: build-test-release
+agent:
+  machine:
+    type: s1-prod-ubuntu20-04-arm64-1
+fail_fast:
+  cancel:
+    when: "true"
+execution_time_limit:
+  hours: 4
+queue:
+  - when: "branch != 'master' and branch !~ '[0-9]+\\.[0-9]+\\.x'"
+    processing: parallel
+global_job_config:
+  env_vars:
+    - name: NANO_VERSION
+      value: "true"
+    - name: PUBLISH
+      value: "true"
+    - name: ENABLE_PUBLISH_ARTIFACTS
+      value: "true"
+    - name: ENABLE_DOWNSTREAM_TRIGGER
+      value: "true"
+    - name: DOWNSTREAM_PROJECTS
+      value: "common"
+  prologue:
+    commands:
+      - echo $SEMAPHORE_WORKFLOW_ID
+      - echo $SEMAPHORE_GIT_REPO_SLUG
+      - checkout
+      - sem-version java 21
+      - sem-version go 1.16.15
+      - git config --global url."git@github.com:".insteadOf "https://github.com/"
+      - export SEMAPHORE_CACHE_DIR=/home/semaphore
+      - source scripts/set_env_vars.sh
+      - source scripts/set_downstream_branch.sh
+blocks:
+  - name: Gradle Build
+    dependencies: []
+    task:
+      jobs:
+        - name: Build, Compile, Validations, Publish
+          commands:
+            - |
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
+                . vault-setup
+              fi
+            - >-
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]] && [ "$NANO_VERSION" = "true" ] && [ "$RELEASE_JOB" = "false" ] && [ "$ENABLE_PUBLISH_ARTIFACTS" = "true" ]; then
+                . ci-tools ci-update-version
+              fi
+            - |
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
+                make compile-validate
+              fi
+            - |
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
+                make check-scala-compatibility
+              fi
+            - |
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]] && [ "$PUBLISH" = "true" ] && [ "$SEMAPHORE_GIT_REF_TYPE" != "pull-request" ] && [ "$ENABLE_PUBLISH_ARTIFACTS" = "true" ]; then \
+                if [[ "$RELEASE_JOB" = "false" ]]; then \
+                  . ci-tools ci-push-tag; \
+                  mavenUrl=$(vault kv get v1/ci/kv/gradle/artifactory_snapshots_settings | grep mavenUrl | cut -d "," -f 2 | cut -d "'" -f 2); \
+                elif [[ "$SEMAPHORE_GIT_BRANCH" == *-alpha* ]]; then \
+                  mavenUrl=$(vault kv get v1/ci/kv/gradle/artifactory_preview_release_settings | grep mavenUrl | cut -d "," -f 2 | cut -d "'" -f 2); \
+                fi; \
+                ./gradlewAll -PmavenUrl=$mavenUrl -PkeepAliveMode=session uploadArchives; \
+              fi
+            - |
+              echo "PUBLISH: $PUBLISH, RELEASE_JOB: $RELEASE_JOB, SEMAPHORE_GIT_REF_TYPE: $SEMAPHORE_GIT_REF_TYPE, ENABLE_DOWNSTREAM_TRIGGER: $ENABLE_DOWNSTREAM_TRIGGER"
+              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]] && [ "$PUBLISH" = "true" ] && [ "$RELEASE_JOB" = "false" ] && [ "$SEMAPHORE_GIT_REF_TYPE" != "pull-request" ] && [ "$ENABLE_DOWNSTREAM_TRIGGER" = "true" ]; then
+                for project in $DOWNSTREAM_PROJECTS; do
+                  sem-trigger -p $project -b $DOWNSTREAM_BRANCH_NAME -f .semaphore/semaphore.yml
+                done
+              fi
+  - name: Tests
+    dependencies: []
+    task:
+      jobs:
+        - name: Unit tests and Integration tests
+          commands:
+            - './gradlew 
+                unitTest integrationTest --no-daemon --stacktrace --continue 
+                -PtestLoggingEvents=started,passed,skipped,failed -PmaxParallelForks=4 
+                -PignoreFailures=true -PmaxTestRetries=1 -PmaxTestRetryFailures=5'
+          execution_time_limit:
+            minutes: 120
+      epilogue:
+        always:
+          commands:
+            - shopt -s globstar && test-results publish --name Test-Suite --trim-output-to 1024 --omit-output-for-passed **/build/test-results/**/TEST-*.xml
+            - |
+              echo "Job creation time: $((SEMAPHORE_JOB_CREATION_TIME * 1000))"
+              echo "Current time: $(date +%s%3N)"
+              echo $(( ($(date +%s%3N) - $SEMAPHORE_JOB_CREATION_TIME * 1000) )) > duration.txt
+              artifact push workflow duration.txt --destination $SEMAPHORE_JOB_INDEX-test-duration-$SEMAPHORE_WORKFLOW_ID || true
+after_pipeline:
+  task:
+    agent:
+      machine:
+        type: s1-prod-ubuntu20-04-arm64-0
+    jobs:
+      - name: Metrics
+        commands:
+          - emit-ci-metrics -p -a test-results
+      - name: Publish Test Results
+        commands:
+          - test-results gen-pipeline-report || true
+      - name: SonarQube
+        commands:
+          - checkout
+          - sem-version java 11
+          - emit-sonarqube-data -a test-results
