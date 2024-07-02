@@ -69,13 +69,13 @@ public abstract class SslSelectorTest extends SelectorTest {
     public void setUp() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
 
-        Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, ConnectionMode.SERVER, trustStoreFile, "server");
         this.server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
         this.server.start();
         this.time = new MockTime();
         sslClientConfigs = createSslClientConfigs(trustStoreFile);
         LogContext logContext = new LogContext();
-        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        this.channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, logContext);
@@ -113,9 +113,9 @@ public abstract class SslSelectorTest extends SelectorTest {
         server.start();
         Time time = new MockTime();
         File trustStoreFile = new File(TestKeyManagerFactory.TestKeyManager.mockTrustStoreFile);
-        Map<String, Object> sslClientConfigs = TestSslUtils.createSslConfig(true, true, Mode.CLIENT, trustStoreFile, "client");
+        Map<String, Object> sslClientConfigs = TestSslUtils.createSslConfig(true, true, ConnectionMode.CLIENT, trustStoreFile, "client");
 
-        ChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        ChannelBuilder channelBuilder = new TestSslChannelBuilder(ConnectionMode.CLIENT);
         channelBuilder.configure(sslClientConfigs);
         Metrics metrics = new Metrics();
         Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
@@ -152,7 +152,7 @@ public abstract class SslSelectorTest extends SelectorTest {
 
         this.selector.close();
 
-        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        this.channelBuilder = new TestSslChannelBuilder(ConnectionMode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
         connect(node, new InetSocketAddress("localhost", server.port));
@@ -194,7 +194,7 @@ public abstract class SslSelectorTest extends SelectorTest {
         String node2 = "2";
         final AtomicInteger node1Polls = new AtomicInteger();
 
-        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        this.channelBuilder = new TestSslChannelBuilder(ConnectionMode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
             @Override
@@ -251,11 +251,11 @@ public abstract class SslSelectorTest extends SelectorTest {
         //the initial channel builder is for clients, we need a server one
         String tlsProtocol = "TLSv1.2";
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> sslServerConfigs = new TestSslUtils.SslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> sslServerConfigs = new TestSslUtils.SslConfigsBuilder(ConnectionMode.SERVER)
                 .tlsProtocol(tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
                 .build();
-        channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false, new LogContext());
+        channelBuilder = new SslChannelBuilder(ConnectionMode.SERVER, null, false, new LogContext());
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
                 new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
@@ -341,8 +341,8 @@ public abstract class SslSelectorTest extends SelectorTest {
 
     private static class TestSslChannelBuilder extends SslChannelBuilder {
 
-        public TestSslChannelBuilder(Mode mode) {
-            super(mode, null, false, new LogContext());
+        public TestSslChannelBuilder(ConnectionMode connectionMode) {
+            super(connectionMode, null, false, new LogContext());
         }
 
         @Override
