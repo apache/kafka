@@ -420,6 +420,44 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         AppInfoParser.registerAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics, time.milliseconds());
     }
 
+    // Visible for testing
+    @SuppressWarnings("ParameterNumber")
+    ShareConsumerImpl(final LogContext logContext,
+                      final String clientId,
+                      final Deserializer<K> keyDeserializer,
+                      final Deserializer<V> valueDeserializer,
+                      final ShareFetchBuffer fetchBuffer,
+                      final ShareFetchCollector<K, V> fetchCollector,
+                      final Time time,
+                      final ApplicationEventHandler applicationEventHandler,
+                      final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                      final CompletableEventReaper backgroundEventReaper,
+                      final Metrics metrics,
+                      final SubscriptionState subscriptions,
+                      final ConsumerMetadata metadata,
+                      final int defaultApiTimeoutMs,
+                      final String groupId) {
+        this.log = logContext.logger(getClass());
+        this.subscriptions = subscriptions;
+        this.clientId = clientId;
+        this.groupId = groupId;
+        this.fetchBuffer = fetchBuffer;
+        this.fetchCollector = fetchCollector;
+        this.time = time;
+        this.backgroundEventQueue = backgroundEventQueue;
+        this.backgroundEventProcessor = new BackgroundEventProcessor();
+        this.backgroundEventReaper = backgroundEventReaper;
+        this.metrics = metrics;
+        this.metadata = metadata;
+        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
+        this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
+        this.currentFetch = ShareFetch.empty();
+        this.applicationEventHandler = applicationEventHandler;
+        this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
+        this.clientTelemetryReporter = Optional.empty();
+        this.completedAcknowledgements = Collections.emptyList();
+    }
+
     // auxiliary interface for testing
     interface ApplicationEventHandlerFactory {
 

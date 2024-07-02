@@ -17,18 +17,26 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareLeaveOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeApplicationEvent;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -66,11 +74,13 @@ import static org.mockito.Mockito.verify;
 @SuppressWarnings("unchecked")
 public class ShareConsumerImplTest {
 
+    private final int defaultApiTimeoutMs = 1000;
+
     private ShareConsumerImpl<String, String> consumer = null;
 
     private final Time time = new MockTime(1);
     private final ShareFetchCollector<String, String> fetchCollector = mock(ShareFetchCollector.class);
-
+    private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
     private final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
     private final CompletableEventReaper backgroundEventReaper = mock(CompletableEventReaper.class);
@@ -116,9 +126,35 @@ public class ShareConsumerImplTest {
         );
     }
 
+    private ShareConsumerImpl<String, String> newConsumer(
+            ShareFetchBuffer fetchBuffer,
+            SubscriptionState subscriptions,
+            String groupId,
+            String clientId
+    ) {
+        return new ShareConsumerImpl<>(
+                new LogContext(),
+                clientId,
+                new StringDeserializer(),
+                new StringDeserializer(),
+                fetchBuffer,
+                fetchCollector,
+                time,
+                applicationEventHandler,
+                backgroundEventQueue,
+                backgroundEventReaper,
+                new Metrics(),
+                subscriptions,
+                metadata,
+                defaultApiTimeoutMs,
+                groupId
+        );
+    }
+
     @Test
     public void testSuccessfulStartupShutdown() {
         consumer = newConsumer();
+        completeShareLeaveOnCloseApplicationEventSuccessfully();
         assertDoesNotThrow(() -> consumer.close());
     }
 
@@ -144,6 +180,7 @@ public class ShareConsumerImplTest {
     @Test
     public void testFailOnClosedConsumer() {
         consumer = newConsumer();
+        completeShareLeaveOnCloseApplicationEventSuccessfully();
         consumer.close();
         final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::subscription);
         assertEquals("This consumer has already been closed.", res.getMessage());
@@ -152,6 +189,7 @@ public class ShareConsumerImplTest {
     @Test
     public void testVerifyApplicationEventOnShutdown() {
         consumer = newConsumer();
+        completeShareLeaveOnCloseApplicationEventSuccessfully();
         doReturn(null).when(applicationEventHandler).addAndGet(any());
         consumer.close();
         verify(applicationEventHandler).addAndGet(any(ShareLeaveOnCloseEvent.class));
@@ -290,6 +328,34 @@ public class ShareConsumerImplTest {
         assertEquals("Failed to construct Kafka share consumer", exception.getMessage());
     }
 
+    @Test
+    public void testEnsurePollEventSentOnConsumerPoll() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        consumer = newConsumer(
+                mock(ShareFetchBuffer.class),
+                subscriptions,
+                "group-id",
+                "client-id");
+        final TopicPartition tp = new TopicPartition("topic", 0);
+        final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), tp);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
+        batch.addRecord(new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
+        final ShareFetch<String, String> fetch = ShareFetch.empty();
+        fetch.add(tip, batch);
+        doAnswer(invocation -> fetch)
+                .when(fetchCollector)
+                .collect(Mockito.any(ShareFetchBuffer.class));
+
+        consumer.subscribe(singletonList("topic1"));
+        consumer.poll(Duration.ofMillis(100));
+        verify(applicationEventHandler).add(any(PollEvent.class));
+        verify(applicationEventHandler).add(any(ShareSubscriptionChangeApplicationEvent.class));
+
+        completeShareLeaveOnCloseApplicationEventSuccessfully();
+        consumer.close();
+        verify(applicationEventHandler).addAndGet(any(ShareLeaveOnCloseEvent.class));
+    }
+
     private Properties requiredConsumerPropertiesAndGroupId(final String groupId) {
         final Properties props = requiredConsumerProperties();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
@@ -387,5 +453,13 @@ public class ShareConsumerImplTest {
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(ShareUnsubscribeApplicationEvent.class));
+    }
+
+    private void completeShareLeaveOnCloseApplicationEventSuccessfully() {
+        doAnswer(invocation -> {
+            ShareLeaveOnCloseEvent event = invocation.getArgument(0);
+            event.future().complete(null);
+            return null;
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(ShareLeaveOnCloseEvent.class));
     }
 }
