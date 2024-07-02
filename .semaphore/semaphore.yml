@@ -58,10 +58,6 @@ blocks:
           commands:
             - |
               if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
-                make init-ci
-              fi
-            - |
-              if [[ "${SEMAPHORE_ORGANIZATION_URL}" != *".semaphoreci.com" ]]; then
                 . vault-setup
               fi
             - >-
