@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.server.config;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.Utils;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -25,7 +27,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
 
-public class ShareGroupConfigs {
+public class ShareGroupConfig {
     /** Share Group Configurations **/
 
     // Internal configuration used by integration and system tests.
@@ -100,4 +102,97 @@ public class ShareGroupConfigs {
             .define(SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC)
             .define(SHARE_GROUP_MAX_GROUPS_CONFIG, SHORT, SHARE_GROUP_MAX_GROUPS_DEFAULT, between(1, 100), MEDIUM, SHARE_GROUP_MAX_GROUPS_DOC)
             .define(SHARE_GROUP_MAX_SIZE_CONFIG, SHORT, SHARE_GROUP_MAX_SIZE_DEFAULT, between(10, 1000), MEDIUM, SHARE_GROUP_MAX_SIZE_DOC);
+
+    private final AbstractConfig config;
+
+    public ShareGroupConfig(AbstractConfig config) {
+        this.config = config;
+    }
+
+    /** Share group configuration **/
+    Boolean isShareGroupEnabled() {
+        return config.getBoolean(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG);
+    }
+
+    public int shareGroupPartitionMaxRecordLocks() {
+        return config.getInt(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+    }
+
+    public int shareGroupDeliveryCountLimit() {
+        return config.getInt(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG);
+    }
+
+    public short shareGroupMaxGroups() {
+        return config.getShort(ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG);
+    }
+
+    public short shareGroupMaxSize() {
+        return config.getShort(ShareGroupConfig.SHARE_GROUP_MAX_SIZE_CONFIG);
+    }
+
+    public int shareGroupSessionTimeoutMs() {
+        return config.getInt(ShareGroupConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG);
+    }
+
+    public int shareGroupMinSessionTimeoutMs() {
+        return config.getInt(ShareGroupConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+    }
+
+    public int shareGroupMaxSessionTimeoutMs() {
+        return config.getInt(ShareGroupConfig.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+    }
+
+    public int shareGroupHeartbeatIntervalMs() {
+        return config.getInt(ShareGroupConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG);
+    }
+
+    public int shareGroupMinHeartbeatIntervalMs() {
+        return config.getInt(ShareGroupConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
+    }
+
+    public int shareGroupMaxHeartbeatIntervalMs() {
+        return config.getInt(ShareGroupConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
+    }
+
+    public int shareGroupRecordLockDurationMs() {
+        return config.getInt(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG);
+    }
+
+    public int shareGroupMaxRecordLockDurationMs() {
+        return config.getInt(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
+    }
+
+    public int shareGroupMinRecordLockDurationMs() {
+        return config.getInt(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG);
+    }
+
+    public void validate() {
+        Utils.require(shareGroupMaxHeartbeatIntervalMs() >= shareGroupMinHeartbeatIntervalMs(),
+                String.format("%s must be greater than or equals to %s",
+                        SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
+        Utils.require(shareGroupHeartbeatIntervalMs() >= shareGroupMinHeartbeatIntervalMs(),
+                String.format("%s must be greater than or equals to %s",
+                        SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
+        Utils.require(shareGroupHeartbeatIntervalMs() <= shareGroupMaxHeartbeatIntervalMs(),
+                String.format("%s must be less than or equals to %s",
+                        SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG));
+
+        Utils.require(shareGroupMaxSessionTimeoutMs() >= shareGroupMinSessionTimeoutMs(),
+                String.format("%s must be greater than or equals to %s",
+                        SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
+        Utils.require(shareGroupSessionTimeoutMs() >= shareGroupMinSessionTimeoutMs(),
+                String.format("%s must be greater than or equals to %s",
+                        SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
+        Utils.require(shareGroupSessionTimeoutMs() <= shareGroupMaxSessionTimeoutMs(),
+                String.format("%s must be less than or equals to %s",
+                        SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
+
+        Utils.require(shareGroupRecordLockDurationMs() >= shareGroupMinRecordLockDurationMs(),
+                String.format("%s must be greater than or equals to %s",
+                        SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG));
+        Utils.require(shareGroupMaxRecordLockDurationMs() >= shareGroupRecordLockDurationMs(),
+                String.format("%s must be greater than or equals to %s",
+                        SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG));
+
+    }
 }
