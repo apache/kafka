@@ -48,6 +48,7 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -69,7 +70,6 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValu
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
-import org.apache.kafka.coordinator.group.metrics.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
@@ -89,6 +89,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
@@ -276,7 +278,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * The coordinator metrics shard.
      */
-    private final CoordinatorMetricsShard metricsShard;
+    private final GroupCoordinatorMetricsShard metricsShard;
 
     /**
      * Constructor.
@@ -295,7 +297,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         CoordinatorTimer<Void, CoordinatorRecord> timer,
         GroupCoordinatorConfig config,
         CoordinatorMetrics coordinatorMetrics,
-        CoordinatorMetricsShard metricsShard
+        GroupCoordinatorMetricsShard metricsShard
     ) {
         this.log = logContext.logger(GroupCoordinatorShard.class);
         this.groupMetadataManager = groupMetadataManager;
@@ -621,10 +623,15 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public CoordinatorResult<Void, CoordinatorRecord> cleanupGroupMetadata() {
         long startMs = time.milliseconds();
         List<CoordinatorRecord> records = new ArrayList<>();
+        AtomicInteger deletedClassicGroupCount = new AtomicInteger(0);
         groupMetadataManager.groupIds().forEach(groupId -> {
             boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
             if (allOffsetsExpired) {
-                groupMetadataManager.maybeDeleteGroup(groupId, records);
+                if (groupMetadataManager.maybeDeleteGroup(groupId, records)) {
+                    if (groupMetadataManager.group(groupId).type() == Group.GroupType.CLASSIC) {
+                        deletedClassicGroupCount.incrementAndGet();
+                    }
+                }
             }
         });
 
@@ -632,7 +639,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             records.size(), time.milliseconds() - startMs);
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();
-        return new CoordinatorResult<>(records, false);
+
+        // If the append operation fails, revert classic group state transitions. Groups were only deleted
+        // if they were in Empty state.
+        CompletableFuture<Void> appendFuture = new CompletableFuture<>();
+        appendFuture.exceptionally(__ -> {
+            IntStream.range(0, deletedClassicGroupCount.get()).forEach(___ ->
+                metricsShard.onClassicGroupStateTransition(null, ClassicGroupState.EMPTY));
+            return null;
+        });
+        return new CoordinatorResult<>(records, null, appendFuture, true, false);
     }
 
     /**

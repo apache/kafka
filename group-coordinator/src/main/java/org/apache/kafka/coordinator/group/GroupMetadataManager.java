@@ -3984,6 +3984,8 @@ public class GroupMetadataManager {
 
                     responseFuture.complete(new JoinGroupResponseData()
                         .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
+
+                    metrics.onClassicGroupStateTransition(EMPTY, null);
                 }
             });
 
@@ -5861,12 +5863,16 @@ public class GroupMetadataManager {
      *
      * @param groupId The group id.
      * @param records The list of records to append the group metadata tombstone records.
+     *
+     * @return True if the group can be deleted, false otherwise.
      */
-    public void maybeDeleteGroup(String groupId, List<CoordinatorRecord> records) {
+    public boolean maybeDeleteGroup(String groupId, List<CoordinatorRecord> records) {
         Group group = groups.get(groupId);
         if (group != null && group.isEmpty()) {
             createGroupTombstoneRecords(groupId, records);
+            return true;
         }
+        return false;
     }
 
     /**
