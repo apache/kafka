@@ -1415,11 +1415,10 @@ public class SharePartitionManagerTest {
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp2), sp2);
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp3), sp3);
-
-        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
-
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
                 .withPartitionCacheMap(partitionCacheMap).build();
+
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
         acknowledgeTopics.put(tp1, Arrays.asList(
                 new ShareAcknowledgementBatch(12, 20, Collections.singletonList((byte) 1)),
                 new ShareAcknowledgementBatch(24, 56, Collections.singletonList((byte) 1))
