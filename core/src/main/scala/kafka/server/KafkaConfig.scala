@@ -1183,10 +1183,10 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     logProps
   }
 
-  def extractGroupConfigMap: java.util.Map[String, Object] = {
-    val groupProps = new java.util.HashMap[String, Object]()
-    groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs)
-    groupProps.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs)
+  def extractGroupConfigMap: java.util.Map[String, Int] = {
+    val groupProps = new java.util.HashMap[String, Int]()
+    groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, groupCoordinatorConfig.consumerGroupSessionTimeoutMs)
+    groupProps.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, groupCoordinatorConfig.consumerGroupHeartbeatIntervalMs)
     groupProps
   }
 

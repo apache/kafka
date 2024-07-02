@@ -68,8 +68,8 @@ public class GroupConfig extends AbstractConfig {
      * Validates the values of the given properties.
      */
     public static void validateValues(Map<?, ?> valueMaps, Properties groupConfigBounds) {
-        int consumerHeartbeatInterval = (int) valueMaps.get(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
-        int consumerSessionTimeout = (int) valueMaps.get(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
+        int consumerHeartbeatInterval = (Integer) valueMaps.get(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
+        int consumerSessionTimeout = (Integer) valueMaps.get(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
         require(consumerHeartbeatInterval >= (int) groupConfigBounds.get(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG),
             CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG + "must be greater than or equals to" +
             GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);

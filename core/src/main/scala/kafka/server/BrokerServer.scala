@@ -584,10 +584,10 @@ class BrokerServer(
       )
       val groupConfigManager = new GroupConfigManager(
         config.extractGroupConfigMap,
-        config.consumerGroupMinSessionTimeoutMs,
-        config.consumerGroupMaxSessionTimeoutMs,
-        config.consumerGroupMinHeartbeatIntervalMs,
-        config.consumerGroupMaxHeartbeatIntervalMs
+        config.groupCoordinatorConfig.consumerGroupMinSessionTimeoutMs,
+        config.groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs,
+        config.groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs,
+        config.groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs
       )
       new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
         .withTime(time)
