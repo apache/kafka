@@ -4031,7 +4031,6 @@ public class CoordinatorRuntimeTest {
         assertFalse(write1.isDone());
 
         // Verify the state.
-        //assertNull(ctx.currentBatch);
         assertEquals(3L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Arrays.asList(0L, 3L), ctx.coordinator.snapshotRegistry().epochsList());
