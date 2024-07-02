@@ -68,7 +68,7 @@ public class FeatureCommandTest {
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV1\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(0)));
+                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(0)));
 
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
@@ -85,7 +85,7 @@ public class FeatureCommandTest {
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV1\tFinalizedVersionLevel: 3.7-IV4\t", outputWithoutEpoch(features.get(0)));
+                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(0)));
 
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
@@ -147,7 +147,7 @@ public class FeatureCommandTest {
         );
         // Change expected message to reflect possible MetadataVersion range 1-N (N increases when adding a new version)
         assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
-                "metadata.version. Local controller 3000 only supports versions 1-22", commandOutput);
+                "metadata.version. Local controller 3000 only supports versions 1-23", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
