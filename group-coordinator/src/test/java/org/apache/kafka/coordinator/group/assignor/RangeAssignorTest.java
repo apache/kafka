@@ -349,7 +349,6 @@ public class RangeAssignorTest {
             )
         );
 
-        // Initial members with instance IDs
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
@@ -370,13 +369,12 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
 
-        // First assignment
         GroupAssignment initialAssignment = assignor.assign(
             groupSpec,
             subscribedTopicMetadata
         );
 
-        // Remove memberA and add it back with a different member ID but same instance ID
+        // Remove static memberA and add it back with a different member Id but same instance Id.
         members.remove(memberA);
         members.put("memberA1", new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
@@ -391,7 +389,6 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
 
-        // Reassignment
         GroupAssignment reassignedAssignment = assignor.assign(
             groupSpec,
             subscribedTopicMetadata
@@ -401,6 +398,11 @@ public class RangeAssignorTest {
         assertEquals(
             initialAssignment.members().get(memberA).partitions(),
             reassignedAssignment.members().get("memberA1").partitions()
+        );
+
+        assertEquals(
+            initialAssignment.members().get(memberB).partitions(),
+            reassignedAssignment.members().get(memberB).partitions()
         );
     }
 
@@ -418,7 +420,7 @@ public class RangeAssignorTest {
             )
         );
 
-        // Initial members with instance IDs
+        // Initialize members with instance Ids.
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
@@ -433,7 +435,7 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        // Member without instance ID
+        // Initialize member without an instance Id.
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
@@ -447,13 +449,12 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
 
-        // First assignment
         GroupAssignment initialAssignment = assignor.assign(
             groupSpec,
             subscribedTopicMetadata
         );
 
-        // Remove memberA and add it back with a different member ID but same instance ID
+        // Remove memberA and add it back with a different member Id but same instance Id.
         members.remove(memberA);
         members.put("memberA1", new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
@@ -468,13 +469,12 @@ public class RangeAssignorTest {
             invertedTargetAssignment(members)
         );
 
-        // Reassignment
         GroupAssignment reassignedAssignment = assignor.assign(
             groupSpec,
             subscribedTopicMetadata
         );
 
-        // Assert that the assignments did not change
+        // Assert that the assignments did not change.
         assertEquals(
             initialAssignment.members().get(memberA).partitions(),
             reassignedAssignment.members().get("memberA1").partitions()
@@ -563,7 +563,7 @@ public class RangeAssignorTest {
             mkTopicAssignment(topic2Uuid)
         ));
 
-        // Consumer C shouldn't get any assignment
+        // Consumer C shouldn't get any assignment.
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
@@ -924,13 +924,13 @@ public class RangeAssignorTest {
             Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(memberId).partitions();
             Map<Uuid, Set<Integer>> expectedAssignmentForMember = expectedAssignment.get(memberId);
 
-            // Compare the content of the maps by entries
+            // Compare the content of the maps by entries.
             assertEquals(expectedAssignmentForMember.size(), computedAssignmentForMember.size());
             for (Map.Entry<Uuid, Set<Integer>> entry : expectedAssignmentForMember.entrySet()) {
                 Set<Integer> expectedSet = entry.getValue();
                 Set<Integer> computedSet = computedAssignmentForMember.get(entry.getKey());
 
-                // Convert both sets to HashSet for comparison
+                // Convert both sets to HashSet for comparison.
                 Set<Integer> normalizedExpectedSet = new HashSet<>(expectedSet);
                 Set<Integer> normalizedComputedSet = new HashSet<>(computedSet);
 

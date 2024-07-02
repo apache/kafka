@@ -38,13 +38,17 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * A range assignor assigns contiguous partition ranges to members of a consumer group such that :
- * 1. Each subscribed member receives at least one partition from that topic.
- * 2. Each member receives the same partition number from every subscribed topic when co-partitioning is possible.
+ * A range assignor assigns contiguous partition ranges to members of a consumer group such that:
+ * <ol>
+ *   <li>Each subscribed member receives at least one partition from that topic.</li>
+ *   <li>Each member receives the same partition number from every subscribed topic when co-partitioning is possible.</li>
+ * </ol>
  *
  * Co-partitioning is possible when the below conditions are satisfied:
- * 1. ALl the members are subscribed to the same set of topics.
- * 2. All the topics have the same number of partitions.
+ * <ol>
+ *   <li>All the members are subscribed to the same set of topics.</li>
+ *   <li>All the topics have the same number of partitions.</li>
+ * </ol>
  *
  * Co-partitioning is useful in performing joins on data streams.
  *
