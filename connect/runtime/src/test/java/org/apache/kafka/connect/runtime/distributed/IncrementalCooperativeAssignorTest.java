@@ -132,18 +132,36 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     @Test
-    public void checkIndividualConnectorBalance() {
+    public void testConnectorWellBalancedOnScaleOut() {
+        // Customize assignor for this test case
+        time = new MockTime();
+        initAssignor();
         connectors.clear();
+
+        // Add first connector
         addNewConnector("connector1", 12);
         performStandardRebalance();
+        assertDelay(0);
+
+        // add second connector
         addNewConnector("connector2", 12);
         performStandardRebalance();
+        assertDelay(0);
+
+        // add second worker
         addNewEmptyWorkers("worker2");
         performStandardRebalance();
         performStandardRebalance();
+        assertDelay(0);
+
+        // add third worker
         addNewEmptyWorkers("worker3");
         performStandardRebalance();
         performStandardRebalance();
+        assertDelay(0);
+
+        // assert the connectors are well balanced
+        // over the workers
         assertEquals(3, memberAssignments.size());
         memberAssignments.forEach((k, v) -> {
             Map<String, List<ConnectorTaskId>> countsByConnector = v.tasks().stream().collect(Collectors.groupingBy(ConnectorTaskId::connector));

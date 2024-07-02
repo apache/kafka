@@ -822,7 +822,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         @Override
         public E next() {
-            for (; k < k + this.keys.size(); ) {
+            while (!this.keys.isEmpty() && k < k + this.keys.size()) { 
                 Iterator<E> iterator = grouped.get(this.keys.get(k % this.keys.size()));
                 k++;
                 if (iterator.hasNext()) {
