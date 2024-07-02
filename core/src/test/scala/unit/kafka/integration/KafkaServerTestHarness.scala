@@ -449,8 +449,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
    */
   private def createOffsetsTopic(zkClient: KafkaZkClient, servers: Seq[KafkaBroker]): Unit = {
     val server = servers.head
-    val numPartitions = server.config.offsetsTopicPartitions
-    val replicationFactor = server.config.offsetsTopicReplicationFactor.toInt
+    val numPartitions = server.config.groupCoordinatorConfig.offsetsTopicPartitions
+    val replicationFactor = server.config.groupCoordinatorConfig.offsetsTopicReplicationFactor.toInt
 
     try {
        TestUtils.createTopic(

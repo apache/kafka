@@ -412,7 +412,7 @@ public class OffsetMetadataManager {
      * @return True if the committed metadata is invalid; False otherwise.
      */
     private boolean isMetadataInvalid(String metadata) {
-        return metadata != null && metadata.length() > config.offsetMetadataMaxSize;
+        return metadata != null && metadata.length() > config.offsetMetadataMaxSize();
     }
 
     /**
@@ -881,7 +881,7 @@ public class OffsetMetadataManager {
             if (!group.isSubscribedToTopic(topic)) {
                 partitions.forEach((partition, offsetAndMetadata) -> {
                     // We don't expire the offset yet if there is a pending transactional offset for the partition.
-                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs) &&
+                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs()) &&
                         !hasPendingTransactionalOffsets(groupId, topic, partition)) {
                         expiredPartitions.add(appendOffsetCommitTombstone(groupId, topic, partition, records).toString());
                         log.debug("[GroupId {}] Expired offset for partition={}-{}", groupId, topic, partition);
