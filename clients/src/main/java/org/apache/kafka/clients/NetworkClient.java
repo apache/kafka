@@ -1213,6 +1213,7 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public List<Node> fetchNodes() {
+            ensureBootstrapped(time.milliseconds());
             return metadata.fetch().nodes();
         }
 
