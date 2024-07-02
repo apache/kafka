@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
+
 import org.slf4j.Logger;
 
 import java.util.Collection;

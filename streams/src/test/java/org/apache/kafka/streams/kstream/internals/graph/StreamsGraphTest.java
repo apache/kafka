@@ -39,6 +39,7 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.ProcessorContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

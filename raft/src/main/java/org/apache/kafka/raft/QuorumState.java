@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.internals.BatchAccumulator;
@@ -84,9 +82,9 @@ public class QuorumState {
     private final Time time;
     private final Logger log;
     private final QuorumStateStore store;
-    private final ListenerName listenerName;
     private final Supplier<VoterSet> latestVoterSet;
     private final Supplier<Short> latestKraftVersion;
+    private final Endpoints localListeners;
     private final Random random;
     private final int electionTimeoutMs;
     private final int fetchTimeoutMs;
@@ -97,9 +95,9 @@ public class QuorumState {
     public QuorumState(
         OptionalInt localId,
         Uuid localDirectoryId,
-        ListenerName listenerName,
         Supplier<VoterSet> latestVoterSet,
         Supplier<Short> latestKraftVersion,
+        Endpoints localListeners,
         int electionTimeoutMs,
         int fetchTimeoutMs,
         QuorumStateStore store,
@@ -109,9 +107,9 @@ public class QuorumState {
     ) {
         this.localId = localId;
         this.localDirectoryId = localDirectoryId;
-        this.listenerName = listenerName;
         this.latestVoterSet = latestVoterSet;
         this.latestKraftVersion = latestKraftVersion;
+        this.localListeners = localListeners;
         this.electionTimeoutMs = electionTimeoutMs;
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.store = store;
@@ -174,11 +172,12 @@ public class QuorumState {
                 latestVoterSet.get().voterIds(),
                 randomElectionTimeoutMs(),
                 Collections.emptyList(),
+                localListeners,
                 logContext
             );
         } else if (
             localId.isPresent() &&
-            election.isVotedCandidate(ReplicaKey.of(localId.getAsInt(), Optional.of(localDirectoryId)))
+            election.isVotedCandidate(ReplicaKey.of(localId.getAsInt(), localDirectoryId))
         ) {
             initialState = new CandidateState(
                 time,
@@ -202,27 +201,13 @@ public class QuorumState {
                 logContext
             );
         } else if (election.hasLeader()) {
-            /* KAFKA-16529 is going to change this so that the leader is not required to be in the set
-             * of voters. In other words, don't throw an IllegalStateException if the leader is not in
-             * the set of voters.
-             */
-            Node leader = latestVoterSet
-                .get()
-                .voterNode(election.leaderId(), listenerName)
-                .orElseThrow(() ->
-                    new IllegalStateException(
-                        String.format(
-                            "Leader %s must be in the voter set %s",
-                            election.leaderId(),
-                            latestVoterSet.get()
-                        )
-                    )
-                );
+            VoterSet voters = latestVoterSet.get();
             initialState = new FollowerState(
                 time,
                 election.epoch(),
-                leader,
-                latestVoterSet.get().voterIds(),
+                election.leaderId(),
+                voters.listeners(election.leaderId()),
+                voters.voterIds(),
                 Optional.empty(),
                 fetchTimeoutMs,
                 logContext
@@ -243,9 +228,7 @@ public class QuorumState {
 
     public boolean isOnlyVoter() {
         return localId.isPresent() &&
-            latestVoterSet.get().isOnlyVoter(
-                ReplicaKey.of(localId.getAsInt(), Optional.of(localDirectoryId))
-            );
+            latestVoterSet.get().isOnlyVoter(ReplicaKey.of(localId.getAsInt(), localDirectoryId));
     }
 
     public int localIdOrSentinel() {
@@ -277,7 +260,6 @@ public class QuorumState {
     }
 
     public OptionalInt leaderId() {
-
         ElectionState election = state.election();
         if (election.hasLeader())
             return OptionalInt.of(state.election().leaderId());
@@ -293,6 +275,10 @@ public class QuorumState {
         return hasLeader() && leaderIdOrSentinel() != localIdOrSentinel();
     }
 
+    public Endpoints leaderEndpoints() {
+        return state.leaderEndpoints();
+    }
+
     public boolean isVoter() {
         if (!localId.isPresent()) {
             return false;
@@ -300,7 +286,7 @@ public class QuorumState {
 
         return latestVoterSet
             .get()
-            .isVoter(ReplicaKey.of(localId.getAsInt(), Optional.of(localDirectoryId)));
+            .isVoter(ReplicaKey.of(localId.getAsInt(), localDirectoryId));
     }
 
     public boolean isVoter(ReplicaKey nodeKey) {
@@ -327,6 +313,7 @@ public class QuorumState {
                 latestVoterSet.get().voterIds(),
                 randomElectionTimeoutMs(),
                 preferredSuccessors,
+                localListeners,
                 logContext
             )
         );
@@ -427,16 +414,16 @@ public class QuorumState {
     /**
      * Become a follower of an elected leader so that we can begin fetching.
      */
-    public void transitionToFollower(int epoch, Node leader) {
+    public void transitionToFollower(int epoch, int leaderId, Endpoints endpoints) {
         int currentEpoch = state.epoch();
-        if (localId.isPresent() && leader.id() == localId.getAsInt()) {
-            throw new IllegalStateException("Cannot transition to Follower with leader " + leader +
+        if (localId.isPresent() && leaderId == localId.getAsInt()) {
+            throw new IllegalStateException("Cannot transition to Follower with leader " + leaderId +
                 " and epoch " + epoch + " since it matches the local broker.id " + localId);
         } else if (epoch < currentEpoch) {
-            throw new IllegalStateException("Cannot transition to Follower with leader " + leader +
+            throw new IllegalStateException("Cannot transition to Follower with leader " + leaderId +
                 " and epoch " + epoch + " since the current epoch " + currentEpoch + " is larger");
         } else if (epoch == currentEpoch && (isFollower() || isLeader())) {
-            throw new IllegalStateException("Cannot transition to Follower with leader " + leader +
+            throw new IllegalStateException("Cannot transition to Follower with leader " + leaderId +
                 " and epoch " + epoch + " from state " + state);
         }
 
@@ -444,7 +431,8 @@ public class QuorumState {
             new FollowerState(
                 time,
                 epoch,
-                leader,
+                leaderId,
+                endpoints,
                 latestVoterSet.get().voterIds(),
                 state.highWatermark(),
                 fetchTimeoutMs,
@@ -518,13 +506,13 @@ public class QuorumState {
 
         LeaderState<T> state = new LeaderState<>(
             time,
-            localIdOrThrow(),
-            localDirectoryId(),
+            ReplicaKey.of(localIdOrThrow(), localDirectoryId),
             epoch(),
             epochStartOffset,
-            latestVoterSet.get().voters(),
+            latestVoterSet.get(),
             candidateState.grantingVoters(),
             accumulator,
+            localListeners,
             fetchTimeoutMs,
             logContext
         );

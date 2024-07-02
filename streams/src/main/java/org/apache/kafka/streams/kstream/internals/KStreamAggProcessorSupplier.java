@@ -24,4 +24,3 @@ public interface KStreamAggProcessorSupplier<KIn, VIn, KAgg, VAgg> extends Proce
 
     void enableSendingOldValues();
 }
-

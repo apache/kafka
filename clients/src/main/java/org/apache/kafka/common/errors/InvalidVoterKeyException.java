@@ -14,7 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
+package org.apache.kafka.common.errors;
 
-public interface IntegrationTest {
+public class InvalidVoterKeyException extends ApiException {
+
+    private static final long serialVersionUID = 1;
+
+    public InvalidVoterKeyException(String s) {
+        super(s);
+    }
+
+    public InvalidVoterKeyException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
 }

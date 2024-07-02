@@ -85,7 +85,7 @@ public class TargetAssignmentBuilderBenchmark {
 
     private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
 
-    private TargetAssignmentBuilder targetAssignmentBuilder;
+    private TargetAssignmentBuilder<ConsumerGroupMember> targetAssignmentBuilder;
 
     private GroupSpecImpl groupSpec;
 
@@ -109,7 +109,7 @@ public class TargetAssignmentBuilderBenchmark {
             .setSubscribedTopicNames(allTopicNames)
             .build();
 
-        targetAssignmentBuilder = new TargetAssignmentBuilder(GROUP_ID, GROUP_EPOCH, partitionAssignor)
+        targetAssignmentBuilder = new TargetAssignmentBuilder<ConsumerGroupMember>(GROUP_ID, GROUP_EPOCH, partitionAssignor)
             .withMembers(members)
             .withSubscriptionMetadata(subscriptionMetadata)
             .withSubscriptionType(HOMOGENEOUS)
