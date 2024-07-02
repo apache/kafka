@@ -250,6 +250,7 @@ if (repo != null) {
     excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
     // And some of the files that we have checked in should also be excluded from this check
     excludes.addAll([
+        '**/debian/**',
         'build.log',
         '**/.git/**',
         '**/build/**',
