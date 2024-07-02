@@ -210,7 +210,7 @@ public enum MetadataVersion {
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
     // Add ELR related supports (KIP-966).
-    IBP_3_9_IV0(21, "3.9", "IV0", false);
+    IBP_3_9_IV0(21, "3.9", "IV0", true);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
