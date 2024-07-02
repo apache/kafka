@@ -2021,8 +2021,13 @@ class KafkaController(val config: KafkaConfig,
     def newVersionRangeOrError(update: UpdateFeaturesRequest.FeatureUpdateItem): Either[Option[Short], ApiError] = {
       try {
         if (!update.feature().equals(MetadataVersion.FEATURE_NAME)) {
+          
+          val expectedFeaturesJava = expectedFeatures.map {
+            case (key, value) => (key, java.lang.Short.valueOf(value))
+          }.toMap.asJava
+
           Features.validateVersion(Features.featureFromName(update.feature()).fromFeatureLevel(
-            update.versionLevel(), true), expectedFeatures.view.mapValues(java.lang.Short.valueOf(_)).toMap.asJava, false)
+            update.versionLevel(), true), expectedFeaturesJava, false)
         }
         newFinalizedVersionOrIncompatibilityError(update)
           .fold(versionRange => Left(Some(versionRange)), error => Right(error))
