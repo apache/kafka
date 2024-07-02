@@ -55,6 +55,12 @@ public class GroupCoordinatorMetricsShardTest {
         GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(snapshotRegistry, tp);
 
         shard.incrementNumOffsets();
+
+        shard.incrementNumClassicGroups(PREPARING_REBALANCE);
+        shard.incrementNumClassicGroups(COMPLETING_REBALANCE);
+        shard.incrementNumClassicGroups(STABLE);
+        shard.incrementNumClassicGroups(DEAD);
+        shard.incrementNumClassicGroups(EMPTY);
         shard.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY);
         shard.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING);
         shard.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING);
@@ -64,6 +70,12 @@ public class GroupCoordinatorMetricsShardTest {
         snapshotRegistry.getOrCreateSnapshot(1000);
         // The value should not be updated until the offset has been committed.
         assertEquals(0, shard.numOffsets());
+        assertEquals(0, shard.numClassicGroups());
+        assertEquals(0, shard.numClassicGroups(PREPARING_REBALANCE));
+        assertEquals(0, shard.numClassicGroups(COMPLETING_REBALANCE));
+        assertEquals(0, shard.numClassicGroups(STABLE));
+        assertEquals(0, shard.numClassicGroups(DEAD));
+        assertEquals(0, shard.numClassicGroups(EMPTY));
         assertEquals(0, shard.numConsumerGroups());
         assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
         assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING));
@@ -73,6 +85,12 @@ public class GroupCoordinatorMetricsShardTest {
 
         shard.commitUpTo(1000);
         assertEquals(1, shard.numOffsets());
+        assertEquals(5, shard.numClassicGroups());
+        assertEquals(1, shard.numClassicGroups(PREPARING_REBALANCE));
+        assertEquals(1, shard.numClassicGroups(COMPLETING_REBALANCE));
+        assertEquals(1, shard.numClassicGroups(STABLE));
+        assertEquals(1, shard.numClassicGroups(DEAD));
+        assertEquals(1, shard.numClassicGroups(EMPTY));
         assertEquals(5, shard.numConsumerGroups());
         assertEquals(1, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
         assertEquals(1, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING));
@@ -81,6 +99,11 @@ public class GroupCoordinatorMetricsShardTest {
         assertEquals(1, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD));
 
         shard.decrementNumOffsets();
+        shard.decrementNumClassicGroups(PREPARING_REBALANCE);
+        shard.decrementNumClassicGroups(COMPLETING_REBALANCE);
+        shard.decrementNumClassicGroups(STABLE);
+        shard.decrementNumClassicGroups(DEAD);
+        shard.decrementNumClassicGroups(EMPTY);
         shard.decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY);
         shard.decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING);
         shard.decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING);
@@ -90,6 +113,12 @@ public class GroupCoordinatorMetricsShardTest {
         snapshotRegistry.getOrCreateSnapshot(2000);
         shard.commitUpTo(2000);
         assertEquals(0, shard.numOffsets());
+        assertEquals(0, shard.numClassicGroups());
+        assertEquals(0, shard.numClassicGroups(PREPARING_REBALANCE));
+        assertEquals(0, shard.numClassicGroups(COMPLETING_REBALANCE));
+        assertEquals(0, shard.numClassicGroups(STABLE));
+        assertEquals(0, shard.numClassicGroups(DEAD));
+        assertEquals(0, shard.numClassicGroups(EMPTY));
         assertEquals(0, shard.numConsumerGroups());
         assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
         assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING));
@@ -102,9 +131,10 @@ public class GroupCoordinatorMetricsShardTest {
     public void testGenericGroupStateTransitionMetrics() {
         MetricsRegistry registry = new MetricsRegistry();
         Metrics metrics = new Metrics();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         TopicPartition tp = new TopicPartition("__consumer_offsets", 0);
         GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
-        GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(new SnapshotRegistry(new LogContext()), tp);
+        GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(snapshotRegistry, tp);
         coordinatorMetrics.activateMetricsShard(shard);
 
         LogContext logContext = new LogContext();
@@ -115,6 +145,8 @@ public class GroupCoordinatorMetricsShardTest {
 
         IntStream.range(0, 4).forEach(__ -> shard.incrementNumClassicGroups(EMPTY));
 
+        snapshotRegistry.getOrCreateSnapshot(1000);
+        shard.commitUpTo(1000);
         assertEquals(4, shard.numClassicGroups());
 
         group0.transitionTo(PREPARING_REBALANCE);
@@ -122,6 +154,8 @@ public class GroupCoordinatorMetricsShardTest {
         group1.transitionTo(PREPARING_REBALANCE);
         group2.transitionTo(DEAD);
 
+        snapshotRegistry.getOrCreateSnapshot(2000);
+        shard.commitUpTo(2000);
         assertEquals(1, shard.numClassicGroups(ClassicGroupState.EMPTY));
         assertEquals(1, shard.numClassicGroups(ClassicGroupState.PREPARING_REBALANCE));
         assertEquals(1, shard.numClassicGroups(ClassicGroupState.COMPLETING_REBALANCE));
@@ -132,6 +166,8 @@ public class GroupCoordinatorMetricsShardTest {
         group1.transitionTo(COMPLETING_REBALANCE);
         group3.transitionTo(DEAD);
 
+        snapshotRegistry.getOrCreateSnapshot(3000);
+        shard.commitUpTo(3000);
         assertEquals(0, shard.numClassicGroups(ClassicGroupState.EMPTY));
         assertEquals(0, shard.numClassicGroups(ClassicGroupState.PREPARING_REBALANCE));
         assertEquals(1, shard.numClassicGroups(ClassicGroupState.COMPLETING_REBALANCE));

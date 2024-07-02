@@ -58,7 +58,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     /**
      * Classic group size gauge counters keyed by the metric name.
      */
-    private final Map<ClassicGroupState, AtomicLong> classicGroupGauges;
+    private final Map<ClassicGroupState, TimelineGaugeCounter> classicGroupGauges;
 
     /**
      * Consumer group size gauge counters keyed by the metric name.
@@ -76,11 +76,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     private final TimelineGaugeCounter numOffsetsTimelineGaugeCounter;
 
     /**
-     * The number of classic groups metric counter.
-     */
-    private final TimelineGaugeCounter numClassicGroupsTimelineCounter;
-
-    /**
      * The topic partition.
      */
     private final TopicPartition topicPartition;
@@ -92,14 +87,18 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     ) {
         Objects.requireNonNull(snapshotRegistry);
         numOffsetsTimelineGaugeCounter = new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0));
-        numClassicGroupsTimelineCounter = new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0));
 
         this.classicGroupGauges = Utils.mkMap(
-            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, new AtomicLong(0)),
-            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, new AtomicLong(0)),
-            Utils.mkEntry(ClassicGroupState.STABLE, new AtomicLong(0)),
-            Utils.mkEntry(ClassicGroupState.DEAD, new AtomicLong(0)),
-            Utils.mkEntry(ClassicGroupState.EMPTY, new AtomicLong(0))
+            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE,
+                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
+            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE,
+                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
+            Utils.mkEntry(ClassicGroupState.STABLE,
+                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
+            Utils.mkEntry(ClassicGroupState.DEAD,
+                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
+            Utils.mkEntry(ClassicGroupState.EMPTY,
+                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0)))
         );
 
         this.consumerGroupGauges = Utils.mkMap(
@@ -119,19 +118,26 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
         this.topicPartition = Objects.requireNonNull(topicPartition);
     }
 
-    public void incrementNumClassicGroups(ClassicGroupState state) {
-        AtomicLong counter = classicGroupGauges.get(state);
-        if (counter != null) {
-            counter.incrementAndGet();
-        }
-    }
-
     /**
      * Increment the number of offsets.
      */
     public void incrementNumOffsets() {
         synchronized (numOffsetsTimelineGaugeCounter.timelineLong) {
             numOffsetsTimelineGaugeCounter.timelineLong.increment();
+        }
+    }
+
+    /**
+     * Increment the number of classic groups.
+     *
+     * @param state the consumer group state.
+     */
+    public void incrementNumClassicGroups(ClassicGroupState state) {
+        TimelineGaugeCounter gaugeCounter = classicGroupGauges.get(state);
+        if (gaugeCounter != null) {
+            synchronized (gaugeCounter.timelineLong) {
+                gaugeCounter.timelineLong.increment();
+            }
         }
     }
 
@@ -164,11 +170,12 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      * @param state the classic group state.
      */
     public void decrementNumClassicGroups(ClassicGroupState state) {
-        AtomicLong counter = classicGroupGauges.get(state);
-        if (counter != null) {
-            counter.decrementAndGet();
-        }
-    }
+        TimelineGaugeCounter gaugeCounter = classicGroupGauges.get(state);
+        if (gaugeCounter != null) {
+            synchronized (gaugeCounter.timelineLong) {
+                gaugeCounter.timelineLong.decrement();
+            }
+        }}
 
     /**
      * Decrement the number of consumer groups.
@@ -199,9 +206,9 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      * @return   The number of classic groups in `state`.
      */
     public long numClassicGroups(ClassicGroupState state) {
-        AtomicLong counter = classicGroupGauges.get(state);
-        if (counter != null) {
-            return counter.get();
+        TimelineGaugeCounter gaugeCounter = classicGroupGauges.get(state);
+        if (gaugeCounter != null) {
+            return gaugeCounter.atomicLong.get();
         }
         return 0L;
     }
@@ -211,7 +218,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      */
     public long numClassicGroups() {
         return classicGroupGauges.values().stream()
-                                 .mapToLong(AtomicLong::get).sum();
+            .mapToLong(timelineGaugeCounter -> timelineGaugeCounter.atomicLong.get()).sum();
     }
 
     /**
@@ -268,10 +275,13 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
             gaugeCounter.atomicLong.set(value);
         });
 
-        synchronized (numClassicGroupsTimelineCounter.timelineLong) {
-            long value = numClassicGroupsTimelineCounter.timelineLong.get(offset);
-            numClassicGroupsTimelineCounter.atomicLong.set(value);
-        }
+        this.classicGroupGauges.forEach((__, gaugeCounter) -> {
+            long value;
+            synchronized (gaugeCounter.timelineLong) {
+                value = gaugeCounter.timelineLong.get(offset);
+            }
+            gaugeCounter.atomicLong.set(value);
+        });
 
         synchronized (numOffsetsTimelineGaugeCounter.timelineLong) {
             long value = numOffsetsTimelineGaugeCounter.timelineLong.get(offset);
