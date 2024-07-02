@@ -1023,7 +1023,8 @@ public class SharePartition {
      * @return True if the start offset has moved and within the request first and last offset, false otherwise.
      */
     private boolean checkForStartOffsetWithinBatch(long batchFirstOffset, long batchLastOffset) {
-        return batchFirstOffset < startOffset && batchLastOffset >= startOffset;
+        long localStartOffset = startOffset();
+        return batchFirstOffset < localStartOffset && batchLastOffset >= localStartOffset;
     }
 
     private Map<Long, RecordState> fetchRecordStateMapForAcknowledgementBatch(
