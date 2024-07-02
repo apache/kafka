@@ -19,6 +19,7 @@ package org.apache.kafka.common.compress;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

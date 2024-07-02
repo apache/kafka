@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * This is a simple container class used during the assignment process to distinguish

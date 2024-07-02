@@ -19,6 +19,7 @@ package kafka.test.annotation;
 
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterGenerator;
+
 import org.junit.jupiter.api.TestTemplate;
 
 import java.lang.annotation.Documented;

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.requests.JoinGroupRequest;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;

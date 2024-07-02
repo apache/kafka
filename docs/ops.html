@@ -351,16 +351,17 @@ Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
   Topic: foo	Partition: 0	Leader: 5	Replicas: 5,6,7	Isr: 5,6,7</code></pre>
 
   <h4 class="anchor-heading"><a id="rep-throttle" class="anchor-link"></a><a href="#rep-throttle">Limiting Bandwidth Usage during Data Migration</a></h4>
-  Kafka lets you apply a throttle to replication traffic, setting an upper bound on the bandwidth used to move replicas from machine to machine. This is useful when rebalancing a cluster, bootstrapping a new broker or adding or removing brokers, as it limits the impact these data-intensive operations will have on users.
+  Kafka lets you apply a throttle to replication traffic, setting an upper bound on the bandwidth used to move replicas from machine to machine and from disk to disk. This is useful when rebalancing a cluster, adding or removing brokers or adding or removing disks, as it limits the impact these data-intensive operations will have on users.
   <p></p>
   There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kafka-configs.sh can also be used to view and alter the throttle values directly.
   <p></p>
-  So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s.
-  <pre class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --execute --reassignment-json-file bigger-cluster.json --throttle 50000000</pre>
+  So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s between brokers, and at no more than 100MB/s between disks on a broker.
+  <pre class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --execute --reassignment-json-file bigger-cluster.json --throttle 50000000 --replica-alter-log-dirs-throttle 100000000</pre>
   When you execute this script you will see the throttle engage:
-  <pre><code class="language-bash">The inter-broker throttle limit was set to 50000000 B/s
+  <pre><code class="language-text">The inter-broker throttle limit was set to 50000000 B/s
+The replica-alter-dir throttle limit was set to 100000000 B/s
 Successfully started partition reassignment for foo1-0</code></pre>
-  <p>Should you wish to alter the throttle, during a rebalance, say to increase the throughput so it completes quicker, you can do this by re-running the execute command with the --additional option passing the same reassignment-json-file:</p>
+  <p>Should you wish to alter the throttle, during a rebalance, say to increase the inter-broker throughput so it completes quicker, you can do this by re-running the execute command with the --additional option passing the same reassignment-json-file:</p>
   <pre class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --additional --execute --reassignment-json-file bigger-cluster.json --throttle 700000000
 The inter-broker throttle limit was set to 700000000 B/s</pre>
 
@@ -378,12 +379,13 @@ Reassignment of partition [my-topic,0] is completed
 Clearing broker-level throttles on brokers 1,2,3
 Clearing topic-level throttles on topic my-topic</code></pre>
 
-  <p>The administrator can also validate the assigned configs using the kafka-configs.sh. There are two pairs of throttle
-      configuration used to manage the throttling process. First pair refers to the throttle value itself. This is configured, at a broker
+  <p>The administrator can also validate the assigned configs using the kafka-configs.sh. There are two sets of throttle
+      configuration used to manage the throttling process. First set refers to the throttle value itself. This is configured, at a broker
       level, using the dynamic properties: </p>
 
   <pre><code class="language-text">leader.replication.throttled.rate
-follower.replication.throttled.rate</code></pre>
+follower.replication.throttled.rate
+replica.alter.log.dirs.io.max.bytes.per.second</code></pre>
 
   <p>Then there is the configuration pair of enumerated sets of throttled replicas: </p>
 
@@ -392,16 +394,16 @@ follower.replication.throttled.replicas</code></pre>
 
   <p>Which are configured per topic. </p>
 
-  <p>All four config values are automatically assigned by kafka-reassign-partitions.sh (discussed below).</p>
+  <p>All five config values are automatically assigned by kafka-reassign-partitions.sh (discussed below).</p>
 
   <p>To view the throttle limit configuration:</p>
 
   <pre><code class="language-bash">$ bin/kafka-configs.sh --describe --bootstrap-server localhost:9092 --entity-type brokers
-Configs for brokers '2' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000
-Configs for brokers '1' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000</code></pre>
+Configs for brokers '2' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000,replica.alter.log.dirs.io.max.bytes.per.second=1000000000
+Configs for brokers '1' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000,replica.alter.log.dirs.io.max.bytes.per.second=1000000000</code></pre>
 
-  <p>This shows the throttle applied to both leader and follower side of the replication protocol. By default both sides
-      are assigned the same throttled throughput value. </p>
+  <p>This shows the throttle applied to both leader and follower side of the replication protocol (by default both sides
+      are assigned the same throttled throughput value), as well as the disk throttle.</p>
 
   <p>To view the list of throttled replicas:</p>
 
@@ -441,8 +443,7 @@ Configs for topic 'my-topic' are leader.replication.throttled.replicas=1:102,0:1
   <pre>kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</pre>
 
   <p>The lag should constantly decrease during replication. If the metric does not decrease the administrator should
-      increase the
-      throttle throughput as described above. </p>
+      increase the throttle throughput as described above. </p>
 
 
   <h4 class="anchor-heading"><a id="quotas" class="anchor-link"></a><a href="#quotas">Setting quotas</a></h4>
@@ -3160,9 +3161,11 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
  </table>
 
  <h5 class="anchor-heading"><a id="kafka_streams_store_monitoring" class="anchor-link"></a><a href="#kafka_streams_store_monitoring">State Store Metrics</a></h5>
-All of the following metrics have a recording level of <code>debug</code>, except for the record-e2e-latency-* metrics which have a recording level <code>trace</code>.
-Note that the <code>store-scope</code> value is specified in <code>StoreSupplier#metricsScope()</code> for user's customized state stores;
-for built-in state stores, currently we have:
+All the following metrics have a recording level of <code>debug</code>, except for the <code>record-e2e-latency-*</code>
+metrics which have a recording level <code>trace</code> and <code>num-open-iterators</code> which has recording level
+<code>info</code>.
+Note that the <code>store-scope</code> value is specified in <code>StoreSupplier#metricsScope()</code> for user's
+customized state stores; for built-in state stores, currently we have:
   <ul>
     <li><code>in-memory-state</code></li>
     <li><code>in-memory-lru-state</code></li>
@@ -3365,6 +3368,26 @@ for built-in state stores, currently we have:
       <tr>
         <td>record-e2e-latency-min</td>
         <td>The minimum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>num-open-iterators</td>
+        <td>The current number of iterators on the store that have been created, but not yet closed.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>iterator-duration-avg</td>
+        <td>The average time spent between creating an iterator and closing it, in nanoseconds.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>iterator-duration-max</td>
+        <td>The maximum time spent between creating an iterator and closing it, in nanoseconds.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>oldest-iterator-open-since-ms</td>
+        <td>The UNIX timestamp the oldest still open iterator was created, in milliseconds.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
     </tbody>

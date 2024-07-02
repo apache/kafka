@@ -16,6 +16,38 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils.RackAwareOptimizationParams;
+import org.apache.kafka.streams.processor.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.assignment.TaskInfo;
+import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -30,43 +62,9 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.assignment.ApplicationState;
-import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
-import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
-import org.apache.kafka.streams.processor.assignment.TaskAssignor;
-import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils.RackAwareOptimizationParams;
-import org.apache.kafka.streams.processor.assignment.TaskInfo;
-import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
-import org.junit.Rule;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.junit.rules.Timeout;
-
 public class TaskAssignmentUtilsTest {
 
-    @Rule
-    public Timeout timeout = new Timeout(30, TimeUnit.SECONDS);
-
+    @Timeout(value = 30)
     @ParameterizedTest
     @ValueSource(strings = {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
@@ -105,6 +103,7 @@ public class TaskAssignmentUtilsTest {
         assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
     }
 
+    @Timeout(value = 30)
     @ParameterizedTest
     @ValueSource(strings = {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
@@ -138,6 +137,7 @@ public class TaskAssignmentUtilsTest {
         assertThat(assignments.get(processId(3)).tasks().keySet(), equalTo(mkSet(TASK_0_1)));
     }
 
+    @Timeout(value = 30)
     @Test
     public void shouldAssignStandbyTasksWithClientTags() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
@@ -176,6 +176,7 @@ public class TaskAssignmentUtilsTest {
         assertThat(assignments.get(processId(4)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
     }
 
+    @Timeout(value = 30)
     @Test
     public void shouldAssignStandbyTasksByClientLoad() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
@@ -211,6 +212,7 @@ public class TaskAssignmentUtilsTest {
         assertThat(assignments.get(processId(5)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
     }
 
+    @Timeout(value = 30)
     @ParameterizedTest
     @ValueSource(strings = {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
@@ -267,6 +269,7 @@ public class TaskAssignmentUtilsTest {
         assertThat(assignments.get(processId(4)).tasks().keySet(), equalTo(mkSet()));
     }
 
+    @Timeout(value = 30)
     @ParameterizedTest
     @ValueSource(strings = {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
@@ -305,6 +308,7 @@ public class TaskAssignmentUtilsTest {
         assertThat(assignments.get(processId(3)).tasks().keySet(), equalTo(mkSet(TASK_0_2)));
     }
 
+    @Timeout(value = 30)
     @Test
     public void shouldCorrectlyReturnIdentityAssignment() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
@@ -334,6 +338,7 @@ public class TaskAssignmentUtilsTest {
         assertThat(assignments.get(processId(5)).tasks().keySet(), equalTo(mkSet()));
     }
 
+    @Timeout(value = 30)
     @Test
     public void testValidateTaskAssignment() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(

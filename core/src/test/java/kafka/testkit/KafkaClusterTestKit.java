@@ -21,9 +21,10 @@ import kafka.raft.KafkaRaftManager;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.FaultHandlerFactory;
-import kafka.server.SharedServer;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaRaftServer;
+import kafka.server.SharedServer;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Node;
@@ -45,10 +46,10 @@ import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
-import scala.Option;
 
 import java.io.File;
 import java.net.InetSocketAddress;
@@ -74,9 +75,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
+import scala.Option;
+
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 
 @SuppressWarnings("deprecation") // Needed for Scala 2.12 compatibility

@@ -17,11 +17,11 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.Objects;
-import java.util.Optional;
-
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.GroupType;
+
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * A listing of a consumer group in the cluster.

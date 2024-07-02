@@ -81,11 +81,11 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(
                 new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,
-                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                time.milliseconds(), segSize, Collections.singletonMap(0, 0L), 0);
         RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(
                 new RemoteLogSegmentId(followerTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,
-                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                time.milliseconds(), segSize, Collections.singletonMap(0, 0L), 0);
 
         try (TopicBasedRemoteLogMetadataManager topicBasedRemoteLogMetadataManager = createTopicBasedRemoteLogMetadataManager()) {
             // Register these partitions to RemoteLogMetadataManager.
@@ -115,7 +115,7 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
             RemoteLogSegmentMetadata leaderSegmentMetadata2 = new RemoteLogSegmentMetadata(
                     new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                     101, 200, -1L, 0,
-                    time.milliseconds(), segSize, Collections.singletonMap(0, 101L));
+                    time.milliseconds(), segSize, Collections.singletonMap(0, 101L), 0);
             topicBasedRemoteLogMetadataManager.addRemoteLogSegmentMetadata(leaderSegmentMetadata2).get();
 
             // Check that both the stored segment and recently added segment are available.

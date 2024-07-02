@@ -26,4 +26,3 @@ public class BytesSerializer implements Serializer<Bytes> {
         return data.get();
     }
 }
-

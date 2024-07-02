@@ -38,24 +38,21 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -66,32 +63,19 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * An integration test to verify the conversion of a dirty-closed EOS
  * task towards a standby task is safe across restarts of the application.
  */
-@RunWith(Parameterized.class)
-@Category(IntegrationTest.class)
+@SuppressWarnings("deprecation")
+@Tag("integration")
+@Timeout(600)
 public class StandbyTaskEOSIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
     private static final int KEY_0 = 0;
     private static final int KEY_1 = 1;
-
-    @SuppressWarnings("deprecation")
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<String[]> data() {
-        return asList(new String[][] {
-            {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_V2}
-        });
-    }
-
-    @Parameterized.Parameter
-    public String eosConfig;
 
     private final AtomicBoolean skipRecord = new AtomicBoolean(false);
 
@@ -106,22 +90,19 @@ public class StandbyTaskEOSIntegrationTest {
 
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
-    public void createTopics() throws Exception {
-        final String safeTestName = safeUniqueTestName(testName);
+    @BeforeEach
+    public void createTopics(final TestInfo testInfo) throws Exception {
+        final String safeTestName = safeUniqueTestName(testInfo);
         appId = "app-" + safeTestName;
         inputTopic = "input-" + safeTestName;
         outputTopic = "output-" + safeTestName;
@@ -131,7 +112,7 @@ public class StandbyTaskEOSIntegrationTest {
         CLUSTER.createTopic(outputTopic, 1, 3);
     }
 
-    @After
+    @AfterEach
     public void cleanUp() {
         if (streamInstanceOne != null) {
             streamInstanceOne.close();
@@ -144,8 +125,9 @@ public class StandbyTaskEOSIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldSurviveWithOneTaskAsStandby() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    public void shouldSurviveWithOneTaskAsStandby(final String eosConfig) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputTopic,
             Collections.singletonList(
@@ -164,8 +146,8 @@ public class StandbyTaskEOSIntegrationTest {
 
         final CountDownLatch instanceLatch = new CountDownLatch(1);
 
-        streamInstanceOne = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-1/", instanceLatch);
-        streamInstanceTwo = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-2/", instanceLatch);
+        streamInstanceOne = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-1/", instanceLatch, eosConfig);
+        streamInstanceTwo = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-2/", instanceLatch, eosConfig);
 
         startApplicationAndWaitUntilRunning(asList(streamInstanceOne, streamInstanceTwo), Duration.ofSeconds(60));
 
@@ -180,12 +162,13 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     private KafkaStreams buildStreamWithDirtyStateDir(final String stateDirPath,
-                                                      final CountDownLatch recordProcessLatch) throws Exception {
+                                                      final CountDownLatch recordProcessLatch,
+                                                      final String eosConfig) throws Exception {
 
         final StreamsBuilder builder = new StreamsBuilder();
         final TaskId taskId = new TaskId(0, 0);
 
-        final Properties props = props(stateDirPath);
+        final Properties props = props(stateDirPath, eosConfig);
 
         final StateDirectory stateDirectory = new StateDirectory(
             new StreamsConfig(props), new MockTime(), true, false);
@@ -206,8 +189,9 @@ public class StandbyTaskEOSIntegrationTest {
         return new KafkaStreams(builder.build(), props);
     }
 
-    @Test
-    public void shouldWipeOutStandbyStateDirectoryIfCheckpointIsMissing() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    public void shouldWipeOutStandbyStateDirectoryIfCheckpointIsMissing(final String eosConfig) throws Exception {
         final long time = System.currentTimeMillis();
         final String base = TestUtils.tempDirectory(appId).getPath();
 
@@ -225,8 +209,8 @@ public class StandbyTaskEOSIntegrationTest {
             10L + time
         );
 
-        streamInstanceOne = buildWithDeduplicationTopology(base + "-1");
-        streamInstanceTwo = buildWithDeduplicationTopology(base + "-2");
+        streamInstanceOne = buildWithDeduplicationTopology(base + "-1", eosConfig);
+        streamInstanceTwo = buildWithDeduplicationTopology(base + "-2", eosConfig);
 
         // start first instance and wait for processing
         startApplicationAndWaitUntilRunning(streamInstanceOne);
@@ -293,7 +277,7 @@ public class StandbyTaskEOSIntegrationTest {
             2
         );
 
-        streamInstanceOneRecovery = buildWithDeduplicationTopology(base + "-1");
+        streamInstanceOneRecovery = buildWithDeduplicationTopology(base + "-1", eosConfig);
 
         // "restart" first client and wait for standby recovery
         // (could actually also be active, but it does not matter as long as we enable "state stores"
@@ -342,7 +326,7 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     @SuppressWarnings("deprecation")
-    private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath) {
+    private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath, final String eosConfig) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.addStateStore(Stores.keyValueStoreBuilder(
@@ -392,11 +376,11 @@ public class StandbyTaskEOSIntegrationTest {
             )
             .to(outputTopic);
 
-        return new KafkaStreams(builder.build(), props(stateDirPath));
+        return new KafkaStreams(builder.build(), props(stateDirPath, eosConfig));
     }
 
 
-    private Properties props(final String stateDirPath) {
+    private Properties props(final String stateDirPath, final String eosConfig) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());

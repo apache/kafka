@@ -3756,6 +3756,89 @@ public class CoordinatorRuntimeTest {
         assertNotEquals(coordinator, ctx.coordinator);
     }
 
+    @Test
+    public void testWriteOpIsNotReleasedWhenStateMachineIsNotCaughtUpAfterLoad() throws ExecutionException, InterruptedException, TimeoutException {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        CoordinatorLoader<String> loader = new CoordinatorLoader<String>() {
+            @Override
+            public CompletableFuture<LoadSummary> load(
+                TopicPartition tp,
+                CoordinatorPlayback<String> coordinator
+            ) {
+                coordinator.replay(
+                    0,
+                    RecordBatch.NO_PRODUCER_ID,
+                    RecordBatch.NO_PRODUCER_EPOCH,
+                    "record#0"
+                );
+
+                coordinator.replay(
+                    0,
+                    RecordBatch.NO_PRODUCER_ID,
+                    RecordBatch.NO_PRODUCER_EPOCH,
+                    "record#1"
+                );
+
+                coordinator.updateLastWrittenOffset(2L);
+                coordinator.updateLastCommittedOffset(1L);
+
+                return CompletableFuture.completedFuture(new LoadSummary(
+                    0L,
+                    0L,
+                    0L,
+                    2,
+                    1
+                ));
+            }
+
+            @Override
+            public void close() {}
+        };
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(loader)
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(10)
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(2L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(1L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Collections.singletonList(2L), ctx.coordinator.snapshotRegistry().epochsList());
+
+        // Schedule a write operation that does not generate any records.
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(Collections.emptyList(), "response1"));
+
+        // The write operation should not be done.
+        assertFalse(write.isDone());
+
+        // Advance the last committed offset.
+        ctx.highWatermarklistener.onHighWatermarkUpdated(TP, 2L);
+
+        // Verify the state.
+        assertEquals(2L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(2L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Collections.singletonList(2L), ctx.coordinator.snapshotRegistry().epochsList());
+
+        // The write operation should be completed.
+        assertEquals("response1", write.get(5, TimeUnit.SECONDS));
+    }
+
     private static <S extends CoordinatorShard<U>, U> ArgumentMatcher<CoordinatorPlayback<U>> coordinatorMatcher(
         CoordinatorRuntime<S, U> runtime,
         TopicPartition tp
