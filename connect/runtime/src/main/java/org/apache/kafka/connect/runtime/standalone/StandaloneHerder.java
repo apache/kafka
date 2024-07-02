@@ -55,12 +55,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -94,6 +92,7 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     // visible for testing
+    @SuppressWarnings("this-escape")
     StandaloneHerder(Worker worker,
                      String workerId,
                      String kafkaClusterId,
@@ -104,7 +103,7 @@ public class StandaloneHerder extends AbstractHerder {
         super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy, time);
         this.configState = ClusterConfigState.EMPTY;
         this.requestExecutorService = Executors.newSingleThreadScheduledExecutor();
-        this.healthCheckThread = new HealthCheckThread();
+        this.healthCheckThread = new HealthCheckThread(this);
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
 
@@ -646,57 +645,6 @@ public class StandaloneHerder extends AbstractHerder {
             return;
         }
         callback.onCompletion(null, tasksConfig);
-    }
-
-    private class HealthCheckThread extends Thread {
-
-        private final Queue<Callback<Void>> callbacks = new LinkedList<>();
-        private volatile boolean running = true;
-
-        @Override
-        public void run() {
-            while (running) {
-                try {
-                    Collection<Callback<Void>> callbacksSnapshot;
-                    synchronized (this) {
-                        while (this.callbacks.isEmpty()) {
-                            wait();
-                        }
-                        callbacksSnapshot = new ArrayList<>(this.callbacks);
-                        this.callbacks.clear();
-                    }
-
-                    for (Callback<Void> callback : callbacksSnapshot) {
-                        // For now, our only criteria for liveness (as opposed to readiness)
-                        // in standalone mode is that the worker isn't deadlocked
-                        synchronized (StandaloneHerder.this) {
-                            try {
-                                callback.onCompletion(null, null);
-                            } catch (Throwable t) {
-                                log.warn("Failed to complete health check callback", t);
-                            }
-                        }
-                    }
-                } catch (Throwable t) {
-                    log.warn("Health check thread encountered unexpected error", t);
-                }
-            }
-        }
-
-        public void check(Callback<Void> callback) {
-            synchronized (this) {
-                this.callbacks.add(callback);
-                notifyAll();
-            }
-        }
-
-        public void shutDown() {
-            synchronized (this) {
-                this.running = false;
-                notifyAll();
-            }
-        }
-
     }
 
 }
