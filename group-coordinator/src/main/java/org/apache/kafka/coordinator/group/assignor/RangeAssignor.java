@@ -89,20 +89,53 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         return RANGE_ASSIGNOR_NAME;
     }
 
+    /**
+     * Metadata for a topic including partition and subscription details.
+     */
     private static class TopicMetadata {
-        public Uuid topicId;
-        public int numPartitions;
+        public final Uuid topicId;
+        public final int numPartitions;
         public int numMembers;
 
-        public int quota = -1;
-        public int extra = -1;
+        public int minQuota = -1;
+        public int extraPartitions = -1;
         public int nextRange = 0;
 
-        void maybeComputeQuota() {
-            if (quota != -1) return;
+        /**
+         * Constructs a new TopicMetadata instance.
+         *
+         * @param topicId           The topic Id.
+         * @param numPartitions     The number of partitions.
+         * @param numMembers        The number of subscribed members.
+         */
+        private TopicMetadata(Uuid topicId, int numPartitions, int numMembers) {
+            this.topicId = topicId;
+            this.numPartitions = numPartitions;
+            this.numMembers = numMembers;
+        }
 
-            quota = numPartitions / numMembers;
-            extra = numPartitions % numMembers;
+        /**
+         * Factory method to create a TopicMetadata instance.
+         *
+         * @param topicId           The topic Id.
+         * @param numPartitions     The number of partitions.
+         * @param numMembers        The number of subscribed members.
+         * @return A new TopicMetadata instance.
+         */
+        public static TopicMetadata create(Uuid topicId, int numPartitions, int numMembers) {
+            return new TopicMetadata(topicId, numPartitions, numMembers);
+        }
+
+        /**
+         * Computes the minimum partition quota per member and the extra partitions, if not already computed.
+         */
+        void maybeComputeQuota() {
+            // The minimum number of partitions each member should receive for a balanced assignment.
+            if (minQuota != -1) return;
+            minQuota = numPartitions / numMembers;
+
+            // Extra partitions to be distributed one to each member.
+            extraPartitions = numPartitions % numMembers;
         }
 
         @Override
@@ -111,8 +144,8 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
                 "topicId=" + topicId +
                 ", numPartitions=" + numPartitions +
                 ", numMembers=" + numMembers +
-                ", quota=" + quota +
-                ", extra=" + extra +
+                ", minQuota=" + minQuota +
+                ", extraPartitions=" + extraPartitions +
                 ", nextRange=" + nextRange +
                 '}';
         }
@@ -134,13 +167,15 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         int numMembers = groupSpec.memberIds().size();
 
         for (Uuid topicId : subscribedTopics) {
-            TopicMetadata m = new TopicMetadata();
-            m.topicId = topicId;
-            m.numPartitions = subscribedTopicDescriber.numPartitions(topicId);
-            if (m.numPartitions == -1) {
+            int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
+            if (numPartitions == -1) {
                 throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
             }
-            m.numMembers = numMembers;
+            TopicMetadata m = TopicMetadata.create(
+                topicId,
+                numPartitions,
+                numMembers
+            );
             topics.add(m);
         }
 
@@ -148,21 +183,9 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
 
         for (String memberId : memberIds) {
             Map<Uuid, Set<Integer>> assignment = new HashMap<>((int) ((subscribedTopics.size() / 0.75f) + 1));
-            for (TopicMetadata metadata : topics) {
-                metadata.maybeComputeQuota();
-
-                if (metadata.nextRange >= metadata.numPartitions) {
-                    assignment.put(metadata.topicId, Collections.emptySet());
-                } else {
-                    int start = metadata.nextRange;
-                    int end = Math.min(start + metadata.quota, metadata.numPartitions);
-                    if (metadata.extra > 0) {
-                        end++;
-                        metadata.extra--;
-                    }
-                    metadata.nextRange = end;
-                    assignment.put(metadata.topicId, new RangeSet(start, end));
-                }
+            for (TopicMetadata topicMetadata : topics) {
+                topicMetadata.maybeComputeQuota();
+                addPartitionsToAssignment(topicMetadata, assignment);
             }
             assignments.put(memberId, new MemberAssignmentImpl(assignment));
         }
@@ -185,16 +208,19 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         for (String memberId : memberIds) {
             MemberSubscription subs = groupSpec.memberSubscription(memberId);
             for (Uuid topicId : subs.subscribedTopicIds()) {
-                TopicMetadata metadata = topics.computeIfAbsent(topicId, __ -> {
-                    TopicMetadata m = new TopicMetadata();
-                    m.topicId = topicId;
-                    m.numPartitions = subscribedTopicDescriber.numPartitions(topicId);
-                    if (m.numPartitions == -1) {
+                TopicMetadata topicMetadata = topics.computeIfAbsent(topicId, __ -> {
+                    int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
+                    if (numPartitions == -1) {
                         throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
                     }
-                    return m;
+
+                    return TopicMetadata.create(
+                        topicId,
+                        numPartitions,
+                        0
+                    );
                 });
-                metadata.numMembers++;
+                topicMetadata.numMembers++;
             }
         }
 
@@ -206,19 +232,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             for (Uuid topicId : subs.subscribedTopicIds()) {
                 TopicMetadata metadata = topics.get(topicId);
                 metadata.maybeComputeQuota();
-
-                if (metadata.nextRange >= metadata.numPartitions) {
-                    assignment.put(metadata.topicId, Collections.emptySet());
-                } else {
-                    int start = metadata.nextRange;
-                    int end = Math.min(start + metadata.quota, metadata.numPartitions);
-                    if (metadata.extra > 0) {
-                        end++;
-                        metadata.extra--;
-                    }
-                    metadata.nextRange = end;
-                    assignment.put(metadata.topicId, new RangeSet(start, end));
-                }
+                addPartitionsToAssignment(metadata, assignment);
             }
             assignments.put(memberId, new MemberAssignmentImpl(assignment));
         }
@@ -259,6 +273,31 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             }
         });
         return sortedMemberIds;
+    }
+
+    /**
+     * Assigns a range of partitions to the specified topic based on the provided metadata.
+     *
+     * @param topicMetadata         Metadata containing the topic details, including the number of partitions,
+     *                              the next range to assign, minQuota, and extra partitions.
+     * @param memberAssignment      Map from topic Id to the set of assigned partition Ids.
+     */
+    private void addPartitionsToAssignment(
+        TopicMetadata topicMetadata,
+        Map<Uuid, Set<Integer>> memberAssignment
+    ) {
+        if (topicMetadata.nextRange >= topicMetadata.numPartitions) {
+            memberAssignment.put(topicMetadata.topicId, Collections.emptySet());
+        } else {
+            int start = topicMetadata.nextRange;
+            int end = Math.min(start + topicMetadata.minQuota, topicMetadata.numPartitions);
+            if (topicMetadata.extraPartitions > 0) {
+                end++;
+                topicMetadata.extraPartitions--;
+            }
+            topicMetadata.nextRange = end;
+            memberAssignment.put(topicMetadata.topicId, new RangeSet(start, end));
+        }
     }
 
     /**
