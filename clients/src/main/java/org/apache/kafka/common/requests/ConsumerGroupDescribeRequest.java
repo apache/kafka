@@ -90,13 +90,14 @@ public class ConsumerGroupDescribeRequest extends AbstractRequest {
 
     public static List<ConsumerGroupDescribeResponseData.DescribedGroup> getErrorDescribedGroupList(
         List<String> groupIds,
-        Errors error
+        Errors error,
+        String errorMessage
     ) {
         return groupIds.stream()
             .map(groupId -> new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId(groupId)
                 .setErrorCode(error.code())
-                .setErrorMessage(error.message())
+                .setErrorMessage(errorMessage)
             ).collect(Collectors.toList());
     }
 }

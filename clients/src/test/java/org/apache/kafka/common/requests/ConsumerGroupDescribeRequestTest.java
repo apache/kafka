@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
-import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.protocol.Errors;
 
 import org.junit.jupiter.api.Test;
@@ -29,21 +28,7 @@ import java.util.List;
 import static org.apache.kafka.common.requests.ConsumerGroupDescribeRequest.getErrorDescribedGroupList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ConsumerGroupRequestTest {
-    private static final int THROTTLE_TIME_MS = 1000;
-
-    @Test
-    void testGetErrorConsumerGroupHeartbeatResponse() {
-        ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
-        ConsumerGroupHeartbeatRequest request = new ConsumerGroupHeartbeatRequest.Builder(data).build();
-        Throwable e = Errors.UNSUPPORTED_VERSION.exception();
-        ConsumerGroupHeartbeatResponse response = request.getErrorResponse(THROTTLE_TIME_MS, e);
-
-        assertEquals(THROTTLE_TIME_MS, response.throttleTimeMs());
-        ApiError apiError = ApiError.fromThrowable(e);
-        assertEquals(apiError.code(), response.data().errorCode());
-        assertEquals(e.getMessage(), response.data().errorMessage());
-    }
+public class ConsumerGroupDescribeRequestTest {
 
     @Test
     void testGetErrorConsumerGroupDescribeResponse() {
@@ -53,9 +38,10 @@ public class ConsumerGroupRequestTest {
         ConsumerGroupDescribeRequest request = new ConsumerGroupDescribeRequest.Builder(data, true)
             .build();
         Throwable e = Errors.GROUP_AUTHORIZATION_FAILED.exception();
-        ConsumerGroupDescribeResponse response = request.getErrorResponse(THROTTLE_TIME_MS, e);
+        int throttleTimeMs = 1000;
+        ConsumerGroupDescribeResponse response = request.getErrorResponse(throttleTimeMs, e);
 
-        assertEquals(THROTTLE_TIME_MS, response.throttleTimeMs());
+        assertEquals(throttleTimeMs, response.throttleTimeMs());
         ApiError apiError = ApiError.fromThrowable(e);
         for (int i = 0; i < groupIds.size(); i++) {
             ConsumerGroupDescribeResponseData.DescribedGroup group = response.data().groups().get(i);
@@ -84,7 +70,8 @@ public class ConsumerGroupRequestTest {
 
         List<ConsumerGroupDescribeResponseData.DescribedGroup> describedGroupList = getErrorDescribedGroupList(
             Arrays.asList("group-id-1", "group-id-2", "group-id-3"),
-            Errors.COORDINATOR_LOAD_IN_PROGRESS
+            Errors.COORDINATOR_LOAD_IN_PROGRESS,
+            Errors.COORDINATOR_LOAD_IN_PROGRESS.message()
         );
 
         assertEquals(expectedDescribedGroupList, describedGroupList);
