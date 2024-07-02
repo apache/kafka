@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
-import org.apache.kafka.connect.util.Stage;
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -46,10 +44,10 @@ public class WorkerStatus {
         return HEALTHY;
     }
 
-    public static WorkerStatus starting(Stage stage) {
+    public static WorkerStatus starting(String statusDetails) {
         String message = "Worker is still starting up.";
-        if (stage != null)
-            message += " " + stage.summarize();
+        if (statusDetails != null)
+            message += " " + statusDetails;
 
         return new WorkerStatus(
                 "starting",
@@ -57,10 +55,10 @@ public class WorkerStatus {
         );
     }
 
-    public static WorkerStatus unhealthy(Stage stage) {
+    public static WorkerStatus unhealthy(String statusDetails) {
         String message = "Worker was unable to handle this request and may be unable to handle other requests.";
-        if (stage != null)
-            message += " " + stage.summarize();
+        if (statusDetails != null)
+            message += " " + statusDetails;
 
         return new WorkerStatus(
                 "unhealthy",

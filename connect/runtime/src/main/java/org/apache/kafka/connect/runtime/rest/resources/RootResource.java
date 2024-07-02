@@ -22,7 +22,6 @@ import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.entities.WorkerStatus;
 import org.apache.kafka.connect.util.FutureCallback;
-import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.StagedTimeoutException;
 
 import java.util.concurrent.ExecutionException;
@@ -81,15 +80,15 @@ public class RootResource {
             statusCode = Response.Status.OK.getStatusCode();
             workerStatus = WorkerStatus.healthy();
         } catch (TimeoutException e) {
-            Stage stage = e instanceof StagedTimeoutException
-                    ? ((StagedTimeoutException) e).stage()
+            String statusDetails = e instanceof StagedTimeoutException
+                    ? ((StagedTimeoutException) e).stage().summarize()
                     : null;
             if (!herder.isReady()) {
                 statusCode = Response.Status.SERVICE_UNAVAILABLE.getStatusCode();
-                workerStatus = WorkerStatus.starting(stage);
+                workerStatus = WorkerStatus.starting(statusDetails);
             } else {
                 statusCode = Response.Status.INTERNAL_SERVER_ERROR.getStatusCode();
-                workerStatus = WorkerStatus.unhealthy(stage);
+                workerStatus = WorkerStatus.unhealthy(statusDetails);
             }
         } catch (ExecutionException e) {
             throw e.getCause();

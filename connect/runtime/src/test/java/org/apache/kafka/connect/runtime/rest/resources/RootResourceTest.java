@@ -116,7 +116,7 @@ public class RootResourceTest {
         Response response = rootResource.healthCheck();
         assertEquals(Response.Status.SERVICE_UNAVAILABLE.getStatusCode(), response.getStatus());
 
-        WorkerStatus expectedStatus = WorkerStatus.starting(stage);
+        WorkerStatus expectedStatus = WorkerStatus.starting(stage.summarize());
         WorkerStatus actualStatus = workerStatus(response);
         assertEquals(expectedStatus, actualStatus);
         assertTrue(
@@ -149,7 +149,7 @@ public class RootResourceTest {
         Response response = rootResource.healthCheck();
         assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
 
-        WorkerStatus expectedStatus = WorkerStatus.unhealthy(stage);
+        WorkerStatus expectedStatus = WorkerStatus.unhealthy(stage.summarize());
         WorkerStatus actualStatus = workerStatus(response);
         assertEquals(expectedStatus, actualStatus);
         assertTrue(
