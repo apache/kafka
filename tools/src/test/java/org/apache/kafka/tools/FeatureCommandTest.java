@@ -68,7 +68,7 @@ public class FeatureCommandTest {
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(1)));
+                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(0)));
     }
 
     // Use the first MetadataVersion that supports KIP-919
@@ -82,7 +82,7 @@ public class FeatureCommandTest {
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(1)));
+                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(0)));
     }
 
     @ClusterTest(types = {Type.ZK}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
