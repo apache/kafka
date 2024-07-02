@@ -45,7 +45,6 @@
               files="(KafkaClusterTestKit).java"/>
     <suppress checks="JavaNCSS"
               files="(RemoteLogManagerTest|SharePartitionTest).java"/>
-              files="RemoteLogManagerTest.java"/>
     <suppress checks="ClassDataAbstractionCoupling" files="SharePartitionManagerTest"/>
 
     <!-- server tests -->
