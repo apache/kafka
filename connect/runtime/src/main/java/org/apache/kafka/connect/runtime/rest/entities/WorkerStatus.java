@@ -25,6 +25,11 @@ import java.util.Objects;
 
 public class WorkerStatus {
 
+    private static final WorkerStatus HEALTHY = new WorkerStatus(
+            "healthy",
+            "Worker has completed startup and is ready to handle requests."
+    );
+
     private final String status;
     private final String message;
 
@@ -38,10 +43,7 @@ public class WorkerStatus {
     }
 
     public static WorkerStatus healthy() {
-        return new WorkerStatus(
-                "healthy",
-                "Worker has completed startup and is ready to handle requests."
-        );
+        return HEALTHY;
     }
 
     public static WorkerStatus starting(Stage stage) {
