@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.HostInfo;
+
 import java.util.Map;
 import java.util.Optional;
 import java.util.SortedSet;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.HostInfo;
 
 /**
  * A read-only metadata class representing the current state of each KafkaStreams client with at least one StreamThread participating in this rebalance

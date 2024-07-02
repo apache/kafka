@@ -17,14 +17,6 @@
 
 package org.apache.kafka.streams.integration;
 
-import java.io.IOException;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Properties;
-import java.util.Set;
-import java.util.Optional;
-import java.util.Arrays;
-
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
@@ -58,38 +50,45 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
 
 import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
-
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 
 @Timeout(600)
 @Tag("integration")
 public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
-    private final static int NUM_BROKERS = 1;
+    private static final int NUM_BROKERS = 1;
 
-    public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
-    private final static MockTime MOCK_TIME = CLUSTER.time;
-    private final static String TABLE_1 = "table1";
-    private final static String TABLE_2 = "table2";
-    private final static String OUTPUT = "output-";
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private static final MockTime MOCK_TIME = CLUSTER.time;
+    private static final String TABLE_1 = "table1";
+    private static final String TABLE_2 = "table2";
+    private static final String OUTPUT = "output-";
     private Properties streamsConfig;
     private Properties streamsConfigTwo;
     private Properties streamsConfigThree;
     private KafkaStreams streams;
     private KafkaStreams streamsTwo;
     private KafkaStreams streamsThree;
-    private final static Properties CONSUMER_CONFIG = new Properties();
-    private final static Properties PRODUCER_CONFIG_1 = new Properties();
-    private final static Properties PRODUCER_CONFIG_2 = new Properties();
+    private static final Properties CONSUMER_CONFIG = new Properties();
+    private static final Properties PRODUCER_CONFIG_1 = new Properties();
+    private static final Properties PRODUCER_CONFIG_2 = new Properties();
 
     static class MultiPartitioner implements StreamPartitioner<String, Void> {
 

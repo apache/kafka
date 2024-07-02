@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.util.Objects;
-import java.util.Optional;
 import org.apache.kafka.common.Uuid;
 
-public final class ReplicaKey {
+import java.util.Objects;
+import java.util.Optional;
+
+public final class ReplicaKey implements Comparable<ReplicaKey> {
+    public static final Uuid NO_DIRECTORY_ID = Uuid.ZERO_UUID;
+
     private final int id;
     private final Optional<Uuid> directoryId;
 
@@ -35,6 +38,18 @@ public final class ReplicaKey {
 
     public Optional<Uuid> directoryId() {
         return directoryId;
+    }
+
+    @Override
+    public int compareTo(ReplicaKey that) {
+        int idComparison = Integer.compare(this.id, that.id);
+        if (idComparison == 0) {
+            return directoryId
+                .orElse(NO_DIRECTORY_ID)
+                .compareTo(that.directoryId.orElse(NO_DIRECTORY_ID));
+        } else {
+            return idComparison;
+        }
     }
 
     @Override
@@ -58,7 +73,10 @@ public final class ReplicaKey {
         return String.format("ReplicaKey(id=%d, directoryId=%s)", id, directoryId);
     }
 
-    public static ReplicaKey of(int id, Optional<Uuid> directoryId) {
-        return new ReplicaKey(id, directoryId);
+    public static ReplicaKey of(int id, Uuid directoryId) {
+        return new ReplicaKey(
+            id,
+            directoryId.equals(NO_DIRECTORY_ID) ? Optional.empty() : Optional.of(directoryId)
+        );
     }
 }

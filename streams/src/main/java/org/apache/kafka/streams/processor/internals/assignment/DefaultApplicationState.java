@@ -16,32 +16,32 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static java.util.Collections.unmodifiableMap;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import org.apache.kafka.streams.processor.assignment.TaskInfo;
-import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.ClientMetadata;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
+import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.ClientMetadata;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+import static java.util.Collections.unmodifiableMap;
 
 public class DefaultApplicationState implements ApplicationState {
 
     private final AssignmentConfigs assignmentConfigs;
     private final Map<TaskId, TaskInfo> tasks;
-    private final Map<UUID, ClientMetadata> clientStates;
+    private final Map<ProcessId, ClientMetadata> clientStates;
 
     private final Map<Boolean, Map<ProcessId, KafkaStreamsState>> cachedKafkaStreamStates;
 
     public DefaultApplicationState(final AssignmentConfigs assignmentConfigs,
                                    final Map<TaskId, TaskInfo> tasks,
-                                   final Map<UUID, ClientMetadata> clientStates) {
+                                   final Map<ProcessId, ClientMetadata> clientStates) {
         this.assignmentConfigs = assignmentConfigs;
         this.tasks = unmodifiableMap(tasks);
         this.clientStates = clientStates;
@@ -55,12 +55,12 @@ public class DefaultApplicationState implements ApplicationState {
         }
 
         final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = new HashMap<>();
-        for (final Map.Entry<UUID, StreamsPartitionAssignor.ClientMetadata> clientEntry : clientStates.entrySet()) {
+        for (final Map.Entry<ProcessId, StreamsPartitionAssignor.ClientMetadata> clientEntry : clientStates.entrySet()) {
             final ClientMetadata metadata = clientEntry.getValue();
             final ClientState clientState = metadata.state();
-            final ProcessId processId = new ProcessId(clientEntry.getKey());
+            final ProcessId processId = clientEntry.getKey();
             final Map<TaskId, Long> taskLagTotals = computeTaskLags ? clientState.taskLagTotals() : null;
-            final KafkaStreamsState kafkaStreamsState = new KafkaStreamsStateImpl(
+            final KafkaStreamsState kafkaStreamsState = new DefaultKafkaStreamsState(
                 processId,
                 clientState.capacity(),
                 clientState.clientTags(),

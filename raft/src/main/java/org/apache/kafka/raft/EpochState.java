@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.raft.internals.ReplicaKey;
+
 import java.io.Closeable;
 import java.util.Optional;
-import org.apache.kafka.raft.internals.ReplicaKey;
 
 public interface EpochState extends Closeable {
 
@@ -47,6 +48,13 @@ public interface EpochState extends Closeable {
      * Get the current (immutable) epoch.
      */
     int epoch();
+
+    /**
+     * Returns the known endpoints for the leader.
+     *
+     * If the leader is not known then {@code Endpoints.empty()} is returned.
+     */
+    Endpoints leaderEndpoints();
 
     /**
      * User-friendly description of the state

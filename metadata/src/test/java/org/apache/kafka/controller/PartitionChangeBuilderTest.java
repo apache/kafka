@@ -29,6 +29,7 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.DefaultDirProvider;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -116,7 +117,7 @@ public class PartitionChangeBuilderTest {
         setPartitionEpoch(200).
         build();
 
-    private final static Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
+    private static final Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
 
     private static MetadataVersion metadataVersionForPartitionChangeRecordVersion(short version) {
         switch (version) {
@@ -125,7 +126,7 @@ public class PartitionChangeBuilderTest {
             case (short) 1:
                 return MetadataVersion.IBP_3_7_IV2;
             case (short) 2:
-                return MetadataVersion.IBP_3_8_IV0;
+                return MetadataVersion.IBP_3_9_IV1;
             default:
                 throw new RuntimeException("Unknown PartitionChangeRecord version " + version);
         }
@@ -163,7 +164,7 @@ public class PartitionChangeBuilderTest {
         setPartitionEpoch(200).
         build();
 
-    private final static Uuid BAR_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
+    private static final Uuid BAR_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
     private static boolean isElrEnabled(short partitionChangeRecordVersion) {
         return partitionChangeRecordVersion >= 2;
@@ -194,7 +195,7 @@ public class PartitionChangeBuilderTest {
         setPartitionEpoch(200).
         build();
 
-    private final static Uuid BAZ_ID = Uuid.fromString("wQzt5gkSTwuQNXZF5gIw7A");
+    private static final Uuid BAZ_ID = Uuid.fromString("wQzt5gkSTwuQNXZF5gIw7A");
 
     private static PartitionChangeBuilder createBazBuilder(short version) {
         return new PartitionChangeBuilder(BAZ,
@@ -237,7 +238,7 @@ public class PartitionChangeBuilderTest {
             setPartitionEpoch(200).
             build();
 
-    private final static Uuid OFFLINE_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
+    private static final Uuid OFFLINE_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
     private static PartitionChangeBuilder createOfflineBuilder(short partitionChangeRecordVersion) {
         MetadataVersion metadataVersion =
@@ -312,7 +313,7 @@ public class PartitionChangeBuilderTest {
      * Test that shrinking the ISR doesn't increase the leader epoch in later MVs.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"3.6-IV0", "3.7-IV4"})
+    @ValueSource(strings = {"3.6-IV0", "3.7-IV2", "3.9-IV1"})
     public void testNoLeaderEpochBumpOnIsrShrink(String metadataVersionString) {
         MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
         testTriggerLeaderEpochBumpIfNeeded(
@@ -341,7 +342,7 @@ public class PartitionChangeBuilderTest {
      * Test that shrinking the ISR does increase the leader epoch in later MVs when ZK migration is on.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"3.6-IV0", "3.7-IV4"})
+    @ValueSource(strings = {"3.6-IV0", "3.7-IV2", "3.9-IV1"})
     public void testLeaderEpochBumpOnIsrShrinkWithZkMigration(String metadataVersionString) {
         MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
         testTriggerLeaderEpochBumpIfNeeded(
@@ -357,7 +358,7 @@ public class PartitionChangeBuilderTest {
      * Test that expanding the ISR doesn't increase the leader epoch.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV4"})
+    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV2", "3.9-IV1"})
     public void testNoLeaderEpochBumpOnIsrExpansion(String metadataVersionString) {
         MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
         testTriggerLeaderEpochBumpIfNeeded(
@@ -371,7 +372,7 @@ public class PartitionChangeBuilderTest {
      * Test that expanding the ISR doesn't increase the leader epoch during ZK migration.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV4"})
+    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV2", "3.9-IV1"})
     public void testNoLeaderEpochBumpOnIsrExpansionDuringMigration(String metadataVersionString) {
         MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
         testTriggerLeaderEpochBumpIfNeeded(
@@ -388,7 +389,7 @@ public class PartitionChangeBuilderTest {
      * always results in a leader epoch increase.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV4"})
+    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV2", "3.9-IV1"})
     public void testLeaderEpochBumpOnNewReplicaSetDisjoint(String metadataVersionString) {
         MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
         testTriggerLeaderEpochBumpIfNeeded(
@@ -402,7 +403,7 @@ public class PartitionChangeBuilderTest {
      * cannot actually change the ISR, triggerLeaderEpochBumpForIsrShrinkIfNeeded does not engage.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV4"})
+    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV2"})
     public void testNoLeaderEpochBumpOnEmptyTargetIsr(String metadataVersionString) {
         MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
         PartitionRegistration partition = new PartitionRegistration.Builder().

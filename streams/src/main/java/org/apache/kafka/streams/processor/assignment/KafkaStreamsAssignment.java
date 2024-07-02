@@ -16,15 +16,17 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
-import static java.util.Collections.unmodifiableMap;
+import org.apache.kafka.streams.processor.TaskId;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.apache.kafka.streams.processor.TaskId;
+
+import static java.util.Collections.unmodifiableMap;
 
 /**
  * A simple container class for the assignor to return the desired placement of active and standby tasks on
@@ -108,6 +110,16 @@ public class KafkaStreamsAssignment {
         return followupRebalanceDeadline;
     }
 
+    @Override
+    public String toString() {
+        return String.format(
+            "KafkaStreamsAssignment{%s, %s, %s}",
+            processId,
+            Arrays.toString(tasks.values().toArray(new AssignedTask[0])),
+            followupRebalanceDeadline
+        );
+    }
+
     public static class AssignedTask {
         private final TaskId id;
         private final Type taskType;
@@ -156,6 +168,11 @@ public class KafkaStreamsAssignment {
                 return false;
             final AssignedTask other = (AssignedTask) obj;
             return this.id.equals(other.id()) && this.taskType == other.taskType;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("AssignedTask{%s, %s}", taskType, id);
         }
     }
 }

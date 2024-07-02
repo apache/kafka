@@ -60,6 +60,7 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
       val response = connectAndReceive[DescribeQuorumResponse](request)
 
       assertEquals(Errors.NONE, Errors.forCode(response.data.errorCode))
+      assertEquals("", response.data.errorMessage)
       assertEquals(1, response.data.topics.size)
 
       val topicData = response.data.topics.get(0)
@@ -69,6 +70,7 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
       val partitionData = topicData.partitions.get(0)
       assertEquals(KafkaRaftServer.MetadataPartition.partition, partitionData.partitionIndex)
       assertEquals(Errors.NONE, Errors.forCode(partitionData.errorCode))
+      assertEquals("", partitionData.errorMessage())
       assertTrue(partitionData.leaderEpoch > 0)
 
       val leaderId = partitionData.leaderId

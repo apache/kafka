@@ -17,13 +17,13 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
-
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Options for {@link Admin#listConsumerGroups()}.

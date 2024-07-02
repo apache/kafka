@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TimedRequestStateTest {
 
-    private final static long DEFAULT_TIMEOUT_MS = 30000;
+    private static final long DEFAULT_TIMEOUT_MS = 30000;
     private final Time time = new MockTime();
 
     @Test

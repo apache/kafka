@@ -20,10 +20,11 @@ import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.junit.ClusterTestExtensions;
 import kafka.utils.Exit;
+
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.extension.ExtendWith;
-import scala.Console;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -35,6 +36,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicReference;
+
+import scala.Console;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

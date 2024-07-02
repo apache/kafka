@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.protocol.ApiMessage;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -46,25 +47,48 @@ public abstract class RaftRequest implements RaftMessage {
         return createdTimeMs;
     }
 
-    public final static class Inbound extends RaftRequest {
+    public static final class Inbound extends RaftRequest {
+        private final short apiVersion;
+        private final ListenerName listenerName;
+
         public final CompletableFuture<RaftResponse.Outbound> completion = new CompletableFuture<>();
 
-        public Inbound(int correlationId, ApiMessage data, long createdTimeMs) {
+        public Inbound(
+            ListenerName listenerName,
+            int correlationId,
+            short apiVersion,
+            ApiMessage data,
+            long createdTimeMs
+        ) {
             super(correlationId, data, createdTimeMs);
+
+            this.listenerName = listenerName;
+            this.apiVersion = apiVersion;
+        }
+
+        public short apiVersion() {
+            return apiVersion;
+        }
+
+        public ListenerName listenerName() {
+            return listenerName;
         }
 
         @Override
         public String toString() {
             return String.format(
-                "InboundRequest(correlationId=%d, data=%s, createdTimeMs=%d)",
+                "InboundRequest(listenerName=%s, correlationId=%d, apiVersion=%d, data=%s, " +
+                "createdTimeMs=%d)",
+                listenerName,
                 correlationId(),
+                apiVersion,
                 data(),
                 createdTimeMs()
             );
         }
     }
 
-    public final static class Outbound extends RaftRequest {
+    public static final class Outbound extends RaftRequest {
         private final Node destination;
         public final CompletableFuture<RaftResponse.Inbound> completion = new CompletableFuture<>();
 

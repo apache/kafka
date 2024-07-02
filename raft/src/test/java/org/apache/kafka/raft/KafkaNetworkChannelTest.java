@@ -49,6 +49,7 @@ import org.apache.kafka.common.requests.VoteResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -320,7 +321,23 @@ public class KafkaNetworkChannelTest {
             case END_QUORUM_EPOCH:
                 return new EndQuorumEpochResponseData().setErrorCode(error.code());
             case VOTE:
-                return VoteResponse.singletonResponse(error, topicPartition, Errors.NONE, 1, 5, false);
+                return new VoteResponseData()
+                    .setErrorCode(error.code())
+                    .setTopics(
+                        Collections.singletonList(
+                            new VoteResponseData.TopicData()
+                                .setTopicName(topicPartition.topic())
+                                .setPartitions(
+                                    Collections.singletonList(
+                                        new VoteResponseData.PartitionData()
+                                            .setErrorCode(Errors.NONE.code())
+                                            .setLeaderId(1)
+                                            .setLeaderEpoch(5)
+                                            .setVoteGranted(false)
+                                    )
+                                )
+                        )
+                    );
             case FETCH:
                 return new FetchResponseData().setErrorCode(error.code());
             case FETCH_SNAPSHOT:

@@ -16,18 +16,20 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
+
 import org.slf4j.Logger;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class CandidateState implements EpochState {
     private final int localId;
@@ -62,7 +64,7 @@ public class CandidateState implements EpochState {
         int electionTimeoutMs,
         LogContext logContext
     ) {
-        if (!voters.isVoter(ReplicaKey.of(localId, Optional.of(localDirectoryId)))) {
+        if (!voters.isVoter(ReplicaKey.of(localId, localDirectoryId))) {
             throw new IllegalArgumentException(
                 String.format(
                     "Local replica (%d, %s) must be in the set of voters %s",
@@ -245,7 +247,7 @@ public class CandidateState implements EpochState {
     public ElectionState election() {
         return ElectionState.withVotedCandidate(
             epoch,
-            ReplicaKey.of(localId, Optional.of(localDirectoryId)),
+            ReplicaKey.of(localId, localDirectoryId),
             voteStates.keySet()
         );
     }
@@ -253,6 +255,11 @@ public class CandidateState implements EpochState {
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public Endpoints leaderEndpoints() {
+        return Endpoints.empty();
     }
 
     @Override

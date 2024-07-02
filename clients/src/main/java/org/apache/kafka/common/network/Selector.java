@@ -32,6 +32,7 @@ import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -230,6 +231,21 @@ public class Selector implements Selectable, AutoCloseable {
 
     public Selector(long connectionMaxIdleMS, int failedAuthenticationDelayMs, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
         this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, Collections.emptyMap(), true, channelBuilder, logContext);
+    }
+
+    /**
+     * Generates a unique connection ID for the given socket.
+     *
+     * @param socket The socket for which the connection ID is to be generated.
+     * @param connectionIndex The index to be used in the connection ID to ensure uniqueness.
+     * @return A string representing the unique connection ID.
+     */
+    public static String generateConnectionId(Socket socket, int connectionIndex) {
+        String localHost = socket.getLocalAddress().getHostAddress();
+        int localPort = socket.getLocalPort();
+        String remoteHost = socket.getInetAddress().getHostAddress();
+        int remotePort = socket.getPort();
+        return localHost + ":" + localPort + "-" + remoteHost + ":" + remotePort + "-" + connectionIndex;
     }
 
     /**

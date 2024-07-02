@@ -16,7 +16,21 @@
  */
 package org.apache.kafka.streams.processor.assignment.assignors;
 
-import static java.util.Collections.unmodifiableMap;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils.RackAwareOptimizationParams;
+import org.apache.kafka.streams.processor.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.assignment.TaskInfo;
+import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
+import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -29,21 +43,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.assignment.ApplicationState;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
-import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
-import org.apache.kafka.streams.processor.assignment.TaskAssignor;
-import org.apache.kafka.streams.processor.assignment.TaskInfo;
-import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static java.util.Collections.unmodifiableMap;
 
 
 public class StickyTaskAssignor implements TaskAssignor {
@@ -94,21 +97,24 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.newAssignments;
 
-        final Set<TaskId> statefulTasks = applicationState.allTasks().values().stream()
-            .filter(TaskInfo::isStateful)
-            .map(TaskInfo::id)
-            .collect(Collectors.toSet());
-        final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignmentsForStatefulTasks = TaskAssignmentUtils.optimizeRackAwareActiveTasks(
-            applicationState, currentAssignments, new TreeSet<>(statefulTasks));
+        final RackAwareOptimizationParams statefulTaskParams = RackAwareOptimizationParams.of(applicationState)
+            .withTrafficCostOverride(
+                applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
+            )
+            .withNonOverlapCostOverride(
+                applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
+            )
+            .forStatefulTasks();
+        TaskAssignmentUtils.optimizeRackAwareActiveTasks(statefulTaskParams, currentAssignments);
 
-        final Set<TaskId> statelessTasks = applicationState.allTasks().values().stream()
-            .filter(task -> !task.isStateful())
-            .map(TaskInfo::id)
-            .collect(Collectors.toSet());
-        final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignmentsForAllTasks = TaskAssignmentUtils.optimizeRackAwareActiveTasks(
-            applicationState, optimizedAssignmentsForStatefulTasks, new TreeSet<>(statelessTasks));
-
-        assignmentState.processOptimizedAssignments(optimizedAssignmentsForAllTasks);
+        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
+            RackAwareOptimizationParams.of(applicationState)
+                .forStatelessTasks()
+                .withTrafficCostOverride(RackAwareTaskAssignor.STATELESS_TRAFFIC_COST)
+                .withNonOverlapCostOverride(RackAwareTaskAssignor.STATELESS_NON_OVERLAP_COST),
+            currentAssignments
+        );
+        assignmentState.processOptimizedAssignments(currentAssignments);
     }
 
     private void optimizeStandby(final ApplicationState applicationState, final AssignmentState assignmentState) {
@@ -120,10 +126,17 @@ public class StickyTaskAssignor implements TaskAssignor {
             return;
         }
 
-        final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.newAssignments;
-        final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignments = TaskAssignmentUtils.optimizeRackAwareStandbyTasks(
-            applicationState, currentAssignments);
-        assignmentState.processOptimizedAssignments(optimizedAssignments);
+        final Map<ProcessId, KafkaStreamsAssignment> assignments = assignmentState.newAssignments;
+
+        final RackAwareOptimizationParams optimizationParams = RackAwareOptimizationParams.of(applicationState)
+            .withTrafficCostOverride(
+                applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
+            )
+            .withNonOverlapCostOverride(
+                applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
+            );
+        TaskAssignmentUtils.optimizeRackAwareStandbyTasks(optimizationParams, assignments);
+        assignmentState.processOptimizedAssignments(assignments);
     }
 
     private static void assignActive(final ApplicationState applicationState,

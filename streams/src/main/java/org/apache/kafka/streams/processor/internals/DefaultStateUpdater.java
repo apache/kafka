@@ -36,6 +36,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.TaskAndAction.Action;
+
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -71,7 +72,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 
 public class DefaultStateUpdater implements StateUpdater {
 
-    private final static String BUG_ERROR_MESSAGE = "This indicates a bug. " +
+    private static final String BUG_ERROR_MESSAGE = "This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the dev-mailing list (https://kafka.apache.org/contact).";
 
     private class StateUpdaterThread extends Thread {

@@ -19,7 +19,6 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogSegmentMetadataTransform;
@@ -30,6 +29,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RemoteLogMetadataTransformTest {
     private static final TopicIdPartition TP0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-    private final Time time = new SystemTime();
+    private final Time time = Time.SYSTEM;
 
     @Test
     public void testRemoteLogSegmentMetadataTransform() {
@@ -68,7 +68,7 @@ public class RemoteLogMetadataTransformTest {
     private RemoteLogSegmentMetadata createRemoteLogSegmentMetadata() {
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 1,
-                time.milliseconds(), 1024, Collections.singletonMap(0, 0L));
+                time.milliseconds(), 1024, Collections.singletonMap(0, 0L), 0);
     }
 
     @Test

@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Stream;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.StoreBuilder;
+
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Stream;
 
 public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 

@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
+
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -66,7 +67,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
  * of Global State Stores. There is only ever 1 instance of this class per Application Instance.
  */
 public class GlobalStateManagerImpl implements GlobalStateManager {
-    private final static long NO_DEADLINE = -1L;
+    private static final long NO_DEADLINE = -1L;
 
     private final Time time;
     private final Logger log;

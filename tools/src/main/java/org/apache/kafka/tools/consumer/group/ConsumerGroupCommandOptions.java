@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import joptsimple.OptionSpec;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,6 +27,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import joptsimple.OptionSpec;
 
 import static org.apache.kafka.tools.ToolsUtils.minus;
 

@@ -22,9 +22,9 @@ import java.util.Map;
 public enum TransactionVersion implements FeatureVersion {
 
     // Version 1 enables flexible transactional state records. (KIP-890)
-    TV_1(1, MetadataVersion.IBP_4_0_IV1, Collections.emptyMap()),
+    TV_1(1, MetadataVersion.IBP_3_9_IV2, Collections.emptyMap()),
     // Version 2 enables epoch bump per transaction and optimizations. (KIP-890)
-    TV_2(2, MetadataVersion.IBP_4_0_IV1, Collections.emptyMap());
+    TV_2(2, MetadataVersion.IBP_3_9_IV2, Collections.emptyMap());
 
     public static final String FEATURE_NAME = "transaction.version";
 

@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -82,6 +83,8 @@ public class Metadata implements Closeable {
     private final ClusterResourceListeners clusterResourceListeners;
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
+    /** Addresses with which the metadata was originally bootstrapped. */
+    private List<InetSocketAddress> bootstrapAddresses;
 
     /**
      * Create a new Metadata instance
@@ -304,6 +307,12 @@ public class Metadata implements Closeable {
         this.needFullUpdate = true;
         this.updateVersion += 1;
         this.metadataSnapshot = MetadataSnapshot.bootstrap(addresses);
+        this.bootstrapAddresses = addresses;
+    }
+
+    public synchronized void rebootstrap() {
+        log.info("Rebootstrapping with {}", this.bootstrapAddresses);
+        this.bootstrap(this.bootstrapAddresses);
     }
 
     /**

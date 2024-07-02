@@ -41,6 +41,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -758,7 +759,7 @@ public class ClassicGroupTest {
             .setMetadata(new byte[0]));
 
         group.addPendingMember(memberId);
-        assertFalse(group.hasMemberId(memberId));
+        assertFalse(group.hasMember(memberId));
         assertTrue(group.isPendingMember(memberId));
 
         ClassicGroupMember member = new ClassicGroupMember(
@@ -773,18 +774,18 @@ public class ClassicGroupTest {
         );
 
         group.add(member);
-        assertTrue(group.hasMemberId(memberId));
+        assertTrue(group.hasMember(memberId));
         assertFalse(group.isPendingMember(memberId));
     }
 
     @Test
     public void testRemovalFromPendingWhenMemberIsRemoved() {
         group.addPendingMember(memberId);
-        assertFalse(group.hasMemberId(memberId));
+        assertFalse(group.hasMember(memberId));
         assertTrue(group.isPendingMember(memberId));
 
         group.remove(memberId);
-        assertFalse(group.hasMemberId(memberId));
+        assertFalse(group.hasMember(memberId));
         assertFalse(group.isPendingMember(memberId));
     }
 
@@ -807,7 +808,7 @@ public class ClassicGroupTest {
         );
 
         group.add(member);
-        assertTrue(group.hasMemberId(memberId));
+        assertTrue(group.hasMember(memberId));
         assertTrue(group.hasStaticMember(groupInstanceId));
 
         // We are not permitted to add the member again if it is already present
