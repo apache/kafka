@@ -2932,6 +2932,8 @@ public class GroupMetadataManager {
 
                     responseFuture.complete(new JoinGroupResponseData()
                         .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
+
+                    metrics.onClassicGroupStateTransition(EMPTY, null);
                 }
             });
 

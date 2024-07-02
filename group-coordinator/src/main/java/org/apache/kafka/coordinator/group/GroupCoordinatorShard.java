@@ -46,6 +46,8 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -78,8 +80,10 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -575,9 +579,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public CoordinatorResult<Void, CoordinatorRecord> cleanupGroupMetadata() {
         long startMs = time.milliseconds();
         List<CoordinatorRecord> records = new ArrayList<>();
+        List<ClassicGroupState> prevStates = new ArrayList<>();
         groupMetadataManager.groupIds().forEach(groupId -> {
             boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
             if (allOffsetsExpired) {
+                Group group = groupMetadataManager.group(groupId);
+                if (group.type() == Group.GroupType.CLASSIC) {
+                    prevStates.add(((ClassicGroup) group).currentState());
+                }
                 groupMetadataManager.maybeDeleteGroup(groupId, records);
             }
         });
@@ -586,7 +595,17 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             records.size(), time.milliseconds() - startMs);
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();
-        return new CoordinatorResult<>(records, false);
+
+        // If the append operation fails, revert 
+        CompletableFuture<Void> appendFuture = new CompletableFuture<>();
+        appendFuture.whenComplete((__, t) -> {
+            if (t != null) {
+                prevStates.forEach(prevState ->
+                    ((GroupCoordinatorMetricsShard) metricsShard).onClassicGroupStateTransition(null, prevState)
+                );
+            }
+        });
+        return new CoordinatorResult<>(records, null, appendFuture, true, false);
     }
 
     /**
