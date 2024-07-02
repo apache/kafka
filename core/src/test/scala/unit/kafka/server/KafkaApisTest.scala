@@ -80,7 +80,7 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
-import org.apache.kafka.server.common.{FinalizedFeatures, GroupVersion, MetadataVersion}
+import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
@@ -7081,14 +7081,6 @@ class KafkaApisTest extends Logging {
   @Test
   def testConsumerGroupHeartbeatRequest(): Unit = {
     metadataCache = mock(classOf[KRaftMetadataCache])
-    when(metadataCache.features()).thenReturn {
-      new FinalizedFeatures(
-        MetadataVersion.latestTesting(),
-        Collections.singletonMap(GroupVersion.FEATURE_NAME, GroupVersion.GV_1.featureLevel()),
-        0,
-        true
-      )
-    }
 
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequestData().setGroupId("group")
 
@@ -7116,14 +7108,6 @@ class KafkaApisTest extends Logging {
   @Test
   def testConsumerGroupHeartbeatRequestFutureFailed(): Unit = {
     metadataCache = mock(classOf[KRaftMetadataCache])
-    when(metadataCache.features()).thenReturn {
-      new FinalizedFeatures(
-        MetadataVersion.latestTesting(),
-        Collections.singletonMap(GroupVersion.FEATURE_NAME, GroupVersion.GV_1.featureLevel()),
-        0,
-        true
-      )
-    }
 
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequestData().setGroupId("group")
 
@@ -7148,14 +7132,6 @@ class KafkaApisTest extends Logging {
   @Test
   def testConsumerGroupHeartbeatRequestAuthorizationFailed(): Unit = {
     metadataCache = mock(classOf[KRaftMetadataCache])
-    when(metadataCache.features()).thenReturn {
-      new FinalizedFeatures(
-        MetadataVersion.latestTesting(),
-        Collections.singletonMap(GroupVersion.FEATURE_NAME, GroupVersion.GV_1.featureLevel()),
-        0,
-        true
-      )
-    }
 
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequestData().setGroupId("group")
 
@@ -7179,14 +7155,6 @@ class KafkaApisTest extends Logging {
   @ValueSource(booleans = Array(true, false))
   def testConsumerGroupDescribe(includeAuthorizedOperations: Boolean): Unit = {
     metadataCache = mock(classOf[KRaftMetadataCache])
-    when(metadataCache.features()).thenReturn {
-      new FinalizedFeatures(
-        MetadataVersion.latestTesting(),
-        Collections.singletonMap(GroupVersion.FEATURE_NAME, GroupVersion.GV_1.featureLevel()),
-        0,
-        true
-      )
-    }
 
     val groupIds = List("group-id-0", "group-id-1", "group-id-2").asJava
     val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
@@ -7253,14 +7221,6 @@ class KafkaApisTest extends Logging {
   @Test
   def testConsumerGroupDescribeAuthorizationFailed(): Unit = {
     metadataCache = mock(classOf[KRaftMetadataCache])
-    when(metadataCache.features()).thenReturn {
-      new FinalizedFeatures(
-        MetadataVersion.latestTesting(),
-        Collections.singletonMap(GroupVersion.FEATURE_NAME, GroupVersion.GV_1.featureLevel()),
-        0,
-        true
-      )
-    }
 
     val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
     consumerGroupDescribeRequestData.groupIds.add("group-id")
@@ -7290,14 +7250,6 @@ class KafkaApisTest extends Logging {
   @Test
   def testConsumerGroupDescribeFutureFailed(): Unit = {
     metadataCache = mock(classOf[KRaftMetadataCache])
-    when(metadataCache.features()).thenReturn {
-      new FinalizedFeatures(
-        MetadataVersion.latestTesting(),
-        Collections.singletonMap(GroupVersion.FEATURE_NAME, GroupVersion.GV_1.featureLevel()),
-        0,
-        true
-      )
-    }
 
     val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
     consumerGroupDescribeRequestData.groupIds.add("group-id")
