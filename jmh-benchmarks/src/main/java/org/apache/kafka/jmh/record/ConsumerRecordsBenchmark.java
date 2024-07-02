@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.record;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.ConsumerRecordsNew;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
@@ -52,6 +53,7 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 public class ConsumerRecordsBenchmark {
     private ConsumerRecords<Integer, String> records;
+    private ConsumerRecordsNew<Integer, String> recordsNew;
 
     @Setup(Level.Trial)
     public void setUp() {
@@ -72,6 +74,7 @@ public class ConsumerRecordsBenchmark {
         }
 
         records = new ConsumerRecords<>(partitionToRecords);
+        recordsNew = new ConsumerRecordsNew<>(partitionToRecords);
     }
 
     @Benchmark
@@ -83,5 +86,10 @@ public class ConsumerRecordsBenchmark {
     @Benchmark
     public void recordsWithFilterIterator(Blackhole blackhole) {
         blackhole.consume(records.records("topic2"));
+    }
+
+    @Benchmark
+    public void records2(Blackhole blackhole) {
+        blackhole.consume(recordsNew.records("topic2"));
     }
 }
