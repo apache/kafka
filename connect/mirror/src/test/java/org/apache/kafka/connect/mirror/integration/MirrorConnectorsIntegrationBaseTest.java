@@ -574,7 +574,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         List<TopicDescription> offsetSyncTopic = primary.kafka().describeTopics("mm2-offset-syncs.backup.internal").values()
                 .stream()
                 .filter(Optional::isPresent)
-                .map(obj -> obj.get())
+                .map(Optional::get)
                 .collect(Collectors.toList());
         assertTrue(offsetSyncTopic.isEmpty());
 

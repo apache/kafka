@@ -253,7 +253,7 @@ public class DedicatedMirrorIntegrationTest {
             List<TopicDescription> offsetSyncTopic = clusterA.describeTopics("mm2-offset-syncs.B.internal").values()
                     .stream()
                     .filter(Optional::isPresent)
-                    .map(obj -> obj.get())
+                    .map(Optional::get)
                     .collect(Collectors.toList());
 
             assertTrue(offsetSyncTopic.isEmpty());
@@ -392,6 +392,7 @@ public class DedicatedMirrorIntegrationTest {
             cluster.produce(topic, Integer.toString(i));
         }
     }
+
     private void awaitMirrorMakerStart(final MirrorMaker mm, final SourceAndTarget sourceAndTarget) throws InterruptedException {
         waitForCondition(() -> {
             try {

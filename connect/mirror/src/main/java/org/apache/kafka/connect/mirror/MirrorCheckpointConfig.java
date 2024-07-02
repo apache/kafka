@@ -19,18 +19,13 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.ConfigUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 public class MirrorCheckpointConfig extends MirrorConnectorConfig {
-    private static final Logger LOG = LoggerFactory.getLogger(MirrorCheckpointConfig.class);
     protected static final String REFRESH_GROUPS = "refresh.groups";
     protected static final String EMIT_CHECKPOINTS = "emit.checkpoints";
     protected static final String SYNC_GROUP_OFFSETS = "sync.group.offsets";
@@ -176,12 +171,12 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
         Map<String, String> invalidConfigs = new HashMap<>();
 
         // No point to validate when connector is disabled.
-        if ("false".equals(Optional.ofNullable(configs.get(ENABLED)).orElse("true"))) {
+        if ("false".equals(configs.getOrDefault(ENABLED, "true"))) {
             return invalidConfigs;
         }
 
-        boolean emitCheckpointDisabled = "false".equals(Optional.ofNullable(configs.get(EMIT_CHECKPOINTS_ENABLED)).orElse("true"));
-        boolean syncGroupOffsetsDisabled = "false".equals(Optional.ofNullable(configs.get(SYNC_GROUP_OFFSETS_ENABLED)).orElse("true"));
+        boolean emitCheckpointDisabled = "false".equals(configs.getOrDefault(EMIT_CHECKPOINTS_ENABLED, "true"));
+        boolean syncGroupOffsetsDisabled = "false".equals(configs.getOrDefault(SYNC_GROUP_OFFSETS_ENABLED, "true"));
 
         if (emitCheckpointDisabled && syncGroupOffsetsDisabled) {
             Arrays.asList(SYNC_GROUP_OFFSETS_ENABLED, EMIT_CHECKPOINTS_ENABLED).forEach(configName -> {
@@ -189,7 +184,7 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                         EMIT_CHECKPOINTS_ENABLED + " set to false");
             });
         }
-        if ("false".equals(Optional.ofNullable(configs.get(EMIT_OFFSET_SYNCS_ENABLED)).orElse("true"))) {
+        if ("false".equals(configs.getOrDefault(EMIT_OFFSET_SYNCS_ENABLED, "true"))) {
             invalidConfigs.put(EMIT_OFFSET_SYNCS_ENABLED, "MirrorCheckpointConnector can't run without offset syncs");
         }
 
