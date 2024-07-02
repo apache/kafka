@@ -21,8 +21,6 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
-import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
@@ -192,21 +190,5 @@ public class Utils {
         return topicPartitionsList.stream().collect(Collectors.toMap(
             ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
             topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
-    }
-
-    /**
-     * Creates a {{@link Assignment}} from a {{@link ConsumerGroupTargetAssignmentMemberValue}}.
-     *
-     * @param record The record.
-     * @return A {{@link Assignment}}.
-     */
-    public static Assignment fromRecord(
-        ConsumerGroupTargetAssignmentMemberValue record
-    ) {
-        return new Assignment(
-            record.topicPartitions().stream().collect(Collectors.toMap(
-                ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId,
-                topicPartitions -> new HashSet<>(topicPartitions.partitions())))
-        );
     }
 }

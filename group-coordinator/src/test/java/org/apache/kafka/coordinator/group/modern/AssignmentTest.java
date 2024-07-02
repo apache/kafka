@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 
 import org.junit.jupiter.api.Test;
@@ -65,7 +64,7 @@ public class AssignmentTest {
         ConsumerGroupTargetAssignmentMemberValue record = new ConsumerGroupTargetAssignmentMemberValue()
             .setTopicPartitions(partitions);
 
-        Assignment assignment = Utils.fromRecord(record);
+        Assignment assignment = Assignment.fromRecord(record);
 
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 1, 2, 3),

@@ -2579,7 +2579,7 @@ public class GroupMetadataManager {
         ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
 
         if (value != null) {
-            consumerGroup.updateTargetAssignment(memberId, Utils.fromRecord(value));
+            consumerGroup.updateTargetAssignment(memberId, Assignment.fromRecord(value));
         } else {
             consumerGroup.removeTargetAssignment(memberId);
         }

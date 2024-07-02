@@ -18,11 +18,14 @@ package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * An immutable assignment for a member.
@@ -65,5 +68,21 @@ public class Assignment implements MemberAssignment {
     @Override
     public String toString() {
         return "Assignment(partitions=" + partitions + ')';
+    }
+
+    /**
+     * Creates a {{@link Assignment}} from a {{@link ConsumerGroupTargetAssignmentMemberValue}}.
+     *
+     * @param record The record.
+     * @return A {{@link Assignment}}.
+     */
+    public static Assignment fromRecord(
+        ConsumerGroupTargetAssignmentMemberValue record
+    ) {
+        return new Assignment(
+            record.topicPartitions().stream().collect(Collectors.toMap(
+                ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId,
+                topicPartitions -> new HashSet<>(topicPartitions.partitions())))
+        );
     }
 }
