@@ -252,8 +252,8 @@ public class MirrorSourceConnector extends SourceConnector {
                         configValues.add(result);
                         return result;
                     });
-            emitOffsetSyncs.addErrorMessage("MirrorSourceConnector can't setup offset-syncs feature while" +
-                    MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED + "set to false");
+            emitOffsetSyncs.addErrorMessage("MirrorSourceConnector can't setup offset-syncs feature while " +
+                    MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED + " set to false");
         }
     }
 
