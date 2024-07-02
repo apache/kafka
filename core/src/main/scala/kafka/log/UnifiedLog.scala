@@ -41,7 +41,7 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, VerificationGuard}
 
 import java.io.{File, IOException}
 import java.nio.file.{Files, Path}
@@ -150,9 +150,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def localLogStartOffset(): Long = _localLogStartOffset
 
   // This is the offset(inclusive) until which segments are copied to the remote storage.
-  @volatile private[kafka] var _highestOffsetInRemoteStorage: Long = -1L
-
-  def highestOffsetInRemoteStorage(): Long = _highestOffsetInRemoteStorage
+  @volatile private var highestOffsetInRemoteStorage: Long = -1L
 
   locally {
     def updateLocalLogStartOffset(offset: Long): Unit = {
@@ -547,8 +545,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def updateHighestOffsetInRemoteStorage(offset: Long): Unit = {
     if (!remoteLogEnabled())
-      warn(s"Unable to update the highest offset in remote storage with offset $offset since remote storage is not enabled. The existing highest offset is ${highestOffsetInRemoteStorage()}.")
-    else if (offset > highestOffsetInRemoteStorage()) _highestOffsetInRemoteStorage = offset
+      warn(s"Unable to update the highest offset in remote storage with offset $offset since remote storage is not enabled. The existing highest offset is $highestOffsetInRemoteStorage.")
+    else if (offset > highestOffsetInRemoteStorage) highestOffsetInRemoteStorage = offset
   }
 
   // Rebuild producer state until lastOffset. This method may be called from the recovery code path, and thus must be
@@ -1274,6 +1272,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
       if (config.messageFormatVersion.isLessThan(IBP_0_10_0_IV0) &&
         targetTimestamp != ListOffsetsRequest.EARLIEST_TIMESTAMP &&
+        targetTimestamp != ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP &&
         targetTimestamp != ListOffsetsRequest.LATEST_TIMESTAMP)
         throw new UnsupportedForMessageFormatException(s"Cannot search offsets based on timestamp because message format version " +
           s"for partition $topicPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
@@ -1294,15 +1293,16 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
         val curLocalLogStartOffset = localLogStartOffset()
 
-        val epochResult: Optional[Integer] =
-          if (leaderEpochCache.isDefined) {
-            val epochOpt = leaderEpochCache.get.epochForOffset(curLocalLogStartOffset)
-            if (epochOpt.isPresent) Optional.of(epochOpt.getAsInt) else Optional.empty()
-          } else {
-            Optional.empty()
-          }
+        val earliestLocalLogEpochEntry = leaderEpochCache.asJava.flatMap(cache => {
+          val epoch = cache.epochForOffset(curLocalLogStartOffset)
+          if (epoch.isPresent) cache.epochEntry(epoch.getAsInt) else Optional.empty[EpochEntry]()
+        })
 
-        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochResult))
+        val epochOpt = if (earliestLocalLogEpochEntry.isPresent && earliestLocalLogEpochEntry.get().startOffset <= curLocalLogStartOffset)
+          Optional.of[Integer](earliestLocalLogEpochEntry.get().epoch)
+        else Optional.empty[Integer]()
+
+        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
         val epoch = leaderEpochCache match {
           case Some(cache) =>
@@ -1311,28 +1311,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           case None => Optional.empty[Integer]()
         }
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epoch))
-      } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
-        if (remoteLogEnabled()) {
-          val curHighestRemoteOffset = highestOffsetInRemoteStorage()
-
-          val epochResult: Optional[Integer] =
-            if (leaderEpochCache.isDefined) {
-              val epochOpt = leaderEpochCache.get.epochForOffset(curHighestRemoteOffset)
-              if (epochOpt.isPresent) {
-                Optional.of(epochOpt.getAsInt)
-              } else if (curHighestRemoteOffset == -1) {
-                Optional.of(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-              } else {
-                Optional.empty()
-              }
-            } else {
-              Optional.empty()
-            }
-
-          Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curHighestRemoteOffset, epochResult))
-        } else {
-          Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1)))
-        }
       } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
         // constant time access while being safe to use with concurrent collections unlike `toArray`.
@@ -1478,7 +1456,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       //    1. they are uploaded to the remote storage
       //    2. log-start-offset was incremented higher than the largest offset in the candidate segment
       if (remoteLogEnabled()) {
-        (upperBoundOffset > 0 && upperBoundOffset - 1 <= highestOffsetInRemoteStorage()) ||
+        (upperBoundOffset > 0 && upperBoundOffset - 1 <= highestOffsetInRemoteStorage) ||
           allowDeletionDueToLogStartOffsetIncremented
       } else {
         true
@@ -1616,13 +1594,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * The log size in bytes for all segments that are only in local log but not yet in remote log.
    */
   def onlyLocalLogSegmentsSize: Long =
-    UnifiedLog.sizeInBytes(logSegments.stream.filter(_.baseOffset >= highestOffsetInRemoteStorage()).collect(Collectors.toList[LogSegment]))
+    UnifiedLog.sizeInBytes(logSegments.stream.filter(_.baseOffset >= highestOffsetInRemoteStorage).collect(Collectors.toList[LogSegment]))
 
   /**
    * The number of segments that are only in local log but not yet in remote log.
    */
   def onlyLocalLogSegmentsCount: Long =
-    logSegments.stream().filter(_.baseOffset >= highestOffsetInRemoteStorage()).count()
+    logSegments.stream().filter(_.baseOffset >= highestOffsetInRemoteStorage).count()
 
   /**
    * The offset of the next message that will be appended to the log
