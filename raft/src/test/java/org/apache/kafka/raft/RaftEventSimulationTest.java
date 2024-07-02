@@ -20,6 +20,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
@@ -772,6 +773,7 @@ public class RaftEventSimulationTest {
                 FETCH_MAX_WAIT_MS,
                 clusterId.toString(),
                 Collections.emptyList(),
+                Endpoints.empty(), // KAFKA-16529 will fix this
                 logContext,
                 random,
                 quorumConfig
@@ -1236,8 +1238,20 @@ public class RaftEventSimulationTest {
 
             int correlationId = outbound.correlationId();
             Node destination = outbound.destination();
-            RaftRequest.Inbound inbound = new RaftRequest.Inbound(correlationId, outbound.apiVersion(), outbound.data(),
-                cluster.time.milliseconds());
+            RaftRequest.Inbound inbound = cluster
+                .nodeIfRunning(senderId)
+                .map(node ->
+                    new RaftRequest.Inbound(
+                        node.channel.listenerName(),
+                        correlationId,
+                        ApiMessageType
+                            .fromApiKey(outbound.data().apiKey())
+                            .highestSupportedVersion(true),
+                        outbound.data(),
+                        cluster.time.milliseconds()
+                    )
+                )
+                .get();
 
             if (!filters.get(destination.id()).acceptInbound(inbound))
                 return;

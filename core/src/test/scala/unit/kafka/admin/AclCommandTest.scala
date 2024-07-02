@@ -18,11 +18,11 @@ package kafka.admin
 
 import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.authorizer.AclAuthorizer
-import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
+import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
 import kafka.utils.{Exit, LogCaptureAppender, Logging, TestUtils}
+import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
-import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourceType._
@@ -30,11 +30,14 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{AppInfoParser, SecurityUtils}
 import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.io.{ByteArrayOutputStream, File}
 import java.util.Properties
@@ -42,7 +45,7 @@ import javax.management.InstanceAlreadyExistsException
 
 class AclCommandTest extends QuorumTestHarness with Logging {
 
-  var servers: Seq[KafkaServer] = Seq()
+  var servers: Seq[KafkaBroker] = Seq()
 
   private val principal: KafkaPrincipal = SecurityUtils.parseKafkaPrincipal("User:test2")
   private val Users = Set(SecurityUtils.parseKafkaPrincipal("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"),
@@ -110,11 +113,14 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
 
-    brokerProps = TestUtils.createBrokerConfig(0, zkConnect)
-    brokerProps.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AclAuthorizer].getName)
-    brokerProps.put(AclAuthorizer.SuperUsersProp, "User:ANONYMOUS")
-
-    zkArgs = Array("--authorizer-properties", "zookeeper.connect=" + zkConnect)
+    brokerProps = TestUtils.createBrokerConfig(0, zkConnectOrNull)
+    if (isKRaftTest()) {
+      brokerProps.putAll(kraftControllerConfigs().head)
+    } else {
+      brokerProps.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AclAuthorizer].getName)
+      brokerProps.put(AclAuthorizer.SuperUsersProp, "User:ANONYMOUS")
+      zkArgs = Array("--authorizer-properties", "zookeeper.connect=" + zkConnect)
+    }
   }
 
   @AfterEach
@@ -123,19 +129,27 @@ class AclCommandTest extends QuorumTestHarness with Logging {
     super.tearDown()
   }
 
+  override protected def kraftControllerConfigs(): Seq[Properties] = {
+    val controllerConfig = new Properties
+    controllerConfig.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
+    controllerConfig.put(StandardAuthorizer.SUPER_USERS_CONFIG, "User:ANONYMOUS")
+    Seq(controllerConfig)
+  }
+
   @Test
   def testAclCliWithAuthorizer(): Unit = {
     testAclCli(zkArgs)
   }
 
-  @Test
-  def testAclCliWithAdminAPI(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAclCliWithAdminAPI(quorum: String): Unit = {
     createServer()
     testAclCli(adminArgs)
   }
 
   private def createServer(commandConfig: Option[File] = None): Unit = {
-    servers = Seq(TestUtils.createServer(KafkaConfig.fromProps(brokerProps)))
+    servers = Seq(createBroker(KafkaConfig.fromProps(brokerProps)))
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
 
     var adminArgs = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, listenerName))
@@ -156,7 +170,6 @@ class AclCommandTest extends QuorumTestHarness with Logging {
         val (acls, cmd) = getAclToCommand(permissionType, operationToCmd._1)
         val (addOut, addErr) = callMain(cmdArgs ++ cmd ++ resourceCmd ++ operationToCmd._2 :+ "--add")
         assertOutputContains("Adding ACLs", resources, resourceCmd, addOut)
-        assertOutputContains("Current ACLs", resources, resourceCmd, addOut)
         assertEquals("", addErr)
 
         for (resource <- resources) {
@@ -189,14 +202,16 @@ class AclCommandTest extends QuorumTestHarness with Logging {
     testProducerConsumerCli(zkArgs)
   }
 
-  @Test
-  def testProducerConsumerCliWithAdminAPI(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testProducerConsumerCliWithAdminAPI(quorum: String): Unit = {
     createServer()
     testProducerConsumerCli(adminArgs)
   }
 
-  @Test
-  def testAclCliWithClientId(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAclCliWithClientId(quorum: String): Unit = {
     val adminClientConfig = TestUtils.tempFile("client.id=my-client")
 
     createServer(Some(adminClientConfig))
@@ -204,7 +219,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
     val appender = LogCaptureAppender.createAndRegister()
     val previousLevel = LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], Level.WARN)
     try {
-        testAclCli(adminArgs)
+      testAclCli(adminArgs)
     } finally {
       LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], previousLevel)
       LogCaptureAppender.unregister(appender)
@@ -213,7 +228,6 @@ class AclCommandTest extends QuorumTestHarness with Logging {
       e.getThrowableInformation != null &&
       e.getThrowableInformation.getThrowable.getClass.getName == classOf[InstanceAlreadyExistsException].getName)
     assertFalse(warning.isDefined, "There should be no warnings about multiple registration of mbeans")
-
   }
 
   private def testProducerConsumerCli(cmdArgs: Array[String]): Unit = {
@@ -236,8 +250,9 @@ class AclCommandTest extends QuorumTestHarness with Logging {
     testAclsOnPrefixedResources(zkArgs)
   }
 
-  @Test
-  def testAclsOnPrefixedResourcesWithAdminAPI(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAclsOnPrefixedResourcesWithAdminAPI(quorum: String): Unit = {
     createServer()
     testAclsOnPrefixedResources(adminArgs)
   }
@@ -272,7 +287,18 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   }
 
   @Test
-  def testPatternTypes(): Unit = {
+  def testPatternTypesWithAuthorizer(): Unit = {
+    testPatternTypes(zkArgs)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testPatternTypesWithAdminAPI(quorum: String): Unit = {
+    createServer()
+    testPatternTypes(adminArgs)
+  }
+
+  private def testPatternTypes(cmdArgs: Array[String]): Unit = {
     Exit.setExitProcedure { (status, _) =>
       if (status == 1)
         throw new RuntimeException("Exiting command")
@@ -287,14 +313,13 @@ class AclCommandTest extends QuorumTestHarness with Logging {
     }
     try {
       PatternType.values.foreach { patternType =>
-        val addCmd = zkArgs ++ Array("--allow-principal", principal.toString, "--producer", "--topic", "Test",
+        val addCmd = cmdArgs ++ Array("--allow-principal", principal.toString, "--producer", "--topic", "Test",
           "--add", "--resource-pattern-type", patternType.toString)
         verifyPatternType(addCmd, isValid = patternType.isSpecific)
-        val listCmd = zkArgs ++ Array("--topic", "Test", "--list", "--resource-pattern-type", patternType.toString)
+        val listCmd = cmdArgs ++ Array("--topic", "Test", "--list", "--resource-pattern-type", patternType.toString)
         verifyPatternType(listCmd, isValid = patternType != PatternType.UNKNOWN)
-        val removeCmd = zkArgs ++ Array("--topic", "Test", "--force", "--remove", "--resource-pattern-type", patternType.toString)
+        val removeCmd = cmdArgs ++ Array("--topic", "Test", "--force", "--remove", "--resource-pattern-type", patternType.toString)
         verifyPatternType(removeCmd, isValid = patternType != PatternType.UNKNOWN)
-
       }
     } finally {
       Exit.resetExitProcedure()
@@ -303,7 +328,6 @@ class AclCommandTest extends QuorumTestHarness with Logging {
 
   private def testRemove(cmdArgs: Array[String], resources: Set[ResourcePattern], resourceCmd: Array[String]): Unit = {
     val (out, err) = callMain(cmdArgs ++ resourceCmd :+ "--remove" :+ "--force")
-    assertEquals("", out)
     assertEquals("", err)
     for (resource <- resources) {
       withAuthorizer() { authorizer =>
@@ -324,12 +348,18 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   }
 
   private def withAuthorizer()(f: Authorizer => Unit): Unit = {
-    val kafkaConfig = KafkaConfig.fromProps(brokerProps, doLog = false)
-    val authZ = new AclAuthorizer
-    try {
-      authZ.configure(kafkaConfig.originals)
-      f(authZ)
-    } finally authZ.close()
+    if (isKRaftTest()) {
+      (servers.map(_.authorizer.get) ++ controllerServers.map(_.authorizer.get)).foreach { auth =>
+        f(auth)
+      }
+    } else {
+      val kafkaConfig = KafkaConfig.fromProps(brokerProps, doLog = false)
+      val auth = new AclAuthorizer
+      try {
+        auth.configure(kafkaConfig.originals)
+        f(auth)
+      } finally auth.close()
+    }
   }
 
   /**

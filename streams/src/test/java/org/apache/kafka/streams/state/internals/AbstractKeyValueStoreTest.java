@@ -21,17 +21,18 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,12 +46,12 @@ import java.util.Map;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @SuppressWarnings("unchecked")
 public abstract class AbstractKeyValueStoreTest {
@@ -60,7 +61,7 @@ public abstract class AbstractKeyValueStoreTest {
     protected KeyValueStore<Integer, String> store;
     protected KeyValueStoreTestDriver<Integer, String> driver;
 
-    @Before
+    @BeforeEach
     public void before() {
         driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
         context = (InternalMockProcessorContext) driver.context();
@@ -68,7 +69,7 @@ public abstract class AbstractKeyValueStoreTest {
         store = createKeyValueStore(context);
     }
 
-    @After
+    @AfterEach
     public void after() {
         store.close();
         driver.clear();
@@ -478,7 +479,7 @@ public abstract class AbstractKeyValueStoreTest {
 
     @Test
     public void testSize() {
-        assertEquals("A newly created store should have no entries", 0, store.approximateNumEntries());
+        assertEquals(0, store.approximateNumEntries(), "A newly created store should have no entries");
 
         store.put(0, "zero");
         store.put(1, "one");
@@ -669,4 +670,3 @@ public abstract class AbstractKeyValueStoreTest {
         }
     }                  
 }
-

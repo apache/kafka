@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.OptionalInt;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -34,6 +33,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,6 +44,7 @@ import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;

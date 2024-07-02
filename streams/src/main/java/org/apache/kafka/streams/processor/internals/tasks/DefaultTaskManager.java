@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
-import java.time.Duration;
-import java.util.concurrent.locks.Condition;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
@@ -29,14 +27,17 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
 import org.apache.kafka.streams.processor.internals.TasksRegistry;
+
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
@@ -377,4 +378,3 @@ public class DefaultTaskManager implements TaskManager {
         }
     }
 }
-

@@ -188,4 +188,3 @@ public interface TopologyDescription {
     Set<GlobalStore> globalStores();
 
 }
-

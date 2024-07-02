@@ -17,15 +17,16 @@
 
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.DescribeClusterResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+
+import java.nio.ByteBuffer;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class DescribeClusterResponse extends AbstractResponse {
 

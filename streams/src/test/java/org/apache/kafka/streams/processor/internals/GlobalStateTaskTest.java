@@ -35,8 +35,9 @@ import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.Collections;
@@ -47,10 +48,10 @@ import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.testutil.ConsumerRecordUtil.record;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class GlobalStateTaskTest {
 
@@ -81,7 +82,7 @@ public class GlobalStateTaskTest {
     private GlobalStateManagerStub stateMgr;
     private GlobalStateUpdateTask globalStateTask;
 
-    @Before
+    @BeforeEach
     public void before() {
         final Set<String> storeNames = Utils.mkSet("t1-store", "t2-store");
         final Map<String, SourceNode<?, ?>> sourceByTopics = new HashMap<>();

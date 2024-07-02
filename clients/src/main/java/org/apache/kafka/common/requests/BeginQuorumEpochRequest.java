@@ -68,16 +68,12 @@ public class BeginQuorumEpochRequest extends AbstractRequest {
         return new BeginQuorumEpochRequest(new BeginQuorumEpochRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
-    public static BeginQuorumEpochRequestData singletonRequest(TopicPartition topicPartition,
-                                                               int leaderEpoch,
-                                                               int leaderId) {
-        return singletonRequest(topicPartition, null, leaderEpoch, leaderId);
-    }
-
-    public static BeginQuorumEpochRequestData singletonRequest(TopicPartition topicPartition,
-                                                               String clusterId,
-                                                               int leaderEpoch,
-                                                               int leaderId) {
+    public static BeginQuorumEpochRequestData singletonRequest(
+        TopicPartition topicPartition,
+        String clusterId,
+        int leaderEpoch,
+        int leaderId
+    ) {
         return new BeginQuorumEpochRequestData()
                    .setClusterId(clusterId)
                    .setTopics(Collections.singletonList(
@@ -90,5 +86,4 @@ public class BeginQuorumEpochRequest extends AbstractRequest {
                                    .setLeaderId(leaderId))))
                    );
     }
-
 }

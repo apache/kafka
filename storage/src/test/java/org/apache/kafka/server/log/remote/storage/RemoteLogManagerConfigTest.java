@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 
 import org.junit.jupiter.api.Test;
@@ -39,24 +40,18 @@ public class RemoteLogManagerConfigTest {
         Map<String, Object> props = getRLMProps(rsmPrefix, rlmmPrefix);
         rsmProps.forEach((k, v) -> props.put(rsmPrefix + k, v));
         rlmmProps.forEach((k, v) -> props.put(rlmmPrefix + k, v));
+        RLMTestConfig config = new RLMTestConfig(props);
 
-        RemoteLogManagerConfig expectedRemoteLogManagerConfig = new RemoteLogManagerConfig(props);
-
-        // Removing remote.log.metadata.manager.class.name so that the default value gets picked up.
-        props.remove(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
-
-        RemoteLogManagerConfig remoteLogManagerConfig = new RemoteLogManagerConfig(props);
-        assertEquals(expectedRemoteLogManagerConfig.values(), remoteLogManagerConfig.values());
-
-        assertEquals(rsmProps, remoteLogManagerConfig.remoteStorageManagerProps());
-        assertEquals(rlmmProps, remoteLogManagerConfig.remoteLogMetadataManagerProps());
+        RemoteLogManagerConfig rlmConfig = config.remoteLogManagerConfig();
+        assertEquals(rsmProps, rlmConfig.remoteStorageManagerProps());
+        assertEquals(rlmmProps, rlmConfig.remoteLogMetadataManagerProps());
     }
 
     @Test
     public void testDefaultConfigs() {
         // Even with empty properties, RemoteLogManagerConfig has default values
         Map<String, Object> emptyProps = new HashMap<>();
-        RemoteLogManagerConfig remoteLogManagerConfigEmptyConfig = new RemoteLogManagerConfig(emptyProps);
+        RemoteLogManagerConfig remoteLogManagerConfigEmptyConfig = new RLMTestConfig(emptyProps).remoteLogManagerConfig();
         assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerThreadPoolSize());
         assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM, remoteLogManagerConfigEmptyConfig.remoteLogManagerCopyNumQuotaSamples());
     }
@@ -66,7 +61,7 @@ public class RemoteLogManagerConfigTest {
         // Test with a empty string props should throw ConfigException
         Map<String, Object> emptyStringProps = Collections.singletonMap(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "");
         assertThrows(ConfigException.class, () ->
-                new RemoteLogManagerConfig(emptyStringProps));
+                new RLMTestConfig(emptyStringProps).remoteLogManagerConfig());
     }
 
     private Map<String, Object> getRLMProps(String rsmPrefix, String rlmmPrefix) {
@@ -110,5 +105,19 @@ public class RemoteLogManagerConfigTest {
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP,
                 rlmmPrefix);
         return props;
+    }
+
+    private static class RLMTestConfig extends AbstractConfig {
+
+        private final RemoteLogManagerConfig rlmConfig;
+
+        public RLMTestConfig(Map<?, ?> originals) {
+            super(RemoteLogManagerConfig.configDef(), originals, true);
+            rlmConfig = new RemoteLogManagerConfig(this);
+        }
+
+        public RemoteLogManagerConfig remoteLogManagerConfig() {
+            return rlmConfig;
+        }
     }
 }

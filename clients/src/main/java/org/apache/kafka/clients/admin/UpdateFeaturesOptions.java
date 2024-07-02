@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Map;
 import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Map;
 
 /**
  * Options for {@link AdminClient#updateFeatures(Map, UpdateFeaturesOptions)}.

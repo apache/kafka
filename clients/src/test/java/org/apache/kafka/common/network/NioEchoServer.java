@@ -33,6 +33,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -50,8 +53,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -88,7 +90,8 @@ public class NioEchoServer extends Thread {
     private volatile boolean closeKafkaChannels;
     private final DelegationTokenCache tokenCache;
     private final Time time;
-    
+    private final AtomicLong idGenerator = new AtomicLong();
+
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
                          String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache, Time time) throws Exception {
         this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, 100, time);
@@ -225,7 +228,7 @@ public class NioEchoServer extends Thread {
                 selector.poll(100);
                 synchronized (newChannels) {
                     for (SocketChannel socketChannel : newChannels) {
-                        String id = id(socketChannel);
+                        String id = id();
                         selector.register(id, socketChannel);
                         socketChannels.add(socketChannel);
                     }
@@ -276,9 +279,8 @@ public class NioEchoServer extends Thread {
         return false;
     }
 
-    private String id(SocketChannel channel) {
-        return channel.socket().getLocalAddress().getHostAddress() + ":" + channel.socket().getLocalPort() + "-" +
-                channel.socket().getInetAddress().getHostAddress() + ":" + channel.socket().getPort();
+    private String id() {
+        return "connection-" + idGenerator.getAndIncrement();
     }
 
     private KafkaChannel channel(String id) {

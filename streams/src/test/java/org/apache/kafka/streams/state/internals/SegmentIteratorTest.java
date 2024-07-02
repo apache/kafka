@@ -28,19 +28,20 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SegmentIteratorTest {
 
@@ -55,7 +56,7 @@ public class SegmentIteratorTest {
     private SegmentIterator<KeyValueSegment> iterator = null;
 
     @SuppressWarnings("rawtypes")
-    @Before
+    @BeforeEach
     public void before() {
         final InternalMockProcessorContext context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
@@ -74,7 +75,7 @@ public class SegmentIteratorTest {
         segmentTwo.put(Bytes.wrap("d".getBytes()), "4".getBytes());
     }
 
-    @After
+    @AfterEach
     public void closeSegments() {
         if (iterator != null) {
             iterator.close();

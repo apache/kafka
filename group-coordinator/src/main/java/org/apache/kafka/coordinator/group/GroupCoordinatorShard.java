@@ -194,16 +194,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withTime(time)
                 .withTimer(timer)
                 .withGroupConfigManager(groupConfigManager)
-                .withConsumerGroupAssignors(config.consumerGroupAssignors)
-                .withConsumerGroupMaxSize(config.consumerGroupMaxSize)
-                .withConsumerGroupSessionTimeout(config.consumerGroupSessionTimeoutMs)
-                .withConsumerGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs)
-                .withClassicGroupMaxSize(config.classicGroupMaxSize)
-                .withClassicGroupInitialRebalanceDelayMs(config.classicGroupInitialRebalanceDelayMs)
-                .withClassicGroupNewMemberJoinTimeoutMs(config.classicGroupNewMemberJoinTimeoutMs)
-                .withClassicGroupMinSessionTimeoutMs(config.classicGroupMinSessionTimeoutMs)
-                .withClassicGroupMaxSessionTimeoutMs(config.classicGroupMaxSessionTimeoutMs)
-                .withConsumerGroupMigrationPolicy(config.consumerGroupMigrationPolicy)
+                .withConsumerGroupAssignors(config.consumerGroupAssignors())
+                .withConsumerGroupMaxSize(config.consumerGroupMaxSize())
+                .withConsumerGroupSessionTimeout(config.consumerGroupSessionTimeoutMs())
+                .withConsumerGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs())
+                .withClassicGroupMaxSize(config.classicGroupMaxSize())
+                .withClassicGroupInitialRebalanceDelayMs(config.classicGroupInitialRebalanceDelayMs())
+                .withClassicGroupNewMemberJoinTimeoutMs(config.classicGroupNewMemberJoinTimeoutMs())
+                .withClassicGroupMinSessionTimeoutMs(config.classicGroupMinSessionTimeoutMs())
+                .withClassicGroupMaxSessionTimeoutMs(config.classicGroupMaxSessionTimeoutMs())
+                .withConsumerGroupMigrationPolicy(config.consumerGroupMigrationPolicy())
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .build();
 
@@ -608,10 +608,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private void scheduleGroupMetadataExpiration() {
         timer.schedule(
             GROUP_EXPIRATION_KEY,
-            config.offsetsRetentionCheckIntervalMs,
+            config.offsetsRetentionCheckIntervalMs(),
             TimeUnit.MILLISECONDS,
             true,
-            config.offsetsRetentionCheckIntervalMs,
+            config.offsetsRetentionCheckIntervalMs(),
             this::cleanupGroupMetadata
         );
     }

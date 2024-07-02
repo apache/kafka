@@ -56,6 +56,7 @@ import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.ConnectException;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 

@@ -16,21 +16,21 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.HashSet;
-import java.util.Set;
-
-import java.util.stream.Collectors;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * The state of our connection to each node in the cluster.

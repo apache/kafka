@@ -17,11 +17,13 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import java.io.IOException;
-import java.util.Map;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
+
 import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.util.Map;
 
 public class AccessTokenValidatorFactoryTest extends OAuthBearerTest {
 
