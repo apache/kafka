@@ -21,7 +21,7 @@ package org.apache.kafka.server.mutable;
  * An exception that is thrown when the BoundedList cannot add any more elements.
  */
 public class BoundedListTooLongException extends RuntimeException {
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
     public BoundedListTooLongException(String message) {
         super(message);

@@ -33,13 +33,15 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ClusterTestDefaults(types = Array(Type.KRAFT))
 @Tag("integration")
 class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-    new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
-    new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
+      new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+    )
+  )
   def testListGroupsWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
     testListGroups(true)
   }

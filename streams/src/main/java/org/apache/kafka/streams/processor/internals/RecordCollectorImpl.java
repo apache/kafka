@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
@@ -48,6 +49,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
+
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -61,7 +63,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 
 public class RecordCollectorImpl implements RecordCollector {
-    private final static String SEND_EXCEPTION_MESSAGE = "Error encountered sending record to topic %s for task %s due to:%n%s";
+    private static final String SEND_EXCEPTION_MESSAGE = "Error encountered sending record to topic %s for task %s due to:%n%s";
 
     private final Logger log;
     private final TaskId taskId;
@@ -74,7 +76,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private final Sensor droppedRecordsSensor;
     private final Map<String, Sensor> producedSensorByTopic = new HashMap<>();
 
-    private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
+    private final AtomicReference<KafkaException> sendException;
 
     /**
      * @throws StreamsException fatal error that should cause the thread to die (from producer.initTxn)
@@ -88,6 +90,7 @@ public class RecordCollectorImpl implements RecordCollector {
         this.log = logContext.logger(getClass());
         this.taskId = taskId;
         this.streamsProducer = streamsProducer;
+        this.sendException = streamsProducer.sendException();
         this.productionExceptionHandler = productionExceptionHandler;
         this.eosEnabled = streamsProducer.eosEnabled();
         this.streamsMetrics = streamsMetrics;
@@ -304,7 +307,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, exception));
         } else {
-            if (exception instanceof RetriableException) {
+            if (isRetriable(exception)) {
                 errorMessage += "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\nConsider overwriting `max.block.ms` and /or " +
@@ -322,6 +325,16 @@ public class RecordCollectorImpl implements RecordCollector {
         }
 
         log.error(errorMessage, exception);
+    }
+
+    /**
+     * The `TimeoutException` with root cause `UnknownTopicOrPartitionException` is considered as non-retriable
+     * (despite `TimeoutException` being a subclass of `RetriableException`, this particular case is explicitly excluded).
+    */
+    private boolean isRetriable(final Exception exception) {
+        return exception instanceof RetriableException &&
+                (!(exception instanceof TimeoutException) || exception.getCause() == null
+                        || !(exception.getCause() instanceof UnknownTopicOrPartitionException));
     }
 
     private boolean isFatalException(final Exception exception) {

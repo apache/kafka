@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.security;
 
-import javax.crypto.SecretKeyFactory;
-
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.server.util.Csv;
+
 import org.junit.jupiter.api.Test;
 
 import java.security.GeneralSecurityException;
 import java.util.Map;
+
+import javax.crypto.SecretKeyFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

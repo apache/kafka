@@ -21,13 +21,14 @@ import kafka.cluster.BrokerEndPoint
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.utils.{CoreUtils, Logging, TestUtils}
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.server.common.OffsetAndEpoch
@@ -265,7 +266,7 @@ class LocalLeaderEndPointTest extends Logging {
   }
 
   private def records: MemoryRecords = {
-    MemoryRecords.withRecords(CompressionType.NONE,
+    MemoryRecords.withRecords(Compression.NONE,
       new SimpleRecord("first message".getBytes()),
       new SimpleRecord("second message".getBytes()),
       new SimpleRecord("third message".getBytes()),

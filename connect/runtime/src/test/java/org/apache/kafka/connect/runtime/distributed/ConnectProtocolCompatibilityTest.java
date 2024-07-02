@@ -17,7 +17,8 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -25,8 +26,8 @@ import java.util.Collections;
 
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class ConnectProtocolCompatibilityTest {
     private static final String LEADER = "leader";
@@ -98,7 +99,7 @@ public class ConnectProtocolCompatibilityTest {
     public void testEagerToEagerAssignment() {
         ConnectProtocol.Assignment assignment = new ConnectProtocol.Assignment(
                 ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
-                Arrays.asList(connectorId1, connectorId3), Arrays.asList(taskId2x0));
+                Arrays.asList(connectorId1, connectorId3), Collections.singletonList(taskId2x0));
 
         ByteBuffer leaderBuf = ConnectProtocol.serializeAssignment(assignment);
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(leaderBuf);
@@ -110,7 +111,7 @@ public class ConnectProtocolCompatibilityTest {
 
         ConnectProtocol.Assignment assignment2 = new ConnectProtocol.Assignment(
                 ConnectProtocol.Assignment.NO_ERROR, "member", LEADER_URL, 1L,
-                Arrays.asList(connectorId2), Arrays.asList(taskId1x0, taskId3x0));
+                Collections.singletonList(connectorId2), Arrays.asList(taskId1x0, taskId3x0));
 
         ByteBuffer memberBuf = ConnectProtocol.serializeAssignment(assignment2);
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(memberBuf);
@@ -125,7 +126,7 @@ public class ConnectProtocolCompatibilityTest {
     public void testCoopToCoopAssignment() {
         ExtendedAssignment assignment = new ExtendedAssignment(
                 CONNECT_PROTOCOL_V1, ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
-                Arrays.asList(connectorId1, connectorId3), Arrays.asList(taskId2x0),
+                Arrays.asList(connectorId1, connectorId3), Collections.singletonList(taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
 
         ByteBuffer leaderBuf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment, false);
@@ -138,7 +139,7 @@ public class ConnectProtocolCompatibilityTest {
 
         ExtendedAssignment assignment2 = new ExtendedAssignment(
                 CONNECT_PROTOCOL_V1, ConnectProtocol.Assignment.NO_ERROR, "member", LEADER_URL, 1L,
-                Arrays.asList(connectorId2), Arrays.asList(taskId1x0, taskId3x0),
+                Collections.singletonList(connectorId2), Arrays.asList(taskId1x0, taskId3x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
 
         ByteBuffer memberBuf = ConnectProtocol.serializeAssignment(assignment2);
@@ -155,7 +156,7 @@ public class ConnectProtocolCompatibilityTest {
     public void testEagerToCoopAssignment() {
         ConnectProtocol.Assignment assignment = new ConnectProtocol.Assignment(
                 ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
-                Arrays.asList(connectorId1, connectorId3), Arrays.asList(taskId2x0));
+                Arrays.asList(connectorId1, connectorId3), Collections.singletonList(taskId2x0));
 
         ByteBuffer leaderBuf = ConnectProtocol.serializeAssignment(assignment);
         ConnectProtocol.Assignment leaderAssignment =
@@ -168,7 +169,7 @@ public class ConnectProtocolCompatibilityTest {
 
         ConnectProtocol.Assignment assignment2 = new ConnectProtocol.Assignment(
                 ConnectProtocol.Assignment.NO_ERROR, "member", LEADER_URL, 1L,
-                Arrays.asList(connectorId2), Arrays.asList(taskId1x0, taskId3x0));
+                Collections.singletonList(connectorId2), Arrays.asList(taskId1x0, taskId3x0));
 
         ByteBuffer memberBuf = ConnectProtocol.serializeAssignment(assignment2);
         ConnectProtocol.Assignment memberAssignment =
@@ -184,7 +185,7 @@ public class ConnectProtocolCompatibilityTest {
     public void testCoopToEagerAssignment() {
         ExtendedAssignment assignment = new ExtendedAssignment(
                 CONNECT_PROTOCOL_V1, ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
-                Arrays.asList(connectorId1, connectorId3), Arrays.asList(taskId2x0),
+                Arrays.asList(connectorId1, connectorId3), Collections.singletonList(taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
 
         ByteBuffer leaderBuf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment, false);
@@ -197,7 +198,7 @@ public class ConnectProtocolCompatibilityTest {
 
         ExtendedAssignment assignment2 = new ExtendedAssignment(
                 CONNECT_PROTOCOL_V1, ConnectProtocol.Assignment.NO_ERROR, "member", LEADER_URL, 1L,
-                Arrays.asList(connectorId2), Arrays.asList(taskId1x0, taskId3x0),
+                Collections.singletonList(connectorId2), Arrays.asList(taskId1x0, taskId3x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
 
         ByteBuffer memberBuf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment2, false);

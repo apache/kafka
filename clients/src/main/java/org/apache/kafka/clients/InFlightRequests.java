@@ -148,7 +148,7 @@ final class InFlightRequests {
         } else {
             final Deque<NetworkClient.InFlightRequest> clearedRequests = requests.remove(node);
             inFlightRequestCount.getAndAdd(-clearedRequests.size());
-            return () -> clearedRequests.descendingIterator();
+            return clearedRequests::descendingIterator;
         }
     }
 

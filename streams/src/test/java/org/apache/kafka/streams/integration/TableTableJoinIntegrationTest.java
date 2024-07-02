@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.time.Duration;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -26,65 +25,55 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * Tests all available joins of Kafka Streams DSL.
  */
-@Category({IntegrationTest.class})
-@RunWith(value = Parameterized.class)
+@Tag("integration")
+@Timeout(600)
 public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-    private KTable<Long, String> leftTable;
-    private KTable<Long, String> rightTable;
+    private static final String APP_ID = "table-table-join-integration-test";
+    private static final String STORE_NAME = APP_ID + "-store";
+    private final TestRecord<Long, String> expectedFinalJoinResultUnversioned =
+            new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 4L);
+    private final TestRecord<Long, String> expectedFinalJoinResultLeftVersionedOnly =
+            new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 15L);
+    private final TestRecord<Long, String> expectedFinalJoinResultRightVersionedOnly =
+            new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null, 14L);
+    private final TestRecord<Long, String> expectedFinalMultiJoinResult =
+            new TestRecord<>(ANY_UNIQUE_KEY, "F-f-f", null, 4L);
 
-    public TableTableJoinIntegrationTest(final boolean cacheEnabled) {
-        super(cacheEnabled);
-    }
-
-    @Before
-    public void prepareTopology() throws InterruptedException {
-        super.prepareEnvironment();
-
-        appID = "table-table-join-integration-test";
-
-        builder = new StreamsBuilder();
-    }
-
-    private final TestRecord<Long, String> expectedFinalJoinResultUnversioned = new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 4L);
-    private final TestRecord<Long, String> expectedFinalJoinResultLeftVersionedOnly = new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 15L);
-    private final TestRecord<Long, String> expectedFinalJoinResultRightVersionedOnly = new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null, 14L);
-    private final TestRecord<Long, String> expectedFinalMultiJoinResult = new TestRecord<>(ANY_UNIQUE_KEY, "F-f-f", null, 4L);
-    private final String storeName = appID + "-store";
-
-    private final Materialized<Long, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(storeName)
+    private final Materialized<Long, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(STORE_NAME)
             .withKeySerde(Serdes.Long())
             .withValueSerde(Serdes.String())
             .withCachingDisabled()
             .withLoggingDisabled();
 
-    @Test
-    public void testInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInner(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalJoinResultUnversioned, storeName);
+            runTestWithDriver(input, expectedFinalJoinResultUnversioned, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -112,20 +101,24 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 4L))
             );
 
-            runTestWithDriver(input, expectedResult, storeName);
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeft(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalJoinResultUnversioned, storeName);
+            runTestWithDriver(input, expectedFinalJoinResultUnversioned, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -153,20 +146,24 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 4L))
             );
 
-            runTestWithDriver(input, expectedResult, storeName);
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuter(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalJoinResultUnversioned, storeName);
+            runTestWithDriver(input, expectedFinalJoinResultUnversioned, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -194,20 +191,20 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 4L))
             );
 
-            runTestWithDriver(input, expectedResult, storeName);
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testInnerWithVersionedStores() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String>as(
-            Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))
-        ).withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String>as(
-            Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))
-        ).withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerWithVersionedStores(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
@@ -237,19 +234,19 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             null
         );
 
-        runTestWithDriver(input, expectedResult, storeName);
+        runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
     }
 
-    @Test
-    public void testLeftWithVersionedStores() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String>as(
-            Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))
-        ).withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String>as(
-            Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))
-        ).withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftWithVersionedStores(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
@@ -279,19 +276,19 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             null
         );
 
-        runTestWithDriver(input, expectedResult, storeName);
+        runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
     }
 
-    @Test
-    public void testOuterWithVersionedStores() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String>as(
-            Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))
-        ).withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String>as(
-            Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))
-        ).withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterWithVersionedStores(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
@@ -321,21 +318,23 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             null
         );
 
-        runTestWithDriver(input, expectedResult, storeName);
+        runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
     }
 
-    @Test
-    public void testInnerWithLeftVersionedOnly() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String>as(
-            Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))
-        ).withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerWithLeftVersionedOnly(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalJoinResultLeftVersionedOnly, storeName);
+            runTestWithDriver(input, expectedFinalJoinResultLeftVersionedOnly, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -363,22 +362,24 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 15L))
             );
 
-            runTestWithDriver(input, expectedResult, storeName);
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testLeftWithLeftVersionedOnly() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String>as(
-            Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))
-        ).withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftWithLeftVersionedOnly(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalJoinResultLeftVersionedOnly, storeName);
+            runTestWithDriver(input, expectedFinalJoinResultLeftVersionedOnly, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -406,22 +407,24 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 15L))
             );
 
-            runTestWithDriver(input, expectedResult, storeName);
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testOuterWithLeftVersionedOnly() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String>as(
-            Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))
-        ).withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterWithLeftVersionedOnly(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalJoinResultLeftVersionedOnly, storeName);
+            runTestWithDriver(input, expectedFinalJoinResultLeftVersionedOnly, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -449,22 +452,24 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 15L))
             );
 
-            runTestWithDriver(input, expectedResult, storeName);
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testInnerWithRightVersionedOnly() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String>as(
-            Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))
-        ).withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerWithRightVersionedOnly(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalJoinResultRightVersionedOnly, storeName);
+            runTestWithDriver(input, expectedFinalJoinResultRightVersionedOnly, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -492,22 +497,24 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null
             );
 
-            runTestWithDriver(input, expectedResult, storeName);
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testLeftWithRightVersionedOnly() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String>as(
-            Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))
-        ).withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftWithRightVersionedOnly(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalJoinResultRightVersionedOnly, storeName);
+            runTestWithDriver(input, expectedFinalJoinResultRightVersionedOnly, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -535,22 +542,24 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null
             );
 
-            runTestWithDriver(input, expectedResult, storeName);
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testOuterWithRightVersionedOnly() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String>as(
-            Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))
-        ).withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterWithRightVersionedOnly(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalJoinResultRightVersionedOnly, storeName);
+            runTestWithDriver(input, expectedFinalJoinResultRightVersionedOnly, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -578,23 +587,27 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null
             );
 
-            runTestWithDriver(input, expectedResult, storeName);
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testInnerInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerInner(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
         leftTable.join(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             // TODO K6443: the duplicate below for all the multi-joins are due to
             //             KAFKA-6443, should be updated once it is fixed.
@@ -625,23 +638,27 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null
             );
 
-            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testInnerLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerLeft(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
         leftTable.join(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -669,23 +686,27 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null
             );
 
-            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testInnerOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerOuter(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
         leftTable.join(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -716,23 +737,27 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null
             );
 
-            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testLeftInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftInner(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
         leftTable.leftJoin(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -760,23 +785,27 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null
             );
 
-            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testLeftLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftLeft(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
         leftTable.leftJoin(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -806,23 +835,27 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null
             );
 
-            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testLeftOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftOuter(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
         leftTable.leftJoin(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -852,23 +885,27 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null
             );
 
-            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testOuterInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterInner(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
         leftTable.outerJoin(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -898,23 +935,27 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null
             );
 
-            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testOuterLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterLeft(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
         leftTable.outerJoin(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -946,23 +987,27 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null
             );
 
-            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testOuterOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
-
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterOuter(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
         leftTable.outerJoin(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(input, expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
@@ -995,7 +1040,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null,
                 null
             );
-            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 }

@@ -78,12 +78,9 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.TemporaryStage;
+
 import org.slf4j.Logger;
 
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -111,6 +108,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
@@ -2229,11 +2231,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void publishConnectorTaskConfigs(String connName, List<Map<String, String>> taskProps, Callback<Void> cb) {
-        if (!taskConfigsChanged(configState, connName, taskProps)) {
+        List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
+        if (!taskConfigsChanged(configState, connName, rawTaskProps)) {
             return;
         }
 
-        List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
         if (isLeader()) {
             writeTaskConfigs(connName, rawTaskProps);
             cb.onCompletion(null, null);
@@ -2730,6 +2732,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             } else {
                 log.info("Wasn't able to resume work after last rebalance, can skip stopping connectors and tasks");
             }
+        }
+
+        @Override
+        public void onPollTimeoutExpiry() {
+            log.warn("worker poll timeout has expired. The last known action being performed by the worker is : {} and may contribute to the timeout. " +
+                "Please review the last action (if known) for any corrective actions. " +
+                "One of the ways of addressing this can be increasing the rebalance.timeout.ms configuration value. Please note that " +
+                "rebalance.timeout.ms also controls the maximum allowed time for each worker to join the group once a " +
+                "rebalance has begun so the set value should not be very high", tickThreadStage == null ? "not known" : tickThreadStage.description());
         }
 
         private void resetActiveTopics(Collection<String> connectors, Collection<ConnectorTaskId> tasks) {

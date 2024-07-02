@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.Optional;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+
+import java.util.Optional;
 
 public interface ReplicatedLog extends AutoCloseable {
 

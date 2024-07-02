@@ -39,10 +39,10 @@ class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
   @ClusterTest
   def testAllocateProducersIdSentToController(): Unit = {
     val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
-    val sourceBroker = raftCluster.brokers.findFirst().get()
+    val sourceBroker = raftCluster.brokers.values().stream().findFirst().get().asInstanceOf[BrokerServer]
 
     val controllerId = sourceBroker.raftManager.leaderAndEpoch.leaderId().getAsInt
-    val controllerServer = raftCluster.controllers()
+    val controllerServer = raftCluster.controllers.values().stream()
       .filter(_.config.nodeId == controllerId)
       .findFirst()
       .get()
@@ -56,10 +56,10 @@ class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
   @ClusterTest(controllers = 3)
   def testAllocateProducersIdSentToNonController(): Unit = {
     val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
-    val sourceBroker = raftCluster.brokers.findFirst().get()
+    val sourceBroker = raftCluster.brokers.values().stream().findFirst().get().asInstanceOf[BrokerServer]
 
     val controllerId = sourceBroker.raftManager.leaderAndEpoch.leaderId().getAsInt
-    val controllerServer = raftCluster.controllers()
+    val controllerServer = raftCluster.controllers().values().stream()
       .filter(_.config.nodeId != controllerId)
       .findFirst()
       .get()

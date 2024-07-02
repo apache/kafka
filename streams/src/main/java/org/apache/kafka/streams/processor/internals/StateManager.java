@@ -21,11 +21,11 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
-import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 public interface StateManager {
     File baseDir();

@@ -16,6 +16,7 @@
  */
 package kafka.raft
 
+import java.net.InetSocketAddress
 import java.nio.channels.FileChannel
 import java.nio.channels.OverlappingFileLockException
 import java.nio.file.{Files, Path, StandardOpenOption}
@@ -23,25 +24,26 @@ import java.util.Properties
 import java.util.concurrent.CompletableFuture
 import kafka.log.LogManager
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
 import kafka.tools.TestRaftServer.ByteArraySerde
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.raft.Endpoints
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.fault.FaultHandler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import org.apache.kafka.server.fault.FaultHandler
 import org.mockito.Mockito._
 
 import scala.util.Using
-
+import scala.jdk.CollectionConverters._
 
 class RaftManagerTest {
   private def createZkBrokerConfig(
@@ -64,7 +66,7 @@ class RaftManagerTest {
     }
 
     props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
-    props.setProperty(KafkaConfig.BrokerIdProp, nodeId.toString)
+    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, nodeId.toString)
     new KafkaConfig(props)
   }
 
@@ -107,9 +109,19 @@ class RaftManagerTest {
   ): KafkaRaftManager[Array[Byte]] = {
     val topicId = new Uuid(0L, 2L)
 
+    val endpoints = Endpoints.fromInetSocketAddresses(
+      config.effectiveAdvertisedControllerListeners
+        .map { endpoint =>
+          (endpoint.listenerName, InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
+        }
+        .toMap
+        .asJava
+    )
+
     new KafkaRaftManager[Array[Byte]](
       Uuid.randomUuid.toString,
       config,
+      Uuid.randomUuid,
       new ByteArraySerde,
       topicPartition,
       topicId,
@@ -117,6 +129,8 @@ class RaftManagerTest {
       new Metrics(Time.SYSTEM),
       Option.empty,
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
+      QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
+      endpoints,
       mock(classOf[FaultHandler])
     )
   }

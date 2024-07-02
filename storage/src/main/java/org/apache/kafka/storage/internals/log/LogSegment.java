@@ -16,6 +16,26 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.FileRecords.LogOffsetPosition;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
+
+import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.Timer;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
+
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
@@ -31,24 +51,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import com.yammer.metrics.core.MetricName;
-import com.yammer.metrics.core.Timer;
-import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.FileRecords.LogOffsetPosition;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.metrics.KafkaMetricsGroup;
-import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.slf4j.event.Level;
 
 import static java.util.Arrays.asList;
 
@@ -398,7 +400,7 @@ public class LogSegment implements Closeable {
     /**
      * Equivalent to {@code read(startOffset, maxSize, size())}.
      *
-     * See {@link #read(long, int, long, boolean)} for details.
+     * See {@link #read(long, int, Optional, boolean)} for details.
      */
     public FetchDataInfo read(long startOffset, int maxSize) throws IOException {
         return read(startOffset, maxSize, size());
@@ -407,10 +409,10 @@ public class LogSegment implements Closeable {
     /**
      * Equivalent to {@code read(startOffset, maxSize, maxPosition, false)}.
      *
-     * See {@link #read(long, int, long, boolean)} for details.
+     * See {@link #read(long, int, Optional, boolean)} for details.
      */
     public FetchDataInfo read(long startOffset, int maxSize, long maxPosition) throws IOException {
-        return read(startOffset, maxSize, maxPosition, false);
+        return read(startOffset, maxSize, Optional.of(maxPosition), false);
     }
 
     /**
@@ -421,13 +423,13 @@ public class LogSegment implements Closeable {
      *
      * @param startOffset A lower bound on the first offset to include in the message set we read
      * @param maxSize The maximum number of bytes to include in the message set we read
-     * @param maxPosition The maximum position in the log segment that should be exposed for read
+     * @param maxPositionOpt The maximum position in the log segment that should be exposed for read
      * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxSize` (if one exists)
      *
      * @return The fetched data and the offset metadata of the first message whose offset is >= startOffset,
      *         or null if the startOffset is larger than the largest offset in this log
      */
-    public FetchDataInfo read(long startOffset, int maxSize, long maxPosition, boolean minOneMessage) throws IOException {
+    public FetchDataInfo read(long startOffset, int maxSize, Optional<Long> maxPositionOpt, boolean minOneMessage) throws IOException {
         if (maxSize < 0)
             throw new IllegalArgumentException("Invalid max size " + maxSize + " for log read from segment " + log);
 
@@ -444,12 +446,14 @@ public class LogSegment implements Closeable {
         if (minOneMessage)
             adjustedMaxSize = Math.max(maxSize, startOffsetAndSize.size);
 
-        // return a log segment but with zero size in the case below
-        if (adjustedMaxSize == 0)
+        // return empty records in the fetch-data-info when:
+        // 1. adjustedMaxSize is 0 (or)
+        // 2. maxPosition to read is unavailable
+        if (adjustedMaxSize == 0 || !maxPositionOpt.isPresent())
             return new FetchDataInfo(offsetMetadata, MemoryRecords.EMPTY);
 
         // calculate the length of the message set to read based on whether or not they gave us a maxOffset
-        int fetchSize = Math.min((int) (maxPosition - startPosition), adjustedMaxSize);
+        int fetchSize = Math.min((int) (maxPositionOpt.get() - startPosition), adjustedMaxSize);
 
         return new FetchDataInfo(offsetMetadata, log.slice(startPosition, fetchSize),
             adjustedMaxSize < startOffsetAndSize.size, Optional.empty());
@@ -717,9 +721,9 @@ public class LogSegment implements Closeable {
     }
 
     /**
-     * @return the first batch timestamp if the timestamp is available. Otherwise return Long.MaxValue
+     * @return the first batch timestamp if the timestamp is available. Otherwise, return Long.MaxValue
      */
-    long getFirstBatchTimestamp() {
+    public long getFirstBatchTimestamp() {
         loadFirstBatchTimestamp();
         OptionalLong timestamp = rollingBasedTimestamp;
         if (timestamp.isPresent() && timestamp.getAsLong() >= 0)

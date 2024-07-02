@@ -18,9 +18,9 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -160,7 +161,7 @@ public class MockLogTest {
         final long initialOffset = log.endOffset().offset;
 
         log.appendAsLeader(
-            MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+            MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
             currentEpoch
         );
 
@@ -169,7 +170,7 @@ public class MockLogTest {
             RuntimeException.class,
             () -> {
                 log.appendAsLeader(
-                    MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+                    MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
                     currentEpoch
                 );
             }
@@ -179,7 +180,7 @@ public class MockLogTest {
             RuntimeException.class,
             () -> {
                 log.appendAsFollower(
-                    MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo)
+                    MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo)
                 );
             }
         );
@@ -226,7 +227,7 @@ public class MockLogTest {
         }
         log.truncateToLatestSnapshot();
 
-        log.appendAsFollower(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, epoch, recordFoo));
+        log.appendAsFollower(MemoryRecords.withRecords(initialOffset, Compression.NONE, epoch, recordFoo));
 
         assertEquals(initialOffset, log.startOffset());
         assertEquals(initialOffset + 1, log.endOffset().offset);
@@ -388,7 +389,7 @@ public class MockLogTest {
         }
         log.truncateToLatestSnapshot();
 
-        log.appendAsFollower(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, epoch, recordFoo));
+        log.appendAsFollower(MemoryRecords.withRecords(initialOffset, Compression.NONE, epoch, recordFoo));
 
         assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.startOffset() - 1,
             Isolation.UNCOMMITTED));
@@ -827,7 +828,7 @@ public class MockLogTest {
         appendBatch(numberOfRecords, 2);
         appendBatch(numberOfRecords, 4);
 
-        // offset is not equal to oldest snapshot's offset
+        // offset is not equal to the oldest snapshot's offset
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 3);
         assertEquals(ValidOffsetAndEpoch.diverging(new OffsetAndEpoch(20, 2)), resultOffsetAndEpoch);
     }
@@ -845,7 +846,7 @@ public class MockLogTest {
 
         appendBatch(numberOfRecords, 3);
 
-        // offset is not equal to oldest snapshot's offset
+        // offset is not equal to the oldest snapshot's offset
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 2);
         assertEquals(ValidOffsetAndEpoch.diverging(olderEpochSnapshotId), resultOffsetAndEpoch);
     }
@@ -952,7 +953,7 @@ public class MockLogTest {
         log.appendAsLeader(
             MemoryRecords.withRecords(
                 log.endOffset().offset,
-                CompressionType.NONE,
+                Compression.NONE,
                 records.toArray(new SimpleRecord[records.size()])
             ),
             epoch

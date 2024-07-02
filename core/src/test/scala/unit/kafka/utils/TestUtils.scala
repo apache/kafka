@@ -35,6 +35,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.clients.{ClientResponse, CommonClientConfigs}
 import org.apache.kafka.common._
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{KafkaStorageException, OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
@@ -51,15 +52,15 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerd
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.queue.KafkaEventQueue
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.server.config._
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.server.util.timer.SystemTimer
@@ -236,7 +237,7 @@ object TestUtils extends Logging {
     listenerName: ListenerName
   ): String = {
     brokers.map { s =>
-      val listener = s.config.effectiveAdvertisedListeners.find(_.listenerName == listenerName).getOrElse(
+      val listener = s.config.effectiveAdvertisedBrokerListeners.find(_.listenerName == listenerName).getOrElse(
         sys.error(s"Could not find listener with name ${listenerName.value}"))
       formatAddress(listener.host, s.boundPort(listenerName))
     }.mkString(",")
@@ -303,18 +304,19 @@ object TestUtils extends Logging {
     }.mkString(",")
 
     val props = new Properties
-    props.put(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
+    props.put(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true")
+    props.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
     if (zkConnect == null) {
       props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
       props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-      props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
+      props.put(ServerConfigs.BROKER_ID_CONFIG, nodeId.toString)
       props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, listeners)
       props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners)
       props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
       props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, protocolAndPorts.
         map(p => "%s:%s".format(p._1, p._1)).mkString(",") + ",CONTROLLER:PLAINTEXT")
     } else {
-      if (nodeId >= 0) props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
+      if (nodeId >= 0) props.put(ServerConfigs.BROKER_ID_CONFIG, nodeId.toString)
       props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners)
     }
     if (logDirCount > 1) {
@@ -340,20 +342,20 @@ object TestUtils extends Logging {
     }
     props.put(ReplicationConfigs.REPLICA_SOCKET_TIMEOUT_MS_CONFIG, "1500")
     props.put(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG, "1500")
-    props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
-    props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
+    props.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, enableControlledShutdown.toString)
+    props.put(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, enableDeleteTopic.toString)
     props.put(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
-    props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
+    props.put(ServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG, "100")
     props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152")
     props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
     if (!props.containsKey(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG))
       props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "5")
     if (!props.containsKey(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG))
       props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
-    rack.foreach(props.put(KafkaConfig.RackProp, _))
+    rack.foreach(props.put(ServerConfigs.BROKER_RACK_CONFIG, _))
     // Reduce number of threads per broker
-    props.put(KafkaConfig.NumNetworkThreadsProp, "2")
-    props.put(KafkaConfig.BackgroundThreadsProp, "2")
+    props.put(ServerConfigs.NUM_NETWORK_THREADS_CONFIG, "2")
+    props.put(ServerConfigs.BACKGROUND_THREADS_CONFIG, "2")
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
       props ++= sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId")
@@ -366,13 +368,13 @@ object TestUtils extends Logging {
     }
 
     if (enableToken)
-      props.put(KafkaConfig.DelegationTokenSecretKeyProp, "secretkey")
+      props.put(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "secretkey")
 
     props.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, numPartitions.toString)
     props.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, defaultReplicationFactor.toString)
 
     if (enableFetchFromFollower) {
-      props.put(KafkaConfig.RackProp, nodeId.toString)
+      props.put(ServerConfigs.BROKER_RACK_CONFIG, nodeId.toString)
       props.put(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
     }
     props
@@ -613,7 +615,7 @@ object TestUtils extends Logging {
    */
   def singletonRecords(value: Array[Byte],
                        key: Array[Byte] = null,
-                       codec: CompressionType = CompressionType.NONE,
+                       codec: Compression = Compression.NONE,
                        timestamp: Long = RecordBatch.NO_TIMESTAMP,
                        magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
     records(Seq(new SimpleRecord(timestamp, key, value)), magicValue = magicValue, codec = codec)
@@ -621,7 +623,7 @@ object TestUtils extends Logging {
 
   def records(records: Iterable[SimpleRecord],
               magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
-              codec: CompressionType = CompressionType.NONE,
+              codec: Compression = Compression.NONE,
               producerId: Long = RecordBatch.NO_PRODUCER_ID,
               producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
               sequence: Int = RecordBatch.NO_SEQUENCE,
@@ -902,9 +904,10 @@ object TestUtils extends Logging {
   def pollRecordsUntilTrue[K, V](consumer: Consumer[K, V],
                                  action: ConsumerRecords[K, V] => Boolean,
                                  msg: => String,
-                                 waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+                                 waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS,
+                                 pollTimeoutMs: Long = 100): Unit = {
     waitUntilTrue(() => {
-      val records = consumer.poll(Duration.ofMillis(100))
+      val records = consumer.poll(Duration.ofMillis(pollTimeoutMs))
       action(records)
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
@@ -1097,13 +1100,31 @@ object TestUtils extends Logging {
   def awaitLeaderChange[B <: KafkaBroker](
       brokers: Seq[B],
       tp: TopicPartition,
-      oldLeader: Int,
+      oldLeaderOpt: Option[Int] = None,
+      expectedLeaderOpt: Option[Int] = None,
       timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     def newLeaderExists: Option[Int] = {
-      brokers.find { broker =>
-        broker.config.brokerId != oldLeader &&
-          broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
-      }.map(_.config.brokerId)
+      if (expectedLeaderOpt.isDefined) {
+        debug(s"Checking leader that has changed to ${expectedLeaderOpt.get}")
+        brokers.find { broker =>
+          broker.config.brokerId == expectedLeaderOpt.get &&
+            broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+        }.map(_.config.brokerId)
+
+      } else if (oldLeaderOpt.isDefined) {
+          debug(s"Checking leader that has changed from ${oldLeaderOpt}")
+          brokers.find { broker =>
+            broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+            broker.config.brokerId != oldLeaderOpt.get &&
+              broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+          }.map(_.config.brokerId)
+
+      } else {
+        debug(s"Checking the elected leader")
+        brokers.find { broker =>
+            broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+        }.map(_.config.brokerId)
+      }
     }
 
     waitUntilTrue(() => newLeaderExists.isDefined,
@@ -1414,6 +1435,33 @@ object TestUtils extends Logging {
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
         s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
         45000)
+  }
+
+
+  def waitAndVerifyAcl(expected: AccessControlEntry,
+                       authorizer: JAuthorizer,
+                       resource: ResourcePattern,
+                       accessControlEntryFilter: AccessControlEntryFilter = AccessControlEntryFilter.ANY): Unit = {
+    val newLine = scala.util.Properties.lineSeparator
+
+    val filter = new AclBindingFilter(resource.toFilter, accessControlEntryFilter)
+    waitUntilTrue(() => authorizer.acls(filter).asScala.map(_.entry).toSet.contains(expected),
+      s"expected to contain acl: $expected" +
+        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
+      45000)
+  }
+
+  def waitAndVerifyRemovedAcl(expectedToRemoved: AccessControlEntry,
+                              authorizer: JAuthorizer,
+                              resource: ResourcePattern,
+                              accessControlEntryFilter: AccessControlEntryFilter = AccessControlEntryFilter.ANY): Unit = {
+    val newLine = scala.util.Properties.lineSeparator
+
+    val filter = new AclBindingFilter(resource.toFilter, accessControlEntryFilter)
+    waitUntilTrue(() => !authorizer.acls(filter).asScala.map(_.entry).toSet.contains(expectedToRemoved),
+      s"expected acl to be removed : $expectedToRemoved" +
+        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
+      45000)
   }
 
   /**
@@ -1872,7 +1920,7 @@ object TestUtils extends Logging {
       AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
       AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
       QuorumTestHarness.ZkClientEventThreadSuffix,
-      QuorumController.CONTROLLER_THREAD_SUFFIX,
+      KafkaEventQueue.EVENT_HANDLER_THREAD_SUFFIX,
       ClientMetricsManager.CLIENT_METRICS_REAPER_THREAD_NAME,
       SystemTimer.SYSTEM_TIMER_THREAD_PREFIX,
     )

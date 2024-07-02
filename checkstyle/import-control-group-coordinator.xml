@@ -51,6 +51,7 @@
             <allow pkg="org.apache.kafka.clients.consumer" />
             <allow pkg="org.apache.kafka.common.annotation" />
             <allow pkg="org.apache.kafka.common.config" />
+            <allow pkg="org.apache.kafka.common.compress" />
             <allow pkg="org.apache.kafka.common.internals" />
             <allow pkg="org.apache.kafka.common.message" />
             <allow pkg="org.apache.kafka.common.metadata" />

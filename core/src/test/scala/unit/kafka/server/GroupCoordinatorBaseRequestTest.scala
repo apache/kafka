@@ -17,9 +17,7 @@
 package kafka.server
 
 import kafka.test.ClusterInstance
-import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
-import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
-import kafka.utils.{NotNothing, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -36,21 +34,9 @@ import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
-  private def brokers(): Seq[KafkaBroker] = {
-    if (cluster.isKRaftTest) {
-      cluster.asInstanceOf[RaftClusterInstance].brokers.collect(Collectors.toList[KafkaBroker]).asScala.toSeq
-    } else {
-      cluster.asInstanceOf[ZkClusterInstance].servers.collect(Collectors.toList[KafkaBroker]).asScala.toSeq
-    }
-  }
+  private def brokers(): Seq[KafkaBroker] = cluster.brokers.values().stream().collect(Collectors.toList[KafkaBroker]).asScala.toSeq
 
-  private def controllerServers(): Seq[ControllerServer] = {
-    if (cluster.isKRaftTest) {
-      cluster.asInstanceOf[RaftClusterInstance].controllerServers().asScala.toSeq
-    } else {
-      Seq.empty
-    }
-  }
+  private def controllerServers(): Seq[ControllerServer] = cluster.controllers().values().asScala.toSeq
 
   protected def createOffsetsTopic(): Unit = {
     TestUtils.createOffsetsTopicWithAdmin(
@@ -435,10 +421,13 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def consumerGroupDescribe(
     groupIds: List[String],
+    includeAuthorizedOperations: Boolean,
     version: Short = ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)
   ): List[ConsumerGroupDescribeResponseData.DescribedGroup] = {
     val consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
-      new ConsumerGroupDescribeRequestData().setGroupIds(groupIds.asJava)
+      new ConsumerGroupDescribeRequestData()
+        .setGroupIds(groupIds.asJava)
+        .setIncludeAuthorizedOperations(includeAuthorizedOperations)
     ).build(version)
 
     val consumerGroupDescribeResponse = connectAndReceive[ConsumerGroupDescribeResponse](consumerGroupDescribeRequest)
@@ -589,7 +578,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest
-  )(implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
+  )(implicit classTag: ClassTag[T]): T = {
     IntegrationTestUtils.connectAndReceive[T](
       request,
       cluster.anyBrokerSocketServer(),

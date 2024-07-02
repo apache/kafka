@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
@@ -45,11 +46,10 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupBuilder;
-import org.apache.kafka.coordinator.group.consumer.MemberState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -65,6 +65,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -85,8 +86,10 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+import static org.apache.kafka.coordinator.group.Assertions.assertSyncGroupResponseEquals;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSyncKey;
@@ -369,21 +372,21 @@ public class GroupMetadataManagerTestContext {
     }
 
     public static class Builder {
-        final private MockTime time = new MockTime();
-        final private MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
-        final private LogContext logContext = new LogContext();
-        final private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        private final MockTime time = new MockTime();
+        private final MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
+        private final LogContext logContext = new LogContext();
+        private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         private MetadataImage metadataImage;
-        private List<PartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
-        final private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
+        private List<ConsumerGroupPartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
+        private final List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
         private int classicGroupMaxSize = Integer.MAX_VALUE;
         private int classicGroupInitialRebalanceDelayMs = 3000;
-        final private int classicGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
+        private final int classicGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
         private int classicGroupMinSessionTimeoutMs = 10;
         private int classicGroupMaxSessionTimeoutMs = 10 * 60 * 1000;
-        final private GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
+        private final GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
         private ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy = ConsumerGroupMigrationPolicy.DISABLED;
 
         public Builder withMetadataImage(MetadataImage metadataImage) {
@@ -391,7 +394,7 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
-        public Builder withAssignors(List<PartitionAssignor> assignors) {
+        public Builder withConsumerGroupAssignors(List<ConsumerGroupPartitionAssignor> assignors) {
             this.consumerGroupAssignors = assignors;
             return this;
         }
@@ -614,6 +617,27 @@ public class GroupMetadataManagerTestContext {
     ) {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(consumerGroupRebalanceTimeoutKey(groupId, memberId));
+        assertNull(timeout);
+    }
+
+    public MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> assertJoinTimeout(
+        String groupId,
+        String memberId,
+        long delayMs
+    ) {
+        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+            timer.timeout(consumerGroupJoinKey(groupId, memberId));
+        assertNotNull(timeout);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        return timeout;
+    }
+
+    public void assertNoJoinTimeout(
+        String groupId,
+        String memberId
+    ) {
+        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+            timer.timeout(consumerGroupJoinKey(groupId, memberId));
         assertNull(timeout);
     }
 
@@ -905,7 +929,7 @@ public class GroupMetadataManagerTestContext {
         assertEquals(Errors.NONE.code(), followerJoinResult.joinFuture.get().errorCode());
         assertEquals(1, leaderJoinResult.joinFuture.get().generationId());
         assertEquals(1, followerJoinResult.joinFuture.get().generationId());
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(1, group.generationId());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
@@ -955,7 +979,7 @@ public class GroupMetadataManagerTestContext {
         assertEquals(Errors.NONE.code(), followerSyncResult.syncFuture.get().errorCode());
         assertTrue(group.isInState(STABLE));
 
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(1, group.generationId());
 
         return new RebalanceResult(
@@ -1070,7 +1094,7 @@ public class GroupMetadataManagerTestContext {
         assertTrue(followerJoinResult.records.isEmpty());
         assertFalse(followerJoinResult.joinFuture.isDone());
         assertTrue(group.isInState(PREPARING_REBALANCE));
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(1, group.numPendingJoinMembers());
 
         return new PendingMemberGroupResult(
@@ -1107,10 +1131,10 @@ public class GroupMetadataManagerTestContext {
         assertEquals(expectedRecords, timeouts.get(timeoutsSize - 1).result.records());
         assertNoOrEmptyResult(timeouts.subList(0, timeoutsSize - 1));
         assertTrue(group.isInState(EMPTY));
-        assertEquals(0, group.size());
+        assertEquals(0, group.numMembers());
     }
 
-    public HeartbeatResponseData sendClassicGroupHeartbeat(
+    public CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> sendClassicGroupHeartbeat(
         HeartbeatRequestData request
     ) {
         RequestContext context = new RequestContext(
@@ -1162,7 +1186,7 @@ public class GroupMetadataManagerTestContext {
         if (expectedError == Errors.UNKNOWN_MEMBER_ID) {
             assertThrows(UnknownMemberIdException.class, () -> sendClassicGroupHeartbeat(request));
         } else {
-            HeartbeatResponseData response = sendClassicGroupHeartbeat(request);
+            HeartbeatResponseData response = sendClassicGroupHeartbeat(request).response();
             assertEquals(expectedError.code(), response.errorCode());
         }
     }
@@ -1226,7 +1250,7 @@ public class GroupMetadataManagerTestContext {
             return null;
         }).collect(Collectors.toList());
 
-        assertEquals(numMembers, group.size());
+        assertEquals(numMembers, group.numMembers());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
         return joinResponses;
@@ -1264,6 +1288,62 @@ public class GroupMetadataManagerTestContext {
                 .setGroupState(DEAD.toString())
             ),
             describedGroups
+        );
+    }
+
+    public void verifyClassicGroupSyncToConsumerGroup(
+        String groupId,
+        String memberId,
+        int generationId,
+        String protocolName,
+        String protocolType,
+        List<TopicPartition> topicPartitionList,
+        short version
+    ) throws Exception {
+        GroupMetadataManagerTestContext.SyncResult syncResult = sendClassicGroupSync(
+            new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withMemberId(memberId)
+                .withGenerationId(generationId)
+                .withProtocolName(protocolName)
+                .withProtocolType(protocolType)
+                .build()
+        );
+        assertEquals(Collections.emptyList(), syncResult.records);
+        assertFalse(syncResult.syncFuture.isDone());
+
+        // Simulate a successful write to log.
+        syncResult.appendFuture.complete(null);
+        assertSyncGroupResponseEquals(
+            new SyncGroupResponseData()
+                .setProtocolType(protocolType)
+                .setProtocolName(protocolName)
+                .setAssignment(ConsumerProtocol.serializeAssignment(
+                    new ConsumerPartitionAssignor.Assignment(topicPartitionList),
+                    version
+                ).array()),
+            syncResult.syncFuture.get()
+        );
+        assertSessionTimeout(groupId, memberId, 5000);
+        assertNoSyncTimeout(groupId, memberId);
+    }
+
+    public void verifyClassicGroupSyncToConsumerGroup(
+        String groupId,
+        String memberId,
+        int generationId,
+        String protocolName,
+        String protocolType,
+        List<TopicPartition> topicPartitionList
+    ) throws Exception {
+        verifyClassicGroupSyncToConsumerGroup(
+            groupId,
+            memberId,
+            generationId,
+            protocolName,
+            protocolType,
+            topicPartitionList,
+            ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION
         );
     }
 

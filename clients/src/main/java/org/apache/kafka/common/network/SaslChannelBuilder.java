@@ -51,6 +51,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSException;
@@ -59,8 +60,6 @@ import org.ietf.jgss.GSSName;
 import org.ietf.jgss.Oid;
 import org.slf4j.Logger;
 
-import javax.security.auth.Subject;
-import javax.security.auth.kerberos.KerberosPrincipal;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
@@ -71,6 +70,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
+
+import javax.security.auth.Subject;
+import javax.security.auth.kerberos.KerberosPrincipal;
 
 public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
     static final String GSS_NATIVE_PROP = "sun.security.jgss.native";
@@ -315,7 +317,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             String prefix = ListenerName.saslMechanismPrefix(mechanism);
             @SuppressWarnings("unchecked")
             Class<? extends AuthenticateCallbackHandler> clazz =
-                    (Class<? extends AuthenticateCallbackHandler>) configs.get(prefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS);
+                    (Class<? extends AuthenticateCallbackHandler>) configs.get(prefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG);
             if (clazz != null)
                 callbackHandler = Utils.newInstance(clazz);
             else if (mechanism.equals(PlainSaslServer.PLAIN_MECHANISM))
@@ -333,9 +335,9 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private void createConnectionsMaxReauthMsMap(Map<String, ?> configs) {
         for (String mechanism : jaasContexts.keySet()) {
             String prefix = ListenerName.saslMechanismPrefix(mechanism);
-            Long connectionsMaxReauthMs = (Long) configs.get(prefix + BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS);
+            Long connectionsMaxReauthMs = (Long) configs.get(prefix + BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG);
             if (connectionsMaxReauthMs == null)
-                connectionsMaxReauthMs = (Long) configs.get(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS);
+                connectionsMaxReauthMs = (Long) configs.get(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG);
             if (connectionsMaxReauthMs != null)
                 connectionsMaxReauthMsByMechanism.put(mechanism, connectionsMaxReauthMs);
         }

@@ -22,20 +22,21 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.Collections
 import java.util.Optional
-import java.util.Arrays
 import java.util.Properties
+import java.util.stream.IntStream
 import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.{BrokerTopicStats, KafkaRaftServer}
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, TimeIndexDumpErrors}
-import kafka.utils.TestUtils
+import kafka.utils.{TestUtils, VerifiableProperties}
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, Subscription}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.{CoordinatorRecord, CoordinatorRecordSerde}
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
@@ -106,7 +107,7 @@ class DumpLogSegmentsTest {
     batches += BatchInfo(fourthBatchRecords, hasKeys = false, hasValues = false)
 
     batches.foreach { batchInfo =>
-      log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, batchInfo.records: _*),
+      log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0, batchInfo.records: _*),
         leaderEpoch = 0)
     }
     // Flush, but don't close so that the indexes are not trimmed and contain some zero entries
@@ -121,27 +122,27 @@ class DumpLogSegmentsTest {
 
   @Test
   def testBatchAndRecordMetadataOutput(): Unit = {
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0,
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0,
       new SimpleRecord("a".getBytes),
       new SimpleRecord("b".getBytes)
     ), leaderEpoch = 0)
 
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.GZIP, 0,
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.gzip().build(), 0,
       new SimpleRecord(time.milliseconds(), "c".getBytes, "1".getBytes),
       new SimpleRecord("d".getBytes)
     ), leaderEpoch = 3)
 
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0,
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0,
       new SimpleRecord("e".getBytes, null),
       new SimpleRecord(null, "f".getBytes),
       new SimpleRecord("g".getBytes)
     ), leaderEpoch = 3)
 
-    log.appendAsLeader(MemoryRecords.withIdempotentRecords(CompressionType.NONE, 29342342L, 15.toShort, 234123,
+    log.appendAsLeader(MemoryRecords.withIdempotentRecords(Compression.NONE, 29342342L, 15.toShort, 234123,
       new SimpleRecord("h".getBytes)
     ), leaderEpoch = 3)
 
-    log.appendAsLeader(MemoryRecords.withTransactionalRecords(CompressionType.GZIP, 98323L, 99.toShort, 266,
+    log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.gzip().build(), 98323L, 99.toShort, 266,
       new SimpleRecord("i".getBytes),
       new SimpleRecord("j".getBytes)
     ), leaderEpoch = 5)
@@ -270,7 +271,7 @@ class DumpLogSegmentsTest {
       buf.flip()
       new SimpleRecord(null, buf.array)
     }).toArray
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 1)
     log.flush(false)
 
     var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", logFilePath))
@@ -287,8 +288,8 @@ class DumpLogSegmentsTest {
     val writer = new ByteBufferAccessor(buf)
     writer.writeUnsignedVarint(10000)
     writer.writeUnsignedVarint(10000)
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(null, buf.array)), leaderEpoch = 2)
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 2)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(null, buf.array)), leaderEpoch = 2)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 2)
 
     output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath))
     assertTrue(output.contains("TOPIC_RECORD"))
@@ -337,7 +338,7 @@ class DumpLogSegmentsTest {
         .setLastContainedLogTimestamp(lastContainedLogTimestamp)
         .setRawSnapshotWriter(metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)).get)
         .setKraftVersion(1)
-        .setVoterSet(Optional.of(VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)))))
+        .setVoterSet(Optional.of(VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true))))
         .build(MetadataRecordSerde.INSTANCE)
     ) { snapshotWriter =>
       snapshotWriter.append(metadataRecords.asJava)
@@ -597,6 +598,26 @@ class DumpLogSegmentsTest {
     )
   }
 
+  @Test
+  def testNewDecoder(): Unit = {
+    // Decoder translate should pass without exception
+    DumpLogSegments.newDecoder(classOf[DumpLogSegmentsTest.TestDecoder].getName)
+    DumpLogSegments.newDecoder(classOf[kafka.serializer.DefaultDecoder].getName)
+    assertThrows(classOf[Exception], () => DumpLogSegments.newDecoder(classOf[DumpLogSegmentsTest.TestDecoderWithoutVerifiableProperties].getName))
+  }
+
+  @Test
+  def testConvertDeprecatedDecoderClass(): Unit = {
+    assertEquals(classOf[org.apache.kafka.tools.api.DefaultDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
+      classOf[kafka.serializer.DefaultDecoder].getName))
+    assertEquals(classOf[org.apache.kafka.tools.api.IntegerDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
+      classOf[kafka.serializer.IntegerDecoder].getName))
+    assertEquals(classOf[org.apache.kafka.tools.api.LongDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
+      classOf[kafka.serializer.LongDecoder].getName))
+    assertEquals(classOf[org.apache.kafka.tools.api.StringDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
+      classOf[kafka.serializer.StringDecoder].getName))
+  }
+
   private def readBatchMetadata(lines: util.ListIterator[String]): Option[String] = {
     while (lines.hasNext) {
       val line = lines.next()
@@ -729,5 +750,15 @@ class DumpLogSegmentsTest {
         assertEquals(None, parsedRecord.get("compresscodec"))
       }
     }
+  }
+}
+
+object DumpLogSegmentsTest {
+  class TestDecoder(props: VerifiableProperties) extends kafka.serializer.Decoder[Array[Byte]] {
+    override def fromBytes(bytes: Array[Byte]): Array[Byte] = bytes
+  }
+
+  class TestDecoderWithoutVerifiableProperties() extends kafka.serializer.Decoder[Array[Byte]] {
+    override def fromBytes(bytes: Array[Byte]): Array[Byte] = bytes
   }
 }

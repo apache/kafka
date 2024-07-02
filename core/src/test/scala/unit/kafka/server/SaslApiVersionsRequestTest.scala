@@ -22,7 +22,7 @@ import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.server.SaslApiVersionsRequestTest.{kafkaClientSaslMechanism, kafkaServerSaslMechanisms}
 import kafka.test.annotation.{ClusterTemplate, Type}
 import kafka.test.junit.ClusterTestExtensions
-import kafka.test.{ClusterConfig, ClusterGenerator, ClusterInstance}
+import kafka.test.{ClusterConfig, ClusterInstance}
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -31,7 +31,6 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, SaslHandshakeRequest, SaslHandshakeResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -44,9 +43,9 @@ object SaslApiVersionsRequestTest {
   val controlPlaneListenerName = "CONTROL_PLANE"
   val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
 
-  def saslApiVersionsRequestClusterConfig(clusterGenerator: ClusterGenerator): Unit = {
+  def saslApiVersionsRequestClusterConfig(): java.util.List[ClusterConfig] = {
     val saslServerProperties = new java.util.HashMap[String, String]()
-    saslServerProperties.put(KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, kafkaClientSaslMechanism)
+    saslServerProperties.put(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, kafkaClientSaslMechanism)
     saslServerProperties.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, kafkaServerSaslMechanisms.mkString(","))
 
     val saslClientProperties = new java.util.HashMap[String, String]()
@@ -59,13 +58,13 @@ object SaslApiVersionsRequestTest {
     serverProperties.put("listeners", s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
     serverProperties.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
 
-    clusterGenerator.accept(ClusterConfig.defaultBuilder
+    List(ClusterConfig.defaultBuilder
       .setSecurityProtocol(securityProtocol)
       .setTypes(Set(Type.ZK).asJava)
       .setSaslServerProperties(saslServerProperties)
       .setSaslClientProperties(saslClientProperties)
       .setServerProperties(serverProperties)
-      .build())
+      .build()).asJava
   }
 }
 
@@ -85,7 +84,9 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
     try {
       val apiVersionsResponse = IntegrationTestUtils.sendAndReceive[ApiVersionsResponse](
         new ApiVersionsRequest.Builder().build(0), socket)
-      validateApiVersionsResponse(apiVersionsResponse)
+      validateApiVersionsResponse(apiVersionsResponse,
+        enableUnstableLastVersion = !"false".equals(
+          cluster.config().serverProperties().get("unstable.api.versions.enable")))
       sendSaslHandshakeRequestValidateResponse(socket)
     } finally {
       socket.close()
@@ -114,7 +115,9 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
       assertEquals(Errors.UNSUPPORTED_VERSION.code, apiVersionsResponse.data.errorCode)
       val apiVersionsResponse2 = IntegrationTestUtils.sendAndReceive[ApiVersionsResponse](
         new ApiVersionsRequest.Builder().build(0), socket)
-      validateApiVersionsResponse(apiVersionsResponse2)
+      validateApiVersionsResponse(apiVersionsResponse2,
+        enableUnstableLastVersion = !"false".equals(
+          cluster.config().serverProperties().get("unstable.api.versions.enable")))
       sendSaslHandshakeRequestValidateResponse(socket)
     } finally {
       socket.close()

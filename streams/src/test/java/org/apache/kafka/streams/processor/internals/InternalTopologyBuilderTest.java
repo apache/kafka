@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -33,7 +33,6 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -42,8 +41,10 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
 
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -65,20 +66,20 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_2;
-
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class InternalTopologyBuilderTest {
 
@@ -566,6 +567,29 @@ public class InternalTopologyBuilderTest {
         final List<StateStore> suppliers = builder.buildTopology().stateStores();
         assertEquals(1, suppliers.size());
         assertEquals(storeBuilder.name(), suppliers.get(0).name());
+    }
+
+    @Test
+    public void testStateStoreNamesForSubtopology() {
+        builder.addStateStore(storeBuilder);
+        builder.setApplicationId("X");
+
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addProcessor("processor-1", new MockApiProcessorSupplier<>(), "source-1");
+        builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
+
+        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        builder.addProcessor("processor-2", new MockApiProcessorSupplier<>(), "source-2");
+
+        builder.buildTopology();
+        final Set<String> stateStoreNames = builder.stateStoreNamesForSubtopology(0);
+        assertThat(stateStoreNames, equalTo(mkSet(storeBuilder.name())));
+
+        final Set<String> emptyStoreNames = builder.stateStoreNamesForSubtopology(1);
+        assertThat(emptyStoreNames, equalTo(mkSet()));
+
+        final Set<String> stateStoreNamesUnknownSubtopology = builder.stateStoreNamesForSubtopology(13);
+        assertThat(stateStoreNamesUnknownSubtopology, nullValue());
     }
 
     @Test
@@ -1144,7 +1168,7 @@ public class InternalTopologyBuilderTest {
         final Map<String, List<String>> stateStoreAndTopics = builder.stateStoreNameToFullSourceTopicNames();
         final List<String> topics = stateStoreAndTopics.get(storeBuilder.name());
 
-        assertEquals("Expected to contain two topics", 2, topics.size());
+        assertEquals(2, topics.size(), "Expected to contain two topics");
 
         assertTrue(topics.contains("topic-2"));
         assertTrue(topics.contains("topic-3"));

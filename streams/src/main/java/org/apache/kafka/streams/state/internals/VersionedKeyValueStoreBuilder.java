@@ -20,12 +20,12 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueStore;
-
-import java.util.Objects;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
+
+import java.util.Objects;
 
 public class VersionedKeyValueStoreBuilder<K, V>
     extends AbstractStoreBuilder<K, V, VersionedKeyValueStore<K, V>> {

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration.utils;
 
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -61,11 +62,10 @@ import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.TestInfo;
-import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.Option;
 
 import java.io.File;
 import java.io.IOException;
@@ -97,6 +97,9 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
+import scala.Option;
+
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -104,8 +107,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.fail;
-import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -227,21 +229,6 @@ public class IntegrationTestUtils {
         }
     }
 
-    /**
-     * Gives a test name that is safe to be used in application ids, topic names, etc.
-     * The name is safe even for parameterized methods.
-     * Used by tests not yet migrated from JUnit 4.
-     */
-    public static String safeUniqueTestName(final TestName testName) {
-        final String methodName = testName.getMethodName();
-        return safeUniqueTestName(methodName);
-    }
-
-    /**
-     * Same as @see IntegrationTestUtils#safeUniqueTestName except it accepts a TestInfo passed in by
-     * JUnit 5 instead of a TestName from JUnit 4.
-     * Used by tests migrated to JUnit 5.
-     */
     public static String safeUniqueTestName(final TestInfo testInfo) {
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("unknownMethodName");
         return safeUniqueTestName(methodName);

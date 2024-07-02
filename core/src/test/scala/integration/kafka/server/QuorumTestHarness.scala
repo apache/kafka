@@ -38,7 +38,7 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.server.config.KRaftConfigs
+import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
@@ -124,12 +124,15 @@ class KRaftQuorumImplementation(
     metaPropertiesEnsemble.verify(Optional.of(clusterId),
       OptionalInt.of(config.nodeId),
       util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
-    val sharedServer = new SharedServer(config,
+    val sharedServer = new SharedServer(
+      config,
       metaPropertiesEnsemble,
       time,
       new Metrics(),
       controllerQuorumVotersFuture,
-      faultHandlerFactory)
+      controllerQuorumVotersFuture.get().values(),
+      faultHandlerFactory
+    )
     var broker: BrokerServer = null
     try {
       broker = new BrokerServer(sharedServer)
@@ -324,7 +327,7 @@ abstract class QuorumTestHarness extends Logging {
     props.putAll(overridingProps)
     props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
-    props.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
+    props.setProperty(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true")
     if (props.getProperty(KRaftConfigs.NODE_ID_CONFIG) == null) {
       props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1000")
     }
@@ -354,6 +357,8 @@ abstract class QuorumTestHarness extends Logging {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:0")
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:0")
+    // Setting the configuration to the same value set on the brokers via TestUtils to keep KRaft based and Zk based controller configs are consistent.
+    props.setProperty(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
     val config = new KafkaConfig(props)
     val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, InetSocketAddress]]
     val metaPropertiesEnsemble = new MetaPropertiesEnsemble.Loader().
@@ -362,12 +367,15 @@ abstract class QuorumTestHarness extends Logging {
     metaPropertiesEnsemble.verify(Optional.of(metaProperties.clusterId().get()),
       OptionalInt.of(nodeId),
       util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
-    val sharedServer = new SharedServer(config,
+    val sharedServer = new SharedServer(
+      config,
       metaPropertiesEnsemble,
       Time.SYSTEM,
       new Metrics(),
       controllerQuorumVotersFuture,
-      faultHandlerFactory)
+      Collections.emptyList(),
+      faultHandlerFactory
+    )
     var controllerServer: ControllerServer = null
     try {
       controllerServer = new ControllerServer(

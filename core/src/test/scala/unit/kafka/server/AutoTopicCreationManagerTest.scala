@@ -38,6 +38,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerd
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
+import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -65,7 +66,7 @@ class AutoTopicCreationManagerTest {
   @BeforeEach
   def setup(): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost")
-    props.setProperty(KafkaConfig.RequestTimeoutMsProp, requestTimeout.toString)
+    props.setProperty(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG, requestTimeout.toString)
 
     props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)
     props.setProperty(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)
@@ -355,7 +356,7 @@ class AutoTopicCreationManagerTest {
     val newTopic = if (isInternal) {
       topicName match {
         case Topic.GROUP_METADATA_TOPIC_NAME => getNewTopic(topicName,
-          numPartitions = config.offsetsTopicPartitions, replicationFactor = config.offsetsTopicReplicationFactor)
+          numPartitions = config.groupCoordinatorConfig.offsetsTopicPartitions, replicationFactor = config.groupCoordinatorConfig.offsetsTopicReplicationFactor)
         case Topic.TRANSACTION_STATE_TOPIC_NAME => getNewTopic(topicName,
           numPartitions = config.transactionTopicPartitions, replicationFactor = config.transactionTopicReplicationFactor)
       }

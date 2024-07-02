@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.utils.Time;
@@ -28,20 +31,17 @@ import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
-import org.apache.kafka.common.message.LeaderChangeMessage;
-import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.message.SnapshotFooterRecord;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -57,7 +57,7 @@ public class BatchAccumulator<T> implements Closeable {
     private final SimpleTimer lingerTimer;
     private final int lingerMs;
     private final int maxBatchSize;
-    private final CompressionType compressionType;
+    private final Compression compression;
     private final MemoryPool memoryPool;
     private final ReentrantLock appendLock;
     private final RecordSerde<T> serde;
@@ -80,7 +80,7 @@ public class BatchAccumulator<T> implements Closeable {
         int maxBatchSize,
         MemoryPool memoryPool,
         Time time,
-        CompressionType compressionType,
+        Compression compression,
         RecordSerde<T> serde
     ) {
         this.epoch = epoch;
@@ -89,7 +89,7 @@ public class BatchAccumulator<T> implements Closeable {
         this.memoryPool = memoryPool;
         this.time = time;
         this.lingerTimer = new SimpleTimer();
-        this.compressionType = compressionType;
+        this.compression = compression;
         this.serde = serde;
         this.nextOffset = baseOffset;
         this.drainStatus = DrainStatus.NONE;
@@ -269,7 +269,7 @@ public class BatchAccumulator<T> implements Closeable {
         } else if (batch.baseOffset() != nextOffset) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected a base offset of {} but got {}",
+                    "Expected a base offset of %d but got %d",
                     nextOffset,
                     batch.baseOffset()
                 )
@@ -277,7 +277,7 @@ public class BatchAccumulator<T> implements Closeable {
         } else if (batch.partitionLeaderEpoch() != epoch) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected a partition leader epoch of {} but got {}",
+                    "Expected a partition leader epoch of %d but got %d",
                     epoch,
                     batch.partitionLeaderEpoch()
                 )
@@ -388,7 +388,7 @@ public class BatchAccumulator<T> implements Closeable {
             currentBatch = new BatchBuilder<>(
                 buffer,
                 serde,
-                compressionType,
+                compression,
                 nextOffset,
                 time.milliseconds(),
                 false,

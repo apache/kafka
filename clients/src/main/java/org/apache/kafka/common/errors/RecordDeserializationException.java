@@ -16,7 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.record.TimestampType;
+
+import java.nio.ByteBuffer;
 
 /**
  *  This exception is raised for any error that occurs while deserializing records received by the consumer using 
@@ -24,14 +29,61 @@ import org.apache.kafka.common.TopicPartition;
  */
 public class RecordDeserializationException extends SerializationException {
 
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
+
+    public enum DeserializationExceptionOrigin {
+        KEY,
+        VALUE
+    }
+
+    private final DeserializationExceptionOrigin origin;
     private final TopicPartition partition;
     private final long offset;
+    private final TimestampType timestampType;
+    private final long timestamp;
+    private final ByteBuffer keyBuffer;
+    private final ByteBuffer valueBuffer;
+    private final Headers headers;
 
-    public RecordDeserializationException(TopicPartition partition, long offset, String message, Throwable cause) {
+    @Deprecated
+    public RecordDeserializationException(TopicPartition partition,
+                                          long offset,
+                                          String message,
+                                          Throwable cause) {
         super(message, cause);
+        this.origin = null;
         this.partition = partition;
         this.offset = offset;
+        this.timestampType = TimestampType.NO_TIMESTAMP_TYPE;
+        this.timestamp = ConsumerRecord.NO_TIMESTAMP;
+        this.keyBuffer = null;
+        this.valueBuffer = null;
+        this.headers = null;
+    }
+
+    public RecordDeserializationException(DeserializationExceptionOrigin origin,
+                                          TopicPartition partition,
+                                          long offset,
+                                          long timestamp,
+                                          TimestampType timestampType,
+                                          ByteBuffer keyBuffer,
+                                          ByteBuffer valueBuffer,
+                                          Headers headers,
+                                          String message,
+                                          Throwable cause) {
+        super(message, cause);
+        this.origin = origin;
+        this.offset = offset;
+        this.timestampType = timestampType;
+        this.timestamp = timestamp;
+        this.partition = partition;
+        this.keyBuffer = keyBuffer;
+        this.valueBuffer = valueBuffer;
+        this.headers = headers;
+    }
+
+    public DeserializationExceptionOrigin origin() {
+        return origin;
     }
 
     public TopicPartition topicPartition() {
@@ -40,5 +92,25 @@ public class RecordDeserializationException extends SerializationException {
 
     public long offset() {
         return offset;
+    }
+
+    public TimestampType timestampType() {
+        return timestampType;
+    }
+
+    public long timestamp() {
+        return timestamp;
+    }
+
+    public ByteBuffer keyBuffer() {
+        return keyBuffer;
+    }
+
+    public ByteBuffer valueBuffer() {
+        return valueBuffer;
+    }
+
+    public Headers headers() {
+        return headers;
     }
 }

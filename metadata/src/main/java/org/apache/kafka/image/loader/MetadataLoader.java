@@ -37,6 +37,7 @@ import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
+
 import org.slf4j.Logger;
 
 import java.util.Iterator;

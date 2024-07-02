@@ -19,7 +19,9 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.LeastLoadedNode;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
@@ -32,6 +34,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -39,10 +42,10 @@ import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -86,6 +89,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -298,7 +302,8 @@ public class SenderTest {
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
-                time, true, new ApiVersions(), throttleTimeSensor, logContext);
+                time, true, new ApiVersions(), throttleTimeSensor, logContext,
+                MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.ZK_BROKER);
@@ -569,7 +574,7 @@ public class SenderTest {
             // otherwise it wouldn't update the stats.
             RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42);
             long totalSize = 1024 * 1024;
-            accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L, 0L,
+            accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
                 DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, apiVersions, null,
                 new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"));
 
@@ -2417,7 +2422,7 @@ public class SenderTest {
         // Set a good compression ratio.
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
         try (Metrics m = new Metrics()) {
-            accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.GZIP,
+            accumulator = new RecordAccumulator(logContext, batchSize, Compression.gzip().build(),
                 0, 0L, 0L, deliveryTimeoutMs, m, metricGrpName, time, new ApiVersions(), txnManager,
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics"));
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
@@ -3200,7 +3205,7 @@ public class SenderTest {
             long retryBackoffMaxMs = 100L;
             // lingerMs is 0 to send batch as soon as any records are available on it.
             this.accumulator = new RecordAccumulator(logContext, batchSize,
-                CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
+                Compression.NONE, 0, 10L, retryBackoffMaxMs,
                 DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
@@ -3314,7 +3319,7 @@ public class SenderTest {
             long retryBackoffMaxMs = 100L;
             // lingerMs is 0 to send batch as soon as any records are available on it.
             this.accumulator = new RecordAccumulator(logContext, batchSize,
-                CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
+                Compression.NONE, 0, 10L, retryBackoffMaxMs,
                 DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
@@ -3394,7 +3399,7 @@ public class SenderTest {
             long retryBackoffMaxMs = 100L;
             // lingerMs is 0 to send batch as soon as any records are available on it.
             this.accumulator = new RecordAccumulator(logContext, batchSize,
-                CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
+                Compression.NONE, 0, 10L, retryBackoffMaxMs,
                 DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
@@ -3696,7 +3701,7 @@ public class SenderTest {
         this.metrics = new Metrics(metricConfig, time);
         BufferPool pool = (customPool == null) ? new BufferPool(totalSize, batchSize, metrics, time, metricGrpName) : customPool;
 
-        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, lingerMs, 0L, 0L,
+        this.accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, lingerMs, 0L, 0L,
             DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, transactionManager, pool);
         this.senderMetricsRegistry = new SenderMetricsRegistry(this.metrics);
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, guaranteeOrder, MAX_REQUEST_SIZE, ACKS_ALL,
@@ -3796,12 +3801,12 @@ public class SenderTest {
         client = new MockClient(time, metadata) {
             volatile boolean canSendMore = true;
             @Override
-            public Node leastLoadedNode(long now) {
+            public LeastLoadedNode leastLoadedNode(long now) {
                 for (Node node : metadata.fetch().nodes()) {
                     if (isReady(node, now) && canSendMore)
-                        return node;
+                        return new LeastLoadedNode(node, true);
                 }
-                return null;
+                return new LeastLoadedNode(null, false);
             }
 
             @Override
@@ -3820,7 +3825,7 @@ public class SenderTest {
         while (!client.ready(node, time.milliseconds()))
             client.poll(0, time.milliseconds());
         client.send(request, time.milliseconds());
-        while (client.leastLoadedNode(time.milliseconds()) != null)
+        while (client.leastLoadedNode(time.milliseconds()).node() != null)
             client.poll(0, time.milliseconds());
     }
 

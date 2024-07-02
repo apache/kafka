@@ -17,13 +17,13 @@
 
 package org.apache.kafka.shell.command;
 
-import static java.util.concurrent.TimeUnit.MINUTES;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
+
+import static java.util.concurrent.TimeUnit.MINUTES;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 5, unit = MINUTES)
 public class CommandUtilsTest {
@@ -33,5 +33,19 @@ public class CommandUtilsTest {
             CommandUtils.splitPath("/alpha/beta"));
         assertEquals(Arrays.asList("alpha", "beta"),
             CommandUtils.splitPath("//alpha/beta/"));
+    }
+
+    @Test
+    public void testStripDotPathComponents() {
+
+        //double dots
+        assertEquals(Arrays.asList("keep", "keep2"), CommandUtils.stripDotPathComponents(Arrays.asList("..", "keep", "keep2")));
+        //single dots
+        assertEquals(Arrays.asList("keep", "keep2"), CommandUtils.stripDotPathComponents(Arrays.asList(".", "keep", "keep2")));
+
+        assertEquals(Arrays.asList(".keep", "keep2"), CommandUtils.stripDotPathComponents(Arrays.asList(".", ".keep", "keep2")));
+
+        assertEquals(Arrays.asList(".keep", "keep2"), CommandUtils.stripDotPathComponents(Arrays.asList("..", ".keep", "keep2")));
+
     }
 }

@@ -36,7 +36,8 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
-import org.apache.kafka.coordinator.group.runtime.PartitionWriter;
+import org.apache.kafka.coordinator.group.runtime.Deserializer;
+import org.apache.kafka.coordinator.group.runtime.Serializer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.nio.BufferUnderflowException;
@@ -56,7 +57,7 @@ import java.nio.ByteBuffer;
  *     value_message   : The serialized message of the value {@link ApiMessageAndVersion} object.
  * </pre>
  */
-public class CoordinatorRecordSerde implements PartitionWriter.Serializer<CoordinatorRecord>, CoordinatorLoader.Deserializer<CoordinatorRecord> {
+public class CoordinatorRecordSerde implements Serializer<CoordinatorRecord>, Deserializer<CoordinatorRecord> {
     @Override
     public byte[] serializeKey(CoordinatorRecord record) {
         // Record does not accept a null key.

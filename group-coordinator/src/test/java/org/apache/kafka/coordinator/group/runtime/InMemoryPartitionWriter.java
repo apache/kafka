@@ -18,162 +18,29 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.requests.TransactionResult;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 /**
  * An in-memory partition writer.
- *
- * @param <T> The record type.
  */
-public class InMemoryPartitionWriter<T> implements PartitionWriter<T> {
-
-    public static class LogEntry {
-        public static <T> LogEntry value(T value) {
-            return new LogValue<>(value);
-        }
-
-        public static <T> LogEntry value(
-            long producerId,
-            short producerEpoch,
-            T value
-        ) {
-            return new LogValue<>(
-                producerId,
-                producerEpoch,
-                value
-            );
-        }
-
-        public static LogEntry control(
-            long producerId,
-            short producerEpoch,
-            int coordinatorEpoch,
-            TransactionResult result
-        ) {
-            return new LogControl(
-                producerId,
-                producerEpoch,
-                coordinatorEpoch,
-                result
-            );
-        }
-    }
-
-    public static class LogValue<T> extends LogEntry {
-        public final long producerId;
-        public final short producerEpoch;
-        public final T value;
-
-        private LogValue(
-            long producerId,
-            short producerEpoch,
-            T value
-        ) {
-            this.producerId = producerId;
-            this.producerEpoch = producerEpoch;
-            this.value = value;
-        }
-
-        private LogValue(T value) {
-            this(
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH,
-                value
-            );
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            LogValue<?> that = (LogValue<?>) o;
-
-            return Objects.equals(value, that.value);
-        }
-
-        @Override
-        public int hashCode() {
-            return value != null ? value.hashCode() : 0;
-        }
-
-        @Override
-        public String toString() {
-            return "BasicRecord(" +
-                "producerId=" + producerId +
-                ", producerEpoch=" + producerEpoch +
-                ", value=" + value +
-                ')';
-        }
-    }
-
-    public static class LogControl extends LogEntry {
-        public final long producerId;
-        public final short producerEpoch;
-        public final int coordinatorEpoch;
-        public final TransactionResult result;
-
-        private LogControl(
-            long producerId,
-            short producerEpoch,
-            int coordinatorEpoch,
-            TransactionResult result
-        ) {
-            this.producerId = producerId;
-            this.producerEpoch = producerEpoch;
-            this.coordinatorEpoch = coordinatorEpoch;
-            this.result = result;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            LogControl that = (LogControl) o;
-
-            if (producerId != that.producerId) return false;
-            if (producerEpoch != that.producerEpoch) return false;
-            if (coordinatorEpoch != that.coordinatorEpoch) return false;
-            return result == that.result;
-        }
-
-        @Override
-        public int hashCode() {
-            int result1 = (int) (producerId ^ (producerId >>> 32));
-            result1 = 31 * result1 + (int) producerEpoch;
-            result1 = 31 * result1 + coordinatorEpoch;
-            result1 = 31 * result1 + (result != null ? result.hashCode() : 0);
-            return result1;
-        }
-
-        @Override
-        public String toString() {
-            return "ControlRecord(" +
-                "producerId=" + producerId +
-                ", producerEpoch=" + producerEpoch +
-                ", coordinatorEpoch=" + coordinatorEpoch +
-                ", result=" + result +
-                ')';
-        }
-    }
+public class InMemoryPartitionWriter implements PartitionWriter {
 
     private class PartitionState {
         private ReentrantLock lock = new ReentrantLock();
         private List<Listener> listeners = new ArrayList<>();
-        private List<LogEntry> entries = new ArrayList<>();
+        private List<MemoryRecords> entries = new ArrayList<>();
         private long endOffset = 0L;
         private long committedOffset = 0L;
     }
@@ -221,47 +88,26 @@ public class InMemoryPartitionWriter<T> implements PartitionWriter<T> {
     }
 
     @Override
-    public long append(
-        TopicPartition tp,
-        long producerId,
-        short producerEpoch,
-        VerificationGuard verificationGuard,
-        List<T> records
-    ) throws KafkaException {
-        PartitionState state = partitionState(tp);
-        state.lock.lock();
-        try {
-            state.entries.addAll(records.stream().map(record -> new LogValue<T>(
-                producerId,
-                producerEpoch,
-                record
-            )).collect(Collectors.toList()));
-            state.endOffset += records.size();
-            if (autoCommit) commit(tp, state.endOffset);
-            return state.endOffset;
-        } finally {
-            state.lock.unlock();
-        }
+    public LogConfig config(TopicPartition tp) {
+        return new LogConfig(Collections.emptyMap());
     }
 
     @Override
-    public long appendEndTransactionMarker(
+    public long append(
         TopicPartition tp,
-        long producerId,
-        short producerEpoch,
-        int coordinatorEpoch,
-        TransactionResult result
-    ) throws KafkaException {
+        VerificationGuard verificationGuard,
+        MemoryRecords batch
+    ) {
         PartitionState state = partitionState(tp);
         state.lock.lock();
         try {
-            state.entries.add(new LogControl(
-                producerId,
-                producerEpoch,
-                coordinatorEpoch,
-                result
-            ));
-            state.endOffset += 1;
+            // Copy the memory records because the coordinator runtime reuse the buffer.
+            ByteBuffer buffer = ByteBuffer.allocate(batch.sizeInBytes());
+            batch.firstBatch().writeTo(buffer);
+            buffer.flip();
+            state.entries.add(MemoryRecords.readableRecords(buffer));
+            // Increment the end offset.
+            state.endOffset += StreamSupport.stream(batch.records().spliterator(), false).count();
             if (autoCommit) commit(tp, state.endOffset);
             return state.endOffset;
         } finally {
@@ -311,7 +157,7 @@ public class InMemoryPartitionWriter<T> implements PartitionWriter<T> {
         }
     }
 
-    public List<LogEntry> entries(
+    public List<MemoryRecords> entries(
         TopicPartition tp
     ) {
         PartitionState state = partitionState(tp);

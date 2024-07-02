@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.util.Collections;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -25,28 +24,20 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -61,32 +52,13 @@ import static org.hamcrest.core.IsEqual.equalTo;
 /**
  * Tests all available joins of Kafka Streams DSL.
  */
-@Category({IntegrationTest.class})
-@RunWith(value = Parameterized.class)
 public abstract class AbstractJoinIntegrationTest {
-    @Rule
-    public final TemporaryFolder testFolder = new TemporaryFolder(TestUtils.tempDirectory());
-
-    @Parameterized.Parameters(name = "caching enabled = {0}")
-    public static Collection<Object[]> data() {
-        final List<Object[]> values = new ArrayList<>();
-        for (final boolean cacheEnabled : Arrays.asList(true, false)) {
-            values.add(new Object[]{cacheEnabled});
-        }
-        return values;
-    }
-
-    static String appID;
-
     private final MockTime time = new MockTime();
     private static final Long COMMIT_INTERVAL = 100L;
-    static final Properties STREAMS_CONFIG = new Properties();
     static final String INPUT_TOPIC_RIGHT = "inputTopicRight";
     static final String INPUT_TOPIC_LEFT = "inputTopicLeft";
     static final String OUTPUT_TOPIC = "outputTopic";
     static final long ANY_UNIQUE_KEY = 0L;
-
-    StreamsBuilder builder;
 
     protected final List<Input<String>> input = Arrays.asList(
         new Input<>(INPUT_TOPIC_LEFT, null, 1),
@@ -152,34 +124,36 @@ public abstract class AbstractJoinIntegrationTest {
 
     final ValueJoiner<String, String, String> valueJoiner = (value1, value2) -> value1 + "-" + value2;
 
-    final boolean cacheEnabled;
-
-    AbstractJoinIntegrationTest(final boolean cacheEnabled) {
-        this.cacheEnabled = cacheEnabled;
-    }
-
-    @BeforeClass
-    public static void setupConfigsAndUtils() {
-        STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
-    }
-
-    void prepareEnvironment() throws InterruptedException {
+    Properties setupConfigsAndUtils(final boolean cacheEnabled) {
+        final Properties streamsConfig = new Properties();
+        streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
         if (!cacheEnabled) {
-            STREAMS_CONFIG.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+            streamsConfig.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         }
 
-        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath());
+        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+
+        return streamsConfig;
     }
 
-    void runTestWithDriver(final List<Input<String>> input, final List<List<TestRecord<Long, String>>> expectedResult) {
-        runTestWithDriver(input, expectedResult, null);
+    void runTestWithDriver(
+            final List<Input<String>> input,
+            final List<List<TestRecord<Long, String>>> expectedResult,
+            final Properties properties,
+            final Topology topology) {
+        runTestWithDriver(input, expectedResult, null, properties, topology);
     }
 
-    void runTestWithDriver(final List<Input<String>> input, final List<List<TestRecord<Long, String>>> expectedResult, final String storeName) {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(STREAMS_CONFIG), STREAMS_CONFIG)) {
+    void runTestWithDriver(
+            final List<Input<String>> input,
+            final List<List<TestRecord<Long, String>>> expectedResult,
+            final String storeName,
+            final Properties properties,
+            final Topology topology) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, properties)) {
             final TestInputTopic<Long, String> right = driver.createInputTopic(INPUT_TOPIC_RIGHT, new LongSerializer(), new StringSerializer());
             final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
             final TestOutputTopic<Long, String> outputTopic = driver.createOutputTopic(OUTPUT_TOPIC, new LongDeserializer(), new StringDeserializer());
@@ -217,8 +191,13 @@ public abstract class AbstractJoinIntegrationTest {
         }
     }
 
-    void runTestWithDriver(final List<Input<String>> input, final TestRecord<Long, String> expectedFinalResult, final String storeName) throws InterruptedException {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(STREAMS_CONFIG), STREAMS_CONFIG)) {
+    void runTestWithDriver(
+            final List<Input<String>> input,
+            final TestRecord<Long, String> expectedFinalResult,
+            final String storeName,
+            final Properties streamsConfig,
+            final Topology topology) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<Long, String> right = driver.createInputTopic(INPUT_TOPIC_RIGHT, new LongSerializer(), new StringSerializer());
             final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
             final TestOutputTopic<Long, String> outputTopic = driver.createOutputTopic(OUTPUT_TOPIC, new LongDeserializer(), new StringDeserializer());
@@ -250,8 +229,11 @@ public abstract class AbstractJoinIntegrationTest {
         }
     }
 
-    void runSelfJoinTestWithDriver(final List<List<TestRecord<Long, String>>> expectedResult) {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(STREAMS_CONFIG), STREAMS_CONFIG)) {
+    void runSelfJoinTestWithDriver(
+            final List<List<TestRecord<Long, String>>> expectedResult,
+            final Properties streamsConfig,
+            final Topology topology) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
             final TestOutputTopic<Long, String> outputTopic = driver.createOutputTopic(OUTPUT_TOPIC, new LongDeserializer(), new StringDeserializer());
 

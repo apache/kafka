@@ -17,6 +17,7 @@
 package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.config.ConfigData;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,10 +25,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
@@ -37,7 +38,6 @@ import java.util.Set;
 import java.util.stream.StreamSupport;
 
 import static java.util.Arrays.asList;
-
 import static org.apache.kafka.common.config.provider.DirectoryConfigProvider.ALLOWED_PATHS_CONFIG;
 import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -179,12 +179,12 @@ public class DirectoryConfigProviderTest {
         provider.configure(configs);
 
         ConfigData configData = provider.get(subdir);
-        assertEquals(toSet(asList(subdirFileName)), configData.data().keySet());
+        assertEquals(toSet(Collections.singletonList(subdirFileName)), configData.data().keySet());
         assertEquals("SUBDIRFILE", configData.data().get(subdirFileName));
         assertNull(configData.ttl());
 
         configData = provider.get(siblingDir);
-        assertEquals(toSet(asList(siblingDirFileName)), configData.data().keySet());
+        assertEquals(toSet(Collections.singletonList(siblingDirFileName)), configData.data().keySet());
         assertEquals("SIBLINGDIRFILE", configData.data().get(siblingDirFileName));
         assertNull(configData.ttl());
     }
@@ -218,4 +218,3 @@ public class DirectoryConfigProviderTest {
         assertEquals("The provider has not been configured yet.", ise.getMessage());
     }
 }
-

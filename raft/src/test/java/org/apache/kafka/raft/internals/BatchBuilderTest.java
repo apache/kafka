@@ -16,17 +16,20 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -46,11 +49,11 @@ class BatchBuilderTest {
         long logAppendTime = time.milliseconds();
         boolean isControlBatch = false;
         int leaderEpoch = 15;
-
+        Compression compression = Compression.of(compressionType).build();
         BatchBuilder<String> builder = new BatchBuilder<>(
             buffer,
             serde,
-            compressionType,
+            compression,
             baseOffset,
             logAppendTime,
             isControlBatch,
@@ -68,7 +71,7 @@ class BatchBuilderTest {
 
         records.forEach(record -> builder.appendRecord(record, null));
         MemoryRecords builtRecordSet = builder.build();
-        assertTrue(builder.bytesNeeded(Arrays.asList("a"), null).isPresent());
+        assertTrue(builder.bytesNeeded(Collections.singletonList("a"), null).isPresent());
         assertThrows(IllegalStateException.class, () -> builder.appendRecord("a", null));
 
         List<MutableRecordBatch> builtBatches = Utils.toList(builtRecordSet.batchIterator());
@@ -102,7 +105,7 @@ class BatchBuilderTest {
         BatchBuilder<String> builder = new BatchBuilder<>(
             buffer,
             serde,
-            CompressionType.NONE,
+            Compression.NONE,
             baseOffset,
             logAppendTime,
             isControlBatch,
@@ -112,7 +115,7 @@ class BatchBuilderTest {
 
         String record = "i am a record";
 
-        while (!builder.bytesNeeded(Arrays.asList(record), null).isPresent()) {
+        while (!builder.bytesNeeded(Collections.singletonList(record), null).isPresent()) {
             builder.appendRecord(record, null);
         }
 

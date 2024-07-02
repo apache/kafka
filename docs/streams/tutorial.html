@@ -42,31 +42,31 @@
         We are going to use a Kafka Streams Maven Archetype for creating a Streams project structure with the following commands:
     </p>
 
-    <pre class="line-numbers"><code class="language-bash">mvn archetype:generate \
-    -DarchetypeGroupId=org.apache.kafka \
-    -DarchetypeArtifactId=streams-quickstart-java \
-    -DarchetypeVersion={{fullDotVersion}} \
-    -DgroupId=streams.examples \
-    -DartifactId=streams-quickstart\
-    -Dversion=0.1 \
-    -Dpackage=myapps</code></pre>
+    <pre><code class="language-bash">$ mvn archetype:generate \
+-DarchetypeGroupId=org.apache.kafka \
+-DarchetypeArtifactId=streams-quickstart-java \
+-DarchetypeVersion={{fullDotVersion}} \
+-DgroupId=streams.examples \
+-DartifactId=streams-quickstart\
+-Dversion=0.1 \
+-Dpackage=myapps</code></pre>
     <p>
         You can use a different value for <code>groupId</code>, <code>artifactId</code> and <code>package</code> parameters if you like.
         Assuming the above parameter values are used, this command will create a project structure that looks like this:
     </p>
 
-    <pre class="line-numbers"><code class="language-bash">&gt; tree streams-quickstart
-    streams-quickstart
-    |-- pom.xml
-    |-- src
-        |-- main
-            |-- java
-            |   |-- myapps
-            |       |-- LineSplit.java
-            |       |-- Pipe.java
-            |       |-- WordCount.java
-            |-- resources
-                |-- log4j.properties</code></pre>
+    <pre><code class="language-bash">$ tree streams-quickstart
+streams-quickstart
+|-- pom.xml
+|-- src
+    |-- main
+        |-- java
+        |   |-- myapps
+        |       |-- LineSplit.java
+        |       |-- Pipe.java
+        |       |-- WordCount.java
+        |-- resources
+            |-- log4j.properties</code></pre>
 
     <p>
         The <code>pom.xml</code> file included in the project already has the Streams dependency defined.
@@ -78,8 +78,8 @@
         Since we are going to start writing such programs from scratch, we can now delete these examples:
     </p>
 
-    <pre class="line-numbers"><code class="language-bash">&gt; cd streams-quickstart
-&gt; rm src/main/java/myapps/*.java</code></pre>
+    <pre><code class="language-bash">$ cd streams-quickstart
+$ rm src/main/java/myapps/*.java</code></pre>
 
     <h4><a id="tutorial_code_pipe" href="#tutorial_code_pipe">Writing a first Streams application: Pipe</a></h4>
 
@@ -165,8 +165,8 @@ props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getCla
         If we just stop here, compile and run the program, it will output the following information:
     </p>
 
-    <pre class="line-numbers"><code class="language-bash">&gt; mvn clean package
-&gt; mvn exec:java -Dexec.mainClass=myapps.Pipe
+    <pre><code class="language-bash">$ mvn clean package
+$ mvn exec:java -Dexec.mainClass=myapps.Pipe
 Sub-topologies:
   Sub-topology: 0
     Source: KSTREAM-SOURCE-0000000000(topics: streams-plaintext-input) --> KSTREAM-SINK-0000000001
@@ -273,8 +273,8 @@ public class Pipe {
         you can run this code in your IDE or on the command line, using Maven:
     </p>
 
-    <pre class="line-numbers"><code class="language-brush">&gt; mvn clean package
-&gt; mvn exec:java -Dexec.mainClass=myapps.Pipe</code></pre>
+    <pre><code class="language-bash">$ mvn clean package
+$ mvn exec:java -Dexec.mainClass=myapps.Pipe</code></pre>
 
     <p>
         For detailed instructions on how to run a Streams application and observe its computing results,
@@ -290,7 +290,7 @@ public class Pipe {
         We can first create another program by first copy the existing <code>Pipe.java</code> class:
     </p>
 
-    <pre class="line-numbers"><code class="language-brush">&gt; cp src/main/java/myapps/Pipe.java src/main/java/myapps/LineSplit.java</code></pre>
+    <pre><code class="language-bash">$ cp src/main/java/myapps/Pipe.java src/main/java/myapps/LineSplit.java</code></pre>
 
     <p>
         And change its class name as well as the application id config to distinguish with the original program:
@@ -342,8 +342,8 @@ source.flatMapValues(value -> Arrays.asList(value.split("\\W+")))
         If we now describe this augmented topology as <code>System.out.println(topology.describe())</code>, we will get the following:
     </p>
 
-    <pre class="line-numbers"><code class="language-bash">&gt; mvn clean package
-&gt; mvn exec:java -Dexec.mainClass=myapps.LineSplit
+    <pre><code class="language-bash">$ mvn clean package
+$ mvn exec:java -Dexec.mainClass=myapps.LineSplit
 Sub-topologies:
   Sub-topology: 0
     Source: KSTREAM-SOURCE-0000000000(topics: streams-plaintext-input) --> KSTREAM-FLATMAPVALUES-0000000001
@@ -482,8 +482,8 @@ source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault(
         If we again describe this augmented topology as <code>System.out.println(topology.describe())</code>, we will get the following:
     </p>
 
-    <pre class="line-numbers"><code class="language-bash">&gt; mvn clean package
-&gt; mvn exec:java -Dexec.mainClass=myapps.WordCount
+    <pre><code class="language-bash">$ mvn clean package
+$ mvn exec:java -Dexec.mainClass=myapps.WordCount
 Sub-topologies:
   Sub-topology: 0
     Source: KSTREAM-SOURCE-0000000000(topics: streams-plaintext-input) --> KSTREAM-FLATMAPVALUES-0000000001

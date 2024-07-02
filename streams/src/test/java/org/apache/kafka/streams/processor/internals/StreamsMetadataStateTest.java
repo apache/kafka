@@ -32,27 +32,28 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.Optional;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamsMetadataStateTest {
 
@@ -75,7 +76,7 @@ public class StreamsMetadataStateTest {
     private StreamPartitioner<String, Object> partitioner;
     private Set<String> storeNames;
 
-    @Before
+    @BeforeEach
     public void before() {
         builder = new StreamsBuilder();
         final KStream<Object, Object> one = builder.stream("topic-one");
@@ -180,9 +181,9 @@ public class StreamsMetadataStateTest {
 
         final Collection<StreamsMetadata> actual = metadataState.getAllMetadata();
         assertEquals(3, actual.size());
-        assertTrue("expected " + actual + " to contain " + one, actual.contains(one));
-        assertTrue("expected " + actual + " to contain " + two, actual.contains(two));
-        assertTrue("expected " + actual + " to contain " + three, actual.contains(three));
+        assertTrue(actual.contains(one), "expected " + actual + " to contain " + one);
+        assertTrue(actual.contains(two), "expected " + actual + " to contain " + two);
+        assertTrue(actual.contains(three), "expected " + actual + " to contain " + three);
     }
 
     @Test
@@ -199,7 +200,7 @@ public class StreamsMetadataStateTest {
         final StreamsMetadata expected = new StreamsMetadataImpl(hostFour, Collections.singleton(globalTable),
                 Collections.singleton(tp5), Collections.emptySet(), Collections.emptySet());
         final Collection<StreamsMetadata> actual = metadataState.getAllMetadata();
-        assertTrue("expected " + actual + " to contain " + expected, actual.contains(expected));
+        assertTrue(actual.contains(expected), "expected " + actual + " to contain " + expected);
     }
 
     @Test
@@ -218,10 +219,10 @@ public class StreamsMetadataStateTest {
         final Map<HostInfo, StreamsMetadata> actualAsMap = actual.stream()
             .collect(Collectors.toMap(StreamsMetadata::hostInfo, Function.identity()));
         assertEquals(3, actual.size());
-        assertTrue("expected " + actual + " to contain " + one, actual.contains(one));
-        assertTrue("expected " + actual + " to contain " + two, actual.contains(two));
-        assertTrue("expected " + hostThree + " to contain as standby",
-            actualAsMap.get(hostThree).standbyStateStoreNames().contains("table-one"));
+        assertTrue(actual.contains(one), "expected " + actual + " to contain " + one);
+        assertTrue(actual.contains(two), "expected " + actual + " to contain " + two);
+        assertTrue(actualAsMap.get(hostThree).standbyStateStoreNames().contains("table-one"),
+            "expected " + hostThree + " to contain as standby");
     }
 
     @Test
@@ -392,15 +393,15 @@ public class StreamsMetadataStateTest {
     public void shouldReturnAllMetadataThatRemainsValidAfterChange() {
         final Collection<StreamsMetadata> allMetadata = metadataState.getAllMetadata();
         final Collection<StreamsMetadata> copy = new ArrayList<>(allMetadata);
-        assertFalse("invalid test", allMetadata.isEmpty());
+        assertFalse(allMetadata.isEmpty(), "invalid test");
         metadataState.onChange(Collections.emptyMap(), Collections.emptyMap(), partitionInfos);
-        assertEquals("encapsulation broken", allMetadata, copy);
+        assertEquals(allMetadata, copy, "encapsulation broken");
     }
 
     @Test
     public void shouldNotReturnMutableReferenceToInternalAllMetadataCollection() {
         final Collection<StreamsMetadata> allMetadata = metadataState.getAllMetadata();
-        assertFalse("invalid test", allMetadata.isEmpty());
+        assertFalse(allMetadata.isEmpty(), "invalid test");
 
         try {
             // Either this should not affect internal state of 'metadataState'
@@ -409,6 +410,6 @@ public class StreamsMetadataStateTest {
             // Or should fail.
         }
 
-        assertFalse("encapsulation broken", metadataState.getAllMetadata().isEmpty());
+        assertFalse(metadataState.getAllMetadata().isEmpty(), "encapsulation broken");
     }
 }

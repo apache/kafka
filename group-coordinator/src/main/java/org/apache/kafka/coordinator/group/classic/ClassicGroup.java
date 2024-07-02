@@ -16,10 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.classic;
 
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -28,29 +25,27 @@ import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
-import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -66,6 +61,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
@@ -325,12 +321,10 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * To identify whether the given member id is part of this group.
-     *
-     * @param memberId the given member id.
      * @return true if the member is part of this group, false otherwise.
      */
-    public boolean hasMemberId(String memberId) {
+    @Override
+    public boolean hasMember(String memberId) {
         return members.containsKey(memberId);
     }
 
@@ -347,7 +341,8 @@ public class ClassicGroup implements Group {
     /**
      * @return the total number of members in this group.
      */
-    public int size() {
+    @Override
+    public int numMembers() {
         return members.size();
     }
 
@@ -615,7 +610,7 @@ public class ClassicGroup implements Group {
      *         false otherwise.
      */
     public boolean addPendingMember(String memberId) {
-        if (hasMemberId(memberId)) {
+        if (hasMember(memberId)) {
             throw new IllegalStateException("Attempt to add pending member " + memberId +
                 " which is already a stable member of the group.");
         }
@@ -637,7 +632,7 @@ public class ClassicGroup implements Group {
      *         false otherwise.
      */
     public boolean addPendingSyncMember(String memberId) {
-        if (!hasMemberId(memberId)) {
+        if (!hasMember(memberId)) {
             throw new IllegalStateException("Attempt to add pending sync member " + memberId +
                 " which is already a stable member of the group.");
         }
@@ -652,7 +647,7 @@ public class ClassicGroup implements Group {
      * @return true if the group did store this member, false otherwise.
      */
     public boolean removePendingSyncMember(String memberId) {
-        if (!hasMemberId(memberId)) {
+        if (!hasMember(memberId)) {
             throw new IllegalStateException("Attempt to add pending member " + memberId +
                 " which is already a stable member of the group.");
         }
@@ -812,7 +807,7 @@ public class ClassicGroup implements Group {
             }
         }
 
-        if (!hasMemberId(memberId)) {
+        if (!hasMember(memberId)) {
             throw Errors.UNKNOWN_MEMBER_ID.exception();
         }
     }
@@ -824,13 +819,15 @@ public class ClassicGroup implements Group {
      * @param groupInstanceId   The group instance id.
      * @param generationId      The generation id.
      * @param isTransactional   Whether the offset commit is transactional or not.
+     * @param apiVersion        The api version.
      */
     @Override
     public void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int generationId,
-        boolean isTransactional
+        boolean isTransactional,
+        short apiVersion
     ) throws CoordinatorNotAvailableException, UnknownMemberIdException, IllegalGenerationException, FencedInstanceIdException {
         if (isInState(DEAD)) {
             throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
@@ -1187,7 +1184,7 @@ public class ClassicGroup implements Group {
                     ByteBuffer buffer = ByteBuffer.wrap(member.metadata(protocolName.get()));
                     ConsumerProtocol.deserializeVersion(buffer);
                     allSubscribedTopics.addAll(new HashSet<>(
-                        ConsumerProtocol.deserializeSubscription(buffer, (short) 0).topics()
+                        ConsumerProtocol.deserializeConsumerProtocolSubscription(buffer, (short) 0).topics()
                     ));
                 });
                 return Optional.of(allSubscribedTopics);
@@ -1415,10 +1412,10 @@ public class ClassicGroup implements Group {
             // Set the assignment with serializing the ConsumerGroup's targetAssignment.
             // The serializing version should align with that of the member's JoinGroupRequestProtocol.
             byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(
-                new ConsumerPartitionAssignor.Assignment(ClassicGroup.topicPartitionListFromMap(
+                toConsumerProtocolAssignment(
                     consumerGroup.targetAssignment().get(classicGroupMember.memberId()).partitions(),
                     metadataImage.topics()
-                )),
+                ),
                 ConsumerProtocol.deserializeVersion(
                     ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().orElse("")))
                 )
@@ -1446,23 +1443,6 @@ public class ClassicGroup implements Group {
         );
 
         records.add(CoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments, metadataVersion));
-    }
-
-    /**
-     * @return The list of TopicPartition converted from the map of topic id and partition set.
-     */
-    private static List<TopicPartition> topicPartitionListFromMap(
-        Map<Uuid, Set<Integer>> topicPartitions,
-        TopicsImage topicsImage
-    ) {
-        List<TopicPartition> topicPartitionList = new ArrayList<>();
-        topicPartitions.forEach((topicId, partitionSet) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicId);
-            if (topicImage != null) {
-                partitionSet.forEach(partition -> topicPartitionList.add(new TopicPartition(topicImage.name(), partition)));
-            }
-        });
-        return topicPartitionList;
     }
 
     /**

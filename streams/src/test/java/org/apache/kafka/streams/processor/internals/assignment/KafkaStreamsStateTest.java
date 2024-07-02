@@ -16,6 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.Arrays;
+import java.util.Optional;
+import java.util.TreeMap;
+import java.util.TreeSet;
+
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -25,22 +35,13 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_1_0;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertThrows;
-
-import java.util.Arrays;
-import java.util.Optional;
-import java.util.TreeMap;
-import java.util.TreeSet;
-import java.util.UUID;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class KafkaStreamsStateTest {
     @Test
     public void shouldCorrectlyReturnTasksByLag() {
-        final KafkaStreamsState state = new KafkaStreamsStateImpl(
-            new ProcessId(UUID.randomUUID()),
+        final KafkaStreamsState state = new DefaultKafkaStreamsState(
+            ProcessId.randomProcessId(),
             10,
             mkMap(),
             mkSortedSet(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1),
@@ -54,7 +55,8 @@ public class KafkaStreamsStateTest {
                     mkEntry(NAMED_TASK_T0_0_0, 2000L),
                     mkEntry(NAMED_TASK_T0_0_1, 1000L)
                 )
-            )
+            ),
+            Optional.empty()
         );
 
         assertThrows(IllegalStateException.class, () -> state.lagFor(NAMED_TASK_T0_1_0));
@@ -69,8 +71,8 @@ public class KafkaStreamsStateTest {
 
     @Test
     public void shouldThrowExceptionOnLagOperationsIfLagsWereNotComputed() {
-        final KafkaStreamsState state = new KafkaStreamsStateImpl(
-            new ProcessId(UUID.randomUUID()),
+        final KafkaStreamsState state = new DefaultKafkaStreamsState(
+            ProcessId.randomProcessId(),
             10,
             mkMap(),
             mkSortedSet(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1),
@@ -78,6 +80,7 @@ public class KafkaStreamsStateTest {
             new TreeMap<>(mkMap(
                 mkEntry("c1", mkSet(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1))
             )),
+            Optional.empty(),
             Optional.empty(),
             Optional.empty()
         );

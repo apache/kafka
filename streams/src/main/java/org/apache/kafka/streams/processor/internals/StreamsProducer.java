@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -45,6 +44,7 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
+
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -52,6 +52,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
@@ -78,6 +80,7 @@ public class StreamsProducer {
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
     private double oldProducerTotalBlockedTime = 0;
+    private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
     public StreamsProducer(final StreamsConfig config,
                            final String threadId,
@@ -252,6 +255,10 @@ public class StreamsProducer {
                 );
             }
         }
+    }
+
+    AtomicReference<KafkaException> sendException() {
+        return sendException;
     }
 
     Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record,

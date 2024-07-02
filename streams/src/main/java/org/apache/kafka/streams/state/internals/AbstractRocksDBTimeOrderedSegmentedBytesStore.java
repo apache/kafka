@@ -16,14 +16,16 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 
 /**
  * RocksDB store backed by two SegmentedBytesStores which can optimize scan by time as well as window
@@ -108,7 +110,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
             return KeyValue.pair(getBaseKey(ret.key), value);
         }
 
-        abstract protected Bytes getBaseKey(final Bytes indexKey);
+        protected abstract Bytes getBaseKey(final Bytes indexKey);
     }
 
     AbstractRocksDBTimeOrderedSegmentedBytesStore(final String name,
@@ -135,7 +137,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
         return fetch(key, from, to, false);
     }
 
-    abstract protected IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<KeyValueSegment> segmentIterator);
+    protected abstract IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<KeyValueSegment> segmentIterator);
 
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
                                           final long from,

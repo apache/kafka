@@ -25,7 +25,7 @@ import java.util.Optional;
  * and the log segments. This is useful when generating a new snapshot at a given offset or when
  * evaluating the latest set of voters.
  */
-final public class VoterSetHistory {
+public final class VoterSetHistory {
     private final Optional<VoterSet> staticVoterSet;
     private final LogHistory<VoterSet> votersHistory = new TreeMapLogHistory<>();
 

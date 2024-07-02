@@ -58,6 +58,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -299,9 +300,9 @@ public class AbstractCoordinatorTest {
         coordinator.ensureCoordinatorReadyAsync();
 
         // But should wakeup in sync variation even if timer is 0.
-        assertThrows(WakeupException.class, () -> {
-            coordinator.ensureCoordinatorReady(mockTime.timer(0));
-        });
+        assertThrows(WakeupException.class, () ->
+            coordinator.ensureCoordinatorReady(mockTime.timer(0))
+        );
     }
 
     @Test
