@@ -30,21 +30,25 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * This class ties together all the components of a Kafka Connect process (herder, worker,
  * storage, command interface), managing their lifecycle.
  */
-public class Connect {
+public class Connect<H extends Herder> {
     private static final Logger log = LoggerFactory.getLogger(Connect.class);
 
-    private final Herder herder;
+    private final H herder;
     private final ConnectRestServer rest;
     private final CountDownLatch startLatch = new CountDownLatch(1);
     private final CountDownLatch stopLatch = new CountDownLatch(1);
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
     private final ShutdownHook shutdownHook;
 
-    public Connect(Herder herder, ConnectRestServer rest) {
+    public Connect(H herder, ConnectRestServer rest) {
         log.debug("Kafka Connect instance created");
         this.herder = herder;
         this.rest = rest;
         shutdownHook = new ShutdownHook();
+    }
+
+    public H herder() {
+        return herder;
     }
 
     public void start() {
@@ -83,10 +87,6 @@ public class Connect {
         } catch (InterruptedException e) {
             log.error("Interrupted waiting for Kafka Connect to shutdown");
         }
-    }
-
-    public boolean isRunning() {
-        return herder.isRunning();
     }
 
     // Visible for testing
