@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.raft.internals.VoterSetOffset;
 import org.apache.kafka.raft.internals.VoterSetTest;
 
 import org.junit.jupiter.params.ParameterizedTest;
@@ -66,7 +67,7 @@ public class QuorumStateTest {
             localId,
             localDirectoryId,
             () -> voterSet,
-            () -> Optional.empty(), // revisit
+            kraftVersion == 0 ? Optional::empty : () -> Optional.of(new VoterSetOffset(voterSet, 0L)),
             () -> kraftVersion,
             localId.isPresent() ? voterSet.listeners(localId.getAsInt()) : Endpoints.empty(),
             electionTimeoutMs,

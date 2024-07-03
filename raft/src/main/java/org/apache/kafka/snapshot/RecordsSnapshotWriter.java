@@ -212,7 +212,6 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 serde
             );
 
-            // example of batching multiple control messages
             writer.accumulator.appendControlMessages((baseOffset, epoch, buffer) -> {
                 long now = time.milliseconds();
                 try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
@@ -246,7 +245,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                                 .setKRaftVersion(kraftVersion)
                         );
 
-                        if (voterSet.isPresent()) { // does not include the static voter set
+                        if (voterSet.isPresent()) {
                             builder.appendVotersMessage(
                                 now,
                                 voterSet.get().toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)

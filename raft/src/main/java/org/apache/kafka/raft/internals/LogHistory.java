@@ -77,7 +77,7 @@ public interface LogHistory<T> {
     void clear();
 
     final class Entry<T> {
-        private final long offset; // if this is < 0 then we haven't written out the kraft.version and voters records yet
+        private final long offset;
         private final T value;
 
         public Entry(long offset, T value) {

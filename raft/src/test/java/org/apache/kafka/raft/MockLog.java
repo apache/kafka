@@ -97,8 +97,8 @@ public class MockLog implements ReplicatedLog {
     public boolean truncateToLatestSnapshot() {
         AtomicBoolean truncated = new AtomicBoolean(false);
         latestSnapshotId().ifPresent(snapshotId -> {
-            if (snapshotId.epoch() > logLastFetchedEpoch().orElse(-1) ||
-                (snapshotId.epoch() == logLastFetchedEpoch().orElse(-1) &&
+            if (snapshotId.epoch() > logLastFetchedEpoch().orElse(0) ||
+                (snapshotId.epoch() == logLastFetchedEpoch().orElse(0) &&
                  snapshotId.offset() > endOffset().offset)) {
 
                 logger.debug("Truncating to the latest snapshot at {}", snapshotId);
@@ -458,7 +458,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId) { // this should be fixed to error on creating 0-0.checkpoint, check if offset is 0?
+    public Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId) {
         if (snapshotId.offset() < startOffset()) {
             logger.info(
                 "Cannot create a snapshot with an id ({}) less than the log start offset ({})",

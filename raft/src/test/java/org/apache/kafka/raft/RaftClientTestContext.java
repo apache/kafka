@@ -267,7 +267,7 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder withBootstrapSnapshot(Optional<VoterSet> voterSet, short kraftVersion) { // accept VoterSet instead?
+        Builder withBootstrapSnapshot(Optional<VoterSet> voterSet, short kraftVersion) {
             // Create an empty 0-0.checkpoint if kraft version is 0
             if (kraftVersion == 0) {
                 this.withEmptySnapshot(new OffsetAndEpoch(0, 0));
@@ -1251,24 +1251,14 @@ public final class RaftClientTestContext {
         ByteBuffer recordKey,
         ByteBuffer recordValue
     ) {
-        verifyLeaderChangeMessage(leaderId, voters, recordKey, recordValue);
-        assertEquals(grantingVoters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toSet()),
-            new HashSet<>(ControlRecordUtils.deserializeLeaderChangeMessage(recordValue).grantingVoters()));
-    }
-
-    // delete if we don't end up using this
-    static void verifyLeaderChangeMessage(
-        int leaderId,
-        List<Integer> voters,
-        ByteBuffer recordKey,
-        ByteBuffer recordValue
-    ) {
         assertEquals(ControlRecordType.LEADER_CHANGE, ControlRecordType.parse(recordKey));
 
         LeaderChangeMessage leaderChangeMessage = ControlRecordUtils.deserializeLeaderChangeMessage(recordValue);
         assertEquals(leaderId, leaderChangeMessage.leaderId());
         assertEquals(voters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList()),
             leaderChangeMessage.voters());
+        assertEquals(grantingVoters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toSet()),
+            new HashSet<>(ControlRecordUtils.deserializeLeaderChangeMessage(recordValue).grantingVoters()));
     }
 
     static void verifyVotersRecord(

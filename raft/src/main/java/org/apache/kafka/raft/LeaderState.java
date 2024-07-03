@@ -190,7 +190,7 @@ public class LeaderState<T> implements EpochState {
             .collect(Collectors.toList());
     }
 
-    public void appendLeaderChangeMessage(long currentTimeMs) {
+    public void appendLeaderChangeMessageAndBootstrapRecords(long currentTimeMs) {
         List<Voter> voters = convertToVoters(voterStates.keySet());
         List<Voter> grantingVoters = convertToVoters(this.grantingVoters());
 
@@ -200,9 +200,7 @@ public class LeaderState<T> implements EpochState {
             .setVoters(voters)
             .setGrantingVoters(grantingVoters);
 
-        // add leader change, voter record, and kraft.version record to log in one batch
         accumulator.appendControlMessages((baseOffset, epoch, buffer) -> {
-            // revisit params, do we need to alter LeaderState constructor for instance
             try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                 buffer,
                 RecordBatch.CURRENT_MAGIC_VALUE,
@@ -213,8 +211,8 @@ public class LeaderState<T> implements EpochState {
                 RecordBatch.NO_PRODUCER_ID,
                 RecordBatch.NO_PRODUCER_EPOCH,
                 RecordBatch.NO_SEQUENCE,
-                false, // isTransactional
-                true,  // isControlBatch
+                false,
+                true,
                 epoch,
                 buffer.capacity()
             )
@@ -223,9 +221,8 @@ public class LeaderState<T> implements EpochState {
                     currentTimeMs,
                     leaderChangeMessage
                 );
-                // if offset is 0 the leader hasn't written out the kraft.version and voters records to the log yet
-                // if null, 0-0.checkpoint does not exist/have voters record in it
                 VoterSetOffset voterSetOffset = lastVoterSetOffset.orElse(null);
+                // if lastVoterOffset is -1 we know the leader hasn't written the bootstrap snapshot records to the log yet
                 if (voterSetOffset != null && voterSetOffset.offset() == -1) {
                     if (kraftVersion > 0) {
                         builder.appendKRaftVersionMessage(
@@ -243,7 +240,7 @@ public class LeaderState<T> implements EpochState {
                 return builder.build();
             }
         });
-        accumulator.forceDrain(); // when is forceDrain needed? noticed this isn't called in RecordsSnapshotWriter.Builder.build()
+        accumulator.forceDrain();
     }
 
     public boolean isResignRequested() {

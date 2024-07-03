@@ -51,7 +51,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
 
     @Override
     public long lastContainedLogOffset() {
-        return snapshotId.offset() - 1; // reason why first voterSetHistory offset will be -1
+        return snapshotId.offset() - 1;
     }
 
     @Override

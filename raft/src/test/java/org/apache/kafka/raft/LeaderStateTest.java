@@ -75,8 +75,8 @@ public class LeaderStateTest {
             voters.listeners(localReplicaKey.id()),
             fetchTimeoutMs,
             logContext,
-            Optional.of(new VoterSetOffset(voters, 0L)), // revisit
-            kraftVersion // revisit
+            Optional.of(new VoterSetOffset(voters, 0L)),
+            kraftVersion
         );
     }
 
@@ -120,7 +120,7 @@ public class LeaderStateTest {
                 Endpoints.empty(),
                 fetchTimeoutMs,
                 logContext,
-                Optional.of(new VoterSetOffset(voterSet, 0L)), // revisit
+                Optional.of(new VoterSetOffset(voterSet, 0L)),
                 kraftVersion
             )
         );

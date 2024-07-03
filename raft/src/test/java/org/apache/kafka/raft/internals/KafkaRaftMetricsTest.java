@@ -69,7 +69,7 @@ public class KafkaRaftMetricsTest {
             OptionalInt.of(localId),
             localDirectoryId,
             () -> voterSet,
-            () -> Optional.empty(), // revisit
+            kraftVersion == 0 ? Optional::empty : () -> Optional.of(new VoterSetOffset(voterSet, 0L)),
             () -> kraftVersion,
             voterSet.listeners(localId),
             electionTimeoutMs,

@@ -545,7 +545,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // The high watermark can only be advanced once we have written a record
         // from the new leader's epoch. Hence we write a control message immediately
         // to ensure there is no delay committing pending data.
-        state.appendLeaderChangeMessage(currentTimeMs);
+        state.appendLeaderChangeMessageAndBootstrapRecords(currentTimeMs);
 
         resetConnections();
         kafkaRaftMetrics.maybeUpdateElectionLatency(currentTimeMs);
@@ -1326,12 +1326,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             int lastFetchedEpoch = request.lastFetchedEpoch();
             LeaderState<T> state = quorum.leaderStateOrThrow();
 
-            Optional<OffsetAndEpoch> latestSnapshotId = log.latestSnapshotId();
+            OffsetAndEpoch latestSnapshotId = log.latestSnapshotId().orElse(null);
             final ValidOffsetAndEpoch validOffsetAndEpoch;
-            if (fetchOffset == 0 && latestSnapshotId.isPresent() && !latestSnapshotId.get().equals(BOOTSTRAP_SNAPSHOT_ID)) {
+            if (fetchOffset == 0 && latestSnapshotId != null && !latestSnapshotId.equals(BOOTSTRAP_SNAPSHOT_ID)) {
                 // If the follower has an empty log and a non-bootstrap snapshot exists, it is always more efficient
                 // to reply with a snapshot id (FETCH_SNAPSHOT) instead of fetching from the log segments.
-                validOffsetAndEpoch = ValidOffsetAndEpoch.snapshot(latestSnapshotId.get());
+                validOffsetAndEpoch = ValidOffsetAndEpoch.snapshot(latestSnapshotId);
             } else {
                 validOffsetAndEpoch = log.validateOffsetAndEpoch(fetchOffset, lastFetchedEpoch);
             }

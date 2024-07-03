@@ -1979,7 +1979,7 @@ public final class KafkaRaftClientSnapshotTest {
         );
     }
 
-    static FetchSnapshotResponseData fetchSnapshotResponse(
+    private static FetchSnapshotResponseData fetchSnapshotResponse(
         RaftClientTestContext context,
         int leaderEpoch,
         int leaderId,
@@ -2007,7 +2007,7 @@ public final class KafkaRaftClientSnapshotTest {
         );
     }
 
-    public static Optional<FetchSnapshotRequestData.PartitionSnapshot> assertFetchSnapshotRequest(
+    private static Optional<FetchSnapshotRequestData.PartitionSnapshot> assertFetchSnapshotRequest(
         RaftRequest.Outbound request,
         TopicPartition topicPartition,
         int replicaId,
@@ -2023,14 +2023,14 @@ public final class KafkaRaftClientSnapshotTest {
         return FetchSnapshotRequest.forTopicPartition(data, topicPartition);
     }
 
-    static SnapshotWriter<String> snapshotWriter(RaftClientTestContext context, RawSnapshotWriter snapshot) {
+    private static SnapshotWriter<String> snapshotWriter(RaftClientTestContext context, RawSnapshotWriter snapshot) {
         return new RecordsSnapshotWriter.Builder()
             .setTime(context.time)
             .setRawSnapshotWriter(snapshot)
             .build(new StringSerde());
     }
 
-    static final class MemorySnapshotWriter implements RawSnapshotWriter {
+    private static final class MemorySnapshotWriter implements RawSnapshotWriter {
         private final OffsetAndEpoch snapshotId;
         private final AtomicLong frozenPosition;
         private ByteBuffer data;
