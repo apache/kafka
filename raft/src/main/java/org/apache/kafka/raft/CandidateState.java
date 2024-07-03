@@ -151,12 +151,12 @@ public class CandidateState implements EpochState {
         VoterState voterState = voteStates.get(remoteNodeId);
         if (voterState == null) {
             throw new IllegalArgumentException("Attempt to grant vote to non-voter " + remoteNodeId);
-        } else if (voterState.state() == State.REJECTED) {
+        } else if (voterState.state().equals(State.REJECTED)) {
             throw new IllegalArgumentException("Attempt to grant vote from node " + remoteNodeId +
                 " which previously rejected our request");
         }
 
-        boolean recorded = voterState.state() == State.UNRECORDED;
+        boolean recorded = voterState.state().equals(State.UNRECORDED);
         voterState.setState(State.GRANTED);
 
         return recorded;
@@ -174,12 +174,12 @@ public class CandidateState implements EpochState {
         VoterState voterState = voteStates.get(remoteNodeId);
         if (voterState == null) {
             throw new IllegalArgumentException("Attempt to reject vote to non-voter " + remoteNodeId);
-        } else if (voterState.state() == State.GRANTED) {
+        } else if (voterState.state().equals(State.GRANTED)) {
             throw new IllegalArgumentException("Attempt to reject vote from node " + remoteNodeId +
                 " which previously granted our request");
         }
 
-        boolean recorded = voterState.state() == State.UNRECORDED;
+        boolean recorded = voterState.state().equals(State.UNRECORDED);
         voterState.setState(State.REJECTED);
 
         return recorded;
@@ -225,7 +225,7 @@ public class CandidateState implements EpochState {
         return voteStates
             .values()
             .stream()
-            .filter(voterState -> voterState.state() == state)
+            .filter(voterState -> voterState.state().equals(state))
             .map(VoterState::replicaKey);
     }
 

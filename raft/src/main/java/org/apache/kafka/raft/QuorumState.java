@@ -211,6 +211,14 @@ public class QuorumState {
                 // Transition to unattached instead and discover the leader's endpoint through
                 // Fetch requests to the bootstrap servers or from a BeginQuorumEpoch request from
                 // the leader.
+                log.info(
+                    "The leader in election state {} is not a member of the latest voter set {}; " +
+                    "transitioning to unattached instead of follower because the leader's " +
+                    "endpoints are not known",
+                    election,
+                    voters
+                );
+
                 initialState = new UnattachedState(
                     time,
                     election.epoch(),

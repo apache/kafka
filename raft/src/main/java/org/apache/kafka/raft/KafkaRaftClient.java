@@ -792,6 +792,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             responseLeaderId,
             responseEpoch,
             leaderEndpoints,
+            responseMetadata.source(),
             currentTimeMs
         );
         if (handled.isPresent()) {
@@ -988,6 +989,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             responseLeaderId,
             responseEpoch,
             leaderEndpoints,
+            responseMetadata.source(),
             currentTimeMs
         );
         if (handled.isPresent()) {
@@ -1163,6 +1165,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             responseLeaderId,
             responseEpoch,
             leaderEndpoints,
+            responseMetadata.source(),
             currentTimeMs
         );
         if (handled.isPresent()) {
@@ -1496,6 +1499,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             responseLeaderId,
             responseEpoch,
             leaderEndpoints,
+            responseMetadata.source(),
             currentTimeMs
         );
         if (handled.isPresent()) {
@@ -1841,6 +1845,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             responseLeaderId,
             responseEpoch,
             leaderEndpoints,
+            responseMetadata.source(),
             currentTimeMs
         );
         if (handled.isPresent()) {
@@ -1964,8 +1969,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      *
      * @param error Error from the received response
      * @param leaderId Optional leaderId from the response
-     * @param leaderEndpoints the endpoints of the leader from the response
      * @param epoch Epoch received from the response
+     * @param leaderEndpoints the endpoints of the leader from the response
+     * @param souce the node the sent the response
      * @param currentTimeMs Current epoch time in milliseconds
      * @return Optional value indicating whether the error was handled here and the outcome of
      *    that handling. Specifically:
@@ -1982,6 +1988,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         OptionalInt leaderId,
         int epoch,
         Endpoints leaderEndpoints,
+        Node source,
         long currentTimeMs
     ) {
         if (leaderEndpoints.isEmpty() && leaderId.isPresent()) {
@@ -2026,7 +2033,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // receiver's replica key
             logger.info(
                 "Voter key for VOTE or BEGIN_QUORUM_EPOCH request didn't match the receiver's " +
-                "replica key"
+                "replica key: {}",
+                source
             );
             return Optional.of(true);
         } else if (error == Errors.INVALID_REQUEST) {
