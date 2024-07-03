@@ -45,6 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -228,7 +229,7 @@ public class DedicatedMirrorIntegrationTest {
             // Bring up a single-node cluster
             final MirrorMaker mm = startMirrorMaker("no-offset-syncing", mmProps);
             final SourceAndTarget sourceAndTarget = new SourceAndTarget(a, b);
-            awaitMirrorMakerStart(mm, sourceAndTarget);
+            awaitMirrorMakerStart(mm, sourceAndTarget, Arrays.asList(MirrorSourceConnector.class, MirrorHeartbeatConnector.class));
 
             // wait for mirror source and heartbeat connectors to start a task
             awaitConnectorTasksStart(mm, MirrorHeartbeatConnector.class, sourceAndTarget);
@@ -392,11 +393,14 @@ public class DedicatedMirrorIntegrationTest {
             cluster.produce(topic, Integer.toString(i));
         }
     }
-
     private void awaitMirrorMakerStart(final MirrorMaker mm, final SourceAndTarget sourceAndTarget) throws InterruptedException {
+        awaitMirrorMakerStart(mm, sourceAndTarget, CONNECTOR_CLASSES);
+    }
+
+    private void awaitMirrorMakerStart(final MirrorMaker mm, final SourceAndTarget sourceAndTarget, List<Class<?>> connectorClasses) throws InterruptedException {
         waitForCondition(() -> {
             try {
-                return CONNECTOR_CLASSES.stream().allMatch(
+                return connectorClasses.stream().allMatch(
                     connectorClazz -> isConnectorRunningForMirrorMaker(connectorClazz, mm, sourceAndTarget));
             } catch (Exception ex) {
                 log.error("Something unexpected occurred. Unable to check for startup status for mirror maker {}", mm, ex);

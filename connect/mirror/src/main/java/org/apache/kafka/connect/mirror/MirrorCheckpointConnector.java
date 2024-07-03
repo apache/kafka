@@ -114,7 +114,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         MirrorCheckpointConfig.validate(connectorConfigs).forEach((config, errorMsg) ->
                 configValues.stream()
                         .filter(conf -> conf.name().equals(config))
-                        .forEach(conf -> conf.errorMessages().add(errorMsg)));
+                        .forEach(conf -> conf.addErrorMessage(errorMsg)));
 
         return new Config(configValues);
     }
