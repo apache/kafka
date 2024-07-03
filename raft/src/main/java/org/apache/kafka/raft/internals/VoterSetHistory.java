@@ -92,6 +92,14 @@ public final class VoterSetHistory {
     }
 
     /**
+     * Returns the latest voter set and offset in the history. Does not include static voters.
+     */
+    public Optional<VoterSetOffset> lastVoterSetOffset() { // revisit need for new class
+        Optional<LogHistory.Entry<VoterSet>> result = votersHistory.lastEntry();
+        return result.map(entry -> new VoterSetOffset(entry.value(), entry.offset()));
+    }
+
+    /**
      * Removes all entries with an offset greater than or equal to {@code endOffset}.
      *
      * @param endOffset the ending offset

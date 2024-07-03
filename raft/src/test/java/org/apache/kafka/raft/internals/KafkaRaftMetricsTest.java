@@ -34,6 +34,7 @@ import org.mockito.Mockito;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
@@ -68,6 +69,7 @@ public class KafkaRaftMetricsTest {
             OptionalInt.of(localId),
             localDirectoryId,
             () -> voterSet,
+            () -> Optional.empty(), // revisit
             () -> kraftVersion,
             voterSet.listeners(localId),
             electionTimeoutMs,

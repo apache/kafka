@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 
 public class MockLog implements ReplicatedLog {
     private static final AtomicLong ID_GENERATOR = new AtomicLong();
+    private static final OffsetAndEpoch BOOTSTRAP_SNAPSHOT_ID = new OffsetAndEpoch(0, 0);
 
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();
     private final List<LogBatch> batches = new ArrayList<>();
@@ -96,8 +97,8 @@ public class MockLog implements ReplicatedLog {
     public boolean truncateToLatestSnapshot() {
         AtomicBoolean truncated = new AtomicBoolean(false);
         latestSnapshotId().ifPresent(snapshotId -> {
-            if (snapshotId.epoch() > logLastFetchedEpoch().orElse(0) ||
-                (snapshotId.epoch() == logLastFetchedEpoch().orElse(0) &&
+            if (snapshotId.epoch() > logLastFetchedEpoch().orElse(-1) ||
+                (snapshotId.epoch() == logLastFetchedEpoch().orElse(-1) &&
                  snapshotId.offset() > endOffset().offset)) {
 
                 logger.debug("Truncating to the latest snapshot at {}", snapshotId);
@@ -457,7 +458,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId) {
+    public Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId) { // this should be fixed to error on creating 0-0.checkpoint, check if offset is 0?
         if (snapshotId.offset() < startOffset()) {
             logger.info(
                 "Cannot create a snapshot with an id ({}) less than the log start offset ({})",
@@ -495,7 +496,7 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public Optional<RawSnapshotWriter> createNewSnapshotUnchecked(OffsetAndEpoch snapshotId) {
-        if (snapshots.containsKey(snapshotId)) {
+        if (snapshots.containsKey(snapshotId) && !snapshotId.equals(BOOTSTRAP_SNAPSHOT_ID)) {
             return Optional.empty();
         } else {
             return Optional.of(

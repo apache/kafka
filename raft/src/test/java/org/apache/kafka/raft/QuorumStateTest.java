@@ -66,6 +66,7 @@ public class QuorumStateTest {
             localId,
             localDirectoryId,
             () -> voterSet,
+            () -> Optional.empty(), // revisit
             () -> kraftVersion,
             localId.isPresent() ? voterSet.listeners(localId.getAsInt()) : Endpoints.empty(),
             electionTimeoutMs,

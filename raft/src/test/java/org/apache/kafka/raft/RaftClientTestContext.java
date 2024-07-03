@@ -32,10 +32,12 @@ import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -56,6 +58,7 @@ import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -107,6 +110,7 @@ public final class RaftClientTestContext {
     final Uuid clusterId;
     private final OptionalInt localId;
     public final Uuid localDirectoryId;
+    public final short kraftVersion;
     public final KafkaRaftClient<String> client;
     final Metrics metrics;
     public final MockLog log;
@@ -143,7 +147,8 @@ public final class RaftClientTestContext {
         private final Uuid clusterId = Uuid.randomUuid();
         private final Set<Integer> voters;
         private final OptionalInt localId;
-        private final short kraftVersion = 0;
+        private final short kraftVersion;
+        private final Uuid localDirectoryId;
 
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
         private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
@@ -157,8 +162,14 @@ public final class RaftClientTestContext {
         }
 
         public Builder(OptionalInt localId, Set<Integer> voters) {
+            this(localId, voters, Uuid.randomUuid(), (short) 0);
+        }
+
+        public Builder(OptionalInt localId, Set<Integer> voters, Uuid localDirectoryId, short kraftVersion) {
             this.voters = voters;
             this.localId = localId;
+            this.localDirectoryId = localDirectoryId;
+            this.kraftVersion = kraftVersion;
         }
 
         Builder withElectedLeader(int epoch, int leaderId) {
@@ -255,6 +266,23 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withBootstrapSnapshot(Optional<VoterSet> voterSet, short kraftVersion) { // accept VoterSet instead?
+            // Create an empty 0-0.checkpoint if kraft version is 0
+            if (kraftVersion == 0) {
+                this.withEmptySnapshot(new OffsetAndEpoch(0, 0));
+                return this;
+            }
+            // Create 0-0.checkpoint with VotersRecord and KRaftVersionRecord
+            RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
+                .setRawSnapshotWriter(log.createNewSnapshotUnchecked(new OffsetAndEpoch(0, 0)).get())
+                .setKraftVersion(kraftVersion)
+                .setVoterSet(voterSet);
+            try (RecordsSnapshotWriter<String> writer = builder.build(new StringSerde())) {
+                writer.freeze();
+            }
+            return this;
+        }
+
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
@@ -273,8 +301,6 @@ public final class RaftClientTestContext {
             Endpoints localListeners = localId.isPresent() ?
                 voterSet.listeners(localId.getAsInt()) :
                 Endpoints.empty();
-
-            Uuid localDirectoryId = Uuid.randomUuid();
 
             QuorumConfig quorumConfig = new QuorumConfig(
                 requestTimeoutMs,
@@ -315,6 +341,7 @@ public final class RaftClientTestContext {
                 clusterId,
                 localId,
                 localDirectoryId,
+                kraftVersion,
                 client,
                 log,
                 channel,
@@ -345,6 +372,7 @@ public final class RaftClientTestContext {
         Uuid clusterId,
         OptionalInt localId,
         Uuid localDirectoryId,
+        short kraftVersion,
         KafkaRaftClient<String> client,
         MockLog log,
         MockNetworkChannel channel,
@@ -360,6 +388,7 @@ public final class RaftClientTestContext {
         this.clusterId = clusterId;
         this.localId = localId;
         this.localDirectoryId = localDirectoryId;
+        this.kraftVersion = kraftVersion;
         this.client = client;
         this.log = log;
         this.channel = channel;
@@ -513,8 +542,9 @@ public final class RaftClientTestContext {
     }
 
     public void assertElectedLeader(int epoch, int leaderId) {
+        Set<Integer> voters = kraftVersion == 0 ? this.voters.voterIds() : new HashSet<>();
         assertEquals(
-            ElectionState.withElectedLeader(epoch, leaderId, voters.voterIds()),
+            ElectionState.withElectedLeader(epoch, leaderId, voters),
             quorumStateStore.readElectionState().get()
         );
     }
@@ -878,16 +908,27 @@ public final class RaftClientTestContext {
         int epoch,
         OptionalInt leaderId
     ) {
+        return assertSentFetchPartitionResponseWithSnapshotId(error, epoch, leaderId, -1, -1);
+    }
+
+    MemoryRecords assertSentFetchPartitionResponseWithSnapshotId(
+        Errors error,
+        int epoch,
+        OptionalInt leaderId,
+        long snapshotIdEndOffset,
+        int snapshotIdEpoch
+    ) {
         FetchResponseData.PartitionData partitionResponse = assertSentFetchPartitionResponse();
         assertEquals(error, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(leaderId.orElse(-1), partitionResponse.currentLeader().leaderId());
         assertEquals(-1, partitionResponse.divergingEpoch().endOffset());
         assertEquals(-1, partitionResponse.divergingEpoch().epoch());
-        assertEquals(-1, partitionResponse.snapshotId().endOffset());
-        assertEquals(-1, partitionResponse.snapshotId().epoch());
+        assertEquals(snapshotIdEndOffset, partitionResponse.snapshotId().endOffset());
+        assertEquals(snapshotIdEpoch, partitionResponse.snapshotId().epoch());
 
         return (MemoryRecords) partitionResponse.records();
+
     }
 
     MemoryRecords assertSentFetchPartitionResponse(
@@ -1200,14 +1241,44 @@ public final class RaftClientTestContext {
         ByteBuffer recordKey,
         ByteBuffer recordValue
     ) {
+        verifyLeaderChangeMessage(leaderId, voters, recordKey, recordValue);
+        assertEquals(grantingVoters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toSet()),
+            new HashSet<>(ControlRecordUtils.deserializeLeaderChangeMessage(recordValue).grantingVoters()));
+    }
+
+    // delete if we don't end up using this
+    static void verifyLeaderChangeMessage(
+        int leaderId,
+        List<Integer> voters,
+        ByteBuffer recordKey,
+        ByteBuffer recordValue
+    ) {
         assertEquals(ControlRecordType.LEADER_CHANGE, ControlRecordType.parse(recordKey));
 
         LeaderChangeMessage leaderChangeMessage = ControlRecordUtils.deserializeLeaderChangeMessage(recordValue);
         assertEquals(leaderId, leaderChangeMessage.leaderId());
         assertEquals(voters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList()),
             leaderChangeMessage.voters());
-        assertEquals(grantingVoters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toSet()),
-            new HashSet<>(leaderChangeMessage.grantingVoters()));
+    }
+
+    static void verifyVotersRecord(
+        Set<Integer> expectedVoterIds,
+        ByteBuffer recordKey,
+        ByteBuffer recordValue
+    ) {
+        assertEquals(ControlRecordType.KRAFT_VOTERS, ControlRecordType.parse(recordKey));
+        VotersRecord votersRecord = ControlRecordUtils.deserializeVotersRecord(recordValue);
+        assertEquals(expectedVoterIds, votersRecord.voters().stream().map(VotersRecord.Voter::voterId).collect(Collectors.toSet()));
+    }
+
+    static void verifyKRaftVersionRecord(
+        short expectedKRaftVersion,
+        ByteBuffer recordKey,
+        ByteBuffer recordValue
+    ) {
+        assertEquals(ControlRecordType.KRAFT_VERSION, ControlRecordType.parse(recordKey));
+        KRaftVersionRecord kRaftVersionRecord = ControlRecordUtils.deserializeKRaftVersionRecord(recordValue);
+        assertEquals(expectedKRaftVersion, kRaftVersionRecord.kRaftVersion());
     }
 
     void assertFetchRequestData(

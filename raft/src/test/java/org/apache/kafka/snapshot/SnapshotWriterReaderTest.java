@@ -110,7 +110,7 @@ public final class SnapshotWriterReaderTest {
             RawSnapshotReader snapshot = context.log.readSnapshot(id).get();
             int recordCount = validateDelimiters(snapshot, magicTimestamp);
             assertEquals((recordsPerBatch * batches) + delimiterCount, recordCount);
-            assertSnapshot(expected, reader);
+            assertDataSnapshot(expected, reader);
 
             assertEquals(magicTimestamp, Snapshots.lastContainedLogTimestamp(snapshot));
         }
@@ -247,14 +247,14 @@ public final class SnapshotWriterReaderTest {
         return countRecords;
     }
 
-    public static void assertSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
-        assertSnapshot(
+    public static void assertDataSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
+        assertDataSnapshot(
             batches,
             RecordsSnapshotReader.of(reader, new StringSerde(), BufferSupplier.create(), Integer.MAX_VALUE, true)
         );
     }
 
-    public static void assertSnapshot(List<List<String>> batches, SnapshotReader<String> reader) {
+    public static void assertDataSnapshot(List<List<String>> batches, SnapshotReader<String> reader) {
         List<String> expected = new ArrayList<>();
         batches.forEach(expected::addAll);
 
@@ -264,6 +264,26 @@ public final class SnapshotWriterReaderTest {
             for (String value : batch) {
                 actual.add(value);
             }
+        }
+
+        assertEquals(expected, actual);
+    }
+
+    public static void assertControlSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
+        assertControlSnapshot(
+            batches,
+            RecordsSnapshotReader.of(reader, new StringSerde(), BufferSupplier.create(), Integer.MAX_VALUE, true)
+        );
+    }
+
+    public static void assertControlSnapshot(List<List<String>> batches, SnapshotReader<String> reader) {
+        List<String> expected = new ArrayList<>();
+        batches.forEach(expected::addAll);
+
+        List<String> actual = new ArrayList<>(expected.size());
+        while (reader.hasNext()) {
+            Batch<String> batch = reader.next();
+            batch.controlRecords().forEach(controlRecord -> actual.add(controlRecord.message().toString()));
         }
 
         assertEquals(expected, actual);

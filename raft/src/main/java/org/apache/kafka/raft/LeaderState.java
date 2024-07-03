@@ -16,11 +16,16 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordUtils;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -28,6 +33,7 @@ import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 
+import org.apache.kafka.raft.internals.VoterSetOffset;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -68,6 +74,8 @@ public class LeaderState<T> implements EpochState {
     private final Set<Integer> fetchedVoters = new HashSet<>();
     private final Timer checkQuorumTimer;
     private final int checkQuorumTimeoutMs;
+    private final Optional<VoterSetOffset> lastVoterSetOffset;
+    private final short kraftVersion;
 
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
@@ -82,7 +90,9 @@ public class LeaderState<T> implements EpochState {
         BatchAccumulator<T> accumulator,
         Endpoints endpoints,
         int fetchTimeoutMs,
-        LogContext logContext
+        LogContext logContext,
+        Optional<VoterSetOffset> lastVoterSetOffset,
+        short kraftVersion
     ) {
         this.localReplicaKey = localReplicaKey;
         this.epoch = epoch;
@@ -102,6 +112,8 @@ public class LeaderState<T> implements EpochState {
         // use the 1.5x of fetch timeout to tolerate some network transition time or other IO time.
         this.checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
         this.checkQuorumTimer = time.timer(checkQuorumTimeoutMs);
+        this.lastVoterSetOffset = lastVoterSetOffset;
+        this.kraftVersion = kraftVersion;
     }
 
     /**
@@ -135,7 +147,7 @@ public class LeaderState<T> implements EpochState {
     /**
      * Reset the checkQuorumTimer if we've received fetch/fetchSnapshot request from the majority of the voter
      *
-     * @param id the node id
+     * @param replicaKey the replica key of the voter
      * @param currentTimeMs the current timestamp in millisecond
      */
     public void updateCheckQuorumForFollowingVoter(ReplicaKey replicaKey, long currentTimeMs) {
@@ -188,8 +200,50 @@ public class LeaderState<T> implements EpochState {
             .setVoters(voters)
             .setGrantingVoters(grantingVoters);
 
-        accumulator.appendLeaderChangeMessage(leaderChangeMessage, currentTimeMs);
-        accumulator.forceDrain();
+        // add leader change, voter record, and kraft.version record to log in one batch
+        accumulator.appendControlMessages((baseOffset, epoch, buffer) -> {
+            // revisit params, do we need to alter LeaderState constructor for instance
+            try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
+                buffer,
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                Compression.NONE,
+                TimestampType.CREATE_TIME,
+                baseOffset,
+                currentTimeMs,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE,
+                false, // isTransactional
+                true,  // isControlBatch
+                epoch,
+                buffer.capacity()
+            )
+            ) {
+                builder.appendLeaderChangeMessage(
+                    currentTimeMs,
+                    leaderChangeMessage
+                );
+                // if offset is 0 the leader hasn't written out the kraft.version and voters records to the log yet
+                // if null, 0-0.checkpoint does not exist/have voters record in it
+                VoterSetOffset voterSetOffset = lastVoterSetOffset.orElse(null);
+                if (voterSetOffset != null && voterSetOffset.offset() == -1) {
+                    if (kraftVersion > 0) {
+                        builder.appendKRaftVersionMessage(
+                            currentTimeMs,
+                            new KRaftVersionRecord()
+                                .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
+                                .setKRaftVersion(kraftVersion)
+                        );
+                        builder.appendVotersMessage(
+                            currentTimeMs,
+                            voterSetOffset.voterSet().toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
+                        );
+                    }
+                }
+                return builder.build();
+            }
+        });
+        accumulator.forceDrain(); // when is forceDrain needed? noticed this isn't called in RecordsSnapshotWriter.Builder.build()
     }
 
     public boolean isResignRequested() {
@@ -323,7 +377,7 @@ public class LeaderState<T> implements EpochState {
      * Update the local replica state.
      *
      * @param endOffsetMetadata updated log end offset of local replica
-     * @param lastVoters the up-to-date voter set
+     * @param lastVoterSet the up-to-date voter set
      * @return true if the high watermark is updated as a result of this call
      */
     public boolean updateLocalState(
@@ -347,8 +401,7 @@ public class LeaderState<T> implements EpochState {
     /**
      * Update the replica state in terms of fetch time and log end offsets.
      *
-     * @param replicaId replica id
-     * @param replicaDirectoryId replica directory id
+     * @param replicaKey replica key
      * @param currentTimeMs current time in milliseconds
      * @param fetchOffsetMetadata new log offset and metadata
      * @return true if the high watermark is updated as a result of this call

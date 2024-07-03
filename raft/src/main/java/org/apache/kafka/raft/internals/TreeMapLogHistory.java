@@ -29,9 +29,9 @@ public final class TreeMapLogHistory<T> implements LogHistory<T> {
 
     @Override
     public void addAt(long offset, T value) {
-        if (offset < 0) {
+        if (offset < -1) {
             throw new IllegalArgumentException(
-                String.format("Next offset %d must be greater than or equal to 0", offset)
+                String.format("Next offset %d must be greater than or equal to -1", offset)
             );
         }
 

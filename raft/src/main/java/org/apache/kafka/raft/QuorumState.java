@@ -23,6 +23,7 @@ import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 
+import org.apache.kafka.raft.internals.VoterSetOffset;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -83,6 +84,7 @@ public class QuorumState {
     private final Logger log;
     private final QuorumStateStore store;
     private final Supplier<VoterSet> latestVoterSet;
+    private final Supplier<Optional<VoterSetOffset>> lastVoterSetOffset;
     private final Supplier<Short> latestKraftVersion;
     private final Endpoints localListeners;
     private final Random random;
@@ -96,6 +98,7 @@ public class QuorumState {
         OptionalInt localId,
         Uuid localDirectoryId,
         Supplier<VoterSet> latestVoterSet,
+        Supplier<Optional<VoterSetOffset>> lastVoterSetOffset,
         Supplier<Short> latestKraftVersion,
         Endpoints localListeners,
         int electionTimeoutMs,
@@ -108,6 +111,7 @@ public class QuorumState {
         this.localId = localId;
         this.localDirectoryId = localDirectoryId;
         this.latestVoterSet = latestVoterSet;
+        this.lastVoterSetOffset = lastVoterSetOffset;
         this.latestKraftVersion = latestKraftVersion;
         this.localListeners = localListeners;
         this.electionTimeoutMs = electionTimeoutMs;
@@ -514,7 +518,9 @@ public class QuorumState {
             accumulator,
             localListeners,
             fetchTimeoutMs,
-            logContext
+            logContext,
+            lastVoterSetOffset.get(),
+            latestKraftVersion.get()
         );
         durableTransitionTo(state);
         return state;

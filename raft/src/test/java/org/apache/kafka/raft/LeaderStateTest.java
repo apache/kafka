@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.raft.internals.VoterSetOffset;
 import org.apache.kafka.raft.internals.VoterSetTest;
 
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,7 @@ public class LeaderStateTest {
     private final MockTime time = new MockTime();
     private final int fetchTimeoutMs = 2000;
     private final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
+    private final short kraftVersion = 1;
 
     private LeaderState<?> newLeaderState(
         VoterSet voters,
@@ -72,7 +74,9 @@ public class LeaderStateTest {
             accumulator,
             voters.listeners(localReplicaKey.id()),
             fetchTimeoutMs,
-            logContext
+            logContext,
+            Optional.of(new VoterSetOffset(voters, 0L)), // revisit
+            kraftVersion // revisit
         );
     }
 
@@ -102,6 +106,7 @@ public class LeaderStateTest {
 
     @Test
     public void testRequireNonNullAccumulator() {
+        VoterSet voterSet = VoterSetTest.voterSet(Stream.of(localReplicaKey));
         assertThrows(
             NullPointerException.class,
             () -> new LeaderState<>(
@@ -109,12 +114,14 @@ public class LeaderStateTest {
                 localReplicaKey,
                 epoch,
                 0,
-                VoterSetTest.voterSet(Stream.of(localReplicaKey)),
+                voterSet,
                 Collections.emptySet(),
                 null,
                 Endpoints.empty(),
                 fetchTimeoutMs,
-                logContext
+                logContext,
+                Optional.of(new VoterSetOffset(voterSet, 0L)), // revisit
+                kraftVersion
             )
         );
     }

@@ -455,6 +455,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             nodeId,
             nodeDirectoryId,
             partitionState::lastVoterSet,
+            partitionState::lastVoterSetOffset,
             partitionState::lastKraftVersion,
             localListeners,
             quorumConfig.electionTimeoutMs(),

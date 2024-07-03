@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.raft.internals.VoterSetTest;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,7 +32,7 @@ public class MockNetworkChannel implements NetworkChannel {
     private final AtomicInteger correlationIdCounter;
     private final List<RaftRequest.Outbound> sendQueue = new ArrayList<>();
     private final Map<Integer, RaftRequest.Outbound> awaitingResponse = new HashMap<>();
-    private final ListenerName listenerName = ListenerName.normalised("CONTROLLER");
+    private final ListenerName listenerName = VoterSetTest.DEFAULT_LISTENER_NAME;
 
     public MockNetworkChannel(AtomicInteger correlationIdCounter) {
         this.correlationIdCounter = correlationIdCounter;
