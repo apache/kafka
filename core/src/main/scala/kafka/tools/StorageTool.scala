@@ -243,8 +243,8 @@ object StorageTool extends Logging {
     formatParser.addArgument("--add-scram", "-S").
       action(append()).
       help("""A SCRAM_CREDENTIAL to add to the __cluster_metadata log e.g.
-             |'SCRAM-SHA-256=[name=alice,password=alice-secret]'
-             |'SCRAM-SHA-512=[name=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
+              |'SCRAM-SHA-256=[name=alice,password=alice-secret]'
+              |'SCRAM-SHA-512=[name=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
     formatParser.addArgument("--ignore-formatted", "-g").
       action(storeTrue())
     formatParser.addArgument("--release-version", "-r").
@@ -275,10 +275,10 @@ object StorageTool extends Logging {
   private def configToSelfManagedMode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
 
   def getMetadataVersion(
-                          namespace: Namespace,
-                          featureNamesAndLevelsMap: Map[String, java.lang.Short],
-                          defaultVersionString: Option[String]
-                        ): MetadataVersion = {
+    namespace: Namespace,
+    featureNamesAndLevelsMap: Map[String, java.lang.Short],
+    defaultVersionString: Option[String]
+  ): MetadataVersion = {
     val defaultValue = defaultVersionString match {
       case Some(versionString) => MetadataVersion.fromVersionString(versionString)
       case None => MetadataVersion.LATEST_PRODUCTION
@@ -300,9 +300,9 @@ object StorageTool extends Logging {
   }
 
   private def getUserScramCredentialRecord(
-                                            mechanism: String,
-                                            config: String
-                                          ) : UserScramCredentialRecord = {
+    mechanism: String,
+    config: String
+  ) : UserScramCredentialRecord = {
     /*
      * Remove  '[' amd ']'
      * Split K->V pairs on ',' and no K or V should contain ','
@@ -310,9 +310,9 @@ object StorageTool extends Logging {
      * Create Map of K to V and replace all " in V
      */
     val argMap = config.substring(1, config.length - 1)
-      .split(",")
-      .map(_.split("=(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)"))
-      .map(args => args(0) -> args(1).replaceAll("\"", "")).toMap
+                       .split(",")
+                       .map(_.split("=(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)"))
+                       .map(args => args(0) -> args(1).replaceAll("\"", "")).toMap
 
     val scramMechanism = ScramMechanism.forMechanismName(mechanism)
 
@@ -335,10 +335,10 @@ object StorageTool extends Logging {
       if (argMap.contains("salt")) {
         val iterations = argMap("iterations").toInt
         if (iterations < scramMechanism.minIterations()) {
-          throw new TerseFailure(s"The 'iterations' value must be >= ${scramMechanism.minIterations()} for add-scram")
+            throw new TerseFailure(s"The 'iterations' value must be >= ${scramMechanism.minIterations()} for add-scram")
         }
         if (iterations > scramMechanism.maxIterations()) {
-          throw new TerseFailure(s"The 'iterations' value must be <= ${scramMechanism.maxIterations()} for add-scram")
+            throw new TerseFailure(s"The 'iterations' value must be <= ${scramMechanism.maxIterations()} for add-scram")
         }
         iterations
       } else {
@@ -347,22 +347,22 @@ object StorageTool extends Logging {
     }
 
     def getSaltedPassword(
-                           argMap: Map[String,String],
-                           scramMechanism : ScramMechanism,
-                           salt : Array[Byte],
-                           iterations: Int
-                         ) : Array[Byte] = {
+      argMap: Map[String,String],
+      scramMechanism : ScramMechanism,
+      salt : Array[Byte],
+      iterations: Int
+    ) : Array[Byte] = {
       if (argMap.contains("password")) {
         if (argMap.contains("saltedpassword")) {
-          throw new TerseFailure(s"You must only supply one of 'password' or 'saltedpassword' to add-scram")
+            throw new TerseFailure(s"You must only supply one of 'password' or 'saltedpassword' to add-scram")
         }
         new ScramFormatter(scramMechanism).saltedPassword(argMap("password"), salt, iterations)
       } else {
         if (!argMap.contains("saltedpassword")) {
-          throw new TerseFailure(s"You must supply one of 'password' or 'saltedpassword' to add-scram")
+            throw new TerseFailure(s"You must supply one of 'password' or 'saltedpassword' to add-scram")
         }
         if (!argMap.contains("salt")) {
-          throw new TerseFailure(s"You must supply 'salt' with 'saltedpassword' to add-scram")
+            throw new TerseFailure(s"You must supply 'salt' with 'saltedpassword' to add-scram")
         }
         Base64.getDecoder.decode(argMap("saltedpassword"))
       }
@@ -377,12 +377,12 @@ object StorageTool extends Logging {
       val formatter = new ScramFormatter(scramMechanism)
 
       new UserScramCredentialRecord()
-        .setName(name)
-        .setMechanism(scramMechanism.`type`)
-        .setSalt(salt)
-        .setStoredKey(formatter.storedKey(formatter.clientKey(saltedPassword)))
-        .setServerKey(formatter.serverKey(saltedPassword))
-        .setIterations(iterations)
+           .setName(name)
+           .setMechanism(scramMechanism.`type`)
+           .setSalt(salt)
+           .setStoredKey(formatter.storedKey(formatter.clientKey(saltedPassword)))
+           .setServerKey(formatter.serverKey(saltedPassword))
+           .setIterations(iterations)
     } catch {
       case e: Throwable =>
         throw new TerseFailure(s"Error attempting to create UserScramCredentialRecord: ${e.getMessage}")
@@ -506,8 +506,8 @@ object StorageTool extends Logging {
 
     val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
     metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-      setName(MetadataVersion.FEATURE_NAME).
-      setFeatureLevel(metadataVersion.featureLevel()), 0.toShort))
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(metadataVersion.featureLevel()), 0.toShort))
 
     metadataOptionalArguments.foreach { metadataArguments =>
       for (record <- metadataArguments) metadataRecords.add(record)
@@ -518,9 +518,9 @@ object StorageTool extends Logging {
 
 
   def buildMetadataProperties(
-                               clusterIdStr: String,
-                               config: KafkaConfig
-                             ): MetaProperties = {
+    clusterIdStr: String,
+    config: KafkaConfig
+  ): MetaProperties = {
     val effectiveClusterId = try {
       Uuid.fromString(clusterIdStr)
     } catch {
@@ -537,29 +537,29 @@ object StorageTool extends Logging {
   }
 
   def formatCommand(
-                     stream: PrintStream,
-                     directories: Seq[String],
-                     metaProperties: MetaProperties,
-                     metadataVersion: MetadataVersion,
-                     ignoreFormatted: Boolean,
-                     advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint],
-                     controllersQuorumVoters: String
-                   ): Int = {
+    stream: PrintStream,
+    directories: Seq[String],
+    metaProperties: MetaProperties,
+    metadataVersion: MetadataVersion,
+    ignoreFormatted: Boolean,
+    advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint],
+    controllersQuorumVoters: String
+  ): Int = {
     val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, None, "format command")
     formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted,
       advertisedListenerEndpoints, controllersQuorumVoters)
   }
 
   def formatCommand(
-                     stream: PrintStream,
-                     directories: Seq[String],
-                     metaProperties: MetaProperties,
-                     bootstrapMetadata: BootstrapMetadata,
-                     metadataVersion: MetadataVersion,
-                     ignoreFormatted: Boolean,
-                     advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint],
-                     controllersQuorumVoters: String
-                   ): Int = {
+    stream: PrintStream,
+    directories: Seq[String],
+    metaProperties: MetaProperties,
+    bootstrapMetadata: BootstrapMetadata,
+    metadataVersion: MetadataVersion,
+    ignoreFormatted: Boolean,
+    advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint],
+    controllersQuorumVoters: String
+  ): Int = {
     if (directories.isEmpty) {
       throw new TerseFailure("No log directories found in the configuration.")
     }
