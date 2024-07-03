@@ -21,6 +21,7 @@ import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
 import kafka.log.remote.quota.RLMQuotaManager;
 import kafka.log.remote.quota.RLMQuotaManagerConfig;
+import kafka.log.remote.quota.RLMQuotaMetrics;
 import kafka.server.BrokerTopicStats;
 import kafka.server.QuotaType;
 import kafka.server.StopPartition;
@@ -34,6 +35,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
@@ -137,6 +139,7 @@ import java.util.stream.Stream;
 import scala.Option;
 import scala.collection.JavaConverters;
 
+import static kafka.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
@@ -171,6 +174,7 @@ public class RemoteLogManager implements Closeable {
     private final Condition copyQuotaManagerLockCondition = copyQuotaManagerLock.newCondition();
     private final RLMQuotaManager rlmCopyQuotaManager;
     private final RLMQuotaManager rlmFetchQuotaManager;
+    private final Sensor fetchThrottleTimeSensor;
 
     private final RemoteIndexCache indexCache;
     private final RemoteStorageThreadPool remoteStorageReaderThreadPool;
@@ -229,6 +233,9 @@ public class RemoteLogManager implements Closeable {
         rlmCopyQuotaManager = createRLMCopyQuotaManager();
         rlmFetchQuotaManager = createRLMFetchQuotaManager();
 
+        fetchThrottleTimeSensor = new RLMQuotaMetrics(metrics, "remote-fetch-throttle-time", RemoteLogManager.class.getSimpleName(),
+            "The %s time in millis remote fetches was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS).sensor();
+
         indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteLogStorageManager, logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
@@ -286,8 +293,12 @@ public class RemoteLogManager implements Closeable {
           "Tracking fetch byte-rate for Remote Log Manager", time);
     }
 
-    public boolean isRemoteLogFetchQuotaExceeded() {
-        return rlmFetchQuotaManager.isQuotaExceeded();
+    public long getFetchThrottleTimeMs() {
+        return rlmFetchQuotaManager.getThrottleTimeMs();
+    }
+
+    public Sensor fetchThrottleTimeSensor() {
+        return fetchThrottleTimeSensor;
     }
 
     static RLMQuotaManagerConfig copyQuotaManagerConfig(RemoteLogManagerConfig rlmConfig) {
@@ -804,7 +815,7 @@ public class RemoteLogManager implements Closeable {
 
                             copyQuotaManagerLock.lock();
                             try {
-                                while (rlmCopyQuotaManager.isQuotaExceeded()) {
+                                while (rlmCopyQuotaManager.getThrottleTimeMs() > 0) {
                                     logger.debug("Quota exceeded for copying log segments, waiting for the quota to be available.");
                                     // If the thread gets interrupted while waiting, the InterruptedException is thrown
                                     // back to the caller. It's important to note that the task being executed is already
