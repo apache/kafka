@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
-import java.util.Collection;
-import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupAssignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
+
+import java.util.Collection;
+import java.util.Map;
 
 /**
  * A TaskAssignor is responsible for creating a TaskAssignment from a given

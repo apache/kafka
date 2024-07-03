@@ -99,8 +99,8 @@ class CoordinatorLoaderImpl[T](
           var readAtLeastOneRecord = true
 
           var previousHighWatermark = -1L
-          var numRecords = 0
-          var numBytes = 0
+          var numRecords = 0L
+          var numBytes = 0L
           while (currentOffset < logEndOffset && readAtLeastOneRecord && isRunning.get) {
             val fetchDataInfo = log.read(
               startOffset = currentOffset,

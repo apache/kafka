@@ -426,7 +426,7 @@
     This is a simple tradeoff between availability and consistency. If we wait for replicas in the ISR, then we will remain unavailable as long as those replicas are down. If such replicas were destroyed or their data
     was lost, then we are permanently down. If, on the other hand, a non-in-sync replica comes back to life and we allow it to become leader, then its log becomes the source of truth even though it is not guaranteed to
     have every committed message. By default from version 0.11.0.0, Kafka chooses the first strategy and favor waiting for a consistent replica. This behavior can be changed using
-    configuration property unclean.leader.election.enable, to support use cases where uptime is preferable to consistency.
+    configuration property <code>unclean.leader.election.enable</code>, to support use cases where uptime is preferable to consistency.
     <p>
     This dilemma is not specific to Kafka. It exists in any quorum-based scheme. For example in a majority voting scheme, if a majority of servers suffer a permanent failure, then you must either choose to lose 100% of
     your data or violate consistency by taking what remains on an existing server as your new source of truth.

@@ -252,11 +252,33 @@ public class SharePartitionManager implements AutoCloseable {
     ) {
         log.trace("Acknowledge request for topicIdPartitions: {} with groupId: {}",
             acknowledgeTopics.keySet(), groupId);
+        Map<TopicIdPartition, CompletableFuture<Errors>> futures = new HashMap<>();
+        acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
+            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
+            if (sharePartition != null) {
+                CompletableFuture<Errors> future = sharePartition.acknowledge(memberId, acknowledgePartitionBatches).thenApply(throwable -> {
+                    if (throwable.isPresent()) {
+                        return Errors.forException(throwable.get());
+                    }
+                    return Errors.NONE;
+                });
+                futures.put(topicIdPartition, future);
+            } else {
+                futures.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            }
+        });
 
-        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> future = new CompletableFuture<>();
-        future.completeExceptionally(new UnsupportedOperationException("Not implemented yet"));
-
-        return future;
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+            futures.values().toArray(new CompletableFuture[0]));
+        return allFutures.thenApply(v -> {
+            Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
+            futures.forEach((topicIdPartition, future) -> {
+                result.put(topicIdPartition, new ShareAcknowledgeResponseData.PartitionData()
+                    .setPartitionIndex(topicIdPartition.partition())
+                    .setErrorCode(future.join().code()));
+            });
+            return result;
+        });
     }
 
     /**
@@ -276,11 +298,32 @@ public class SharePartitionManager implements AutoCloseable {
     ) {
         log.trace("Release acquired records request for topicIdPartitions: {} with groupId: {}",
             topicIdPartitions, groupId);
+        Map<TopicIdPartition, CompletableFuture<Errors>> futuresMap = new HashMap<>();
+        topicIdPartitions.forEach(topicIdPartition -> {
+            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
+            if (sharePartition == null) {
+                log.error("No share partition found for groupId {} topicPartition {} while releasing acquired topic partitions", groupId, topicIdPartition);
+                futuresMap.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            } else {
+                CompletableFuture<Errors> future = sharePartition.releaseAcquiredRecords(memberId).thenApply(throwable -> {
+                    if (throwable.isPresent()) {
+                        return Errors.forException(throwable.get());
+                    }
+                    return Errors.NONE;
+                });
+                futuresMap.put(topicIdPartition, future);
+            }
+        });
 
-        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> future = new CompletableFuture<>();
-        future.completeExceptionally(new UnsupportedOperationException("Not implemented yet"));
-
-        return future;
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+                futuresMap.values().toArray(new CompletableFuture[futuresMap.size()]));
+        return allFutures.thenApply(v -> {
+            Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
+            futuresMap.forEach((topicIdPartition, future) -> result.put(topicIdPartition, new ShareAcknowledgeResponseData.PartitionData()
+                    .setPartitionIndex(topicIdPartition.partition())
+                    .setErrorCode(future.join().code())));
+            return result;
+        });
     }
 
     /**
@@ -578,7 +621,8 @@ public class SharePartitionManager implements AutoCloseable {
      *
      * @return The offset for the earliest timestamp.
      */
-    private long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition) {
+    // Visible for testing.
+    long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition) {
         // TODO: We need to know the isolation level from group configs, for now we are passing Option.empty() for isolationLevel
         Option<TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
             topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),

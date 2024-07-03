@@ -14,7 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group.modern;
+
+import org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilder;
 
 import java.util.HashMap;
 import java.util.Map;

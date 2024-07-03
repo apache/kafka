@@ -23,8 +23,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.Features;
-import org.apache.kafka.server.common.GroupVersion;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -93,7 +91,6 @@ class ConsumerGroupCommandTestUtils {
         serverProperties.put(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer");
 
         return Collections.singletonList(ClusterConfig.defaultBuilder()
-                .setFeatures(Collections.singletonMap(Features.GROUP_VERSION, GroupVersion.GV_1.featureLevel()))
                 .setTypes(Collections.singleton(CO_KRAFT))
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("consumerGroupCoordinator"))
