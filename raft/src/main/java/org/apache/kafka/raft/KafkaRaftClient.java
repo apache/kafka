@@ -1622,7 +1622,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         DescribeQuorumRequestData describeQuorumRequestData = (DescribeQuorumRequestData) requestMetadata.data();
         if (!hasValidTopicPartition(describeQuorumRequestData, log.topicPartition())) {
             return DescribeQuorumRequest.getPartitionLevelErrorResponse(
-                describeQuorumRequestData, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+                describeQuorumRequestData,
+                Errors.UNKNOWN_TOPIC_OR_PARTITION
+            );
         }
 
         if (!quorum.isLeader()) {

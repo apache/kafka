@@ -568,17 +568,8 @@ public final class RaftClientTestContext {
             .setCurrentVoters(voterStates)
             .setObservers(observerStates);
 
+        // KAFKA-16953 will add support for including the node listeners in the node collection
         DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection();
-        voterStates.forEach(replicaState -> {
-            if (kip853Rpc && nodes.find(replicaState.replicaId()) == null) {
-                // KAFKA-16953 will add support for including the node listeners in the node
-                // collection
-                nodes.add(
-                    new DescribeQuorumResponseData.Node()
-                        .setNodeId(replicaState.replicaId())
-                );
-            }
-        });
 
         DescribeQuorumResponseData expectedResponse = DescribeQuorumResponse.singletonResponse(
             metadataPartition,

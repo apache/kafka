@@ -596,10 +596,10 @@ public class LeaderStateTest {
         assertEquals(epoch, partitionData.leaderEpoch());
         assertEquals(Collections.emptyList(), partitionData.observers());
         assertEquals(1, partitionData.currentVoters().size());
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localReplicaKey.id())
-                .setReplicaDirectoryId(localReplicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(-1)
                 .setLastFetchTimestamp(time.milliseconds())
                 .setLastCaughtUpTimestamp(time.milliseconds()),
@@ -619,10 +619,10 @@ public class LeaderStateTest {
         assertEquals(epoch, partitionData.leaderEpoch());
         assertEquals(Collections.emptyList(), partitionData.observers());
         assertEquals(1, partitionData.currentVoters().size());
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localReplicaKey.id())
-                .setReplicaDirectoryId(localReplicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(leaderEndOffset)
                 .setLastFetchTimestamp(time.milliseconds())
                 .setLastCaughtUpTimestamp(time.milliseconds()),
@@ -634,9 +634,6 @@ public class LeaderStateTest {
     @ValueSource(booleans = {true, false})
     public void testDescribeQuorumWithMultipleVoters(boolean withDirectoryId) {
         MockTime time = new MockTime();
-        Uuid localVoterDirectoryId = withDirectoryId ?
-            localReplicaKey.directoryId().get() :
-            ReplicaKey.NO_DIRECTORY_ID;
         ReplicaKey activeFollowerKey = replicaKey(1, withDirectoryId);
         ReplicaKey inactiveFollowerKey = replicaKey(2, withDirectoryId);
         long leaderStartOffset = 10L;
@@ -676,10 +673,10 @@ public class LeaderStateTest {
             localReplicaKey.id(),
             partitionData.currentVoters()
         );
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localReplicaKey.id())
-                .setReplicaDirectoryId(localVoterDirectoryId)
                 .setLogEndOffset(leaderEndOffset)
                 .setLastFetchTimestamp(time.milliseconds())
                 .setLastCaughtUpTimestamp(time.milliseconds()),
@@ -693,7 +690,6 @@ public class LeaderStateTest {
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(activeFollowerKey.id())
-                .setReplicaDirectoryId(activeFollowerKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(leaderEndOffset)
                 .setLastFetchTimestamp(activeFollowerFetchTimeMs)
                 .setLastCaughtUpTimestamp(activeFollowerFetchTimeMs),
@@ -707,7 +703,6 @@ public class LeaderStateTest {
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(inactiveFollowerKey.id())
-                .setReplicaDirectoryId(inactiveFollowerKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(-1)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1),
@@ -719,9 +714,6 @@ public class LeaderStateTest {
     @ValueSource(booleans = {true, false})
     public void testDescribeQuorumWithObservers(boolean withDirectoryId) {
         MockTime time = new MockTime();
-        Uuid localVoterDirectoryId = withDirectoryId ?
-            localReplicaKey.directoryId().get() :
-            ReplicaKey.NO_DIRECTORY_ID;
 
         ReplicaKey observerKey = replicaKey(10, withDirectoryId);
         long epochStartOffset = 10L;
@@ -749,8 +741,9 @@ public class LeaderStateTest {
 
         assertEquals(1, partitionData.currentVoters().size());
         assertEquals(localReplicaKey.id(), partitionData.currentVoters().get(0).replicaId());
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(
-            localVoterDirectoryId,
+            ReplicaKey.NO_DIRECTORY_ID,
             partitionData.currentVoters().get(0).replicaDirectoryId()
         );
 
@@ -758,9 +751,9 @@ public class LeaderStateTest {
         assertEquals(1, observerStates.size());
 
         DescribeQuorumResponseData.ReplicaState observerState = observerStates.get(0);
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(observerKey.id())
-                .setReplicaDirectoryId(observerKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(epochStartOffset + 1)
                 .setLastFetchTimestamp(observerFetchTimeMs)
                 .setLastCaughtUpTimestamp(observerFetchTimeMs),
@@ -796,8 +789,9 @@ public class LeaderStateTest {
         assertEquals(epoch, partitionData.leaderEpoch());
         DescribeQuorumResponseData.ReplicaState observer = partitionData.observers().get(0);
         assertEquals(nodeKey1.id(), observer.replicaId());
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(
-            nodeKey1.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID),
+            ReplicaKey.NO_DIRECTORY_ID,
             observer.replicaDirectoryId()
         );
         assertEquals(epochStartOffset + 1, observer.logEndOffset());
@@ -1070,8 +1064,9 @@ public class LeaderStateTest {
 
         DescribeQuorumResponseData.ReplicaState observerState = observerStates.get(0);
         assertEquals(observerKey.id(), observerState.replicaId());
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(
-            observerKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID),
+            ReplicaKey.NO_DIRECTORY_ID,
             observerState.replicaDirectoryId()
         );
 

@@ -2788,6 +2788,7 @@ public class KafkaRaftClientTest {
         context.deliverRequest(context.describeQuorumRequest());
         context.pollUntilResponse();
 
+        // KAFKA-16953 will add support for including the directory id
         context.assertSentDescribeQuorumResponse(localId, epoch, 3L,
             Arrays.asList(
                 new ReplicaState()
@@ -2813,7 +2814,7 @@ public class KafkaRaftClientTest {
             singletonList(
                 new ReplicaState()
                     .setReplicaId(observerId.id())
-                    .setReplicaDirectoryId(observerId.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
+                    .setReplicaDirectoryId(ReplicaKey.NO_DIRECTORY_ID)
                     .setLogEndOffset(0L)
                     .setLastFetchTimestamp(observerFetchTime)
                     .setLastCaughtUpTimestamp(-1L)));
