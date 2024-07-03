@@ -19,7 +19,7 @@ package org.apache.kafka.connect.mirror.integration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.test.TestSslUtils;
@@ -40,7 +40,7 @@ public class MirrorConnectorsIntegrationSSLTest extends MirrorConnectorsIntegrat
 
     @BeforeEach
     public void startClusters() throws Exception {
-        Map<String, Object> sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
+        Map<String, Object> sslConfig = TestSslUtils.createSslConfig(false, true, ConnectionMode.SERVER, TestUtils.tempFile(), "testCert");
         // enable SSL on backup kafka broker
         backupBrokerProps.put(SocketServerConfigs.LISTENERS_CONFIG, "SSL://localhost:0");
         backupBrokerProps.put(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "SSL");
