@@ -3358,7 +3358,7 @@ public class CoordinatorRuntimeTest {
     @Test
     public void testScheduleWriteOperationWithBatchingWhenWriteFails() {
         MockTimer timer = new MockTimer();
-        // The partition writer only accept no writes.
+        // The partition writer does not accept any writes
         MockPartitionWriter writer = new MockPartitionWriter(0);
 
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
@@ -4047,7 +4047,7 @@ public class CoordinatorRuntimeTest {
     @Test
     public void testScheduleNonAtomicWriteOperationWhenWriteFails() {
         MockTimer timer = new MockTimer();
-        // The partition writer only accept no writes.
+        // The partition writer does not accept any writes.
         MockPartitionWriter writer = new MockPartitionWriter(0);
 
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
