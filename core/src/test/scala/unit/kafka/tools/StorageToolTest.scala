@@ -634,7 +634,7 @@ Found problem:
     assertEquals(1, parseAddScram("-S", "SCRAM-SHA-256=[name=alice,password=alice,iterations=4096]").get.size)
 
     // Require 4096 <= iterations <= 16384
-    try assertEquals(1, parseAddScram("-S", 
+    try assertEquals(1, parseAddScram("-S",
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=16385]"))
     catch {
       case e: TerseFailure => assertEquals(s"The 'iterations' value must be <= 16384 for add-scram", e.getMessage)
@@ -738,7 +738,7 @@ Found problem:
       assertTrue(metaPropertiesFile.exists())
       val metaProps = new MetaProperties.Builder(
         PropertiesUtils.readPropertiesFile(metaPropertiesFile.getAbsolutePath())).
-        build()
+          build()
       assertTrue(metaProps.directoryId().isPresent())
       assertFalse(DirectoryId.reserved(metaProps.directoryId().get()))
     } finally Utils.delete(tempDir)
