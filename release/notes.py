@@ -163,7 +163,7 @@ as they have not been truly fixed in this release.
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
+    if len(sys.argv) != 2:
         print("Usage: python notes.py <version>", file=sys.stderr)
         sys.exit(1)
 
