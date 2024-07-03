@@ -326,12 +326,6 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     true,
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC
-            ).define(
-                    EMIT_OFFSET_SYNCS_ENABLED,
-                    ConfigDef.Type.BOOLEAN,
-                    EMIT_OFFSET_SYNCS_ENABLED_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    EMIT_OFFSET_SYNCS_ENABLED_DOC
             ).withClientSslSupport()
             .withClientSaslSupport();
 

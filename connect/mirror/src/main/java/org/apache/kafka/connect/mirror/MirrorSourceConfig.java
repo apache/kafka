@@ -347,7 +347,14 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         ConfigDef.Type.BOOLEAN,
                         ADD_SOURCE_ALIAS_TO_METRICS_DEFAULT,
                         ConfigDef.Importance.LOW,
-                        ADD_SOURCE_ALIAS_TO_METRICS_DOC);
+                        ADD_SOURCE_ALIAS_TO_METRICS_DOC)
+                .define(
+                        EMIT_OFFSET_SYNCS_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        EMIT_OFFSET_SYNCS_ENABLED_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        EMIT_OFFSET_SYNCS_ENABLED_DOC
+                );
     }
 
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = defineSourceConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
