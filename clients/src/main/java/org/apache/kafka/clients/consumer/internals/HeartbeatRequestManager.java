@@ -488,7 +488,7 @@ public class HeartbeatRequestManager implements RequestManager {
         @Override
         public String toStringBase() {
             return super.toStringBase() +
-                    ", heartbeatTimer=" + heartbeatTimer +
+                    ", remainingMs=" + heartbeatTimer.remainingMs() +
                     ", heartbeatIntervalMs=" + heartbeatIntervalMs;
         }
 

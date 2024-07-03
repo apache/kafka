@@ -176,7 +176,7 @@ public class HeartbeatRequestManagerTest {
         );
 
         String target = requestState.toStringBase() +
-                ", heartbeatTimer=" + heartbeatRequestState.heartbeatTimer() +
+                ", remainingMs=" + heartbeatRequestState.heartbeatTimer().remainingMs() +
                 ", heartbeatIntervalMs=" + DEFAULT_HEARTBEAT_INTERVAL_MS;
 
         assertDoesNotThrow(heartbeatRequestState::toString);
