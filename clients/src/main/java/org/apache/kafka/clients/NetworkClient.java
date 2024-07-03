@@ -1182,6 +1182,7 @@ public class NetworkClient implements KafkaClient {
         List<InetSocketAddress> servers = this.bootstrapState.tryResolveAddresses(nowMs);
         if (!servers.isEmpty()) {
             this.metadataUpdater.bootstrap(servers);
+            System.out.println(metadataUpdater.fetchNodes());
             return;
         }
         if (this.bootstrapState.timer.isExpired()) {
@@ -1230,6 +1231,7 @@ public class NetworkClient implements KafkaClient {
         public long maybeUpdate(long now) {
             // should we update our metadata?
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
+            System.out.println("Time to next: " + timeToNextMetadataUpdate);
             long waitForMetadataFetch = hasFetchInProgress() ? defaultRequestTimeoutMs : 0;
 
             long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
@@ -1332,8 +1334,10 @@ public class NetworkClient implements KafkaClient {
          */
         private long maybeUpdate(long now, Node node) {
             String nodeConnectionId = node.idString();
+            System.out.println(nodeConnectionId);
 
             if (canSendRequest(nodeConnectionId, now)) {
+                System.out.println("canSendRequest was true");
                 Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion(now);
                 MetadataRequest.Builder metadataRequest = requestAndVersion.requestBuilder;
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node);
@@ -1346,6 +1350,7 @@ public class NetworkClient implements KafkaClient {
             // the client from unnecessarily connecting to additional nodes while a previous connection
             // attempt has not been completed.
             if (isAnyNodeConnecting()) {
+                System.out.println("Node connecting...");
                 // Strictly the timeout we should return here is "connect timeout", but as we don't
                 // have such application level configuration, using reconnect backoff instead.
                 return reconnectBackoffMs;
