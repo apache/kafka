@@ -92,6 +92,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -1524,6 +1525,117 @@ public class SharePartitionManagerTest {
         assertTrue(result.containsKey(tp));
         assertEquals(3, result.get(tp).partitionIndex());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp).errorCode());
+    }
+
+    @Test
+    public void testProcessFetchResponseWithLsoMovementForTopicPartition() {
+        String groupId = "grp";
+        Uuid fooId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(fooId, new TopicPartition("foo", 1));
+
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+        SharePartition sp0 = Mockito.mock(SharePartition.class);
+        SharePartition sp1 = Mockito.mock(SharePartition.class);
+
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp0), sp0);
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withPartitionCacheMap(partitionCacheMap).withReplicaManager(replicaManager).build();
+
+        SharePartitionManager sharePartitionManagersSpy = Mockito.spy(sharePartitionManager);
+
+        // Mocking the offsetForEarliestTimestamp method to return a valid LSO.
+        Mockito.doReturn(1L).when(sharePartitionManagersSpy).offsetForEarliestTimestamp(any(TopicIdPartition.class));
+
+        when(sp0.nextFetchOffset()).thenReturn((long) 0, (long) 5);
+        when(sp1.nextFetchOffset()).thenReturn((long) 4, (long) 4);
+
+        when(sp0.acquire(any(), any())).thenReturn(
+                CompletableFuture.completedFuture(Collections.emptyList()),
+                CompletableFuture.completedFuture(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
+                        .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1))));
+        when(sp1.acquire(any(), any())).thenReturn(
+                CompletableFuture.completedFuture(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
+                        .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1))),
+                CompletableFuture.completedFuture(Collections.emptyList()));
+
+        doNothing().when(sp1).updateCacheAndOffsets(any(Long.class));
+        doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData = new SharePartitionManager.ShareFetchPartitionData(
+                new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+                        1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()),
+                groupId, Uuid.randomUuid().toString(), Arrays.asList(tp0, tp1), future, partitionMaxBytes);
+
+        MemoryRecords records1 = MemoryRecords.withRecords(Compression.NONE,
+                new SimpleRecord("0".getBytes(), "v".getBytes()),
+                new SimpleRecord("1".getBytes(), "v".getBytes()),
+                new SimpleRecord("2".getBytes(), "v".getBytes()),
+                new SimpleRecord(null, "value".getBytes()));
+
+        List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData1 = new ArrayList<>();
+        responseData1.add(new Tuple2<>(tp0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
+                MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false)));
+        responseData1.add(new Tuple2<>(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
+                records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false)));
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> result1 =
+                sharePartitionManagersSpy.processFetchResponse(shareFetchPartitionData, responseData1);
+
+        assertTrue(result1.isDone());
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData1 = result1.join();
+        assertEquals(2, resultData1.size());
+        assertTrue(resultData1.containsKey(tp0));
+        assertTrue(resultData1.containsKey(tp1));
+        assertEquals(0, resultData1.get(tp0).partitionIndex());
+        assertEquals(1, resultData1.get(tp1).partitionIndex());
+        assertEquals(Errors.NONE.code(), resultData1.get(tp0).errorCode());
+        assertEquals(Errors.NONE.code(), resultData1.get(tp1).errorCode());
+
+        // Since we have OFFSET_OUT_OF_RANGE exception for tp1 and no exception for tp2 from SharePartition class,
+        // we should have 1 call for updateCacheAndOffsets for tp0 and 0 calls for tp1.
+        Mockito.verify(sp0, times(1)).updateCacheAndOffsets(any(Long.class));
+        Mockito.verify(sp1, times(0)).updateCacheAndOffsets(any(Long.class));
+
+        MemoryRecords records2 = MemoryRecords.withRecords(100L, Compression.NONE,
+                new SimpleRecord("0".getBytes(), "v".getBytes()),
+                new SimpleRecord("1".getBytes(), "v".getBytes()),
+                new SimpleRecord("2".getBytes(), "v".getBytes()),
+                new SimpleRecord(null, "value".getBytes()));
+
+        List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData2 = new ArrayList<>();
+        responseData2.add(new Tuple2<>(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+                records2, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false)));
+        responseData2.add(new Tuple2<>(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
+                MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false)));
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> result2 =
+                sharePartitionManagersSpy.processFetchResponse(shareFetchPartitionData, responseData2);
+
+        assertTrue(result2.isDone());
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData2 = result2.join();
+        assertEquals(2, resultData2.size());
+        assertTrue(resultData2.containsKey(tp0));
+        assertTrue(resultData2.containsKey(tp1));
+        assertEquals(0, resultData2.get(tp0).partitionIndex());
+        assertEquals(1, resultData2.get(tp1).partitionIndex());
+        assertEquals(Errors.NONE.code(), resultData2.get(tp0).errorCode());
+        assertEquals(Errors.NONE.code(), resultData2.get(tp1).errorCode());
+
+        // Since we don't see any exception for tp1 and tp2 from SharePartition class,
+        // the updateCacheAndOffsets calls should remain the same as the previous case.
+        Mockito.verify(sp0, times(1)).updateCacheAndOffsets(any(Long.class));
+        Mockito.verify(sp1, times(0)).updateCacheAndOffsets(any(Long.class));
     }
 
     private ShareFetchResponseData.PartitionData noErrorShareFetchResponse() {
