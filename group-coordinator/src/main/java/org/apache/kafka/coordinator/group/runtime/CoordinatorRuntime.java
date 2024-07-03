@@ -972,33 +972,36 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     }
                 }
 
-                try {
-                    for (int i = 0; i < records.size(); i++) {
-                        U recordToReplay = records.get(i);
-                        SimpleRecord recordToAppend = recordsToAppend.get(i);
 
-                        if (!isAtomic) {
-                            // Check if the current batch has enough space. We check this before
-                            // replaying the record in order to avoid having to revert back
-                            // changes if the record do not fit within a batch.
-                            boolean hasRoomFor = currentBatch.builder.hasRoomFor(
-                                recordToAppend.timestamp(),
-                                recordToAppend.key(),
-                                recordToAppend.value(),
-                                recordToAppend.headers()
+                for (int i = 0; i < records.size(); i++) {
+                    U recordToReplay = records.get(i);
+                    SimpleRecord recordToAppend = recordsToAppend.get(i);
+
+                    if (!isAtomic) {
+                        // Check if the current batch has enough space. We check this before
+                        // replaying the record in order to avoid having to revert back
+                        // changes if the record do not fit within a batch.
+                        boolean hasRoomFor = currentBatch.builder.hasRoomFor(
+                            recordToAppend.timestamp(),
+                            recordToAppend.key(),
+                            recordToAppend.value(),
+                            recordToAppend.headers()
+                        );
+
+                        if (!hasRoomFor) {
+                            // If flushing fails, we don't catch the exception in order to let
+                            // the caller fail the current operation.
+                            flushCurrentBatch();
+                            maybeAllocateNewBatch(
+                                producerId,
+                                producerEpoch,
+                                verificationGuard,
+                                currentTimeMs
                             );
-
-                            if (!hasRoomFor) {
-                                flushCurrentBatch();
-                                maybeAllocateNewBatch(
-                                    producerId,
-                                    producerEpoch,
-                                    verificationGuard,
-                                    currentTimeMs
-                                );
-                            }
                         }
+                    }
 
+                    try {
                         if (replay) {
                             coordinator.replay(
                                 currentBatch.nextOffset,
@@ -1010,22 +1013,24 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                         currentBatch.builder.append(recordToAppend);
                         currentBatch.nextOffset++;
+                    } catch (Throwable t) {
+                        log.error("Replaying record {} to {} failed due to: {}.", recordToReplay, tp, t.getMessage());
+
+                        // Add the event to the list of pending events associated with the last
+                        // batch in order to fail it too.
+                        currentBatch.deferredEvents.add(event);
+
+                        // If an exception is thrown, we fail the entire batch. Exceptions should be
+                        // really exceptional in this code path and they would usually be the results
+                        // of bugs preventing records to be replayed.
+                        failCurrentBatch(t);
+
+                        return;
                     }
-
-                    // Add the event to the list of pending events associated with the batch.
-                    currentBatch.deferredEvents.add(event);
-                } catch (Throwable t) {
-                    log.error("Replaying records to {} failed due to: {}.", tp, t.getMessage());
-
-                    // Add the event to the list of pending events associated with the last
-                    // batch in order to fail it too.
-                    currentBatch.deferredEvents.add(event);
-
-                    // If an exception is thrown, we fail the entire batch. Exceptions should be
-                    // really exceptional in this code path and they would usually be the results
-                    // of bugs preventing records to be replayed.
-                    failCurrentBatch(t);
                 }
+
+                // Add the event to the list of pending events associated with the batch.
+                currentBatch.deferredEvents.add(event);
 
                 // Write the current batch if it is transactional or if the linger timeout
                 // has expired.
