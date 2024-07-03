@@ -18,6 +18,7 @@ package org.apache.kafka.connect.util.clusters;
 
 import org.apache.kafka.connect.cli.ConnectDistributed;
 import org.apache.kafka.connect.runtime.Connect;
+import org.apache.kafka.connect.runtime.rest.RestServer;
 
 import java.net.URI;
 import java.util.Map;
@@ -29,9 +30,9 @@ import java.util.Objects;
 public class WorkerHandle {
 
     private final String workerName;
-    private final Connect worker;
+    private final Connect<?> worker;
 
-    protected WorkerHandle(String workerName, Connect worker) {
+    protected WorkerHandle(String workerName, Connect<?> worker) {
         this.workerName = workerName;
         this.worker = worker;
     }
@@ -55,24 +56,6 @@ public class WorkerHandle {
     }
 
     /**
-     * Determine if this worker is running.
-     *
-     * @return true if the worker is running, or false otherwise
-     */
-    public boolean isRunning() {
-        return worker.isRunning();
-    }
-
-    /**
-     * Get the workers's name corresponding to this handle.
-     *
-     * @return the worker's name
-     */
-    public String name() {
-        return workerName;
-    }
-
-    /**
      * Get the workers's url that accepts requests to its REST endpoint.
      *
      * @return the worker's url
@@ -91,13 +74,22 @@ public class WorkerHandle {
     }
 
     /**
-     * Set a new timeout for REST requests to the worker. Useful if a request is expected
-     * to block, since the time spent awaiting that request can be reduced and test runtime
-     * bloat can be avoided.
-     * @param requestTimeoutMs the new timeout in milliseconds; must be positive
+     * Set a new timeout for REST requests to the worker, including health check requests.
+     * Useful if a request is expected to block, since the time spent awaiting that request
+     * can be reduced and test runtime bloat can be avoided.
+     * @param timeoutMs the new timeout in milliseconds; must be positive
      */
-    public void requestTimeout(long requestTimeoutMs) {
-        worker.rest().requestTimeout(requestTimeoutMs);
+    public void requestTimeout(long timeoutMs) {
+        worker.rest().requestTimeout(timeoutMs);
+        worker.rest().healthCheckTimeout(timeoutMs);
+    }
+
+    /**
+     * Reset the timeout for REST requests to the worker, including health check requests.
+     */
+    public void resetRequestTimeout() {
+        worker.rest().requestTimeout(RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+        worker.rest().healthCheckTimeout(RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS);
     }
 
     @Override
