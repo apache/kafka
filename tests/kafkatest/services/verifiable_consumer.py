@@ -266,13 +266,13 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def _worker(self, idx, node):
         with self.lock:
-            if node not in self.event_handlers:
-                if self.is_eager():
-                    self.event_handlers[node] = ConsumerEventHandler(node, self.verify_offsets, idx)
-                elif self.group_protocol == consumer_group.consumer_group_protocol:
-                    self.event_handlers[node] = ConsumerProtocolConsumerEventHandler(node, self.verify_offsets, idx)
-                else:
-                    self.event_handlers[node] = IncrementalAssignmentConsumerEventHandler(node, self.verify_offsets, idx)
+            # if node not in self.event_handlers:
+            if self.is_eager():
+                self.event_handlers[node] = ConsumerEventHandler(node, self.verify_offsets, idx)
+            elif self.group_protocol == consumer_group.consumer_group_protocol:
+                self.event_handlers[node] = ConsumerProtocolConsumerEventHandler(node, self.verify_offsets, idx)
+            else:
+                self.event_handlers[node] = IncrementalAssignmentConsumerEventHandler(node, self.verify_offsets, idx)
             handler = self.event_handlers[node]
 
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
