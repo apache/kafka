@@ -129,13 +129,16 @@ abstract class EmbeddedConnect {
             Exit.setExitProcedure(exitProcedure);
             Exit.setHaltProcedure(haltProcedure);
         }
+
         kafkaCluster.start();
-        startConnect();
+
         try {
             httpClient.start();
         } catch (Exception e) {
             throw new ConnectException("Failed to start HTTP client", e);
         }
+
+        startConnect();
 
         try {
             if (numBrokers > 0) {
@@ -204,6 +207,39 @@ abstract class EmbeddedConnect {
      */
     public void requestTimeout(long requestTimeoutMs) {
         workers().forEach(worker -> worker.requestTimeout(requestTimeoutMs));
+    }
+
+    /**
+     * Reset the REST request timeout to the default value that's used in non-testing
+     * environments. Useful if it has been previous modified using {@link #requestTimeout(long)}.
+     */
+    public void resetRequestTimeout() {
+        workers().forEach(WorkerHandle::resetRequestTimeout);
+    }
+
+    /**
+     * Check to see if the worker is running, using the health check endpoint introduced in
+     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1017%3A+Health+check+endpoint+for+Kafka+Connect">KIP-1017</a>.
+     * @param workerHandle the worker to check; may not be null
+     * @return whether the worker is ready, based on its health check endpoint
+     */
+    public boolean isHealthy(WorkerHandle workerHandle) {
+        try (Response response = healthCheck(workerHandle)) {
+            return response.getStatus() == Response.Status.OK.getStatusCode();
+        } catch (Exception e) {
+            log.debug("Failed to check for worker readiness", e);
+            return false;
+        }
+    }
+
+    /**
+     * Contact the health check endpoint for the worker
+     * @param workerHandle the worker to contact; may not be null
+     * @return the response from the worker
+     */
+    public Response healthCheck(WorkerHandle workerHandle) {
+        String url = workerHandle.url().resolve("health").toString();
+        return requestGet(url);
     }
 
     /**
@@ -1036,29 +1072,11 @@ abstract class EmbeddedConnect {
      *
      * @return the list of handles of the online workers
      */
-    public Set<WorkerHandle> activeWorkers() {
+    public Set<WorkerHandle> healthyWorkers() {
         return workers().stream()
-                .filter(w -> {
-                    try {
-                        String endpoint = w.url().resolve("/connectors/liveness-check").toString();
-                        Response response = requestGet(endpoint);
-                        boolean live = response.getStatus() == Response.Status.NOT_FOUND.getStatusCode()
-                                || response.getStatus() == Response.Status.OK.getStatusCode();
-                        if (live) {
-                            return true;
-                        } else {
-                            log.warn("Worker failed liveness probe. Response: {}", response);
-                            return false;
-                        }
-                    } catch (Exception e) {
-                        // Worker failed to respond. Consider it's offline
-                        log.warn("Failed to contact worker during liveness check", e);
-                        return false;
-                    }
-                })
+                .filter(this::isHealthy)
                 .collect(Collectors.toSet());
     }
-
 
     /**
      * Return the available assertions for this Connect cluster

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -47,12 +46,6 @@ public class PluginScannerTest {
 
     static Stream<PluginScanner> parameters() {
         return Stream.of(new ReflectionScanner(), new ServiceLoaderScanner());
-    }
-
-    @BeforeAll
-    public static void setUp() {
-        // Work around a circular-dependency in TestPlugins.
-        TestPlugins.pluginPath();
     }
 
     @ParameterizedTest
