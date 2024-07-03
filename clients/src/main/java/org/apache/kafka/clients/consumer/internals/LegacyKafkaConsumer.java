@@ -181,8 +181,6 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     interceptorList,
                     Arrays.asList(this.deserializers.keyDeserializer, this.deserializers.valueDeserializer));
             this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
-            //List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-            //this.metadata.bootstrap(addresses);
 
             FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
