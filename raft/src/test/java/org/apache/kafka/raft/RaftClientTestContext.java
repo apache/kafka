@@ -216,7 +216,8 @@ public final class RaftClientTestContext {
                 time.milliseconds(),
                 log.endOffset().offset,
                 epoch,
-                records
+                records,
+                false
             );
             log.appendAsLeader(batch, epoch);
             // Need to flush the log to update the last flushed offset. This is always correct
@@ -414,19 +415,28 @@ public final class RaftClientTestContext {
         return appendLingerMs;
     }
 
-    MemoryRecords buildBatch(
+    MemoryRecords buildDataBatch(
         long baseOffset,
         int epoch,
         List<String> records
     ) {
-        return buildBatch(time.milliseconds(), baseOffset, epoch, records);
+        return buildBatch(time.milliseconds(), baseOffset, epoch, records, false);
+    }
+
+    MemoryRecords buildControlBatch(
+        long baseOffset,
+        int epoch,
+        List<String> records
+    ) {
+        return buildBatch(time.milliseconds(), baseOffset, epoch, records, true);
     }
 
     static MemoryRecords buildBatch(
         long timestamp,
         long baseOffset,
         int epoch,
-        List<String> records
+        List<String> records,
+        boolean isControl
     ) {
         ByteBuffer buffer = ByteBuffer.allocate(512);
         BatchBuilder<String> builder = new BatchBuilder<>(
@@ -435,7 +445,7 @@ public final class RaftClientTestContext {
             Compression.NONE,
             baseOffset,
             timestamp,
-            false,
+            isControl,
             epoch,
             512
         );

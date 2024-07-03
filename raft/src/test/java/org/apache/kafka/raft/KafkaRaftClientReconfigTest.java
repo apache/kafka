@@ -30,7 +30,6 @@ import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.raft.internals.VoterSetTest;
 import org.apache.kafka.snapshot.RawSnapshotReader;
-import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
 import org.junit.jupiter.api.Test;
 
@@ -44,8 +43,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
-import static org.apache.kafka.raft.KafkaRaftClientSnapshotTest.fetchSnapshotResponse;
-import static org.apache.kafka.raft.KafkaRaftClientSnapshotTest.snapshotWriter;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -117,8 +114,7 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
 
-        // check that leader sends bootstrap snapshot to observer
-        // leader responds with bootstrap snapshotId when fetching offset 0
+        // check that leader does not respond with bootstrap snapshot id when follower fetches offset 0
         context.deliverRequest(
             context.fetchRequest(
                 epoch,
@@ -129,8 +125,10 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentFetchPartitionResponseWithSnapshotId(Errors.NONE, epoch, OptionalInt.of(localId), 0, 0);
-        // leader responds with snapshot
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+
+        // check no error if follower requests bootstrap snapshot from the leader
+        // follower will fail to apply snapshot over its existing snapshot (handled in testCreateExistingSnapshot)
         context.deliverRequest(
             KafkaRaftClientSnapshotTest.fetchSnapshotRequest(
                 context.metadataPartition,
@@ -144,16 +142,12 @@ public class KafkaRaftClientReconfigTest {
         context.assertSentFetchSnapshotResponse(Errors.NONE);
     }
 
-    // follower that is voter, or observer
-    // follower either has an empty or full 0-0.checkpoint
     @Test
-    public void testFollowerReadsKRaftBootstrapSnapshot() throws Exception {
+    public void testFollowerDoesNotRequestLeaderBootstrapSnapshot() throws Exception {
         int localId = 0;
         int leader = 1;
-        int follower2 = 2;
         Uuid localDirectoryId = Uuid.randomUuid();
         Uuid leaderDirectoryId = Uuid.randomUuid();
-        Uuid followerDirectoryId2 = Uuid.randomUuid();
         Set<Integer> voterIds = new HashSet<>(Arrays.asList(localId, leader));
         Set<ReplicaKey> voters = new HashSet<>(Arrays.asList(
             ReplicaKey.of(localId, localDirectoryId),
@@ -172,53 +166,18 @@ public class KafkaRaftClientReconfigTest {
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
-        // leader responds with its bootstrap snapshotId
+        // check if leader response were to contain bootstrap snapshot id, follower would not send fetch snapshot request
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
             context.snapshotFetchResponse(epoch, leader, BOOTSTRAP_SNAPSHOT_ID, 0)
         );
-
-        // check follower will send fetch snapshot request to leader, even though follower has 0-0.checkpoint locally
         context.pollUntilRequest();
-        RaftRequest.Outbound fetchSnapshotRequest = context.assertSentFetchSnapshotRequest();
-        KafkaRaftClientSnapshotTest.assertFetchSnapshotRequest(
-            fetchSnapshotRequest,
-            context.metadataPartition,
-            localId,
-            Integer.MAX_VALUE
-        );
-
-        // leader would respond with its bootstrap snapshot, differing from local's snapshot by an additional follower
-        Set<ReplicaKey> leadersVoters = new HashSet<>(voters);
-        leadersVoters.add(ReplicaKey.of(follower2, followerDirectoryId2));
-        VoterSet leadersVoterSet = VoterSetTest.voterSet(leadersVoters.stream());
-        List<String> records = bootstrapSnapshotRecords(leadersVoterSet);
-        KafkaRaftClientSnapshotTest.MemorySnapshotWriter memorySnapshot = new KafkaRaftClientSnapshotTest.MemorySnapshotWriter(BOOTSTRAP_SNAPSHOT_ID);
-        try (SnapshotWriter<String> snapshotWriter = snapshotWriter(context, memorySnapshot)) {
-            snapshotWriter.append(records);
-            snapshotWriter.freeze();
-        }
-
-        context.deliverResponse(
-            fetchSnapshotRequest.correlationId(),
-            fetchSnapshotRequest.destination(),
-            fetchSnapshotResponse(
-                context,
-                epoch,
-                leader,
-                BOOTSTRAP_SNAPSHOT_ID,
-                memorySnapshot.buffer().remaining(),
-                0L,
-                memorySnapshot.buffer().slice()
-            )
-        );
-
-        // check follower applies the snapshot, registering follower2 as a new voter
-        context.client.poll();
-        assertTrue(context.client.quorum().isVoter(ReplicaKey.of(follower2, followerDirectoryId2)));
+        fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
     }
 
+    // this test is maybe out of scope - we are checking that follower is able to apply votersRecord essentially
     @Test
     public void testFollowerReadsKRaftBootstrapRecords() throws Exception {
         int localId = 0;
@@ -251,28 +210,15 @@ public class KafkaRaftClientReconfigTest {
         leadersVoters.add(ReplicaKey.of(follower2, followerDirectoryId2));
         VoterSet leadersVoterSet = VoterSetTest.voterSet(leadersVoters.stream());
         List<String> leaderRecords = Arrays.asList(leadersVoterSet.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION).toString());
-        MemoryRecords batch = context.buildBatch(3L, epoch, leaderRecords);
+        MemoryRecords batch = context.buildControlBatch(3L, epoch, leaderRecords);
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
             context.fetchResponse(epoch, leader, batch, 3, Errors.NONE));
 
+        // this is broken because RaftClientTestContext.buildBatch does not send records in viable format
         // follower applies the bootstrap records, registering follower2 as a new voter
         context.client.poll();
         assertTrue(context.client.quorum().isVoter(ReplicaKey.of(follower2, followerDirectoryId2)));
     }
-
-    private static List<String> bootstrapSnapshotRecords(VoterSet voterSet) {
-        List<String> expectedBootstrapRecords = new ArrayList<>();
-        expectedBootstrapRecords.add(new SnapshotHeaderRecord()
-            .setVersion((short) 0)
-            .setLastContainedLogTimestamp(0).toString());
-        expectedBootstrapRecords.add(new KRaftVersionRecord()
-            .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
-            .setKRaftVersion((short) 1).toString());
-        expectedBootstrapRecords.add(voterSet.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION).toString());
-        expectedBootstrapRecords.add(new SnapshotFooterRecord().setVersion((short) 0).toString());
-        return expectedBootstrapRecords;
-    }
-
 }

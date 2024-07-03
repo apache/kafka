@@ -496,7 +496,7 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public Optional<RawSnapshotWriter> createNewSnapshotUnchecked(OffsetAndEpoch snapshotId) {
-        if (snapshots.containsKey(snapshotId) && !snapshotId.equals(BOOTSTRAP_SNAPSHOT_ID)) {
+        if (snapshots.containsKey(snapshotId)) {
             return Optional.empty();
         } else {
             return Optional.of(

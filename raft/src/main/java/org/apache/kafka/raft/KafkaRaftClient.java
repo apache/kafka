@@ -152,6 +152,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     public static final int MAX_FETCH_WAIT_MS = 500;
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
     public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
+    public static final OffsetAndEpoch BOOTSTRAP_SNAPSHOT_ID = new OffsetAndEpoch(0, 0);
 
     private final OptionalInt nodeId;
     private final Uuid nodeDirectoryId;
@@ -1327,8 +1328,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
             Optional<OffsetAndEpoch> latestSnapshotId = log.latestSnapshotId();
             final ValidOffsetAndEpoch validOffsetAndEpoch;
-            if (fetchOffset == 0 && latestSnapshotId.isPresent()) {
-                // If the follower has an empty log and a snapshot exist, it is always more efficient
+            if (fetchOffset == 0 && latestSnapshotId.isPresent() && !latestSnapshotId.get().equals(BOOTSTRAP_SNAPSHOT_ID)) {
+                // If the follower has an empty log and a non-bootstrap snapshot exists, it is always more efficient
                 // to reply with a snapshot id (FETCH_SNAPSHOT) instead of fetching from the log segments.
                 validOffsetAndEpoch = ValidOffsetAndEpoch.snapshot(latestSnapshotId.get());
             } else {

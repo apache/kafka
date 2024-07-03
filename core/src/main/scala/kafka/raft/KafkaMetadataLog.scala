@@ -60,8 +60,6 @@ final class KafkaMetadataLog private (
   config: MetadataLogConfig
 ) extends ReplicatedLog with Logging {
 
-  val BootstrapSnapshotId = new OffsetAndEpoch(0, 0)
-
   this.logIdent = s"[MetadataLog partition=$topicPartition, nodeId=${config.nodeId}] "
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
@@ -175,7 +173,7 @@ final class KafkaMetadataLog private (
   }
 
   override def truncateToLatestSnapshot(): Boolean = {
-    val latestEpoch = log.latestEpoch.getOrElse(-1)
+    val latestEpoch = log.latestEpoch.getOrElse(0)
     val (truncated, forgottenSnapshots) = latestSnapshotId().asScala match {
       case Some(snapshotId) if (
           snapshotId.epoch > latestEpoch ||
@@ -280,7 +278,7 @@ final class KafkaMetadataLog private (
       snapshots.contains(snapshotId)
     }
 
-    if (containsSnapshotId && !snapshotId.equals(BootstrapSnapshotId)) {
+    if (containsSnapshotId) {
       Optional.empty()
     } else {
       Optional.of(
