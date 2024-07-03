@@ -108,7 +108,6 @@ public class HeartbeatRequestManagerTest {
     @BeforeEach
     public void setUp() {
         this.time = new MockTime();
-        Metrics metrics = new Metrics(time);
         this.logContext = new LogContext();
         this.pollTimer = mock(Timer.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
@@ -117,6 +116,7 @@ public class HeartbeatRequestManagerTest {
         this.subscriptions = mock(SubscriptionState.class);
         this.membershipManager = mock(MembershipManagerImpl.class);
         this.metadata = mock(ConsumerMetadata.class);
+        Metrics metrics = new Metrics(time);
         ConsumerConfig config = mock(ConsumerConfig.class);
 
         this.heartbeatRequestState = spy(new HeartbeatRequestState(
@@ -345,8 +345,8 @@ public class HeartbeatRequestManagerTest {
         time.sleep(DEFAULT_RETRY_BACKOFF_MS);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size(), "A next heartbeat should be sent on " +
-                "the first poll after receiving a response that took longer than the interval, " +
-                "waiting only for the minimal backoff.");
+            "the first poll after receiving a response that took longer than the interval, " +
+            "waiting only for the minimal backoff.");
     }
 
     @Test
@@ -746,7 +746,6 @@ public class HeartbeatRequestManagerTest {
                 heartbeatState,
                 heartbeatRequestState,
                 backgroundEventHandler);
-
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
 
