@@ -182,9 +182,9 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
 
     @Test
     public void testFormatAuthorizationHeaderEncoding() throws UnsupportedEncodingException {
-        // See KAFKA-14496
+        // according to RFC-7617, we need to use the *non-URL safe* base64 encoder. See KAFKA-14496.
         assertAuthorizationHeader("SOME_RANDOM_LONG_USER_01234", "9Q|0`8i~ute-n9ksjLWb\\50\"AX@UUED5E", false);
-        // See KAFKA-16345
+        // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
         assertAuthorizationHeader("user!@~'", "secret-(*)!", true);
     }
 
