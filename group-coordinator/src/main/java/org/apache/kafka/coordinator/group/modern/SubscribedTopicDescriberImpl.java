@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
@@ -27,7 +27,7 @@ import java.util.Set;
 
 /**
  * The subscribed topic metadata class is used by the {@link PartitionAssignor} to obtain
- * topic and partition metadata for the topics that the consumer group is subscribed to.
+ * topic and partition metadata for the topics that the modern group is subscribed to.
  */
 public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
     /**

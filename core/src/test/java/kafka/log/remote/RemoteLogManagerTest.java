@@ -2870,7 +2870,7 @@ public class RemoteLogManagerTest {
             assertTimeoutPreemptively(Duration.ofMillis(100), () -> task.copyLogSegmentsToRemote(mockLog));
 
             // Verify quota check was performed
-            verify(rlmCopyQuotaManager, times(1)).isQuotaExceeded();
+            verify(rlmCopyQuotaManager, times(1)).getThrottleTimeMs();
             // Verify bytes to copy was recorded with the quota manager
             verify(rlmCopyQuotaManager, times(1)).record(10);
 
@@ -2893,7 +2893,7 @@ public class RemoteLogManagerTest {
             Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
         // Ensure the copy operation is waiting for quota to be available
         TestUtils.waitForCondition(() -> {
-            verify(rlmCopyQuotaManager, atLeast(1)).isQuotaExceeded();
+            verify(rlmCopyQuotaManager, atLeast(1)).getThrottleTimeMs();
             return true;
         }, "Quota exceeded check did not happen");
         // Verify RLM is able to shut down
@@ -2958,7 +2958,7 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
         when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class))).thenReturn(Optional.empty());
 
-        when(rlmCopyQuotaManager.isQuotaExceeded()).thenReturn(quotaExceeded);
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaExceeded ? 1000L : 0L);
         doNothing().when(rlmCopyQuotaManager).record(anyInt());
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
@@ -3029,8 +3029,8 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
         when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class))).thenReturn(Optional.empty());
 
-        // After the first call, isQuotaExceeded should return true
-        when(rlmCopyQuotaManager.isQuotaExceeded()).thenReturn(false, true);
+        // After the first call, getThrottleTimeMs should return non-zero throttle time
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(0L, 1000L);
         doNothing().when(rlmCopyQuotaManager).record(anyInt());
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
