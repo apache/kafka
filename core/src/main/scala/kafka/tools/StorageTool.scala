@@ -199,7 +199,7 @@ object StorageTool extends Logging {
       val level: java.lang.Short = specifiedFeatures.getOrElse(feature.featureName, feature.defaultValue(metadataVersionForDefault))
       // Only set feature records for levels greater than 0. 0 is assumed if there is no record. Throw an error if level < 0.
       if (level != 0) {
-        allNonZeroFeaturesAndLevels.append(feature.fromFeatureLevel(level, unstableFeatureVersionsEnabled))
+       allNonZeroFeaturesAndLevels.append(feature.fromFeatureLevel(level, unstableFeatureVersionsEnabled))
       }
     }
     val featuresMap = Features.featureImplsToMap(allNonZeroFeaturesAndLevels.asJava)
