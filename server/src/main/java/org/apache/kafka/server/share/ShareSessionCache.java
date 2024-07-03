@@ -41,15 +41,10 @@ public class ShareSessionCache {
     private long numPartitions = 0;
 
     // A map of session key to ShareSession.
-    private Map<ShareSessionKey, ShareSession> sessions = new HashMap<>();
+    private final Map<ShareSessionKey, ShareSession> sessions = new HashMap<>();
 
     // Maps last used times to sessions.
-    private TreeMap<LastUsedKey, ShareSession> lastUsed = new TreeMap<>();
-
-    // Visible for testing
-    public synchronized TreeMap<LastUsedKey, ShareSession> lastUsed() {
-        return lastUsed;
-    }
+    private final TreeMap<LastUsedKey, ShareSession> lastUsed = new TreeMap<>();
 
     public ShareSessionCache(int maxEntries, long evictionMs) {
         this.maxEntries = maxEntries;
