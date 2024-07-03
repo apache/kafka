@@ -239,7 +239,7 @@ public class CoordinatorRecordHelpers {
                 new ApiMessageAndVersion(
                     new ShareGroupMetadataKey()
                         .setGroupId(groupId),
-                    (short) 3
+                    (short) 11
                 ),
                 null // Tombstone.
             );
