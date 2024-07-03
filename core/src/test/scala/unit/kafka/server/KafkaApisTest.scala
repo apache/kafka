@@ -230,7 +230,7 @@ class KafkaApisTest extends Logging {
       authorizer = authorizer,
       quotas = quotas,
       fetchManager = fetchManager,
-      sharePartitionManagerOption = Some(sharePartitionManager),
+      sharePartitionManager = Some(sharePartitionManager),
       brokerTopicStats = brokerTopicStats,
       clusterId = clusterId,
       time = time,
@@ -4446,8 +4446,8 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
                   new ShareFetchResponseData.PartitionData()
-                    .setErrorCode(Errors.NONE.code())
-                    .setAcknowledgeErrorCode(Errors.NONE.code())
+                    .setErrorCode(Errors.NONE.code)
+                    .setAcknowledgeErrorCode(Errors.NONE.code)
                     .setRecords(records)
                     .setAcquiredRecords(new util.ArrayList(List(
                       new ShareFetchResponseData.AcquiredRecords()
@@ -4493,14 +4493,14 @@ class KafkaApisTest extends Logging {
     val responseData = response.data()
     val topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
-    assertEquals(topicId, topicResponses.get(0).topicId())
-    assertEquals(1, topicResponses.get(0).partitions().size())
-    assertEquals(partitionIndex, topicResponses.get(0).partitions().get(0).partitionIndex())
-    assertEquals(Errors.NONE.code(), topicResponses.get(0).partitions().get(0).errorCode())
-    assertEquals(records, topicResponses.get(0).partitions().get(0).records())
-    assertArrayEquals(expectedAcquiredRecords(0, 9, 1).toArray(), topicResponses.get(0).partitions().get(0).acquiredRecords().toArray())
+    assertEquals(topicId, topicResponses.get(0).topicId)
+    assertEquals(1, topicResponses.get(0).partitions.size())
+    assertEquals(partitionIndex, topicResponses.get(0).partitions.get(0).partitionIndex)
+    assertEquals(Errors.NONE.code, topicResponses.get(0).partitions.get(0).errorCode)
+    assertEquals(records, topicResponses.get(0).partitions.get(0).records)
+    assertArrayEquals(expectedAcquiredRecords(0, 9, 1).toArray(), topicResponses.get(0).partitions.get(0).acquiredRecords.toArray())
   }
 
   @Test
@@ -4522,8 +4522,8 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
-            .setAcknowledgeErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
+            .setAcknowledgeErrorCode(Errors.NONE.code)
             .setRecords(records)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -4582,7 +4582,7 @@ class KafkaApisTest extends Logging {
     var response = verifyNoThrottling[ShareFetchResponse](request)
     var responseData = response.data()
 
-    assertEquals(Errors.INVALID_REQUEST.code(), responseData.errorCode())
+    assertEquals(Errors.INVALID_REQUEST.code, responseData.errorCode)
 
     // Testing whether the subsequent request with the incremented share session epoch works or not
     shareFetchRequestData = new ShareFetchRequestData().
@@ -4605,14 +4605,14 @@ class KafkaApisTest extends Logging {
     responseData = response.data()
     val topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
-    assertEquals(topicId, topicResponses.get(0).topicId())
-    assertEquals(1, topicResponses.get(0).partitions().size())
-    assertEquals(partitionIndex, topicResponses.get(0).partitions().get(0).partitionIndex())
-    assertEquals(Errors.NONE.code(), topicResponses.get(0).partitions().get(0).errorCode())
-    assertEquals(records, topicResponses.get(0).partitions().get(0).records())
-    assertArrayEquals(expectedAcquiredRecords(0, 9, 1).toArray(), topicResponses.get(0).partitions().get(0).acquiredRecords().toArray())
+    assertEquals(topicId, topicResponses.get(0).topicId)
+    assertEquals(1, topicResponses.get(0).partitions.size())
+    assertEquals(partitionIndex, topicResponses.get(0).partitions.get(0).partitionIndex)
+    assertEquals(Errors.NONE.code, topicResponses.get(0).partitions.get(0).errorCode)
+    assertEquals(records, topicResponses.get(0).partitions.get(0).records)
+    assertArrayEquals(expectedAcquiredRecords(0, 9, 1).toArray(), topicResponses.get(0).partitions.get(0).acquiredRecords.toArray())
   }
 
   @Test
@@ -4634,8 +4634,8 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
-            .setAcknowledgeErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
+            .setAcknowledgeErrorCode(Errors.NONE.code)
             .setRecords(records)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -4658,7 +4658,7 @@ class KafkaApisTest extends Logging {
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareAcknowledgeResponseData.PartitionData()
             .setPartitionIndex(partitionIndex)
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
       ).asJava)
     )
 
@@ -4690,14 +4690,14 @@ class KafkaApisTest extends Logging {
     var responseData = response.data()
     val topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
-    assertEquals(topicId, topicResponses.get(0).topicId())
-    assertEquals(1, topicResponses.get(0).partitions().size())
-    assertEquals(partitionIndex, topicResponses.get(0).partitions().get(0).partitionIndex())
-    assertEquals(Errors.NONE.code(), topicResponses.get(0).partitions().get(0).errorCode())
-    assertEquals(records, topicResponses.get(0).partitions().get(0).records())
-    assertArrayEquals(expectedAcquiredRecords(0, 9, 1).toArray(), topicResponses.get(0).partitions().get(0).acquiredRecords().toArray())
+    assertEquals(topicId, topicResponses.get(0).topicId)
+    assertEquals(1, topicResponses.get(0).partitions.size())
+    assertEquals(partitionIndex, topicResponses.get(0).partitions.get(0).partitionIndex)
+    assertEquals(Errors.NONE.code, topicResponses.get(0).partitions.get(0).errorCode)
+    assertEquals(records, topicResponses.get(0).partitions.get(0).records)
+    assertArrayEquals(expectedAcquiredRecords(0, 9, 1).toArray(), topicResponses.get(0).partitions.get(0).acquiredRecords.toArray())
 
     shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -4724,7 +4724,7 @@ class KafkaApisTest extends Logging {
     response = verifyNoThrottling[ShareFetchResponse](request)
     responseData = response.data()
 
-    assertEquals(Errors.INVALID_REQUEST.code(), responseData.errorCode())
+    assertEquals(Errors.INVALID_REQUEST.code, responseData.errorCode)
   }
 
   @Test
@@ -4744,7 +4744,7 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.REPLICA_NOT_AVAILABLE.code())
+            .setErrorCode(Errors.REPLICA_NOT_AVAILABLE.code)
             .setRecords(records)
             .setAcquiredRecords(new util.ArrayList(List().asJava))
       ).asJava)
@@ -4785,15 +4785,15 @@ class KafkaApisTest extends Logging {
     val responseData = response.data()
     val topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
-    assertEquals(topicId, topicResponses.get(0).topicId())
-    assertEquals(1, topicResponses.get(0).partitions().size())
-    assertEquals(partitionIndex, topicResponses.get(0).partitions().get(0).partitionIndex())
-    assertEquals(Errors.REPLICA_NOT_AVAILABLE.code(), topicResponses.get(0).partitions().get(0).errorCode())
-    assertEquals(records, topicResponses.get(0).partitions().get(0).records())
-    assertTrue(topicResponses.get(0).partitions().get(0).acquiredRecords().toArray().isEmpty)
-    assertArrayEquals(Collections.emptyList().toArray(), topicResponses.get(0).partitions().get(0).acquiredRecords().toArray())
+    assertEquals(topicId, topicResponses.get(0).topicId)
+    assertEquals(1, topicResponses.get(0).partitions.size())
+    assertEquals(partitionIndex, topicResponses.get(0).partitions.get(0).partitionIndex)
+    assertEquals(Errors.REPLICA_NOT_AVAILABLE.code, topicResponses.get(0).partitions.get(0).errorCode)
+    assertEquals(records, topicResponses.get(0).partitions.get(0).records)
+    assertTrue(topicResponses.get(0).partitions.get(0).acquiredRecords.toArray().isEmpty)
+    assertArrayEquals(Collections.emptyList().toArray(), topicResponses.get(0).partitions.get(0).acquiredRecords.toArray())
   }
 
   @Test
@@ -4814,7 +4814,7 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -4831,8 +4831,8 @@ class KafkaApisTest extends Logging {
           new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes)
       ).asJava)
     )
-      .thenThrow(Errors.SHARE_SESSION_NOT_FOUND.exception())
-      .thenThrow(Errors.SHARE_SESSION_NOT_FOUND.exception())
+      .thenThrow(Errors.SHARE_SESSION_NOT_FOUND.exception)
+      .thenThrow(Errors.SHARE_SESSION_NOT_FOUND.exception)
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
@@ -4863,14 +4863,14 @@ class KafkaApisTest extends Logging {
     var responseData = response.data()
     val topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
-    assertEquals(topicId, topicResponses.get(0).topicId())
-    assertEquals(1, topicResponses.get(0).partitions().size())
-    assertEquals(partitionIndex, topicResponses.get(0).partitions().get(0).partitionIndex())
-    assertEquals(Errors.NONE.code(), topicResponses.get(0).partitions().get(0).errorCode())
-    assertEquals(records, topicResponses.get(0).partitions().get(0).records())
-    assertArrayEquals(expectedAcquiredRecords(0, 9, 1).toArray(), topicResponses.get(0).partitions().get(0).acquiredRecords().toArray())
+    assertEquals(topicId, topicResponses.get(0).topicId)
+    assertEquals(1, topicResponses.get(0).partitions.size())
+    assertEquals(partitionIndex, topicResponses.get(0).partitions.get(0).partitionIndex)
+    assertEquals(Errors.NONE.code, topicResponses.get(0).partitions.get(0).errorCode)
+    assertEquals(records, topicResponses.get(0).partitions.get(0).records)
+    assertArrayEquals(expectedAcquiredRecords(0, 9, 1).toArray(), topicResponses.get(0).partitions.get(0).acquiredRecords.toArray())
 
     val memberId2 = Uuid.randomUuid()
 
@@ -4893,7 +4893,7 @@ class KafkaApisTest extends Logging {
     response = verifyNoThrottling[ShareFetchResponse](request)
     responseData = response.data()
 
-    assertEquals(Errors.SHARE_SESSION_NOT_FOUND.code(), responseData.errorCode())
+    assertEquals(Errors.SHARE_SESSION_NOT_FOUND.code, responseData.errorCode)
 
     // Using wrong groupId ID
     shareFetchRequestData = new ShareFetchRequestData().
@@ -4914,7 +4914,7 @@ class KafkaApisTest extends Logging {
     response = verifyNoThrottling[ShareFetchResponse](request)
     responseData = response.data()
 
-    assertEquals(Errors.SHARE_SESSION_NOT_FOUND.code(), responseData.errorCode())
+    assertEquals(Errors.SHARE_SESSION_NOT_FOUND.code, responseData.errorCode)
   }
 
   @Test
@@ -4935,7 +4935,7 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -4952,7 +4952,7 @@ class KafkaApisTest extends Logging {
             new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes)
         ).asJava)
       )
-      .thenThrow(Errors.INVALID_SHARE_SESSION_EPOCH.exception())
+      .thenThrow(Errors.INVALID_SHARE_SESSION_EPOCH.exception)
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
@@ -4983,14 +4983,14 @@ class KafkaApisTest extends Logging {
     var responseData = response.data()
     val topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
-    assertEquals(topicId, topicResponses.get(0).topicId())
-    assertEquals(1, topicResponses.get(0).partitions().size())
-    assertEquals(partitionIndex, topicResponses.get(0).partitions().get(0).partitionIndex())
-    assertEquals(Errors.NONE.code(), topicResponses.get(0).partitions().get(0).errorCode())
-    assertEquals(records, topicResponses.get(0).partitions().get(0).records())
-    assertArrayEquals(expectedAcquiredRecords(0, 9, 1).toArray(), topicResponses.get(0).partitions().get(0).acquiredRecords().toArray())
+    assertEquals(topicId, topicResponses.get(0).topicId)
+    assertEquals(1, topicResponses.get(0).partitions.size())
+    assertEquals(partitionIndex, topicResponses.get(0).partitions.get(0).partitionIndex)
+    assertEquals(Errors.NONE.code, topicResponses.get(0).partitions.get(0).errorCode)
+    assertEquals(records, topicResponses.get(0).partitions.get(0).records)
+    assertArrayEquals(expectedAcquiredRecords(0, 9, 1).toArray(), topicResponses.get(0).partitions.get(0).acquiredRecords.toArray())
 
     shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -5010,7 +5010,7 @@ class KafkaApisTest extends Logging {
     response = verifyNoThrottling[ShareFetchResponse](request)
     responseData = response.data()
 
-    assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.code(), responseData.errorCode())
+    assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.code, responseData.errorCode)
   }
 
   def compareResponsePartitions(
@@ -5021,11 +5021,11 @@ class KafkaApisTest extends Logging {
                                  expAcquiredRecords : util.List[AcquiredRecords],
                                  partitionData : PartitionData
                                ) : Unit = {
-    assertEquals(expPartitionIndex, partitionData.partitionIndex())
-    assertEquals(expErrorCode, partitionData.errorCode())
-    assertEquals(expAckErrorCode, partitionData.acknowledgeErrorCode())
-    assertEquals(expRecords, partitionData.records())
-    assertArrayEquals(expAcquiredRecords.toArray(), partitionData.acquiredRecords().toArray())
+    assertEquals(expPartitionIndex, partitionData.partitionIndex)
+    assertEquals(expErrorCode, partitionData.errorCode)
+    assertEquals(expAckErrorCode, partitionData.acknowledgeErrorCode)
+    assertEquals(expRecords, partitionData.records)
+    assertArrayEquals(expAcquiredRecords.toArray(), partitionData.acquiredRecords.toArray())
   }
 
   def compareResponsePartitionsFetchError(
@@ -5033,8 +5033,8 @@ class KafkaApisTest extends Logging {
                                            expErrorCode : Short,
                                            partitionData : PartitionData
                                          ) : Unit = {
-    assertEquals(expPartitionIndex, partitionData.partitionIndex())
-    assertEquals(expErrorCode, partitionData.errorCode())
+    assertEquals(expPartitionIndex, partitionData.partitionIndex)
+    assertEquals(expErrorCode, partitionData.errorCode)
   }
 
   @Test
@@ -5058,7 +5058,7 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records1)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5071,8 +5071,8 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
-            .setAcknowledgeErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
+            .setAcknowledgeErrorCode(Errors.NONE.code)
             .setRecords(records2)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5085,8 +5085,8 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
-            .setAcknowledgeErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
+            .setAcknowledgeErrorCode(Errors.NONE.code)
             .setRecords(records3)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5142,18 +5142,18 @@ class KafkaApisTest extends Logging {
     var responseData = response.data()
     var topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
-    assertEquals(topicId, topicResponses.get(0).topicId())
-    assertEquals(1, topicResponses.get(0).partitions().size())
+    assertEquals(topicId, topicResponses.get(0).topicId)
+    assertEquals(1, topicResponses.get(0).partitions.size())
 
     compareResponsePartitions(
       partitionIndex,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records1,
       expectedAcquiredRecords(0, 9, 1),
-      topicResponses.get(0).partitions().get(0)
+      topicResponses.get(0).partitions.get(0)
     )
 
     shareFetchRequestData = new ShareFetchRequestData().
@@ -5180,18 +5180,18 @@ class KafkaApisTest extends Logging {
     responseData = response.data()
     topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
-    assertEquals(topicId, topicResponses.get(0).topicId())
-    assertEquals(1, topicResponses.get(0).partitions().size())
+    assertEquals(topicId, topicResponses.get(0).topicId)
+    assertEquals(1, topicResponses.get(0).partitions.size())
 
     compareResponsePartitions(
       partitionIndex,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records2,
       expectedAcquiredRecords(10, 19, 1),
-      topicResponses.get(0).partitions().get(0)
+      topicResponses.get(0).partitions.get(0)
     )
 
     shareFetchRequestData = new ShareFetchRequestData().
@@ -5218,18 +5218,18 @@ class KafkaApisTest extends Logging {
     responseData = response.data()
     topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
-    assertEquals(topicId, topicResponses.get(0).topicId())
-    assertEquals(1, topicResponses.get(0).partitions().size())
+    assertEquals(topicId, topicResponses.get(0).topicId)
+    assertEquals(1, topicResponses.get(0).partitions.size())
 
     compareResponsePartitions(
       partitionIndex,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records3,
       expectedAcquiredRecords(20, 29, 1),
-      topicResponses.get(0).partitions().get(0)
+      topicResponses.get(0).partitions.get(0)
     )
   }
 
@@ -5273,7 +5273,7 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records_t1_p1_1)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5283,7 +5283,7 @@ class KafkaApisTest extends Logging {
             ).asJava)),
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records_t1_p2_1)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5293,7 +5293,7 @@ class KafkaApisTest extends Logging {
             ).asJava)),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records_t2_p1_1)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5303,7 +5303,7 @@ class KafkaApisTest extends Logging {
             ).asJava)),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records_t2_p2_1)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5316,7 +5316,7 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records_t3_p1_1)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5329,7 +5329,7 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records_t3_p1_2)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5339,7 +5339,7 @@ class KafkaApisTest extends Logging {
             ).asJava)),
         new TopicIdPartition(topicId4, new TopicPartition(topicName4, 0)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records_t4_p1_1)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5397,11 +5397,11 @@ class KafkaApisTest extends Logging {
         new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)) ->
           new ShareAcknowledgeResponseData.PartitionData()
             .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code()),
+            .setErrorCode(Errors.NONE.code),
         new TopicIdPartition(topicId4, new TopicPartition(topicName4, 0)) ->
           new ShareAcknowledgeResponseData.PartitionData()
             .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
       ).asJava)
     )
 
@@ -5450,22 +5450,22 @@ class KafkaApisTest extends Logging {
     var responseData = response.data()
     var topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(2, topicResponses.size())
     var topicResponsesScala = topicResponses.asScala.toList
     var topicResponsesMap: Map[Uuid, ShareFetchableTopicResponse] = topicResponsesScala.map(topic => topic.topicId -> topic).toMap
     assertTrue(topicResponsesMap.contains(topicId1))
     val topicIdResponse1 : ShareFetchableTopicResponse = topicResponsesMap.getOrElse(topicId1, null)
-    assertEquals(2, topicIdResponse1.partitions().size())
-    val partitionsScala1 = topicIdResponse1.partitions().asScala.toList
-    val partitionsMap1: Map[Int, PartitionData] = partitionsScala1.map(partition => partition.partitionIndex() -> partition).toMap
+    assertEquals(2, topicIdResponse1.partitions.size())
+    val partitionsScala1 = topicIdResponse1.partitions.asScala.toList
+    val partitionsMap1: Map[Int, PartitionData] = partitionsScala1.map(partition => partition.partitionIndex -> partition).toMap
     assertTrue(partitionsMap1.contains(0))
     val partition11 : PartitionData = partitionsMap1.getOrElse(0, null)
 
     compareResponsePartitions(
       0,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records_t1_p1_1,
       expectedAcquiredRecords(0, 9, 1),
       partition11
@@ -5476,8 +5476,8 @@ class KafkaApisTest extends Logging {
 
     compareResponsePartitions(
       1,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records_t1_p2_1,
       expectedAcquiredRecords(10, 19, 1),
       partition12
@@ -5485,16 +5485,16 @@ class KafkaApisTest extends Logging {
 
     assertTrue(topicResponsesMap.contains(topicId2))
     val topicIdResponse2 : ShareFetchableTopicResponse = topicResponsesMap.getOrElse(topicId2, null)
-    assertEquals(2, topicIdResponse2.partitions().size())
-    val partitionsScala2 = topicIdResponse2.partitions().asScala.toList
-    val partitionsMap2: Map[Int, PartitionData] = partitionsScala2.map(partition => partition.partitionIndex() -> partition).toMap
+    assertEquals(2, topicIdResponse2.partitions.size())
+    val partitionsScala2 = topicIdResponse2.partitions.asScala.toList
+    val partitionsMap2: Map[Int, PartitionData] = partitionsScala2.map(partition => partition.partitionIndex -> partition).toMap
     assertTrue(partitionsMap2.contains(0))
     val partition21 : PartitionData = partitionsMap2.getOrElse(0, null)
 
     compareResponsePartitions(
       0,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records_t2_p1_1,
       expectedAcquiredRecords(43, 52, 1),
       partition21
@@ -5505,8 +5505,8 @@ class KafkaApisTest extends Logging {
 
     compareResponsePartitions(
       1,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records_t2_p2_1,
       expectedAcquiredRecords(17, 26, 1),
       partition22
@@ -5534,18 +5534,18 @@ class KafkaApisTest extends Logging {
     responseData = response.data()
     topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
-    assertEquals(topicId3, topicResponses.get(0).topicId())
-    assertEquals(1, topicResponses.get(0).partitions().size())
+    assertEquals(topicId3, topicResponses.get(0).topicId)
+    assertEquals(1, topicResponses.get(0).partitions.size())
 
     compareResponsePartitions(
       0,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records_t3_p1_1,
       expectedAcquiredRecords(54, 73, 1),
-      topicResponses.get(0).partitions().get(0)
+      topicResponses.get(0).partitions.get(0)
     )
 
     shareFetchRequestData = new ShareFetchRequestData().
@@ -5578,34 +5578,34 @@ class KafkaApisTest extends Logging {
     responseData = response.data()
     topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(2, topicResponses.size())
     topicResponsesScala = topicResponses.asScala.toList
     topicResponsesMap = topicResponsesScala.map(topic => topic.topicId -> topic).toMap
     assertTrue(topicResponsesMap.contains(topicId3))
     val topicIdResponse3 = topicResponsesMap.getOrElse(topicId3, null)
-    assertEquals(1, topicIdResponse3.partitions().size())
+    assertEquals(1, topicIdResponse3.partitions.size())
 
     compareResponsePartitions(
       0,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records_t3_p1_2,
       expectedAcquiredRecords(74, 93, 1),
-      topicIdResponse3.partitions().get(0)
+      topicIdResponse3.partitions.get(0)
     )
 
     assertTrue(topicResponsesMap.contains(topicId4))
     val topicIdResponse4 = topicResponsesMap.getOrElse(topicId4, null)
-    assertEquals(1, topicIdResponse4.partitions().size())
+    assertEquals(1, topicIdResponse4.partitions.size())
 
     compareResponsePartitions(
       0,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records_t4_p1_1,
       expectedAcquiredRecords(10, 24, 1),
-      topicIdResponse4.partitions().get(0)
+      topicIdResponse4.partitions.get(0)
     )
 
     // Final request with acknowledgements
@@ -5694,7 +5694,7 @@ class KafkaApisTest extends Logging {
     responseData = response.data()
     topicResponses = responseData.responses()
 
-    assertEquals(Errors.NONE.code(), responseData.errorCode())
+    assertEquals(Errors.NONE.code, responseData.errorCode)
   }
 
   @Test
@@ -5723,7 +5723,7 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records_t1_p1)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5733,7 +5733,7 @@ class KafkaApisTest extends Logging {
             ).asJava)),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records_t2_p1)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5743,7 +5743,7 @@ class KafkaApisTest extends Logging {
             ).asJava)),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records_t2_p2)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5855,7 +5855,7 @@ class KafkaApisTest extends Logging {
     )
 
     val shareFetchResponseData = shareFetchResponse.data()
-    assertEquals(Errors.NONE.code(), shareFetchResponseData.errorCode())
+    assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     val topicResponses = shareFetchResponseData.responses()
 
     assertEquals(2, topicResponses.size())
@@ -5863,14 +5863,14 @@ class KafkaApisTest extends Logging {
     val topicResponsesMap: Map[Uuid, ShareFetchableTopicResponse] = topicResponsesScala.map(topic => topic.topicId -> topic).toMap
     assertTrue(topicResponsesMap.contains(topicId1))
     val topicIdResponse1 : ShareFetchableTopicResponse = topicResponsesMap.getOrElse(topicId1, null)
-    assertEquals(1, topicIdResponse1.partitions().size())
+    assertEquals(1, topicIdResponse1.partitions.size())
 
-    val partition11 : PartitionData = topicIdResponse1.partitions().get(0)
+    val partition11 : PartitionData = topicIdResponse1.partitions.get(0)
 
     compareResponsePartitions(
       0,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records_t1_p1,
       expectedAcquiredRecords(0, 9, 1),
       partition11
@@ -5878,16 +5878,16 @@ class KafkaApisTest extends Logging {
 
     assertTrue(topicResponsesMap.contains(topicId2))
     val topicIdResponse2 : ShareFetchableTopicResponse = topicResponsesMap.getOrElse(topicId2, null)
-    assertEquals(2, topicIdResponse2.partitions().size())
-    val partitionsScala2 = topicIdResponse2.partitions().asScala.toList
-    val partitionsMap2: Map[Int, PartitionData] = partitionsScala2.map(partition => partition.partitionIndex() -> partition).toMap
+    assertEquals(2, topicIdResponse2.partitions.size())
+    val partitionsScala2 = topicIdResponse2.partitions.asScala.toList
+    val partitionsMap2: Map[Int, PartitionData] = partitionsScala2.map(partition => partition.partitionIndex -> partition).toMap
     assertTrue(partitionsMap2.contains(0))
     val partition21 : PartitionData = partitionsMap2.getOrElse(0, null)
 
     compareResponsePartitions(
       0,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records_t2_p1,
       expectedAcquiredRecords(0, 14, 1),
       partition21
@@ -5898,8 +5898,8 @@ class KafkaApisTest extends Logging {
 
     compareResponsePartitions(
       1,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records_t2_p2,
       expectedAcquiredRecords(0, 19, 1),
       partition22
@@ -5929,7 +5929,7 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records_t1_p1)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -5960,7 +5960,7 @@ class KafkaApisTest extends Logging {
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)),
         new ShareFetchResponseData.PartitionData()
           .setPartitionIndex(1)
-          .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+          .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
       )
     )
     erroneousPartitions.add(
@@ -5968,7 +5968,7 @@ class KafkaApisTest extends Logging {
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)),
         new ShareFetchResponseData.PartitionData()
           .setPartitionIndex(0)
-          .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+          .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
       )
     )
 
@@ -6045,7 +6045,7 @@ class KafkaApisTest extends Logging {
     )
 
     val shareFetchResponseData = shareFetchResponse.data()
-    assertEquals(Errors.NONE.code(), shareFetchResponseData.errorCode())
+    assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     val topicResponses = shareFetchResponseData.responses()
 
     assertEquals(2, topicResponses.size())
@@ -6053,17 +6053,17 @@ class KafkaApisTest extends Logging {
     val topicResponsesMap: Map[Uuid, ShareFetchableTopicResponse] = topicResponsesScala.map(topic => topic.topicId -> topic).toMap
     assertTrue(topicResponsesMap.contains(topicId1))
     val topicIdResponse1 : ShareFetchableTopicResponse = topicResponsesMap.getOrElse(topicId1, null)
-    assertEquals(2, topicIdResponse1.partitions().size())
+    assertEquals(2, topicIdResponse1.partitions.size())
 
-    val partitionsScala1 = topicIdResponse1.partitions().asScala.toList
-    val partitionsMap1: Map[Int, PartitionData] = partitionsScala1.map(partition => partition.partitionIndex() -> partition).toMap
+    val partitionsScala1 = topicIdResponse1.partitions.asScala.toList
+    val partitionsMap1: Map[Int, PartitionData] = partitionsScala1.map(partition => partition.partitionIndex -> partition).toMap
     assertTrue(partitionsMap1.contains(0))
     val partition11 : PartitionData = partitionsMap1.getOrElse(0, null)
 
     compareResponsePartitions(
       0,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records_t1_p1,
       expectedAcquiredRecords(0, 9, 1),
       partition11
@@ -6074,18 +6074,18 @@ class KafkaApisTest extends Logging {
 
     compareResponsePartitionsFetchError(
       1,
-      Errors.UNKNOWN_TOPIC_OR_PARTITION.code(),
+      Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
       partition12
     )
 
     assertTrue(topicResponsesMap.contains(topicId2))
     val topicIdResponse2 : ShareFetchableTopicResponse = topicResponsesMap.getOrElse(topicId2, null)
-    assertEquals(1, topicIdResponse2.partitions().size())
+    assertEquals(1, topicIdResponse2.partitions.size())
 
-    val partition21 = topicIdResponse2.partitions().get(0)
+    val partition21 = topicIdResponse2.partitions.get(0)
     compareResponsePartitionsFetchError(
       0,
-      Errors.UNKNOWN_TOPIC_OR_PARTITION.code(),
+      Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
       partition21
     )
   }
@@ -6105,7 +6105,7 @@ class KafkaApisTest extends Logging {
     val sharePartitionManager = mock(classOf[SharePartitionManager])
 
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenThrow(
-      Errors.UNKNOWN_SERVER_ERROR.exception()
+      Errors.UNKNOWN_SERVER_ERROR.exception
     )
 
     val shareFetchData : util.Map[TopicIdPartition, ShareFetchRequest.SharePartitionData] = new util.HashMap()
@@ -6207,17 +6207,17 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
             .setRecords(emptyRecords)
             .setAcquiredRecords(new util.ArrayList(List().asJava)),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
             .setRecords(emptyRecords)
             .setAcquiredRecords(new util.ArrayList(List().asJava)),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
             .setRecords(emptyRecords)
             .setAcquiredRecords(new util.ArrayList(List().asJava))
       ).asJava)
@@ -6324,7 +6324,7 @@ class KafkaApisTest extends Logging {
     )
 
     val shareFetchResponseData = shareFetchResponse.data()
-    assertEquals(Errors.NONE.code(), shareFetchResponseData.errorCode())
+    assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     val topicResponses = shareFetchResponseData.responses()
 
     assertEquals(2, topicResponses.size())
@@ -6332,14 +6332,14 @@ class KafkaApisTest extends Logging {
     val topicResponsesMap: Map[Uuid, ShareFetchableTopicResponse] = topicResponsesScala.map(topic => topic.topicId -> topic).toMap
     assertTrue(topicResponsesMap.contains(topicId1))
     val topicIdResponse1 : ShareFetchableTopicResponse = topicResponsesMap.getOrElse(topicId1, null)
-    assertEquals(1, topicIdResponse1.partitions().size())
+    assertEquals(1, topicIdResponse1.partitions.size())
 
-    val partition11 : PartitionData = topicIdResponse1.partitions().get(0)
+    val partition11 : PartitionData = topicIdResponse1.partitions.get(0)
 
     compareResponsePartitions(
       0,
-      Errors.UNKNOWN_SERVER_ERROR.code(),
-      Errors.NONE.code(),
+      Errors.UNKNOWN_SERVER_ERROR.code,
+      Errors.NONE.code,
       emptyRecords,
       Collections.emptyList[AcquiredRecords](),
       partition11
@@ -6347,16 +6347,16 @@ class KafkaApisTest extends Logging {
 
     assertTrue(topicResponsesMap.contains(topicId2))
     val topicIdResponse2 : ShareFetchableTopicResponse = topicResponsesMap.getOrElse(topicId2, null)
-    assertEquals(2, topicIdResponse2.partitions().size())
-    val partitionsScala2 = topicIdResponse2.partitions().asScala.toList
-    val partitionsMap2: Map[Int, PartitionData] = partitionsScala2.map(partition => partition.partitionIndex() -> partition).toMap
+    assertEquals(2, topicIdResponse2.partitions.size())
+    val partitionsScala2 = topicIdResponse2.partitions.asScala.toList
+    val partitionsMap2: Map[Int, PartitionData] = partitionsScala2.map(partition => partition.partitionIndex -> partition).toMap
     assertTrue(partitionsMap2.contains(0))
     val partition21 : PartitionData = partitionsMap2.getOrElse(0, null)
 
     compareResponsePartitions(
       0,
-      Errors.UNKNOWN_SERVER_ERROR.code(),
-      Errors.NONE.code(),
+      Errors.UNKNOWN_SERVER_ERROR.code,
+      Errors.NONE.code,
       emptyRecords,
       Collections.emptyList[AcquiredRecords](),
       partition21
@@ -6367,8 +6367,8 @@ class KafkaApisTest extends Logging {
 
     compareResponsePartitions(
       1,
-      Errors.UNKNOWN_SERVER_ERROR.code(),
-      Errors.NONE.code(),
+      Errors.UNKNOWN_SERVER_ERROR.code,
+      Errors.NONE.code,
       emptyRecords,
       Collections.emptyList[AcquiredRecords](),
       partition22
@@ -6402,7 +6402,7 @@ class KafkaApisTest extends Logging {
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records1)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -6412,7 +6412,7 @@ class KafkaApisTest extends Logging {
             ).asJava)),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1)) ->
           new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE.code)
             .setRecords(records2)
             .setAcquiredRecords(new util.ArrayList(List(
               new ShareFetchResponseData.AcquiredRecords()
@@ -6545,7 +6545,7 @@ class KafkaApisTest extends Logging {
     )
 
     val shareFetchResponseData = shareFetchResponse.data()
-    assertEquals(Errors.NONE.code(), shareFetchResponseData.errorCode())
+    assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     val topicResponses = shareFetchResponseData.responses()
 
     assertEquals(3, topicResponses.size())
@@ -6553,14 +6553,14 @@ class KafkaApisTest extends Logging {
     val topicResponsesMap: Map[Uuid, ShareFetchableTopicResponse] = topicResponsesScala.map(topic => topic.topicId -> topic).toMap
     assertTrue(topicResponsesMap.contains(topicId1))
     val topicIdResponse1 : ShareFetchableTopicResponse = topicResponsesMap.getOrElse(topicId1, null)
-    assertEquals(1, topicIdResponse1.partitions().size())
+    assertEquals(1, topicIdResponse1.partitions.size())
 
-    val partition11 : PartitionData = topicIdResponse1.partitions().get(0)
+    val partition11 : PartitionData = topicIdResponse1.partitions.get(0)
 
     compareResponsePartitions(
       0,
-      Errors.TOPIC_AUTHORIZATION_FAILED.code(),
-      Errors.NONE.code(),
+      Errors.TOPIC_AUTHORIZATION_FAILED.code,
+      Errors.NONE.code,
       memoryRecords(0, 0),
       Collections.emptyList[AcquiredRecords](),
       partition11
@@ -6568,16 +6568,16 @@ class KafkaApisTest extends Logging {
 
     assertTrue(topicResponsesMap.contains(topicId2))
     val topicIdResponse2 : ShareFetchableTopicResponse = topicResponsesMap.getOrElse(topicId2, null)
-    assertEquals(2, topicIdResponse2.partitions().size())
-    val partitionsScala2 = topicIdResponse2.partitions().asScala.toList
-    val partitionsMap2: Map[Int, PartitionData] = partitionsScala2.map(partition => partition.partitionIndex() -> partition).toMap
+    assertEquals(2, topicIdResponse2.partitions.size())
+    val partitionsScala2 = topicIdResponse2.partitions.asScala.toList
+    val partitionsMap2: Map[Int, PartitionData] = partitionsScala2.map(partition => partition.partitionIndex -> partition).toMap
     assertTrue(partitionsMap2.contains(0))
     val partition21 : PartitionData = partitionsMap2.getOrElse(0, null)
 
     compareResponsePartitions(
       0,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records1,
       expectedAcquiredRecords(0, 9, 1),
       partition21
@@ -6588,22 +6588,22 @@ class KafkaApisTest extends Logging {
 
     compareResponsePartitions(
       1,
-      Errors.NONE.code(),
-      Errors.NONE.code(),
+      Errors.NONE.code,
+      Errors.NONE.code,
       records2,
       expectedAcquiredRecords(0, 19, 1),
       partition22
     )
 
     val topicIdResponse3 : ShareFetchableTopicResponse = topicResponsesMap.getOrElse(topicId3, null)
-    assertEquals(1, topicIdResponse3.partitions().size())
+    assertEquals(1, topicIdResponse3.partitions.size())
 
-    val partition31 : PartitionData = topicIdResponse3.partitions().get(0)
+    val partition31 : PartitionData = topicIdResponse3.partitions.get(0)
 
     compareResponsePartitions(
       0,
-      Errors.UNKNOWN_TOPIC_OR_PARTITION.code(),
-      Errors.NONE.code(),
+      Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
+      Errors.NONE.code,
       memoryRecords(0, 0),
       Collections.emptyList[AcquiredRecords](),
       partition31

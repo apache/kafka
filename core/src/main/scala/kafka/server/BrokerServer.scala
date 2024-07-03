@@ -409,7 +409,7 @@ class BrokerServer(
         KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
       val sharePartitionManager = new SharePartitionManager(
         replicaManager,
-        Time.SYSTEM,
+        time,
         shareFetchSessionCache,
         config.shareGroupRecordLockDurationMs,
         config.shareGroupDeliveryCountLimit,
@@ -434,7 +434,7 @@ class BrokerServer(
         authorizer = authorizer,
         quotas = quotaManagers,
         fetchManager = fetchManager,
-        sharePartitionManagerOption = Some(sharePartitionManager),
+        sharePartitionManager = Some(sharePartitionManager),
         brokerTopicStats = brokerTopicStats,
         clusterId = clusterId,
         time = time,
