@@ -58,7 +58,7 @@ def fail(msg = ""):
         except Exception as e:
             print(f"Exception caught in fail hook {name}: {e}")
 
-    print(msg)
+    print(f"FAILURE: {msg}")
     sys.exit(1)
 
 

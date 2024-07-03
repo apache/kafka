@@ -38,7 +38,7 @@ def save():
     """
     Save preferences dictionary.
     """
-    print("Saving preferences to %s" % FILE)
+    print(f"Saving preferences to {FILE}")
     with open(FILE, "w") as prefs_fp:
         json.dump(prefs, prefs_fp)
 
@@ -48,6 +48,14 @@ def set(name, val):
     Store and persist a preference.
     """
     prefs[name] = val
+    save()
+
+
+def unset(name):
+    """
+    Removes a preference.
+    """
+    del prefs[name]
     save()
 
 
@@ -61,7 +69,7 @@ def get(name, supplier):
         val = supplier()
         set(name, val)
     else:
-        print("Assuming: %s = %s" % (name, val))
+        print(f"Assuming: {name} = {val}")
     return val
 
 

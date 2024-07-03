@@ -78,7 +78,7 @@ def issue_link(issue):
     """
     Generates a link to the specified JIRA issue.
     """
-    return "%s/browse/%s" % (JIRA_BASE_URL, issue.key)
+    return f"{JIRA_BASE_URL}/browse/{issue.key}"
 
 
 def render(version, issues):
@@ -132,7 +132,10 @@ def issue_str(issue):
     """
     Provides a human readable string representation for the given issue.
     """
-    return "%15s %20s %s" % (issue.key, issue.fields.resolution, issue_link(issue))
+    key = issue.key
+    resolution = issue.fields.resolution
+    link = issue_link(issue)
+    return f"{key:>15} {resolution:>20} {link}"
 
 
 def generate(version):
@@ -141,7 +144,7 @@ def generate(version):
     Raises an error if there are unresolved issues or no issues
     at all for the specified version.
     """
-    issues = query('project=KAFKA and fixVersion=%s' % version)
+    issues = query(f"project=KAFKA and fixVersion={version}")
     if not issues:
         raise Exception(f"Didn't find any issues for version {version}")
     unresolved_issues = filter_unresolved(issues)

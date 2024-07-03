@@ -75,21 +75,21 @@ import templates
 import textfiles
 
 
-
 def get_jdk(version):
     """
     Get settings for the specified JDK version.
     """
-    jdk_java_home = preferences.get("jdk%d" % version, lambda: prompt("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
+    msg = f"Enter the path for JAVA_HOME for a JDK{version} compiler (blank to use default JAVA_HOME): "
+    key = f"jdk{version}"
+    jdk_java_home = preferences.get(key, lambda: prompt(msg))
     jdk_env = dict(os.environ)
     if jdk_java_home.strip(): jdk_env["JAVA_HOME"] = jdk_java_home
     else: jdk_java_home = jdk_env["JAVA_HOME"]
-    java_version = execute("%s/bin/java -version" % jdk_java_home, env=jdk_env)
-    if version == 8:
-      if "1.8.0" not in java_version:
-        fail("JDK 8 is required")
-    elif "%d.0" % version not in java_version and '"%d"' % version not in java_version:
-      fail("JDK %s is required" % version)
+    java_version = execute(f"{jdk_java_home}/bin/java -version", env=jdk_env)
+    if (version == 8 and "1.8.0" not in java_version) or \
+       (f"{version}.0" not in java_version and '"{version}"' not in java_version):
+        preferences.unset(key)
+        fail(f"JDK {version} is required")
     return jdk_env
 
 
@@ -123,7 +123,7 @@ def docs_release_version(version):
 def command_stage_docs():
     kafka_site_repo_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(repo_dir, "..", "kafka-site")
     if not os.path.exists(kafka_site_repo_path) or not os.path.exists(os.path.join(kafka_site_repo_path, "powered-by.html")):
-        sys.exit("%s doesn't exist or does not appear to be the kafka-site repository" % kafka_site_repo_path)
+        fail("{kafka_site_repo_path} doesn't exist or does not appear to be the kafka-site repository")
 
     jdk17_env = get_jdk(17)
 
@@ -132,9 +132,9 @@ def command_stage_docs():
     # version due to already having bumped the bugfix version number.
     gradle_version_override = docs_release_version(project_version)
 
-    cmd("Building docs", "./gradlew -Pversion=%s clean siteDocsTar aggregatedJavadoc" % gradle_version_override, cwd=repo_dir, env=jdk17_env)
+    cmd("Building docs", f"./gradlew -Pversion={gradle_version_override} clean siteDocsTar aggregatedJavadoc", cwd=repo_dir, env=jdk17_env)
 
-    docs_tar = os.path.join(repo_dir, "core", "build", "distributions", "kafka_2.13-%s-site-docs.tgz" % gradle_version_override)
+    docs_tar = os.path.join(repo_dir, "core", "build", "distributions", f"kafka_2.13-{gradle_version_override}-site-docs.tgz")
 
     versioned_docs_path = os.path.join(kafka_site_repo_path, docs_version(project_version))
     if not os.path.exists(versioned_docs_path):
@@ -142,11 +142,11 @@ def command_stage_docs():
 
     # The contents of the docs jar are site-docs/<docs dir>. We need to get rid of the site-docs prefix and dump everything
     # inside it into the docs version subdirectory in the kafka-site repo
-    cmd("Extracting site-docs", "tar xf %s --strip-components 1" % docs_tar, cwd=versioned_docs_path)
+    cmd("Extracting site-docs", f"tar xf {docs_tar} --strip-components 1", cwd=versioned_docs_path)
 
     javadocs_src_dir = os.path.join(repo_dir, "build", "docs", "javadoc")
 
-    cmd("Copying javadocs", "cp -R %s %s" % (javadocs_src_dir, versioned_docs_path))
+    cmd("Copying javadocs", f"cp -R {javadocs_src_dir} {versioned_docs_path}")
 
     sys.exit(0)
 
@@ -177,11 +177,11 @@ def command_release_announcement_email():
     release_tag_pattern = re.compile("^[0-9]+\\.[0-9]+\\.[0-9]+$")
     release_tags = sorted([t for t in git.tags() if re.match(release_tag_pattern, t)])
     release_version_num = release_tags[-1]
-    if not confirm("""Is the current release %s ?""" % release_version_num):
+    if not confirm(f"Is the current release {release_version_num}?"):
         release_version_num = prompt("What is the current release version:")
         validate_release_num(release_version_num)
     previous_release_version_num = release_tags[-2]
-    if not confirm("""Is the previous release %s ?""" % previous_release_version_num):
+    if not confirm(f"Is the previous release {previous_release_version_num}?"):
         previous_release_version_num = prompt("What is the previous release version:")
         validate_release_num(previous_release_version_num)
     if release_version_num < previous_release_version_num :
@@ -205,7 +205,7 @@ if subcommand == 'stage-docs':
 elif subcommand == 'release-email':
     command_release_announcement_email()
 elif not (subcommand is None or subcommand == 'stage'):
-    fail("Unknown subcommand: %s" % subcommand)
+    fail(f"Unknown subcommand: {subcommand}")
 # else -> default subcommand stage
 
 
