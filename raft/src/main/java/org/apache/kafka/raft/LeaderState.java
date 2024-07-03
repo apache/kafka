@@ -239,11 +239,11 @@ public class LeaderState<T> implements EpochState {
     }
 
     // visible for testing
-    Set<Integer> nonAcknowledgingVoters() {
-        Set<Integer> nonAcknowledging = new HashSet<>();
+    Set<ReplicaKey> nonAcknowledgingVoters() {
+        Set<ReplicaKey> nonAcknowledging = new HashSet<>();
         for (ReplicaState state : voterStates.values()) {
             if (!state.hasAcknowledgedLeader)
-                nonAcknowledging.add(state.replicaKey.id());
+                nonAcknowledging.add(state.replicaKey);
         }
         return nonAcknowledging;
     }
@@ -404,10 +404,10 @@ public class LeaderState<T> implements EpochState {
         return isVoter(state.replicaKey) && maybeUpdateHighWatermark();
     }
 
-    public List<Integer> nonLeaderVotersByDescendingFetchOffset() {
+    public List<ReplicaKey> nonLeaderVotersByDescendingFetchOffset() {
         return followersByDescendingFetchOffset()
             .filter(state -> !state.matchesKey(localReplicaKey))
-            .map(state -> state.replicaKey.id())
+            .map(state -> state.replicaKey)
             .collect(Collectors.toList());
     }
 
@@ -468,17 +468,8 @@ public class LeaderState<T> implements EpochState {
     public DescribeQuorumResponseData.NodeCollection nodes(long currentTimeMs) {
         clearInactiveObservers(currentTimeMs);
 
-        DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection();
-
-        voterStates.values().forEach(replicaState -> {
-            if (nodes.find(replicaState.replicaKey.id()) == null) {
-                // KAFKA-16953 will add support for including the node listeners in the node
-                // collection
-                nodes.add(new DescribeQuorumResponseData.Node().setNodeId(replicaState.replicaKey.id()));
-            }
-        });
-
-        return nodes;
+        // KAFKA-16953 will add support for including the node listeners in the node collection
+        return new DescribeQuorumResponseData.NodeCollection();
     }
 
     private List<DescribeQuorumResponseData.ReplicaState> describeReplicaStates(
@@ -504,9 +495,10 @@ public class LeaderState<T> implements EpochState {
             lastCaughtUpTimestamp = replicaState.lastCaughtUpTimestamp;
             lastFetchTimestamp = replicaState.lastFetchTimestamp;
         }
+
+        // KAFKA-16953 will add support for the replica directory id
         return new DescribeQuorumResponseData.ReplicaState()
             .setReplicaId(replicaState.replicaKey.id())
-            .setReplicaDirectoryId(replicaState.replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
             .setLogEndOffset(replicaState.endOffset.map(md -> md.offset).orElse(-1L))
             .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
             .setLastFetchTimestamp(lastFetchTimestamp);
