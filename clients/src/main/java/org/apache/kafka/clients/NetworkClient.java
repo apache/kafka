@@ -1141,6 +1141,7 @@ public class NetworkClient implements KafkaClient {
         private final ClientDnsLookup clientDnsLookup;
         private final long dnsResolutionTimeoutMs;
         private final boolean isDisabled;
+        private boolean isBootstrapped;
 
         BootstrapState(BootstrapConfiguration bootstrapConfiguration) {
             if (bootstrapConfiguration == null) {
@@ -1149,6 +1150,7 @@ public class NetworkClient implements KafkaClient {
                 this.bootstrapServers = null;
                 this.clientDnsLookup = null;
                 this.isDisabled = true;
+                this.isBootstrapped = false;
             } else {
                 this.dnsResolutionTimeoutMs = bootstrapConfiguration.bootstrapResolveTimeoutMs;
                 this.timer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
@@ -1175,14 +1177,14 @@ public class NetworkClient implements KafkaClient {
     }
 
     private void ensureBootstrapped(final long nowMs) {
-        if (this.bootstrapState.isDisabled || this.metadataUpdater.isBootstrapped()) {
+        if (this.bootstrapState.isDisabled || this.bootstrapState.isBootstrapped) {
             return;
         }
 
         List<InetSocketAddress> servers = this.bootstrapState.tryResolveAddresses(nowMs);
         if (!servers.isEmpty()) {
             this.metadataUpdater.bootstrap(servers);
-            System.out.println(metadataUpdater.fetchNodes());
+            this.bootstrapState.isBootstrapped = true;
             return;
         }
         if (this.bootstrapState.timer.isExpired()) {
@@ -1231,7 +1233,6 @@ public class NetworkClient implements KafkaClient {
         public long maybeUpdate(long now) {
             // should we update our metadata?
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
-            System.out.println("Time to next: " + timeToNextMetadataUpdate);
             long waitForMetadataFetch = hasFetchInProgress() ? defaultRequestTimeoutMs : 0;
 
             long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
@@ -1334,10 +1335,8 @@ public class NetworkClient implements KafkaClient {
          */
         private long maybeUpdate(long now, Node node) {
             String nodeConnectionId = node.idString();
-            System.out.println(nodeConnectionId);
 
             if (canSendRequest(nodeConnectionId, now)) {
-                System.out.println("canSendRequest was true");
                 Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion(now);
                 MetadataRequest.Builder metadataRequest = requestAndVersion.requestBuilder;
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node);
@@ -1350,7 +1349,6 @@ public class NetworkClient implements KafkaClient {
             // the client from unnecessarily connecting to additional nodes while a previous connection
             // attempt has not been completed.
             if (isAnyNodeConnecting()) {
-                System.out.println("Node connecting...");
                 // Strictly the timeout we should return here is "connect timeout", but as we don't
                 // have such application level configuration, using reconnect backoff instead.
                 return reconnectBackoffMs;
