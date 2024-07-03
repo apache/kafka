@@ -3946,6 +3946,7 @@ inter.broker.listener.name=PLAINTEXT
   </p>
 
   <ul>
+    <li><a href="#brokerconfigs_broker.id">broker.id</a>: In zk mode, if <code>broker.id.generation.enable</code> is enabled (default is enabled), during migration, if <code>broker.id</code> is not set, the migration will fail because <code>node.id</code> will be -1. Both <code>broker.id</code> and <code>node.id</code> must be non-negative integers.</li>
     <li><a href="#brokerconfigs_controller.quorum.voters">controller.quorum.voters</a></li>
     <li><a href="#brokerconfigs_controller.listener.names">controller.listener.names</a></li>
     <li>The controller.listener.name should also be added to <a href="#brokerconfigs_listener.security.protocol.map">listener.security.property.map</a></li>
@@ -3972,12 +3973,6 @@ zookeeper.connect=localhost:2181
 # KRaft controller quorum configuration
 controller.quorum.voters=3000@localhost:9093
 controller.listener.names=CONTROLLER</code></pre>
-
-  <p>
-    <em>Note: If the broker ID already exists due to the migration, it can be accepted without enabling broker ID generation.
-    In such cases, set <code>broker.id.generation.enable=false</code>. If broker ID generation cannot be disabled for some reason, it is recommended to adjust
-    the <code>reserved.broker.max.id</code> to a known maximum node ID in the cluster to avoid conflicts.</em>
-  </p>
 
   <p>
     <em>Note: Once the final ZK broker has been restarted with the necessary configuration, the migration will automatically begin.</em>
