@@ -42,7 +42,7 @@ import java.util.function.Supplier;
 public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
     private final ListenerName listenerName;
     private final boolean isInterBrokerListener;
-    private final Mode mode;
+    private final ConnectionMode connectionMode;
     private SslFactory sslFactory;
     private Map<String, ?> configs;
     private SslPrincipalMapper sslPrincipalMapper;
@@ -51,11 +51,11 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
      * Constructs an SSL channel builder. ListenerName is provided only
      * for server channel builder and will be null for client channel builder.
      */
-    public SslChannelBuilder(Mode mode,
+    public SslChannelBuilder(ConnectionMode connectionMode,
                              ListenerName listenerName,
                              boolean isInterBrokerListener,
                              LogContext logContext) {
-        this.mode = mode;
+        this.connectionMode = connectionMode;
         this.listenerName = listenerName;
         this.isInterBrokerListener = isInterBrokerListener;
     }
@@ -66,7 +66,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
             String sslPrincipalMappingRules = (String) configs.get(BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG);
             if (sslPrincipalMappingRules != null)
                 sslPrincipalMapper = SslPrincipalMapper.fromRules(sslPrincipalMappingRules);
-            this.sslFactory = new SslFactory(mode, null, isInterBrokerListener);
+            this.sslFactory = new SslFactory(connectionMode, null, isInterBrokerListener);
             this.sslFactory.configure(this.configs);
         } catch (KafkaException e) {
             throw e;
