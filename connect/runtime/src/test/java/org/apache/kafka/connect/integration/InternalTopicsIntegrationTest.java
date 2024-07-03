@@ -142,8 +142,6 @@ public class InternalTopicsIntegrationTest {
         // Try to start a worker
         WorkerHandle worker = connect.addWorker();
 
-        // TODO: Ensure this timeout is high enough for CI;
-        //       probably want to get 10 consecutive successful runs before merging
         connect.requestTimeout(1000);
         try (Response response = connect.healthCheck(worker)) {
             assertEquals(Response.Status.SERVICE_UNAVAILABLE.getStatusCode(), response.getStatus());
