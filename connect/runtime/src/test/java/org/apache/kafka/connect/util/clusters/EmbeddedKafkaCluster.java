@@ -208,6 +208,18 @@ public class EmbeddedKafkaCluster {
     }
 
     private void stop(boolean deleteLogDirs, boolean stopZK) {
+        maybeShutDownProducer();
+        triggerBrokerShutdown();
+        awaitBrokerShutdown();
+
+        if (deleteLogDirs)
+            deleteLogDirs();
+
+        if (stopZK)
+            stopZK();
+    }
+
+    private void maybeShutDownProducer() {
         try {
             if (producer != null) {
                 producer.close();
@@ -216,7 +228,9 @@ public class EmbeddedKafkaCluster {
             log.error("Could not shutdown producer ", e);
             throw new RuntimeException("Could not shutdown producer", e);
         }
+    }
 
+    private void triggerBrokerShutdown() {
         for (KafkaServer broker : brokers) {
             try {
                 broker.shutdown();
@@ -226,25 +240,37 @@ public class EmbeddedKafkaCluster {
                 throw new RuntimeException(msg, t);
             }
         }
+    }
 
-        if (deleteLogDirs) {
-            for (KafkaServer broker : brokers) {
-                try {
-                    log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
-                    CoreUtils.delete(broker.config().logDirs());
-                } catch (Throwable t) {
-                    String msg = String.format("Could not clean up log dirs for broker at %s",
-                            address(broker));
-                    log.error(msg, t);
-                    throw new RuntimeException(msg, t);
-                }
+    private void awaitBrokerShutdown() {
+        for (KafkaServer broker : brokers) {
+            try {
+                broker.awaitShutdown();
+            } catch (Throwable t) {
+                String msg = String.format("Failed while awaiting shutdown of broker at %s", address(broker));
+                log.error(msg, t);
+                throw new RuntimeException(msg, t);
             }
         }
+    }
 
-        try {
-            if (stopZK) {
-                zookeeper.shutdown();
+    private void deleteLogDirs() {
+        for (KafkaServer broker : brokers) {
+            try {
+                log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
+                CoreUtils.delete(broker.config().logDirs());
+            } catch (Throwable t) {
+                String msg = String.format("Could not clean up log dirs for broker at %s",
+                        address(broker));
+                log.error(msg, t);
+                throw new RuntimeException(msg, t);
             }
+        }
+    }
+
+    private void stopZK() {
+        try {
+            zookeeper.shutdown();
         } catch (Throwable t) {
             String msg = String.format("Could not shutdown zookeeper at %s", zKConnectString());
             log.error(msg, t);
