@@ -23,6 +23,8 @@ import kafka.cluster.PartitionTest.MockPartitionListener
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
 import kafka.log.remote.RemoteLogManager
+import kafka.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS
+import kafka.log.remote.quota.RLMQuotaMetrics
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.MockBlockingSender
@@ -116,6 +118,8 @@ class ReplicaManagerTest {
   private var addPartitionsToTxnManager: AddPartitionsToTxnManager = _
   private var brokerTopicStats: BrokerTopicStats = _
   private val transactionSupportedOperation = genericError
+  private val quotaExceededThrottleTime = 1000
+  private val quotaAvailableThrottleTime = 0
 
   // Constants defined for readability
   private val zkVersion = 0
@@ -133,6 +137,13 @@ class ReplicaManagerTest {
     alterPartitionManager = mock(classOf[AlterPartitionManager])
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
     mockRemoteLogManager = mock(classOf[RemoteLogManager])
+    when(mockRemoteLogManager.fetchThrottleTimeSensor()).thenReturn(
+      new RLMQuotaMetrics(metrics,
+        "remote-fetch-throttle-time",
+        classOf[RemoteLogManager].getSimpleName,
+        "The %s time in millis remote fetches was throttled by a broker",
+        INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS)
+        .sensor())
     addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
 
     // Anytime we try to verify, just automatically run the callback as though the transaction was verified.
@@ -3357,7 +3368,8 @@ class ReplicaManagerTest {
     defaultTopicRemoteLogStorageEnable: Boolean = true,
     setupLogDirMetaProperties: Boolean = false,
     directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
-    buildRemoteLogAuxState: Boolean = false
+    buildRemoteLogAuxState: Boolean = false,
+    remoteFetchQuotaExceeded: Option[Boolean] = None
   ): ReplicaManager = {
     val props = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     val path1 = TestUtils.tempRelativeDir("data").getAbsolutePath
@@ -3410,6 +3422,15 @@ class ReplicaManagerTest {
       purgatoryName = "DelayedRemoteFetch", timer, reaperEnabled = false)
 
     when(metadataCache.contains(new TopicPartition(topic, 0))).thenReturn(true)
+
+    if (remoteFetchQuotaExceeded.isDefined) {
+      assertFalse(remoteLogManager.isDefined)
+      if (remoteFetchQuotaExceeded.get) {
+        when(mockRemoteLogManager.getFetchThrottleTimeMs()).thenReturn(quotaExceededThrottleTime)
+      } else {
+        when(mockRemoteLogManager.getFetchThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime)
+      }
+    }
 
     // Transactional appends attempt to schedule to the request handler thread using a non request handler thread. Set this to avoid error.
     KafkaRequestHandler.setBypassThreadCheck(true)
@@ -3967,7 +3988,7 @@ class ReplicaManagerTest {
     val tp0 = new TopicPartition(topic, 0)
     val tidp0 = new TopicIdPartition(topicId, tp0)
     // create a replicaManager with remoteLog enabled
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteFetchQuotaExceeded = Some(false))
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
@@ -4022,7 +4043,7 @@ class ReplicaManagerTest {
     val tp0 = new TopicPartition(topic, 0)
     val tidp0 = new TopicIdPartition(topicId, tp0)
     // create a replicaManager with remoteLog enabled
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog= true)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog= true, remoteFetchQuotaExceeded = Some(false))
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
@@ -6713,7 +6734,7 @@ class ReplicaManagerTest {
 
   @Test
   def testRemoteReadQuotaExceeded(): Unit = {
-    when(mockRemoteLogManager.isRemoteLogFetchQuotaExceeded).thenReturn(true)
+    when(mockRemoteLogManager.getFetchThrottleTimeMs).thenReturn(quotaExceededThrottleTime)
 
     val tp0 = new TopicPartition(topic, 0)
     val tpId0 = new TopicIdPartition(topicId, tp0)
@@ -6727,11 +6748,17 @@ class ReplicaManagerTest {
     assertFalse(fetchInfo.firstEntryIncomplete)
     assertFalse(fetchInfo.abortedTransactions.isPresent)
     assertFalse(fetchInfo.delayedRemoteStorageFetch.isPresent)
+
+    val allMetrics = metrics.metrics()
+    val avgMetric = allMetrics.get(metrics.metricName("remote-fetch-throttle-time-avg", "RemoteLogManager"))
+    val maxMetric = allMetrics.get(metrics.metricName("remote-fetch-throttle-time-max", "RemoteLogManager"))
+    assertEquals(quotaExceededThrottleTime, avgMetric.metricValue.asInstanceOf[Double].toLong)
+    assertEquals(quotaExceededThrottleTime, maxMetric.metricValue.asInstanceOf[Double].toLong)
   }
 
   @Test
   def testRemoteReadQuotaNotExceeded(): Unit = {
-    when(mockRemoteLogManager.isRemoteLogFetchQuotaExceeded).thenReturn(false)
+    when(mockRemoteLogManager.getFetchThrottleTimeMs).thenReturn(quotaAvailableThrottleTime)
 
     val tp0 = new TopicPartition(topic, 0)
     val tpId0 = new TopicIdPartition(topicId, tp0)
@@ -6745,6 +6772,12 @@ class ReplicaManagerTest {
     assertEquals(-1, fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
     assertEquals(MemoryRecords.EMPTY, fetchInfo.records)
     assertTrue(fetchInfo.delayedRemoteStorageFetch.isPresent)
+
+    val allMetrics = metrics.metrics()
+    val avgMetric = allMetrics.get(metrics.metricName("remote-fetch-throttle-time-avg", "RemoteLogManager"))
+    val maxMetric = allMetrics.get(metrics.metricName("remote-fetch-throttle-time-max", "RemoteLogManager"))
+    assertEquals(Double.NaN, avgMetric.metricValue)
+    assertEquals(Double.NaN, maxMetric.metricValue)
   }
 
   private def readFromLogWithOffsetOutOfRange(tp: TopicPartition): Seq[(TopicIdPartition, LogReadResult)] = {

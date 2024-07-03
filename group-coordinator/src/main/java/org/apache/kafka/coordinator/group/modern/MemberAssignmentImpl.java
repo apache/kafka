@@ -14,49 +14,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
- * An immutable assignment for a member.
+ * The partition assignment for a modern group member.
  */
-public class Assignment implements MemberAssignment {
-    public static final Assignment EMPTY = new Assignment(Collections.emptyMap());
-
+public class MemberAssignmentImpl implements MemberAssignment {
     /**
-     * The partitions assigned to the member.
+     * The partitions assigned to this member keyed by topicId.
      */
     private final Map<Uuid, Set<Integer>> partitions;
 
-    public Assignment(
-        Map<Uuid, Set<Integer>> partitions
-    ) {
-        this.partitions = Collections.unmodifiableMap(Objects.requireNonNull(partitions));
+    public MemberAssignmentImpl(Map<Uuid, Set<Integer>> partitions) {
+        this.partitions = Objects.requireNonNull(partitions);
     }
 
     /**
-     * @return The assigned partitions.
+     * @return The assigned partitions keyed by topic Ids.
      */
     @Override
     public Map<Uuid, Set<Integer>> partitions() {
-        return partitions;
+        return this.partitions;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        Assignment that = (Assignment) o;
+        MemberAssignmentImpl that = (MemberAssignmentImpl) o;
         return partitions.equals(that.partitions);
     }
 
@@ -67,22 +59,6 @@ public class Assignment implements MemberAssignment {
 
     @Override
     public String toString() {
-        return "Assignment(partitions=" + partitions + ')';
-    }
-
-    /**
-     * Creates a {{@link Assignment}} from a {{@link ConsumerGroupTargetAssignmentMemberValue}}.
-     *
-     * @param record The record.
-     * @return A {{@link Assignment}}.
-     */
-    public static Assignment fromRecord(
-        ConsumerGroupTargetAssignmentMemberValue record
-    ) {
-        return new Assignment(
-            record.topicPartitions().stream().collect(Collectors.toMap(
-                ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId,
-                topicPartitions -> new HashSet<>(topicPartitions.partitions())))
-        );
+        return "MemberAssignment(partitions=" + partitions + ')';
     }
 }

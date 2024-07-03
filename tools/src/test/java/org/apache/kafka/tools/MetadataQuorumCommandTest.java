@@ -31,12 +31,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -68,7 +68,7 @@ class MetadataQuorumCommandTest {
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
         );
 
-        List<String> outputs = stream(describeOutput.split("\n")).skip(1).collect(Collectors.toList());
+        List<String> outputs = Arrays.stream(describeOutput.split("\n")).skip(1).collect(Collectors.toList());
         if (cluster.type() == Type.CO_KRAFT)
           assertEquals(Math.max(cluster.config().numControllers(), cluster.config().numBrokers()), outputs.size());
         else
@@ -102,25 +102,37 @@ class MetadataQuorumCommandTest {
     })
     public void testDescribeQuorumStatusSuccessful() throws InterruptedException {
         cluster.waitForReadyBrokers();
-        String describeOutput = ToolsTestUtils.captureStandardOut(() ->
-            MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
+        String describeOutput = ToolsTestUtils.captureStandardOut(
+            () -> MetadataQuorumCommand.mainNoExit(
+                "--bootstrap-server",
+                cluster.bootstrapServers(),
+                "describe",
+                "--status"
+            )
         );
         String[] outputs = describeOutput.split("\n");
 
-        assertTrue(outputs[0].matches("ClusterId:\\s+\\S{22}"));
-        assertTrue(outputs[1].matches("LeaderId:\\s+\\d+"));
-        assertTrue(outputs[2].matches("LeaderEpoch:\\s+\\d+"));
+        assertTrue(outputs[0].matches("ClusterId:\\s+\\S{22}"), describeOutput);
+        assertTrue(outputs[1].matches("LeaderId:\\s+\\d+"), describeOutput);
+        assertTrue(outputs[2].matches("LeaderEpoch:\\s+\\d+"), describeOutput);
         // HighWatermark may be -1
-        assertTrue(outputs[3].matches("HighWatermark:\\s+-?\\d+"));
-        assertTrue(outputs[4].matches("MaxFollowerLag:\\s+\\d+"));
-        assertTrue(outputs[5].matches("MaxFollowerLagTimeMs:\\s+-?\\d+"));
-        assertTrue(outputs[6].matches("CurrentVoters:\\s+\\[\\d+(,\\d+)*]"));
+        assertTrue(outputs[3].matches("HighWatermark:\\s+-?\\d+"), describeOutput);
+        assertTrue(outputs[4].matches("MaxFollowerLag:\\s+\\d+"), describeOutput);
+        assertTrue(outputs[5].matches("MaxFollowerLagTimeMs:\\s+-?\\d+"), describeOutput);
+        assertTrue(
+            outputs[6].matches("CurrentVoters:\\s+\\[\\d+(,\\d+)*]"),
+            describeOutput
+        );
 
         // There are no observers if we have fewer brokers than controllers
-        if (cluster.type() == Type.CO_KRAFT && cluster.config().numBrokers() <= cluster.config().numControllers())
-            assertTrue(outputs[7].matches("CurrentObservers:\\s+\\[]"));
-        else
-            assertTrue(outputs[7].matches("CurrentObservers:\\s+\\[\\d+(,\\d+)*]"));
+        if (cluster.type() == Type.CO_KRAFT && cluster.config().numBrokers() <= cluster.config().numControllers()) {
+            assertTrue(outputs[7].matches("CurrentObservers:\\s+\\[]"), describeOutput);
+        } else {
+            assertTrue(
+                outputs[7].matches("CurrentObservers:\\s+\\[\\d+(,\\d+)*]"),
+                describeOutput
+            );
+        }
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})

@@ -157,6 +157,7 @@ public class QuorumState {
             initialState = new UnattachedState(
                 time,
                 logEndOffsetAndEpoch.epoch(),
+                OptionalInt.empty(),
                 latestVoterSet.get().voterIds(),
                 Optional.empty(),
                 randomElectionTimeoutMs(),
@@ -206,20 +207,48 @@ public class QuorumState {
             );
         } else if (election.hasLeader()) {
             VoterSet voters = latestVoterSet.get();
-            initialState = new FollowerState(
-                time,
-                election.epoch(),
-                election.leaderId(),
-                voters.listeners(election.leaderId()),
-                voters.voterIds(),
-                Optional.empty(),
-                fetchTimeoutMs,
-                logContext
-            );
+            Endpoints leaderEndpoints = voters.listeners(election.leaderId());
+            if (leaderEndpoints.isEmpty()) {
+                // Since the leader's endpoints are not known, it cannot send Fetch or
+                // FetchSnapshot requests to the leader.
+                //
+                // Transition to unattached instead and discover the leader's endpoint through
+                // Fetch requests to the bootstrap servers or from a BeginQuorumEpoch request from
+                // the leader.
+                log.info(
+                    "The leader in election state {} is not a member of the latest voter set {}; " +
+                    "transitioning to unattached instead of follower because the leader's " +
+                    "endpoints are not known",
+                    election,
+                    voters
+                );
+
+                initialState = new UnattachedState(
+                    time,
+                    election.epoch(),
+                    OptionalInt.of(election.leaderId()),
+                    latestVoterSet.get().voterIds(),
+                    Optional.empty(),
+                    randomElectionTimeoutMs(),
+                    logContext
+                );
+            } else {
+                initialState = new FollowerState(
+                    time,
+                    election.epoch(),
+                    election.leaderId(),
+                    leaderEndpoints,
+                    voters.voterIds(),
+                    Optional.empty(),
+                    fetchTimeoutMs,
+                    logContext
+                );
+            }
         } else {
             initialState = new UnattachedState(
                 time,
                 election.epoch(),
+                OptionalInt.empty(),
                 latestVoterSet.get().voterIds(),
                 Optional.empty(),
                 randomElectionTimeoutMs(),
@@ -249,6 +278,10 @@ public class QuorumState {
 
     public Uuid localDirectoryId() {
         return localDirectoryId;
+    }
+
+    public ReplicaKey localReplicaKeyOrThrow() {
+        return ReplicaKey.of(localIdOrThrow(), localDirectoryId());
     }
 
     public int epoch() {
@@ -301,7 +334,7 @@ public class QuorumState {
         return !isVoter();
     }
 
-    public void transitionToResigned(List<Integer> preferredSuccessors) {
+    public void transitionToResigned(List<ReplicaKey> preferredSuccessors) {
         if (!isLeader()) {
             throw new IllegalStateException("Invalid transition to Resigned state from " + state);
         }
@@ -350,6 +383,7 @@ public class QuorumState {
         durableTransitionTo(new UnattachedState(
             time,
             epoch,
+            OptionalInt.empty(),
             latestVoterSet.get().voterIds(),
             state.highWatermark(),
             electionTimeoutMs,
@@ -360,8 +394,8 @@ public class QuorumState {
     /**
      * Grant a vote to a candidate and become a follower for this epoch. We will remain in this
      * state until either the election timeout expires or a leader is elected. In particular,
-     * we do not begin fetching until the election has concluded and {@link #transitionToFollower(int, int)}
-     * is invoked.
+     * we do not begin fetching until the election has concluded and
+     * {@link #transitionToFollower(int, int, Endpoints)} is invoked.
      */
     public void transitionToVoted(
         int epoch,

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group.modern.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.image.TopicImage;
@@ -73,9 +74,16 @@ public class ConsumerGroupMember extends ModernGroupMember {
         }
 
         public Builder(ConsumerGroupMember member) {
+            this(
+                Objects.requireNonNull(member),
+                member.memberId
+            );
+        }
+
+        public Builder(ConsumerGroupMember member, String newMemberId) {
             Objects.requireNonNull(member);
 
-            this.memberId = member.memberId;
+            this.memberId = Objects.requireNonNull(newMemberId);
             this.memberEpoch = member.memberEpoch;
             this.previousMemberEpoch = member.previousMemberEpoch;
             this.instanceId = member.instanceId;
