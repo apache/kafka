@@ -217,10 +217,10 @@ public enum MetadataVersion {
     // Add ELR related supports (KIP-966).
     IBP_3_9_IV1(22, "3.9", "IV1", true),
 
-    IBP_3_9_IV2(21, "3.9", "IV2", false),
+    IBP_3_9_IV2(23, "3.9", "IV2", false),
 
     // Introduce version 1 of the GroupVersion feature (KIP-848).
-    IBP_4_0_IV0(23, "4.0", "IV0", false);
+    IBP_4_0_IV0(24, "4.0", "IV0", false);
 
 
     // NOTES when adding a new version:
