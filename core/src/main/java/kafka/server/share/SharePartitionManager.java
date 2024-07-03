@@ -621,7 +621,8 @@ public class SharePartitionManager implements AutoCloseable {
      *
      * @return The offset for the earliest timestamp.
      */
-    private long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition) {
+    // Visible for testing.
+    long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition) {
         // TODO: We need to know the isolation level from group configs, for now we are passing Option.empty() for isolationLevel
         Option<TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
             topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
