@@ -988,7 +988,7 @@ public class OffsetsApiIntegrationTest {
      *
      * @param connectorName the name of the sink connector whose offsets are to be verified
      * @param expectedTopic the name of the Kafka topic that the sink connector is consuming from
-     * @param expectedPartitions the number of partitions that exist for the Kafka<<< topic
+     * @param expectedPartitions the number of partitions that exist for the Kafka topic
      * @param expectedOffset the expected consumer group offset for each partition
      * @param conditionDetails the condition that we're waiting to achieve (for example: Sink connector should process
      *                         10 records)
