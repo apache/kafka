@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.internals.SecurityManagerCompatibility;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 
 import org.junit.jupiter.api.AfterEach;
@@ -38,8 +39,6 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MonitorInfo;
 import java.lang.management.ThreadInfo;
 import java.net.URL;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -159,9 +158,8 @@ public class SynchronizationTest {
     private class SynchronizedClassLoaderFactory extends ClassLoaderFactory {
         @Override
         public DelegatingClassLoader newDelegatingClassLoader(ClassLoader parent) {
-            return AccessController.doPrivileged(
-                    (PrivilegedAction<DelegatingClassLoader>) () ->
-                            new SynchronizedDelegatingClassLoader(parent, dclBreakpoint)
+            return SecurityManagerCompatibility.get().doPrivileged(
+                    () -> new SynchronizedDelegatingClassLoader(parent, dclBreakpoint)
             );
         }
 
@@ -171,9 +169,8 @@ public class SynchronizationTest {
                 URL[] urls,
                 ClassLoader parent
         ) {
-            return AccessController.doPrivileged(
-                    (PrivilegedAction<PluginClassLoader>) () ->
-                            new SynchronizedPluginClassLoader(pluginLocation, urls, parent, pclBreakpoint)
+            return SecurityManagerCompatibility.get().doPrivileged(
+                    () -> new SynchronizedPluginClassLoader(pluginLocation, urls, parent, pclBreakpoint)
             );
         }
     }
