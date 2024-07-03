@@ -270,19 +270,13 @@ public final class SnapshotWriterReaderTest {
     }
 
     public static void assertControlSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
-        assertControlSnapshot(
-            batches,
-            RecordsSnapshotReader.of(reader, new StringSerde(), BufferSupplier.create(), Integer.MAX_VALUE, true)
-        );
-    }
-
-    public static void assertControlSnapshot(List<List<String>> batches, SnapshotReader<String> reader) {
+        SnapshotReader<String> snapshotReader = RecordsSnapshotReader.of(reader, new StringSerde(), BufferSupplier.create(), Integer.MAX_VALUE, true);
         List<String> expected = new ArrayList<>();
         batches.forEach(expected::addAll);
 
         List<String> actual = new ArrayList<>(expected.size());
-        while (reader.hasNext()) {
-            Batch<String> batch = reader.next();
+        while (snapshotReader.hasNext()) {
+            Batch<String> batch = snapshotReader.next();
             batch.controlRecords().forEach(controlRecord -> actual.add(controlRecord.message().toString()));
         }
 

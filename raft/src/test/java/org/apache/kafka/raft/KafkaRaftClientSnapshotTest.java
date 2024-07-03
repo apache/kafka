@@ -28,6 +28,8 @@ import org.apache.kafka.common.requests.FetchSnapshotRequest;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.StringSerde;
+import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.raft.internals.VoterSetTest;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
@@ -44,6 +46,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -935,7 +938,7 @@ public final class KafkaRaftClientSnapshotTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void testFetchSnapshotRequestAsFollower(boolean withKip853Rpc) throws IOException { // maybe add bootstrap to the matrix
+    public void testFetchSnapshotRequestAsFollower(boolean withKip853Rpc) throws IOException {
         int localId = 0;
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
