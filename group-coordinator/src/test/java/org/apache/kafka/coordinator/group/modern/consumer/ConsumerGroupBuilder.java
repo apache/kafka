@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group.modern.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 

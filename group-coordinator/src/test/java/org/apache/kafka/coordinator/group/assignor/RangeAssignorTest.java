@@ -20,11 +20,11 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.consumer.Assignment;
-import org.apache.kafka.coordinator.group.consumer.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.consumer.MemberSubscriptionAndAssignmentImpl;
-import org.apache.kafka.coordinator.group.consumer.SubscribedTopicDescriberImpl;
-import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
+import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
+import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 
 import org.junit.jupiter.api.Test;
 

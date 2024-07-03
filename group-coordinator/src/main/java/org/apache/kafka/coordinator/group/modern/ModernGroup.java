@@ -21,8 +21,6 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
-import org.apache.kafka.coordinator.group.consumer.Assignment;
-import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
