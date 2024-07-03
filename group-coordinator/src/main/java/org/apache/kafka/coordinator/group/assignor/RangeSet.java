@@ -26,7 +26,7 @@ import java.util.Set;
  * to {@code to} (exclusive).
  * This implementation provides a view over a continuous range of integers without actually storing them.
  */
-public class RangeSet implements Set<Integer> {
+class RangeSet implements Set<Integer> {
     private final int from;
     private final int to;
 
@@ -128,22 +128,14 @@ public class RangeSet implements Set<Integer> {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("[");
-        for (int i = from; i < to; i++) {
-            sb.append(i);
-            if (i < to - 1) {
-                sb.append(", ");
-            }
-        }
-        sb.append("]");
-        return sb.toString();
+        return "RangeSet(from=" + from + " (inclusive), to=" + to + " (exclusive))";
     }
 
     /**
-     * Compares the specified object with this set for equality. Returns {@code true}
-     * if the specified object is also a set, the two sets have the same size, and
-     * every member of the specified set is contained in this set.
+     * Compares the specified object with this set for equality.
+     * Returns {@code true} if the specified object is also a set,
+     * the two sets have the same size, and every member of the specified
+     * set is contained in this set.
      *
      * @param o object to be compared for equality with this set
      * @return {@code true} if the specified object is equal to this set
@@ -151,7 +143,14 @@ public class RangeSet implements Set<Integer> {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Set)) return false;
+        if (o == null || getClass() != o.getClass()) {
+            if (!(o instanceof Set)) return false;
+        }
+
+        if (o instanceof RangeSet) {
+            RangeSet other = (RangeSet) o;
+            return this.from == other.from && this.to == other.to;
+        }
 
         Set<?> otherSet = (Set<?>) o;
         if (otherSet.size() != this.size()) return false;

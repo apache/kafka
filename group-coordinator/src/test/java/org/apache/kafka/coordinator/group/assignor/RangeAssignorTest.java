@@ -34,7 +34,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -915,6 +914,15 @@ public class RangeAssignorTest {
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
+    /**
+     * Asserts that the computed group assignment matches the expected assignment.
+     *
+     * @param expectedAssignment       A map representing the expected assignment for each member.
+     *                                 The key is the member Id and the value is another map where
+     *                                 the key is the topic Uuid and the value is a set of assigned partition Ids.
+     * @param computedGroupAssignment  The computed group assignment to be checked against the expected assignment.
+     *                                 Contains the actual assignments for each member.
+     */
     private void assertAssignment(
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment,
         GroupAssignment computedGroupAssignment
@@ -922,20 +930,7 @@ public class RangeAssignorTest {
         assertEquals(expectedAssignment.size(), computedGroupAssignment.members().size());
         for (String memberId : computedGroupAssignment.members().keySet()) {
             Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(memberId).partitions();
-            Map<Uuid, Set<Integer>> expectedAssignmentForMember = expectedAssignment.get(memberId);
-
-            // Compare the content of the maps by entries.
-            assertEquals(expectedAssignmentForMember.size(), computedAssignmentForMember.size());
-            for (Map.Entry<Uuid, Set<Integer>> entry : expectedAssignmentForMember.entrySet()) {
-                Set<Integer> expectedSet = entry.getValue();
-                Set<Integer> computedSet = computedAssignmentForMember.get(entry.getKey());
-
-                // Convert both sets to HashSet for comparison.
-                Set<Integer> normalizedExpectedSet = new HashSet<>(expectedSet);
-                Set<Integer> normalizedComputedSet = new HashSet<>(computedSet);
-
-                assertEquals(normalizedExpectedSet, normalizedComputedSet);
-            }
+            assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
         }
     }
 }

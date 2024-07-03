@@ -97,13 +97,12 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
      * Metadata for a topic including partition and subscription details.
      */
     private static class TopicMetadata {
-        public final Uuid topicId;
-        public final int numPartitions;
-        public int numMembers;
-
-        public int minQuota = -1;
-        public int extraPartitions = -1;
-        public int nextRange = 0;
+        private final Uuid topicId;
+        private final int numPartitions;
+        private int numMembers;
+        private int minQuota = -1;
+        private int extraPartitions = -1;
+        private int nextRange = 0;
 
         /**
          * Constructs a new TopicMetadata instance.
@@ -119,23 +118,12 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         }
 
         /**
-         * Factory method to create a TopicMetadata instance.
-         *
-         * @param topicId           The topic Id.
-         * @param numPartitions     The number of partitions.
-         * @param numMembers        The number of subscribed members.
-         * @return A new TopicMetadata instance.
-         */
-        public static TopicMetadata create(Uuid topicId, int numPartitions, int numMembers) {
-            return new TopicMetadata(topicId, numPartitions, numMembers);
-        }
-
-        /**
          * Computes the minimum partition quota per member and the extra partitions, if not already computed.
          */
-        void maybeComputeQuota() {
-            // The minimum number of partitions each member should receive for a balanced assignment.
+        private void maybeComputeQuota() {
             if (minQuota != -1) return;
+
+            // The minimum number of partitions each member should receive for a balanced assignment.
             minQuota = numPartitions / numMembers;
 
             // Extra partitions to be distributed one to each member.
@@ -144,14 +132,13 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
 
         @Override
         public String toString() {
-            return "TopicMetadata{" +
-                "topicId=" + topicId +
+            return "TopicMetadata(topicId=" + topicId +
                 ", numPartitions=" + numPartitions +
                 ", numMembers=" + numMembers +
                 ", minQuota=" + minQuota +
                 ", extraPartitions=" + extraPartitions +
                 ", nextRange=" + nextRange +
-                '}';
+                ')';
         }
     }
 
@@ -175,7 +162,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             if (numPartitions == -1) {
                 throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
             }
-            TopicMetadata m = TopicMetadata.create(
+            TopicMetadata m = new TopicMetadata(
                 topicId,
                 numPartitions,
                 numMembers
@@ -184,9 +171,10 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         }
 
         Map<String, MemberAssignment> assignments = new HashMap<>((int) ((groupSpec.memberIds().size() / 0.75f) + 1));
+        int memberAssignmentInitialCapacity = (int) ((subscribedTopics.size() / 0.75f) + 1);
 
         for (String memberId : memberIds) {
-            Map<Uuid, Set<Integer>> assignment = new HashMap<>((int) ((subscribedTopics.size() / 0.75f) + 1));
+            Map<Uuid, Set<Integer>> assignment = new HashMap<>(memberAssignmentInitialCapacity);
             for (TopicMetadata topicMetadata : topics) {
                 topicMetadata.maybeComputeQuota();
                 addPartitionsToAssignment(topicMetadata, assignment);
@@ -218,7 +206,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
                         throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
                     }
 
-                    return TopicMetadata.create(
+                    return new TopicMetadata(
                         topicId,
                         numPartitions,
                         0
@@ -232,7 +220,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
 
         for (String memberId : memberIds) {
             MemberSubscription subs = groupSpec.memberSubscription(memberId);
-            Map<Uuid, Set<Integer>> assignment = new HashMap<>(subs.subscribedTopicIds().size());
+            Map<Uuid, Set<Integer>> assignment = new HashMap<>((int) ((subs.subscribedTopicIds().size() / 0.75f) + 1));
             for (Uuid topicId : subs.subscribedTopicIds()) {
                 TopicMetadata metadata = topics.get(topicId);
                 metadata.maybeComputeQuota();
@@ -258,6 +246,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         List<String> sortedMemberIds = new ArrayList<>(groupSpec.memberIds());
         Map<String, Optional<String>> instanceIdCache = new HashMap<>();
 
+        // Caching the instanceIds improves performance.
         for (String memberId : sortedMemberIds) {
             instanceIdCache.put(memberId, groupSpec.memberSubscription(memberId).instanceId());
         }
@@ -294,11 +283,17 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             memberAssignment.put(topicMetadata.topicId, Collections.emptySet());
         } else {
             int start = topicMetadata.nextRange;
-            int end = Math.min(start + topicMetadata.minQuota, topicMetadata.numPartitions);
+            int quota = topicMetadata.minQuota;
+
+            // Adjust quota to account for extra partitions if available.
             if (topicMetadata.extraPartitions > 0) {
-                end++;
+                quota++;
                 topicMetadata.extraPartitions--;
             }
+
+            // Calculate the end using the quota.
+            int end = Math.min(start + quota, topicMetadata.numPartitions);
+
             topicMetadata.nextRange = end;
             memberAssignment.put(topicMetadata.topicId, new RangeSet(start, end));
         }

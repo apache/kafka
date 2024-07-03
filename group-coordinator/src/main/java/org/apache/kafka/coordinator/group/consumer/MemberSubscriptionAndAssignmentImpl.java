@@ -54,10 +54,14 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
     }
 
     @Override
-    public Optional<String> rackId() { return rackId; }
+    public Optional<String> rackId() {
+        return rackId;
+    }
 
     @Override
-    public Optional<String> instanceId() { return instanceId; }
+    public Optional<String> instanceId() {
+        return instanceId;
+    }
 
     @Override
     public Set<Uuid> subscribedTopicIds() {
