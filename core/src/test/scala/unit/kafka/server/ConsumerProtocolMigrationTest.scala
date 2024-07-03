@@ -23,7 +23,7 @@ import org.apache.kafka.common.message.ListGroupsResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.coordinator.group.Group
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Timeout

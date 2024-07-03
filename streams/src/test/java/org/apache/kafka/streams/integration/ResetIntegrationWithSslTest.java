@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.test.TestSslUtils;
@@ -53,7 +53,7 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         brokerProps.put(SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, -1L);
 
         try {
-            SSL_CONFIG = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
+            SSL_CONFIG = TestSslUtils.createSslConfig(false, true, ConnectionMode.SERVER, TestUtils.tempFile(), "testCert");
 
             brokerProps.put(SocketServerConfigs.LISTENERS_CONFIG, "SSL://localhost:0");
             brokerProps.put(INTER_BROKER_LISTENER_NAME_CONFIG, "SSL");
