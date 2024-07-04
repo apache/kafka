@@ -397,8 +397,6 @@ Found problem:
     val logDir2 = "/tmp/other2"
     properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, logDir1 + "," + logDir2)
     properties.setProperty("listeners", "PLAINTEXT://localhost:9092")
-//    properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "3")
-//    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"3@localhost:9092")
     val config = new KafkaConfig(properties)
     try{
       val exitCode = StorageTool.runFormatCommand(namespace, config)
