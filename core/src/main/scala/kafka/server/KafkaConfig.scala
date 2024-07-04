@@ -183,8 +183,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   def this(props: java.util.Map[_, _]) = this(true, KafkaConfig.populateSynonyms(props))
   def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, KafkaConfig.populateSynonyms(props))
-  def this(props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig]) =
-    this(doLog, KafkaConfig.populateSynonyms(props))
 
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
