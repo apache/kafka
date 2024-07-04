@@ -209,7 +209,7 @@ public final class RaftClientTestContext {
         public Builder appendToLog(int epoch, List<String> records) {
             MemoryRecords batch = buildBatch(
                 time.milliseconds(),
-                log.endOffset().offset,
+                log.endOffset().offset(),
                 epoch,
                 records
             );
@@ -233,7 +233,7 @@ public final class RaftClientTestContext {
         }
 
         Builder deleteBeforeSnapshot(OffsetAndEpoch snapshotId) {
-            if (snapshotId.offset() > log.highWatermark().offset) {
+            if (snapshotId.offset() > log.highWatermark().offset()) {
                 log.updateHighWatermark(new LogOffsetMetadata(snapshotId.offset()));
             }
             log.deleteBeforeSnapshot(snapshotId);
@@ -462,7 +462,7 @@ public final class RaftClientTestContext {
         pollUntilRequest();
 
         List<RaftRequest.Outbound> voteRequests = collectVoteRequests(epoch,
-            log.lastFetchedEpoch(), log.endOffset().offset);
+            log.lastFetchedEpoch(), log.endOffset().offset());
 
         for (RaftRequest.Outbound request : voteRequests) {
             VoteResponseData voteResponse = voteResponse(true, OptionalInt.empty(), epoch);
@@ -1511,7 +1511,7 @@ public final class RaftClientTestContext {
 
     public void advanceLocalLeaderHighWatermarkToLogEndOffset() throws InterruptedException {
         assertEquals(localId, currentLeader());
-        long localLogEndOffset = log.endOffset().offset;
+        long localLogEndOffset = log.endOffset().offset();
 
         Iterable<ReplicaKey> followers = () -> voters
             .voterKeys()
