@@ -14,18 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * Application event triggered when a user calls the unsubscribe API. This will make the consumer
- * release all its assignments and send a heartbeat request to leave the share group.
- * This event holds a future that will complete when the invocation of callbacks to release
- * complete and the heartbeat to leave the group is sent out (minimal effort to send the
- * leave group heartbeat, without waiting for any response or considering timeouts).
- */
-public class ShareUnsubscribeApplicationEvent extends CompletableApplicationEvent<Void> {
-    public ShareUnsubscribeApplicationEvent() {
-        super(Type.SHARE_UNSUBSCRIBE, Long.MAX_VALUE);
+import org.apache.kafka.clients.consumer.internals.Acknowledgements;
+import org.apache.kafka.common.TopicIdPartition;
+
+import java.util.Map;
+
+public class ShareAcknowledgeOnCloseEvent extends CompletableApplicationEvent<Void> {
+
+    private Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
+
+    public ShareAcknowledgeOnCloseEvent(final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap, final long deadlineMs) {
+        super(Type.SHARE_ACKNOWLEDGE_ON_CLOSE, deadlineMs);
+        this.acknowledgementsMap = acknowledgementsMap;
+    }
+
+    public Map<TopicIdPartition, Acknowledgements> acknowledgementsMap() {
+        return acknowledgementsMap;
+    }
+
+    @Override
+    protected String toStringBase() {
+        return super.toStringBase() + ", acknowledgementsMap=" + acknowledgementsMap;
     }
 }

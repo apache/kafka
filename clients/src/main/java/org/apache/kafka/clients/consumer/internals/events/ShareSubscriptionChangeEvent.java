@@ -22,9 +22,9 @@ package org.apache.kafka.clients.consumer.internals.events;
  * calls the subscribe API. This will make the consumer join a share group if not part of it
  * yet, or just send the updated subscription to the broker if it's already a member of the group.
  */
-public class ShareSubscriptionChangeApplicationEvent extends ApplicationEvent {
+public class ShareSubscriptionChangeEvent extends ApplicationEvent {
 
-    public ShareSubscriptionChangeApplicationEvent() {
+    public ShareSubscriptionChangeEvent() {
         super(Type.SHARE_SUBSCRIPTION_CHANGE);
     }
 }

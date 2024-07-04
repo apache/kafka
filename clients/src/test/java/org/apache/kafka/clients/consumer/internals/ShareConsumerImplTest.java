@@ -24,9 +24,9 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
-import org.apache.kafka.clients.consumer.internals.events.ShareLeaveOnCloseEvent;
-import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -154,7 +154,8 @@ public class ShareConsumerImplTest {
     @Test
     public void testSuccessfulStartupShutdown() {
         consumer = newConsumer();
-        completeShareLeaveOnCloseApplicationEventSuccessfully();
+        completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
+        completeShareUnsubscribeApplicationEventSuccessfully();
         assertDoesNotThrow(() -> consumer.close());
     }
 
@@ -180,7 +181,8 @@ public class ShareConsumerImplTest {
     @Test
     public void testFailOnClosedConsumer() {
         consumer = newConsumer();
-        completeShareLeaveOnCloseApplicationEventSuccessfully();
+        completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
+        completeShareUnsubscribeApplicationEventSuccessfully();
         consumer.close();
         final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::subscription);
         assertEquals("This consumer has already been closed.", res.getMessage());
@@ -189,10 +191,11 @@ public class ShareConsumerImplTest {
     @Test
     public void testVerifyApplicationEventOnShutdown() {
         consumer = newConsumer();
-        completeShareLeaveOnCloseApplicationEventSuccessfully();
-        doReturn(null).when(applicationEventHandler).addAndGet(any());
+        completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
+        completeShareUnsubscribeApplicationEventSuccessfully();
         consumer.close();
-        verify(applicationEventHandler).addAndGet(any(ShareLeaveOnCloseEvent.class));
+        verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
+        verify(applicationEventHandler).add(any(ShareUnsubscribeEvent.class));
     }
 
     @Test
@@ -216,7 +219,7 @@ public class ShareConsumerImplTest {
         String topic = "topic1";
         consumer.subscribe(singletonList(topic));
         assertEquals(singleton(topic), consumer.subscription());
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(ShareSubscriptionChangeApplicationEvent.class));
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(ShareSubscriptionChangeEvent.class));
     }
 
     @Test
@@ -227,7 +230,7 @@ public class ShareConsumerImplTest {
         consumer.unsubscribe();
 
         assertTrue(consumer.subscription().isEmpty());
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(ShareUnsubscribeApplicationEvent.class));
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(ShareUnsubscribeEvent.class));
     }
 
     @Test
@@ -237,7 +240,7 @@ public class ShareConsumerImplTest {
 
         consumer.subscribe(Collections.emptyList());
         assertTrue(consumer.subscription().isEmpty());
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(ShareUnsubscribeApplicationEvent.class));
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(ShareUnsubscribeEvent.class));
     }
 
     @Test
@@ -349,11 +352,12 @@ public class ShareConsumerImplTest {
         consumer.subscribe(singletonList("topic1"));
         consumer.poll(Duration.ofMillis(100));
         verify(applicationEventHandler).add(any(PollEvent.class));
-        verify(applicationEventHandler).add(any(ShareSubscriptionChangeApplicationEvent.class));
+        verify(applicationEventHandler).add(any(ShareSubscriptionChangeEvent.class));
 
-        completeShareLeaveOnCloseApplicationEventSuccessfully();
+        completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
+        completeShareUnsubscribeApplicationEventSuccessfully();
         consumer.close();
-        verify(applicationEventHandler).addAndGet(any(ShareLeaveOnCloseEvent.class));
+        verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
     }
 
     private Properties requiredConsumerPropertiesAndGroupId(final String groupId) {
@@ -449,17 +453,17 @@ public class ShareConsumerImplTest {
 
     private void completeShareUnsubscribeApplicationEventSuccessfully() {
         doAnswer(invocation -> {
-            ShareUnsubscribeApplicationEvent event = invocation.getArgument(0);
+            ShareUnsubscribeEvent event = invocation.getArgument(0);
             event.future().complete(null);
             return null;
-        }).when(applicationEventHandler).add(ArgumentMatchers.isA(ShareUnsubscribeApplicationEvent.class));
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(ShareUnsubscribeEvent.class));
     }
 
-    private void completeShareLeaveOnCloseApplicationEventSuccessfully() {
+    private void completeShareAcknowledgeOnCloseApplicationEventSuccessfully() {
         doAnswer(invocation -> {
-            ShareLeaveOnCloseEvent event = invocation.getArgument(0);
+            ShareAcknowledgeOnCloseEvent event = invocation.getArgument(0);
             event.future().complete(null);
             return null;
-        }).when(applicationEventHandler).add(ArgumentMatchers.isA(ShareLeaveOnCloseEvent.class));
+        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ShareAcknowledgeOnCloseEvent.class));
     }
 }

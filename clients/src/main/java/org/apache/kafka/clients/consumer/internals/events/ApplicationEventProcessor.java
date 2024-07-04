@@ -37,7 +37,6 @@ import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
@@ -137,15 +136,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 return;
 
             case SHARE_SUBSCRIPTION_CHANGE:
-                process((ShareSubscriptionChangeApplicationEvent) event);
+                process((ShareSubscriptionChangeEvent) event);
                 return;
 
             case SHARE_UNSUBSCRIBE:
-                process((ShareUnsubscribeApplicationEvent) event);
+                process((ShareUnsubscribeEvent) event);
                 return;
 
-            case SHARE_LEAVE_ON_CLOSE:
-                process((ShareLeaveOnCloseEvent) event);
+            case SHARE_ACKNOWLEDGE_ON_CLOSE:
+                process((ShareAcknowledgeOnCloseEvent) event);
                 return;
 
             default:
@@ -154,12 +153,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final PollEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
-            return;
+        if (requestManagers.commitRequestManager.isPresent()) {
+            requestManagers.commitRequestManager.ifPresent(m -> m.updateAutoCommitTimer(event.pollTimeMs()));
+            requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
+        } else {
+            requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
         }
-
-        requestManagers.commitRequestManager.ifPresent(m -> m.updateAutoCommitTimer(event.pollTimeMs()));
-        requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
     }
 
     private void process(final AsyncCommitEvent event) {
@@ -331,7 +330,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * consumer join the share group if it is not part of it yet, or send the updated subscription if
      * it is already a member.
      */
-    private void process(final ShareSubscriptionChangeApplicationEvent ignored) {
+    private void process(final ShareSubscriptionChangeEvent ignored) {
         if (!requestManagers.shareHeartbeatRequestManager.isPresent()) {
             log.warn("Group membership manager not present when processing a subscribe event");
             return;
@@ -348,7 +347,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      *              execution for releasing the assignment completes, and the request to leave
      *              the group is sent out.
      */
-    private void process(final ShareUnsubscribeApplicationEvent event) {
+    private void process(final ShareUnsubscribeEvent event) {
         if (!requestManagers.shareHeartbeatRequestManager.isPresent()) {
             KafkaException error = new KafkaException("Group membership manager not present when processing an unsubscribe event");
             event.future().completeExceptionally(error);
@@ -360,21 +359,22 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         future.whenComplete(complete(event.future()));
     }
 
-    private void process(final ShareLeaveOnCloseEvent event) {
-        if (!requestManagers.shareHeartbeatRequestManager.isPresent()) {
-            event.future().complete(null);
+    /**
+     * Process event indicating that the consumer is closing. This will make the consumer
+     * complete pending acknowledgements.
+     *
+     * @param event Acknowledge-on-close event containing a future that will complete when
+     *              the acknowledgements have responses.
+     */
+    private void process(final ShareAcknowledgeOnCloseEvent event) {
+        if (!requestManagers.shareConsumeRequestManager.isPresent()) {
+            KafkaException error = new KafkaException("Group membership manager not present when processing an acknowledge-on-close event");
+            event.future().completeExceptionally(error);
             return;
         }
 
-        requestManagers.shareConsumeRequestManager.ifPresent(scrm -> scrm.acknowledgeOnClose(event.acknowledgementsMap()));
-
-        ShareMembershipManager membershipManager =
-                Objects.requireNonNull(requestManagers.shareHeartbeatRequestManager.get().membershipManager(),
-                        "Expecting membership manager to be non-null");
-
-        log.debug("Leaving group before closing");
-        CompletableFuture<Void> future = membershipManager.leaveGroup();
-        // The future will be completed on heartbeat sent
+        ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
+        CompletableFuture<Void> future = manager.acknowledgeOnClose(event.acknowledgementsMap(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 

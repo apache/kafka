@@ -40,12 +40,12 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeAsyncEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeSyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
-import org.apache.kafka.clients.consumer.internals.events.ShareLeaveOnCloseEvent;
-import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -522,7 +522,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
                 // Trigger subscribe event to effectively join the group if not already part of it,
                 // or just send the new subscription to the broker.
-                applicationEventHandler.add(new ShareSubscriptionChangeApplicationEvent());
+                applicationEventHandler.add(new ShareSubscriptionChangeEvent());
             }
         } finally {
             release();
@@ -536,7 +536,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     public void unsubscribe() {
         acquireAndEnsureOpen();
         try {
-            ShareUnsubscribeApplicationEvent unsubscribeApplicationEvent = new ShareUnsubscribeApplicationEvent();
+            Timer timer = time.timer(Long.MAX_VALUE);
+            ShareUnsubscribeEvent unsubscribeApplicationEvent = new ShareUnsubscribeEvent(calculateDeadlineMs(timer));
             applicationEventHandler.add(unsubscribeApplicationEvent);
             log.info("Unsubscribing all topics");
 
@@ -831,13 +832,18 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         closeTimer.update();
 
         // Prepare shutting down the network thread
-        prepareShutdown(closeTimer, firstException);
-        closeTimer.update();
+        swallow(log, Level.ERROR, "Failed to release assignment before closing consumer",
+                () -> sendAcknowledgementsAndLeaveGroup(closeTimer, firstException), firstException);
+        swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback",
+                this::handleCompletedAcknowledgements, firstException);
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
-        swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback.", this::handleCompletedAcknowledgements,
-                firstException);
         closeTimer.update();
+
+        // close() can be called from inside one of the constructors. In that case, it's possible that neither
+        // the reaper nor the background event queue were constructed, so check them first to avoid NPE.
+        if (backgroundEventReaper != null && backgroundEventQueue != null)
+            backgroundEventReaper.reap(backgroundEventQueue);
 
         closeQuietly(kafkaShareConsumerMetrics, "kafka share consumer metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
@@ -858,12 +864,27 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     /**
      * Prior to closing the network thread, we need to make sure the following operations happen in the right sequence:
      * 1. commit pending acknowledgements and close any share sessions
-     * 2. send leave group
+     * 2. leave the group
      */
-    void prepareShutdown(final Timer timer, final AtomicReference<Throwable> firstException) {
+    private void sendAcknowledgementsAndLeaveGroup(final Timer timer, final AtomicReference<Throwable> firstException) {
         completeQuietly(
-                () -> applicationEventHandler.addAndGet(new ShareLeaveOnCloseEvent(acknowledgementsToSend(), calculateDeadlineMs(timer))),
-                "Failed to send leaveGroup heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
+                () -> {
+                    applicationEventHandler.addAndGet(new ShareAcknowledgeOnCloseEvent(acknowledgementsToSend(), calculateDeadlineMs(timer)));
+                },
+                "Failed to send pending acknowledgements with a timeout(ms)=" + timer.timeoutMs(), firstException);
+        timer.update();
+
+        ShareUnsubscribeEvent unsubscribeEvent = new ShareUnsubscribeEvent(calculateDeadlineMs(timer));
+        applicationEventHandler.add(unsubscribeEvent);
+        try {
+            processBackgroundEvents(unsubscribeEvent.future(), timer);
+            log.info("Completed releasing assignment and leaving group to close consumer.");
+        } catch (TimeoutException e) {
+            log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +
+                    "complete it within {} ms. It will proceed to close.", timer.timeoutMs());
+        } finally {
+            timer.update();
+        }
     }
 
     /**
