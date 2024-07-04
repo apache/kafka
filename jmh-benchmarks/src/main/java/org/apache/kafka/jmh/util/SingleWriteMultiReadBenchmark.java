@@ -64,7 +64,7 @@ public class SingleWriteMultiReadBenchmark {
     private Map<Integer, Integer> copyOnWriteMap;
 
     private int writeTimes;
-    volatile private ImmutableMap<Integer, Integer> pcollectionsImmutableMap;
+    private volatile ImmutableMap<Integer, Integer> pcollectionsImmutableMap;
 
     @Setup(Level.Invocation)
     public void setup() {
