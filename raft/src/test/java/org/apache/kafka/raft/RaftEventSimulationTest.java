@@ -866,12 +866,12 @@ public class RaftEventSimulationTest {
 
         long highWatermark() {
             return client.quorum().highWatermark()
-                .map(hw -> hw.offset)
+                .map(LogOffsetMetadata::offset)
                 .orElse(0L);
         }
 
         long logEndOffset() {
-            return log.endOffset().offset;
+            return log.endOffset().offset();
         }
 
         @Override
@@ -1016,7 +1016,7 @@ public class RaftEventSimulationTest {
             cluster.leaderHighWatermark().ifPresent(highWatermark -> {
                 long numReachedHighWatermark = cluster.nodes.entrySet().stream()
                     .filter(entry -> cluster.voters.containsKey(entry.getKey()))
-                    .filter(entry -> entry.getValue().log.endOffset().offset >= highWatermark)
+                    .filter(entry -> entry.getValue().log.endOffset().offset() >= highWatermark)
                     .count();
                 assertTrue(
                     numReachedHighWatermark >= cluster.majoritySize(),
