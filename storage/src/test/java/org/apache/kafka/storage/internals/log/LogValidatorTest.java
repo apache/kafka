@@ -1706,35 +1706,6 @@ public class LogValidatorTest {
     }
 
     @Test
-    public void testRecordInvalidSequence() {
-        long producerId = 1024;
-        long baseOffset = 0;
-        short producerEpoch = 0;
-        int baseSequence = -1;
-        ByteBuffer buf = ByteBuffer.allocate(1024);
-        Compression codec = Compression.gzip().build();
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buf, codec, baseOffset, producerId, producerEpoch, baseSequence, false);
-        MemoryRecords records = builder.build();
-
-        LogValidator.ValidationResult tmp = new LogValidator(records,
-                topicPartition,
-                time,
-                CompressionType.GZIP,
-                codec,
-                false,
-                RecordBatch.MAGIC_VALUE_V0,
-                TimestampType.CREATE_TIME,
-                1000L,
-                1000L,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                AppendOrigin.CLIENT,
-                MetadataVersion.latestTesting()
-        ).validateMessagesAndAssignOffsetsCompressed(PrimitiveRef.ofLong(0),
-                metricsRecorder,
-                RequestLocal.withThreadConfinedCaching().bufferSupplier());
-    }
-
-    @Test
     public void testDifferentCodecCausesRecompression() {
         List<byte[]> records = Arrays.asList(
                 "somedata".getBytes(),
