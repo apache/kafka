@@ -98,6 +98,7 @@ public class SimpleAssignorTest {
             MEMBER_A,
             new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
+                Optional.empty(),
                 Collections.emptySet(),
                 Assignment.EMPTY
             )
@@ -135,6 +136,7 @@ public class SimpleAssignorTest {
             MEMBER_A,
             new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
+                Optional.empty(),
                 mkSet(TOPIC_2_UUID),
                 Assignment.EMPTY
             )
@@ -170,11 +172,13 @@ public class SimpleAssignorTest {
 
         members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(TOPIC_1_UUID, TOPIC_3_UUID),
             Assignment.EMPTY
         ));
 
         members.put(MEMBER_B, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(TOPIC_1_UUID, TOPIC_3_UUID),
             Assignment.EMPTY
@@ -231,11 +235,13 @@ public class SimpleAssignorTest {
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
         members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(TOPIC_1_UUID, TOPIC_2_UUID),
             Assignment.EMPTY
         ));
 
         members.put(MEMBER_B, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(TOPIC_3_UUID),
             Assignment.EMPTY
@@ -243,6 +249,7 @@ public class SimpleAssignorTest {
 
         String memberC = "C";
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(TOPIC_2_UUID, TOPIC_3_UUID),
             Assignment.EMPTY
@@ -296,11 +303,13 @@ public class SimpleAssignorTest {
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
         members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(TOPIC_1_UUID, TOPIC_2_UUID),
             Assignment.EMPTY
         ));
 
         members.put(MEMBER_B, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             Collections.emptySet(),
             Assignment.EMPTY
