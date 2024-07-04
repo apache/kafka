@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -354,8 +355,10 @@ public class DedicatedMirrorIntegrationTest {
                         .map(TaskInfo::config)
                         .allMatch(predicate);
             } catch (Exception ex) {
-                if (ex instanceof RebalanceNeededException) {
-                    // RebalanceNeededException should be retry-able.
+                boolean retriable = (ex instanceof RebalanceNeededException)
+                        || ((ex instanceof ExecutionException) && (ex.getCause() instanceof RebalanceNeededException));
+                if (retriable) {
+                    // RebalanceNeededException should be retriable
                     // This happens when a worker has read a new config from the config topic, but hasn't completed the
                     // subsequent rebalance yet
                     throw ex;
