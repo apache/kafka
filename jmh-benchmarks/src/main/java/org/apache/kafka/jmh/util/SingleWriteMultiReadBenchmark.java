@@ -64,7 +64,7 @@ public class SingleWriteMultiReadBenchmark {
     private Map<Integer, Integer> copyOnWriteMap;
 
     private int writeTimes;
-    private ImmutableMap<Integer, Integer> pcollectionsImmutableMap;
+    volatile private ImmutableMap<Integer, Integer> pcollectionsImmutableMap;
 
     @Setup(Level.Invocation)
     public void setup() {
@@ -73,8 +73,8 @@ public class SingleWriteMultiReadBenchmark {
         concurrentHashMap = new ConcurrentHashMap<>(mapTemplate);
         copyOnWriteMap = new CopyOnWriteMap<>(mapTemplate);
         pcollectionsImmutableMap = PCollectionsImmutableMap.empty();
-        mapTemplate.entrySet().forEach(s ->
-                pcollectionsImmutableMap = pcollectionsImmutableMap.updated(s.getKey(), s.getValue())
+        mapTemplate.forEach((key, value) ->
+                pcollectionsImmutableMap = pcollectionsImmutableMap.updated(key, value)
         );
         writeTimes = (int) Math.round(writePercentage * TIMES);
     }
