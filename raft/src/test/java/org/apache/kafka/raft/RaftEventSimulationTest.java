@@ -20,7 +20,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
@@ -543,10 +545,7 @@ public class RaftEventSimulationTest {
             this.random = random;
 
             for (int nodeId = 0; nodeId < numVoters; nodeId++) {
-                voters.put(
-                    nodeId,
-                    new Node(nodeId, String.format("host-node-%d", nodeId), 1234)
-                );
+                voters.put(nodeId, nodeFromId(nodeId));
                 nodes.put(nodeId, new PersistentState(nodeId));
             }
 
@@ -730,8 +729,27 @@ public class RaftEventSimulationTest {
             nodes.put(nodeId, new PersistentState(nodeId));
         }
 
+        private static final int PORT = 1234;
+
         private static InetSocketAddress nodeAddress(Node node) {
             return InetSocketAddress.createUnresolved(node.host(), node.port());
+        }
+
+        private static Node nodeFromId(int nodeId) {
+            return new Node(nodeId, hostFromId(nodeId), PORT);
+        }
+
+        private static String hostFromId(int nodeId) {
+            return String.format("host-node-%d", nodeId);
+        }
+
+        private static Endpoints endpointsFromId(int nodeId, ListenerName listenerName) {
+            return Endpoints.fromInetSocketAddresses(
+                Collections.singletonMap(
+                    listenerName,
+                    InetSocketAddress.createUnresolved(hostFromId(nodeId), PORT)
+                )
+            );
         }
 
         void start(int nodeId) {
@@ -772,6 +790,7 @@ public class RaftEventSimulationTest {
                 FETCH_MAX_WAIT_MS,
                 clusterId.toString(),
                 Collections.emptyList(),
+                endpointsFromId(nodeId, channel.listenerName()),
                 logContext,
                 random,
                 quorumConfig
@@ -1236,8 +1255,20 @@ public class RaftEventSimulationTest {
 
             int correlationId = outbound.correlationId();
             Node destination = outbound.destination();
-            RaftRequest.Inbound inbound = new RaftRequest.Inbound(correlationId, outbound.apiVersion(), outbound.data(),
-                cluster.time.milliseconds());
+            RaftRequest.Inbound inbound = cluster
+                .nodeIfRunning(senderId)
+                .map(node ->
+                    new RaftRequest.Inbound(
+                        node.channel.listenerName(),
+                        correlationId,
+                        ApiMessageType
+                            .fromApiKey(outbound.data().apiKey())
+                            .highestSupportedVersion(true),
+                        outbound.data(),
+                        cluster.time.milliseconds()
+                    )
+                )
+                .get();
 
             if (!filters.get(destination.id()).acceptInbound(inbound))
                 return;

@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.ValidString;
 import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.types.Password;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

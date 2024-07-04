@@ -69,6 +69,7 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -1497,7 +1498,10 @@ public class TransactionManager {
                         break;
                     case TRANSACTION:
                         transactionCoordinator = node;
-
+                        break;
+                    default:
+                        log.error("Group coordinator lookup failed: Unexpected coordinator type in response");
+                        fatalError(new IllegalStateException("Group coordinator lookup failed: Unexpected coordinator type in response"));
                 }
                 result.done();
                 log.info("Discovered {} coordinator {}", coordinatorType.toString().toLowerCase(Locale.ROOT), node);

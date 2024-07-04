@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 
 import java.util.Collection;
 import java.util.Comparator;
@@ -25,7 +26,6 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
 
 /**
  * Wraps a priority queue of clients and returns the next valid candidate(s) based on the current task assignment

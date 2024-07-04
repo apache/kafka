@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

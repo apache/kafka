@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 
 import org.apache.kafka.common.compress.Compression;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

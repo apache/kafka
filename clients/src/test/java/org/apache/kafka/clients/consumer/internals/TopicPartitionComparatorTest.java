@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.common.TopicPartition;
+
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TopicPartitionComparatorTest {
     private static final TopicPartition TP1 = new TopicPartition("t1", 0);

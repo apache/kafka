@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
+
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * An implementation of {@link StoreFactory} which wraps an instantiated

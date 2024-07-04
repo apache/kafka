@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.clients.producer.Partitioner;
+import org.apache.kafka.common.Cluster;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;

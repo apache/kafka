@@ -20,8 +20,9 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.assignment.ClientTagAwareStandbyTaskAssignor.TagEntry;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -54,9 +55,9 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.computeTasksToRemainingStandbys;
 import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.createLeastLoadedPrioritySetConstrainedByAssignedTask;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -76,7 +77,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     private StandbyTaskAssignor standbyTaskAssignor;
 
-    @Before
+    @BeforeEach
     public void setup() {
         standbyTaskAssignor = new ClientTagAwareStandbyTaskAssignor();
     }
@@ -198,17 +199,19 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         }
 
         allActiveTasks.forEach(
-            activeTaskId -> assertEquals(String.format("Active task with id [%s] didn't match expected number " +
-                                                       "of remaining standbys value.", activeTaskId),
-                                         1,
-                                         tasksToRemainingStandbys.get(activeTaskId).longValue())
+            activeTaskId -> assertEquals(
+                1,
+                tasksToRemainingStandbys.get(activeTaskId).longValue(),
+                String.format("Active task with id [%s] didn't match expected number of remaining standbys value.", activeTaskId)
+            )
         );
 
         allActiveTasks.forEach(
-            activeTaskId -> assertEquals(String.format("Active task with id [%s] didn't match expected " +
-                                                       "client ID value.", activeTaskId),
-                                         taskToClientId.get(activeTaskId),
-                                         pendingStandbyTasksToClientId.get(activeTaskId))
+            activeTaskId -> assertEquals(
+                taskToClientId.get(activeTaskId),
+                pendingStandbyTasksToClientId.get(activeTaskId),
+                String.format("Active task with id [%s] didn't match expected client ID value.", activeTaskId)
+            )
         );
     }
 
@@ -796,7 +799,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
                                          "Expected any of %s, actual [%s]",
                                          client, Arrays.toString(expectedStandbyTaskCounts), standbyTaskCount);
 
-        assertTrue(msg, Arrays.stream(expectedStandbyTaskCounts).anyMatch(expectedStandbyTaskCount -> expectedStandbyTaskCount == standbyTaskCount));
+        assertTrue(Arrays.stream(expectedStandbyTaskCounts).anyMatch(expectedStandbyTaskCount -> expectedStandbyTaskCount == standbyTaskCount), msg);
     }
 
     private static boolean standbyClientsHonorRackAwareness(final TaskId activeTaskId,

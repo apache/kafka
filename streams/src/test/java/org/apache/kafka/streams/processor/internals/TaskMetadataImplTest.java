@@ -19,8 +19,9 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.processor.TaskId;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 import java.util.Map;
@@ -47,7 +48,7 @@ public class TaskMetadataImplTest {
 
     private TaskMetadata taskMetadata;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         taskMetadata = new TaskMetadataImpl(
             TASK_ID,

@@ -27,8 +27,8 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
 import java.util.Arrays;
-import java.util.SortedSet;
 import java.util.List;
+import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Function;

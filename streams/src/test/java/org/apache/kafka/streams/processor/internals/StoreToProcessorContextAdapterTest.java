@@ -21,16 +21,21 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.To;
-import org.junit.Before;
-import org.junit.Test;
-import static org.junit.Assert.assertThrows;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.Duration;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StoreToProcessorContextAdapterTest {
     @Mock
     private StateStoreContext delegate;
@@ -38,7 +43,7 @@ public class StoreToProcessorContextAdapterTest {
     @Mock
     private Punctuator punctuator;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         context = StoreToProcessorContextAdapter.adapt(delegate);
     }

@@ -77,4 +77,3 @@ public class InternalSinkRecord extends SinkRecord {
         return context;
     }
 }
-

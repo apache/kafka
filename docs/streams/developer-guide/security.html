@@ -98,7 +98,7 @@
                 then you must also include these SSL certificates in the correct locations within the Docker image.</p>
             <p>The snippet below shows the settings to enable client authentication and SSL encryption for data-in-transit between your
                 Kafka Streams application and the Kafka cluster it is reading and writing from:</p>
-            <pre class="line-numbers"><code class="language-bash"># Essential security settings to enable client authentication and SSL encryption
+            <pre><code class="language-bash"># Essential security settings to enable client authentication and SSL encryption
 bootstrap.servers=kafka.example.com:9093
 security.protocol=SSL
 ssl.truststore.location=/etc/security/tls/kafka.client.truststore.jks

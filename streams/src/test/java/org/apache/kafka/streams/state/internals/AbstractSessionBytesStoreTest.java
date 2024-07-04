@@ -37,14 +37,15 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.jupiter.api.Assertions;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -65,19 +67,21 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public abstract class AbstractSessionBytesStoreTest {
 
     static final long SEGMENT_INTERVAL = 60_000L;
     static final long RETENTION_PERIOD = 10_000L;
-
+    private static final String IN_MEMORY_STORE_NAME = "in-memory session store";
+    private static final String ROCK_DB_STORE_NAME = "rocksDB session store";
+    
     enum StoreType {
         RocksDBSessionStore,
         RocksDBTimeOrderedSessionStoreWithIndex,
@@ -91,13 +95,56 @@ public abstract class AbstractSessionBytesStoreTest {
 
     InternalMockProcessorContext context;
 
-    abstract <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
+    <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
                                                          final Serde<K> keySerde,
-                                                         final Serde<V> valueSerde);
+                                                         final Serde<V> valueSerde) {
+        switch (storeType()) {
+            case RocksDBSessionStore: {
+                return Stores.sessionStoreBuilder(
+                        Stores.persistentSessionStore(
+                                ROCK_DB_STORE_NAME,
+                                ofMillis(retentionPeriod)),
+                        keySerde,
+                        valueSerde).build();
+            }
+            case RocksDBTimeOrderedSessionStoreWithIndex: {
+                return Stores.sessionStoreBuilder(
+                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                                ROCK_DB_STORE_NAME,
+                                retentionPeriod,
+                                true
+                        ),
+                        keySerde,
+                        valueSerde
+                ).build();
+            }
+            case RocksDBTimeOrderedSessionStoreWithoutIndex: {
+                return Stores.sessionStoreBuilder(
+                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                                ROCK_DB_STORE_NAME,
+                                retentionPeriod,
+                                false
+                        ),
+                        keySerde,
+                        valueSerde
+                ).build();
+            }
+            case InMemoryStore: {
+                return Stores.sessionStoreBuilder(
+                        Stores.inMemorySessionStore(
+                                IN_MEMORY_STORE_NAME,
+                                ofMillis(retentionPeriod)),
+                        keySerde,
+                        valueSerde).build();
+            }
+            default:
+                throw new IllegalStateException("Unknown StoreType: " + storeType());
+        }
+    }
 
-    abstract StoreType getStoreType();
+    abstract StoreType storeType();
 
-    @Before
+    @BeforeEach
     public void setUp() {
         sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
         recordCollector = new MockRecordCollector();
@@ -115,7 +162,7 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.init((StateStoreContext) context, sessionStore);
     }
 
-    @After
+    @AfterEach
     public void after() {
         sessionStore.close();
     }
@@ -197,11 +244,11 @@ public abstract class AbstractSessionBytesStoreTest {
     public void shouldFindSessionsForTimeRange() {
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 5L);
 
-        if (getStoreType() == StoreType.RocksDBSessionStore) {
+        if (storeType() == StoreType.RocksDBSessionStore) {
             assertThrows(
-                "This API is not supported by this implementation of SessionStore.",
                 UnsupportedOperationException.class,
-                () -> sessionStore.findSessions(0, 0)
+                () -> sessionStore.findSessions(0, 0),
+                "This API is not supported by this implementation of SessionStore."
             );
             return;
         }
@@ -892,7 +939,7 @@ public abstract class AbstractSessionBytesStoreTest {
     @Test
     public void shouldRemoveExpired() {
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
-        if (getStoreType() == StoreType.InMemoryStore) {
+        if (storeType() == StoreType.InMemoryStore) {
             sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
             sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
 
@@ -909,12 +956,12 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
             sessionStore.findSessions("a", "b", 0L, Long.MAX_VALUE)
         ) {
-            if (getStoreType() == StoreType.InMemoryStore) {
+            if (storeType() == StoreType.InMemoryStore) {
                 assertEquals(valuesToSet(iterator), new HashSet<>(Arrays.asList(2L, 3L, 4L)));
             } else {
                 // The 2 records with values 2L and 3L are considered expired as
                 // their end times < observed stream time - retentionPeriod + 1.
-                Assertions.assertEquals(valuesToSet(iterator), new HashSet<>(Collections.singletonList(4L)));
+                assertEquals(valuesToSet(iterator), new HashSet<>(Collections.singletonList(4L)));
             }
         }
     }
@@ -947,32 +994,32 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                      sessionStore.findSessions("p", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)
         ) {
-            Assertions.assertEquals(mkSet(2L), valuesToSet(iterator));
+            assertEquals(mkSet(2L), valuesToSet(iterator));
         }
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                      sessionStore.backwardFindSessions("p", systemTime - 5 * RETENTION_PERIOD, systemTime - 4 * RETENTION_PERIOD)
         ) {
-            Assertions.assertFalse(iterator.hasNext());
+            assertFalse(iterator.hasNext());
         }
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                      sessionStore.findSessions("p", "r", systemTime - 5 * RETENTION_PERIOD, systemTime - 4 * RETENTION_PERIOD)
         ) {
-            Assertions.assertFalse(iterator.hasNext());
+            assertFalse(iterator.hasNext());
         }
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                      sessionStore.findSessions("p", "r", systemTime - RETENTION_PERIOD, systemTime - RETENTION_PERIOD / 2)
         ) {
-            Assertions.assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
+            assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
         }
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                      sessionStore.findSessions("p", "r", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)
         ) {
-            Assertions.assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
+            assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
         }
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                      sessionStore.backwardFindSessions("p", "r", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)
         ) {
-            Assertions.assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
+            assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
         }
     }
 }

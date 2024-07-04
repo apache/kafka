@@ -20,8 +20,8 @@ package kafka.test.junit;
 import kafka.test.ClusterConfig;
 import kafka.test.annotation.ClusterTemplate;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 import java.lang.reflect.Method;
