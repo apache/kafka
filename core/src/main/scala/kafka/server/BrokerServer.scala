@@ -379,11 +379,6 @@ class BrokerServer(
         featuresRemapped,
         logManager.readBrokerEpochFromCleanShutdownFiles()
       )
-      // If the BrokerLifecycleManager's initial catch-up future fails, it means we timed out
-      // or are shutting down before we could catch up. Therefore, also fail the firstPublishFuture.
-      lifecycleManager.initialCatchUpFuture.whenComplete((_, e) => {
-        if (e != null) brokerMetadataPublisher.firstPublishFuture.completeExceptionally(e)
-      })
 
       // Create and initialize an authorizer if one is configured.
       authorizer = config.createNewAuthorizer()
@@ -488,6 +483,12 @@ class BrokerServer(
         () => lifecycleManager.resendBrokerRegistrationUnlessZkMode())
       metadataPublishers.add(brokerRegistrationTracker)
 
+
+      // If the BrokerLifecycleManager's initial catch-up future fails, it means we timed out
+      // or are shutting down before we could catch up. Therefore, also fail the firstPublishFuture.
+      lifecycleManager.initialCatchUpFuture.whenComplete((_, e) => {
+        if (e != null) brokerMetadataPublisher.firstPublishFuture.completeExceptionally(e)
+      })
 
       // Register parts of the broker that can be reconfigured via dynamic configs.  This needs to
       // be done before we publish the dynamic configs, so that we don't miss anything.
