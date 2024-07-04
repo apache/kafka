@@ -1377,13 +1377,16 @@ public final class RaftClientTestContext {
         FetchRequestData request = RaftUtil.singletonFetchRequest(
             metadataPartition,
             metadataTopicId,
-            fetchPartition -> fetchPartition
-                .setCurrentLeaderEpoch(epoch)
-                .setLastFetchedEpoch(lastFetchedEpoch)
-                .setFetchOffset(fetchOffset)
-                .setReplicaDirectoryId(
-                    replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID)
-                )
+            fetchPartition -> {
+                fetchPartition
+                    .setCurrentLeaderEpoch(epoch)
+                    .setLastFetchedEpoch(lastFetchedEpoch)
+                    .setFetchOffset(fetchOffset);
+                if (kip853Rpc) {
+                    fetchPartition
+                        .setReplicaDirectoryId(replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID));
+                }
+            }
         );
         return request
             .setMaxWaitMs(maxWaitTimeMs)
