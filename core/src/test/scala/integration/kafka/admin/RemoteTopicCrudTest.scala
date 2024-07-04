@@ -391,8 +391,8 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
         }
         if (topicConfig.contains(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG)) {
           result = result &&
-            topicConfig.getProperty(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG) ==
-              logBuffer.head.config.remoteLogDisablePolicy()
+            topicConfig.getProperty(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG).equals(
+              logBuffer.head.config.remoteLogDisablePolicy())
         }
       }
       result

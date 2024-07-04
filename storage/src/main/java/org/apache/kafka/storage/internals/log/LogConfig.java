@@ -185,7 +185,6 @@ public class LogConfig extends AbstractConfig {
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
-    public static final String DEFAULT_REMOTE_LOG_DISABLE_POLICY = "retain";
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details
      * Keep DEFAULT_MESSAGE_FORMAT_VERSION as a way to handle the deprecated value */
@@ -326,7 +325,7 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.LOCAL_LOG_RETENTION_MS_DOC)
                 .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
-                .defineInternal(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG, STRING, DEFAULT_REMOTE_LOG_DISABLE_POLICY,
+                .defineInternal(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG, STRING, TopicConfig.REMOTE_LOG_DISABLE_POLICY_RETAIN,
                         in(TopicConfig.REMOTE_LOG_DISABLE_POLICY_RETAIN, TopicConfig.REMOTE_LOG_DISABLE_POLICY_DELETE),
                         MEDIUM, TopicConfig.REMOTE_LOG_DISABLE_POLICY_DOC);
     }
