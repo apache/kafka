@@ -112,20 +112,21 @@ object StorageTool extends Logging {
       setNodeId(config.nodeId).
       build()
     val standaloneMode = namespace.getBoolean("standalone")
-    var advertisedListenerEndpoints: collection.Seq[kafka.cluster.EndPoint] = List()
 
     val controllersQuorumVoters = namespace.getString("controller_quorum_voters")
     if(standaloneMode && controllersQuorumVoters != null) {
       throw new TerseFailure("Both --standalone and --controller-quorum-voters were set. Only one of the two flags can be set.")
     }
 
+    var listeners: util.Map[ListenerName, InetSocketAddress] = new util.HashMap()
     if (standaloneMode) {
-      advertisedListenerEndpoints = config.effectiveAdvertisedBrokerListeners
+      listeners = createStandaloneVoterMap(config)
     } else if(controllersQuorumVoters != null) {
       if (!validateControllerQuorumVoters(controllersQuorumVoters)) {
         throw new TerseFailure("Expected schema for --controller-quorum-voters is <replica-id>[-<replica-directory-id>]@<host>:<port>")
       }
-      advertisedListenerEndpoints = config.effectiveAdvertisedControllerListeners
+      val controllerQuorumVoterMap: util.Map[Integer, InetSocketAddress] = parseVoterConnections(Collections.singletonList(controllersQuorumVoters))
+      listeners = parseControllerQuorumVotersMap(controllerQuorumVoterMap, metaProperties, config)
     }
 
     val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
@@ -163,7 +164,7 @@ object StorageTool extends Logging {
         "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
     }
     formatCommand(System.out, directories, metaProperties, bootstrapMetadata,
-      metadataVersion, ignoreFormatted, advertisedListenerEndpoints, controllersQuorumVoters)
+      metadataVersion, ignoreFormatted, listeners)
   }
 
   private def validateMetadataVersion(metadataVersion: MetadataVersion, config: KafkaConfig): Unit = {
@@ -542,12 +543,11 @@ object StorageTool extends Logging {
     metaProperties: MetaProperties,
     metadataVersion: MetadataVersion,
     ignoreFormatted: Boolean,
-    advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint],
-    controllersQuorumVoters: String
+    listeners: util.Map[ListenerName, InetSocketAddress]
   ): Int = {
     val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, None, "format command")
     formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted,
-      advertisedListenerEndpoints, controllersQuorumVoters)
+      listeners)
   }
 
   def formatCommand(
@@ -557,8 +557,7 @@ object StorageTool extends Logging {
     bootstrapMetadata: BootstrapMetadata,
     metadataVersion: MetadataVersion,
     ignoreFormatted: Boolean,
-    advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint],
-    controllersQuorumVoters: String
+    listeners: util.Map[ListenerName, InetSocketAddress]
   ): Int = {
     if (directories.isEmpty) {
       throw new TerseFailure("No log directories found in the configuration.")
@@ -602,40 +601,11 @@ object StorageTool extends Logging {
         })
       })
       copier.writeLogDirChanges()
-      if (controllersQuorumVoters != null) {
+      if (listeners != null && !listeners.isEmpty) {
         metaPropertiesEnsemble.emptyLogDirs().forEach(logDir => {
-          val nodeId = copier.logDirProps().get(logDir).nodeId()
-          val controllerQuorumVoterMap: util.Map[Integer, InetSocketAddress] = parseVoterConnections(Collections.singletonList(controllersQuorumVoters))
-          val listeners: java.util.Map[ListenerName, InetSocketAddress] = new util.HashMap()
-          controllerQuorumVoterMap.keySet().forEach(replicaId => {
-            if (nodeId.getAsInt == replicaId){
-              val listenerNameOption = advertisedListenerEndpoints.
-                find {
-                  endpoint =>
-                    endpoint.port == controllerQuorumVoterMap.get(replicaId).getPort &&
-                      (controllerQuorumVoterMap.get(replicaId).getHostString.split("//").contains(endpoint.host)
-                    || (endpoint.host == null && controllerQuorumVoterMap.get(replicaId).getHostString.contains("localhost")))
-                }.
-                map(_.listenerName)
-              listenerNameOption match {
-                case Some(listenerName) =>
-                  listeners.put(listenerName, controllerQuorumVoterMap.get(replicaId))
-                case None =>
-                  // No matching endpoint was found
-                  throw new TerseFailure(s"No matching endpoint was found in controller quorum voters")
-              }
-            }
-          })
-          // write only once for all listeners
-          writeCheckpointFile(stream, logDir, copier.logDirProps().get(logDir), listeners)
-        })
-      } else if (advertisedListenerEndpoints.nonEmpty) { // standalone mode
-        metaPropertiesEnsemble.emptyLogDirs().forEach(logDir => {
-          val listeners: java.util.Map[ListenerName, InetSocketAddress] = new util.HashMap()
-          advertisedListenerEndpoints.foreach(endpoint => {
-            listeners.put(endpoint.listenerName, new InetSocketAddress(endpoint.host, endpoint.port))
-          })
-          writeCheckpointFile(stream, logDir, copier.logDirProps().get(logDir), listeners)
+          val voterSet: VoterSet = getVoterSet(metaProperties.nodeId(),
+            copier.logDirProps().get(logDir).directoryId().get(), listeners)
+          writeCheckpointFile(stream, logDir, voterSet)
         })
       }
     }
@@ -665,18 +635,13 @@ object StorageTool extends Logging {
     }.toMap
   }
 
-  def writeCheckpointFile(stream: PrintStream, logDir: String, metaProperties: MetaProperties,
-                          listeners: java.util.Map[ListenerName, InetSocketAddress]): Unit = {
+  def writeCheckpointFile(stream: PrintStream, logDir: String,
+                          voterSet: VoterSet): Unit = {
     val snapshotDir = createLogDirectory(new File(logDir), CLUSTER_METADATA_TOPIC_NAME)
     // Create the raw snapshot writer
     val rawSnapshotWriter = FileRawSnapshotWriter.create(snapshotDir.toPath, BOOTSTRAP_SNAPSHOT_ID)
 
-    if(!listeners.isEmpty){
-      if (!metaProperties.nodeId().isPresent) {
-        throw new TerseFailure(s"Error while formatting. node.id is missing in the meta.properties")
-      }
-
-      val voterSet: VoterSet = getVoterSet(metaProperties.nodeId(), metaProperties.directoryId().get(), listeners)
+    if(voterSet != null){
       val builder = new RecordsSnapshotWriter.Builder()
         .setKraftVersion(1)
         .setVoterSet(Optional.of(voterSet))
@@ -696,6 +661,42 @@ object StorageTool extends Logging {
     val endpoints: Endpoints = Endpoints.fromInetSocketAddresses(listeners)
     val voterSet = VoterSet.fromMap(endpoints, nodeId.getAsInt, directoryId)
     voterSet
+  }
+
+  def createStandaloneVoterMap(config: KafkaConfig): util.Map[ListenerName, InetSocketAddress] = {
+    val advertisedListenerEndpoints = config.effectiveAdvertisedControllerListeners
+    val listeners: util.Map[ListenerName, InetSocketAddress] = new util.HashMap()
+    advertisedListenerEndpoints.foreach(endpoint => {
+      val host: String = endpoint.host
+      listeners.put(endpoint.listenerName, new InetSocketAddress(host, endpoint.port))
+    })
+    listeners
+  }
+
+  private def parseControllerQuorumVotersMap(controllerQuorumVoterMap: util.Map[Integer, InetSocketAddress],
+                           metaProperties: MetaProperties,
+                           config: KafkaConfig): util.Map[ListenerName, InetSocketAddress] = {
+    val listeners: util.Map[ListenerName, InetSocketAddress] = new util.HashMap()
+    controllerQuorumVoterMap.keySet().forEach(replicaId => {
+      if (metaProperties.nodeId().getAsInt == replicaId) {
+        val listenerNameOption = config.effectiveAdvertisedControllerListeners.
+          find {
+            endpoint =>
+              endpoint.port == controllerQuorumVoterMap.get(replicaId).getPort &&
+                (controllerQuorumVoterMap.get(replicaId).getHostString.split("//").contains(endpoint.host)
+                  || (endpoint.host == null && controllerQuorumVoterMap.get(replicaId).getHostString.contains("localhost")))
+          }.
+          map(_.listenerName)
+        listenerNameOption match {
+          case Some(listenerName) =>
+            listeners.put(listenerName, controllerQuorumVoterMap.get(replicaId))
+          case None =>
+            // No matching endpoint was found
+            throw new TerseFailure(s"No matching endpoint was found in controller quorum voters")
+        }
+      }
+    })
+    listeners
   }
 
   private def createLogDirectory(logDir: File, logDirName: String): File = {
