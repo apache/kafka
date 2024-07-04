@@ -68,6 +68,8 @@ public class LeaderState<T> implements EpochState {
     private final Set<Integer> fetchedVoters = new HashSet<>();
     private final Timer checkQuorumTimer;
     private final int checkQuorumTimeoutMs;
+    private final Timer beginQuorumEpochTimer;
+    private final int beginQuorumEpochTimeoutMs;
 
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
@@ -102,6 +104,18 @@ public class LeaderState<T> implements EpochState {
         // use the 1.5x of fetch timeout to tolerate some network transition time or other IO time.
         this.checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
         this.checkQuorumTimer = time.timer(checkQuorumTimeoutMs);
+        this.beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
+        this.beginQuorumEpochTimer = time.timer(0);
+    }
+
+    public long timeUntilBeginQuorumEpochTimerExpires(long currentTimeMs) {
+        beginQuorumEpochTimer.update(currentTimeMs);
+        return beginQuorumEpochTimer.remainingMs();
+    }
+
+    public void resetBeginQuorumEpochTimer(long currentTimeMs) {
+        beginQuorumEpochTimer.update(currentTimeMs);
+        beginQuorumEpochTimer.reset(beginQuorumEpochTimeoutMs);
     }
 
     /**
@@ -224,11 +238,12 @@ public class LeaderState<T> implements EpochState {
         return this.grantingVoters;
     }
 
-    public Set<Integer> nonAcknowledgingVoters() {
-        Set<Integer> nonAcknowledging = new HashSet<>();
+    // visible for testing
+    Set<ReplicaKey> nonAcknowledgingVoters() {
+        Set<ReplicaKey> nonAcknowledging = new HashSet<>();
         for (ReplicaState state : voterStates.values()) {
             if (!state.hasAcknowledgedLeader)
-                nonAcknowledging.add(state.replicaKey.id());
+                nonAcknowledging.add(state.replicaKey);
         }
         return nonAcknowledging;
     }
@@ -389,10 +404,10 @@ public class LeaderState<T> implements EpochState {
         return isVoter(state.replicaKey) && maybeUpdateHighWatermark();
     }
 
-    public List<Integer> nonLeaderVotersByDescendingFetchOffset() {
+    public List<ReplicaKey> nonLeaderVotersByDescendingFetchOffset() {
         return followersByDescendingFetchOffset()
             .filter(state -> !state.matchesKey(localReplicaKey))
-            .map(state -> state.replicaKey.id())
+            .map(state -> state.replicaKey)
             .collect(Collectors.toList());
     }
 
@@ -453,17 +468,8 @@ public class LeaderState<T> implements EpochState {
     public DescribeQuorumResponseData.NodeCollection nodes(long currentTimeMs) {
         clearInactiveObservers(currentTimeMs);
 
-        DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection();
-
-        voterStates.values().forEach(replicaState -> {
-            if (nodes.find(replicaState.replicaKey.id()) == null) {
-                // KAFKA-16953 will add support for including the node listeners in the node
-                // collection
-                nodes.add(new DescribeQuorumResponseData.Node().setNodeId(replicaState.replicaKey.id()));
-            }
-        });
-
-        return nodes;
+        // KAFKA-16953 will add support for including the node listeners in the node collection
+        return new DescribeQuorumResponseData.NodeCollection();
     }
 
     private List<DescribeQuorumResponseData.ReplicaState> describeReplicaStates(
@@ -489,9 +495,10 @@ public class LeaderState<T> implements EpochState {
             lastCaughtUpTimestamp = replicaState.lastCaughtUpTimestamp;
             lastFetchTimestamp = replicaState.lastFetchTimestamp;
         }
+
+        // KAFKA-16953 will add support for the replica directory id
         return new DescribeQuorumResponseData.ReplicaState()
             .setReplicaId(replicaState.replicaKey.id())
-            .setReplicaDirectoryId(replicaState.replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
             .setLogEndOffset(replicaState.endOffset.map(md -> md.offset).orElse(-1L))
             .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
             .setLastFetchTimestamp(lastFetchTimestamp);

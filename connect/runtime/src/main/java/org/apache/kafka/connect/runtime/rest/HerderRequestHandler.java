@@ -28,7 +28,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -64,18 +63,8 @@ public class HerderRequestHandler {
         } catch (ExecutionException e) {
             throw e.getCause();
         } catch (StagedTimeoutException e) {
-            String message;
             Stage stage = e.stage();
-            if (stage.completed() != null) {
-                message = "Request timed out. The last operation the worker completed was "
-                        + stage.description() + ", which began at "
-                        + Instant.ofEpochMilli(stage.started()) + " and completed at "
-                        + Instant.ofEpochMilli(stage.completed());
-            } else {
-                message = "Request timed out. The worker is currently "
-                        + stage.description() + ", which began at "
-                        + Instant.ofEpochMilli(stage.started());
-            }
+            String message = "Request timed out. " + stage.summarize();
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), message);

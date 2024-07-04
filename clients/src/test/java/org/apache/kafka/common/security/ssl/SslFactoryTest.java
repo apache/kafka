@@ -21,7 +21,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.FileBasedStore;
@@ -73,10 +73,10 @@ public abstract class SslFactoryTest {
     @Test
     public void testSslFactoryConfiguration() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> serverSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
-        try (SslFactory sslFactory = new SslFactory(Mode.SERVER, null, true)) {
+        try (SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER, null, true)) {
             sslFactory.configure(serverSslConfig);
             //host and port are hints
             SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
@@ -91,7 +91,7 @@ public abstract class SslFactoryTest {
         //generate server configs for keystore with multiple certificate chain
         Map<String, Object> serverSslConfig = TestSslUtils.generateConfigsWithCertificateChains(tlsProtocol);
 
-        try (SslFactory sslFactory = new SslFactory(Mode.SERVER, null, true)) {
+        try (SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER, null, true)) {
             sslFactory.configure(serverSslConfig);
             SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
             assertNotNull(engine);
@@ -109,7 +109,7 @@ public abstract class SslFactoryTest {
                 tlsProtocol
         );
         serverSslConfig.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, testProviderCreator.getClass().getName());
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
         sslFactory.configure(serverSslConfig);
         assertNotNull(sslFactory.sslEngineFactory(), "SslEngineFactory not created");
         Security.removeProvider(testProviderCreator.getProvider().getName());
@@ -123,7 +123,7 @@ public abstract class SslFactoryTest {
                 TestTrustManagerFactory.ALGORITHM,
                 tlsProtocol
         );
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
         assertThrows(KafkaException.class, () -> sslFactory.configure(serverSslConfig));
     }
 
@@ -137,19 +137,19 @@ public abstract class SslFactoryTest {
         );
         serverSslConfig.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG,
                 "com.fake.ProviderClass1,com.fake.ProviderClass2");
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
         assertThrows(KafkaException.class, () -> sslFactory.configure(serverSslConfig));
     }
 
     @Test
     public void testSslFactoryWithoutPasswordConfiguration() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> serverSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
         // unset the password
         serverSslConfig.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
         try {
             sslFactory.configure(serverSslConfig);
         } catch (Exception e) {
@@ -160,11 +160,11 @@ public abstract class SslFactoryTest {
     @Test
     public void testClientMode() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.CLIENT)
+        Map<String, Object> clientSslConfig = sslConfigsBuilder(ConnectionMode.CLIENT)
                 .createNewTrustStore(trustStoreFile)
                 .useClientCert(false)
                 .build();
-        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.CLIENT);
         sslFactory.configure(clientSslConfig);
         //host and port are hints
         SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
@@ -174,19 +174,19 @@ public abstract class SslFactoryTest {
     @Test
     public void staleSslEngineFactoryShouldBeClosed() throws IOException, GeneralSecurityException {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> clientSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .useClientCert(false)
                 .build();
         clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
         sslFactory.configure(clientSslConfig);
         TestSslUtils.TestSslEngineFactory sslEngineFactory = (TestSslUtils.TestSslEngineFactory) sslFactory.sslEngineFactory();
         assertNotNull(sslEngineFactory);
         assertFalse(sslEngineFactory.closed);
 
         trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        clientSslConfig = sslConfigsBuilder(Mode.SERVER)
+        clientSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
         clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
@@ -200,10 +200,10 @@ public abstract class SslFactoryTest {
     @Test
     public void testReconfiguration() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> sslConfig = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> sslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
         sslFactory.configure(sslConfig);
         SslEngineFactory sslEngineFactory = sslFactory.sslEngineFactory();
         assertNotNull(sslEngineFactory, "SslEngineFactory not created");
@@ -215,7 +215,7 @@ public abstract class SslFactoryTest {
 
         // Verify that the SslEngineFactory is recreated on reconfigure() if config is changed
         trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        sslConfig = sslConfigsBuilder(Mode.SERVER)
+        sslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
         sslFactory.reconfigure(sslConfig);
@@ -252,13 +252,13 @@ public abstract class SslFactoryTest {
     @Test
     public void testReconfigurationWithoutTruststore() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> sslConfig = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> sslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
         sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
         sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
         sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG);
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
         sslFactory.configure(sslConfig);
         SSLContext sslContext = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext();
         assertNotNull(sslContext, "SSL context not created");
@@ -266,7 +266,7 @@ public abstract class SslFactoryTest {
                 "SSL context recreated unnecessarily");
         assertFalse(sslFactory.createSslEngine("localhost", 0).getUseClientMode());
 
-        Map<String, Object> sslConfig2 = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> sslConfig2 = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
         try {
@@ -280,13 +280,13 @@ public abstract class SslFactoryTest {
     @Test
     public void testReconfigurationWithoutKeystore() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> sslConfig = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> sslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
         sslConfig.remove(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
         sslConfig.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
         sslConfig.remove(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG);
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
         sslFactory.configure(sslConfig);
         SSLContext sslContext = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext();
         assertNotNull(sslContext, "SSL context not created");
@@ -295,7 +295,7 @@ public abstract class SslFactoryTest {
         assertFalse(sslFactory.createSslEngine("localhost", 0).getUseClientMode());
 
         File newTrustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        sslConfig = sslConfigsBuilder(Mode.SERVER)
+        sslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(newTrustStoreFile)
                 .build();
         sslConfig.remove(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
@@ -305,7 +305,7 @@ public abstract class SslFactoryTest {
         assertNotSame(sslContext, ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext(),
                 "SSL context not recreated");
 
-        sslConfig = sslConfigsBuilder(Mode.SERVER)
+        sslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(newTrustStoreFile)
                 .build();
         try {
@@ -319,13 +319,13 @@ public abstract class SslFactoryTest {
     @Test
     public void testPemReconfiguration() throws Exception {
         Properties props = new Properties();
-        props.putAll(sslConfigsBuilder(Mode.SERVER)
+        props.putAll(sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(null)
                 .usePem(true)
                 .build());
         TestSecurityConfig sslConfig = new TestSecurityConfig(props);
 
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
         sslFactory.configure(sslConfig.values());
         SslEngineFactory sslEngineFactory = sslFactory.sslEngineFactory();
         assertNotNull(sslEngineFactory, "SslEngineFactory not created");
@@ -360,10 +360,10 @@ public abstract class SslFactoryTest {
     @Test
     public void testKeyStoreTrustStoreValidation() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> serverSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
         sslFactory.configure(serverSslConfig);
         assertNotNull(sslFactory.sslEngineFactory(), "SslEngineFactory not created");
     }
@@ -372,13 +372,13 @@ public abstract class SslFactoryTest {
     public void testUntrustedKeyStoreValidationFails() throws Exception {
         File trustStoreFile1 = TestUtils.tempFile("truststore1", ".jks");
         File trustStoreFile2 = TestUtils.tempFile("truststore2", ".jks");
-        Map<String, Object> sslConfig1 = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> sslConfig1 = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile1)
                 .build();
-        Map<String, Object> sslConfig2 = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> sslConfig2 = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile2)
                 .build();
-        SslFactory sslFactory = new SslFactory(Mode.SERVER, null, true);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER, null, true);
         for (String key : Arrays.asList(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
                 SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
@@ -405,15 +405,15 @@ public abstract class SslFactoryTest {
 
     private void verifyKeystoreVerifiableUsingTruststore(boolean usePem, String tlsProtocol) throws Exception {
         File trustStoreFile1 = usePem ? null : TestUtils.tempFile("truststore1", ".jks");
-        Map<String, Object> sslConfig1 = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> sslConfig1 = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile1)
                 .usePem(usePem)
                 .build();
-        SslFactory sslFactory = new SslFactory(Mode.SERVER, null, true);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER, null, true);
         sslFactory.configure(sslConfig1);
 
         File trustStoreFile2 = usePem ? null : TestUtils.tempFile("truststore2", ".jks");
-        Map<String, Object> sslConfig2 = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> sslConfig2 = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile2)
                 .usePem(usePem)
                 .build();
@@ -441,12 +441,12 @@ public abstract class SslFactoryTest {
 
     private void verifyCertificateEntriesValidation(boolean usePem, String tlsProtocol) throws Exception {
         File trustStoreFile = usePem ? null : TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> serverSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .usePem(usePem)
                 .build();
         File newTrustStoreFile = usePem ? null : TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> newCnConfig = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> newCnConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(newTrustStoreFile)
                 .cn("Another CN")
                 .usePem(usePem)
@@ -469,12 +469,12 @@ public abstract class SslFactoryTest {
     @Test
     public void testClientSpecifiedSslEngineFactoryUsed() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.CLIENT)
+        Map<String, Object> clientSslConfig = sslConfigsBuilder(ConnectionMode.CLIENT)
                 .createNewTrustStore(trustStoreFile)
                 .useClientCert(false)
                 .build();
         clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
-        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.CLIENT);
         sslFactory.configure(clientSslConfig);
         assertInstanceOf(TestSslUtils.TestSslEngineFactory.class, sslFactory.sslEngineFactory(),
             "SslEngineFactory must be of expected type");
@@ -483,12 +483,12 @@ public abstract class SslFactoryTest {
     @Test
     public void testEngineFactoryClosed() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.CLIENT)
+        Map<String, Object> clientSslConfig = sslConfigsBuilder(ConnectionMode.CLIENT)
                 .createNewTrustStore(trustStoreFile)
                 .useClientCert(false)
                 .build();
         clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
-        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.CLIENT);
         sslFactory.configure(clientSslConfig);
         TestSslUtils.TestSslEngineFactory engine = (TestSslUtils.TestSslEngineFactory) sslFactory.sslEngineFactory();
         assertFalse(engine.closed);
@@ -502,12 +502,12 @@ public abstract class SslFactoryTest {
     @Test
     public void testServerSpecifiedSslEngineFactoryUsed() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> serverSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .useClientCert(false)
                 .build();
         serverSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
         sslFactory.configure(serverSslConfig);
         assertInstanceOf(TestSslUtils.TestSslEngineFactory.class, sslFactory.sslEngineFactory(),
             "SslEngineFactory must be of expected type");
@@ -519,24 +519,24 @@ public abstract class SslFactoryTest {
     @Test
     public void testInvalidSslEngineFactory() throws Exception {
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.CLIENT)
+        Map<String, Object> clientSslConfig = sslConfigsBuilder(ConnectionMode.CLIENT)
                 .createNewTrustStore(trustStoreFile)
                 .useClientCert(false)
                 .build();
         clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, String.class);
-        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.CLIENT);
         assertThrows(ClassCastException.class, () -> sslFactory.configure(clientSslConfig));
     }
 
     @Test
     public void testUsedConfigs() throws IOException, GeneralSecurityException {
-        Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER)
+        Map<String, Object> serverSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(TestUtils.tempFile("truststore", ".jks"))
                 .useClientCert(false)
                 .build();
         serverSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
         TestSecurityConfig securityConfig = new TestSecurityConfig(serverSslConfig);
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
         sslFactory.configure(securityConfig.values());
         assertFalse(securityConfig.unused().contains(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG));
     }
@@ -603,7 +603,7 @@ public abstract class SslFactoryTest {
         return store.get();
     }
 
-    private TestSslUtils.SslConfigsBuilder sslConfigsBuilder(Mode mode) {
-        return new TestSslUtils.SslConfigsBuilder(mode).tlsProtocol(tlsProtocol);
+    private TestSslUtils.SslConfigsBuilder sslConfigsBuilder(ConnectionMode connectionMode) {
+        return new TestSslUtils.SslConfigsBuilder(connectionMode).tlsProtocol(tlsProtocol);
     }
 }

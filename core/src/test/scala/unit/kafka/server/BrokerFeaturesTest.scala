@@ -18,7 +18,7 @@
 package kafka.server
 
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
-import org.apache.kafka.server.common.{Features => ServerFeatures, MetadataVersion}
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -95,7 +95,6 @@ class BrokerFeaturesTest {
 
     val expectedFeatures = Map[String, Short](
       MetadataVersion.FEATURE_NAME -> MetadataVersion.latestTesting().featureLevel(),
-      ServerFeatures.GROUP_VERSION.featureName() -> ServerFeatures.GROUP_VERSION.latestTesting(),
       "test_feature_1" -> 4,
       "test_feature_2" -> 3,
       "test_feature_3" -> 7)
