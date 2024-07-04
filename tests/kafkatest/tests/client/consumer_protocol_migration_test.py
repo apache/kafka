@@ -19,6 +19,10 @@ from ducktape.mark.resource import cluster
 
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
 from kafkatest.services.kafka import TopicPartition, quorum, consumer_group
+from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, \
+    LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, \
+    LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, \
+    LATEST_3_7, LATEST_3_8, DEV_BRANCH, KafkaVersion
 
 class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     TOPIC = "test_topic"
@@ -30,29 +34,33 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     COOPERATIVE_STICKEY = "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"
     all_assignment_strategies = [RANGE, ROUND_ROBIN, COOPERATIVE_STICKEY, STICKY]
 
+    all_consumer_versions = [LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, \
+                             LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, \
+                             LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, \
+                             LATEST_3_7, LATEST_3_8, DEV_BRANCH]
+
     def __init__(self, test_context):
-        super(ConsumerProtocolMigrationTest, self).__init__(test_context, num_consumers=2, num_producers=1,
-                                                            num_zk=0, num_brokers=2, topics={
+        super(ConsumerProtocolMigrationTest, self).__init__(test_context, num_consumers=5, num_producers=1,
+                                                            num_zk=0, num_brokers=1, topics={
                 self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 }
             })
 
-    @cluster(num_nodes=6)
+    @cluster(num_nodes=8)
     @matrix(
         clean_shutdown=[True, False],
         enable_autocommit=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
         consumer_group_migration_policy=["bidirectional"],
-        assignment_strategy=all_assignment_strategies,
-        bounce_mode=["all", "rolling"]
+        consumer_version=[str(v) for v in all_consumer_versions],
+        assignment_strategy=all_assignment_strategies
     )
-    def test_boucing_consumer(self, clean_shutdown, enable_autocommit, metadata_quorum, use_new_coordinator,
-                              consumer_group_migration_policy, assignment_strategy, bounce_mode):
+    def test_consumer_all_upgrade(self, clean_shutdown, enable_autocommit, metadata_quorum, use_new_coordinator,
+                                  consumer_group_migration_policy, consumer_version, assignment_strategy):
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
-                                       assignment_strategy=assignment_strategy, enable_autocommit=enable_autocommit)
-        self.mark_for_collect(consumer, 'verifiable_consumer_stdout')
-        consumer.start()
+                                       version=consumer_version, assignment_strategy=assignment_strategy,
+                                       enable_autocommit=enable_autocommit)
 
         producer.start()
         self.await_produced_messages(producer)
@@ -63,29 +71,68 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
 
         consumer.group_protocol = consumer_group.consumer_group_protocol
 
-        if bounce_mode == "all":
-            for node in consumer.nodes:
-                consumer.stop_node(node, clean_shutdown)
+        for node in consumer.nodes:
+            consumer.stop_node(node, clean_shutdown)
 
-            wait_until(lambda: len(consumer.dead_nodes()) == self.num_consumers, timeout_sec=10,
-                       err_msg="Timed out waiting for the consumers to shutdown")
+            wait_until(lambda: len(consumer.dead_nodes()) == 1,
+                       timeout_sec=self.session_timeout_sec+5,
+                       err_msg="Timed out waiting for the consumer to shutdown")
 
-            for node in consumer.nodes:
-                consumer.start_node(node)
+            consumer.start_node(node)
 
             self.await_all_members(consumer)
             self.await_consumed_messages(consumer)
-        else:
-            for node in consumer.nodes:
-                consumer.stop_node(node, clean_shutdown)
 
-                wait_until(lambda: len(consumer.dead_nodes()) == 1,
-                           timeout_sec=self.session_timeout_sec+5,
-                           err_msg="Timed out waiting for the consumer to shutdown")
+        for node in consumer.nodes:
+            consumer.stop_node(node, clean_shutdown)
 
-                consumer.start_node(node)
+        wait_until(lambda: len(consumer.dead_nodes()) == self.num_consumers, timeout_sec=10,
+                   err_msg="Timed out waiting for the consumers to shutdown")
 
-                self.await_all_members(consumer)
-                self.await_consumed_messages(consumer)
+        for node in consumer.nodes:
+            consumer.start_node(node)
+
+        self.await_all_members(consumer)
+        self.await_consumed_messages(consumer)
+
+        consumer.stop_all()
+
+    @cluster(num_nodes=8)
+    @matrix(
+        clean_shutdown=[True, False],
+        enable_autocommit=[True, False],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        consumer_group_migration_policy=["bidirectional"],
+        consumer_version=[str(v) for v in all_consumer_versions],
+        assignment_strategy=all_assignment_strategies
+    )
+    def test_consumer_rolling_upgrade(self, clean_shutdown, enable_autocommit, metadata_quorum, use_new_coordinator,
+                                      consumer_group_migration_policy, consumer_version, assignment_strategy):
+        producer = self.setup_producer(self.TOPIC)
+        consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
+                                       version=consumer_version, assignment_strategy=assignment_strategy,
+                                       enable_autocommit=enable_autocommit)
+
+        producer.start()
+        self.await_produced_messages(producer)
+
+        consumer.start()
+        self.await_all_members(consumer)
+        self.await_consumed_messages(consumer)
+
+        consumer.group_protocol = consumer_group.consumer_group_protocol
+
+        for node in consumer.nodes:
+            consumer.stop_node(node, clean_shutdown)
+
+            wait_until(lambda: len(consumer.dead_nodes()) == 1,
+                       timeout_sec=self.session_timeout_sec+5,
+                       err_msg="Timed out waiting for the consumer to shutdown")
+
+            consumer.start_node(node)
+
+            self.await_all_members(consumer)
+            self.await_consumed_messages(consumer)
 
         consumer.stop_all()

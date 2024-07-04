@@ -266,7 +266,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def _worker(self, idx, node):
         with self.lock:
-            # if node not in self.event_handlers:
             if self.is_eager():
                 self.event_handlers[node] = ConsumerEventHandler(node, self.verify_offsets, idx)
             elif self.group_protocol == consumer_group.consumer_group_protocol:
