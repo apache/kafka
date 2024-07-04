@@ -39,17 +39,17 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
     public static final String OVERVIEW_DOC =
             "Set the schema name, version or both on the record's key (<code>" + Key.class.getName() + "</code>)"
                     + " or value (<code>" + Value.class.getName() + "</code>) schema.";
-    private interface ConfigName {
 
+    private interface ConfigName {
         String SCHEMA_NAME = "schema.name";
         String SCHEMA_VERSION = "schema.version";
-        String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
+        String REPLACE_NULL_WITH_DEFAULT = "replace.null.with.default";
     }
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(ConfigName.SCHEMA_NAME, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, "Schema name to set.")
             .define(ConfigName.SCHEMA_VERSION, ConfigDef.Type.INT, null, ConfigDef.Importance.HIGH, "Schema version to set.")
-            .define(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
+            .define(ConfigName.REPLACE_NULL_WITH_DEFAULT, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
                     "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
     private String schemaName;
@@ -66,7 +66,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
         schemaName = config.getString(ConfigName.SCHEMA_NAME);
         schemaVersion = config.getInt(ConfigName.SCHEMA_VERSION);
-        replaceNullWithDefault = config.getBoolean(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG);
+        replaceNullWithDefault = config.getBoolean(ConfigName.REPLACE_NULL_WITH_DEFAULT);
 
         if (schemaName == null && schemaVersion == null) {
             throw new ConfigException("Neither schema name nor version configured");
@@ -101,7 +101,6 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
     }
 
     private Object getFieldValue(Struct value, Field field) {
-
         if (replaceNullWithDefault) {
             return value.get(field);
         }

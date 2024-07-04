@@ -114,7 +114,7 @@ public class CastTest {
     public void castFieldWithDefaultValueRecordWithSchema(boolean replaceNullWithDefault, Object expectedValue) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(Cast.SPEC_CONFIG, "magic:string");
-        configs.put(Cast.REPLACE_NULL_WITH_DEFAULT_CONFIG, replaceNullWithDefault);
+        configs.put(Cast.REPLACE_NULL_WITH_DEFAULT, replaceNullWithDefault);
         xformValue.configure(configs);
         Schema structSchema = SchemaBuilder.struct()
                 .field("magic", SchemaBuilder.int32().optional().defaultValue(10).build()).build();

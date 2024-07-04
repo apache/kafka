@@ -67,7 +67,7 @@ public class SetSchemaMetadataTest {
         xform.configure(Collections.singletonMap("schema.version", 42));
         final SinkRecord record = new SinkRecord("", 0, null, null, SchemaBuilder.struct().build(), null, 0);
         final SinkRecord updatedRecord = xform.apply(record);
-        assertEquals(Integer.valueOf(42), updatedRecord.valueSchema().version());
+        assertEquals(42, updatedRecord.valueSchema().version());
     }
 
     @Test
@@ -83,7 +83,7 @@ public class SetSchemaMetadataTest {
         final SinkRecord updatedRecord = xform.apply(record);
 
         assertEquals("foo", updatedRecord.valueSchema().name());
-        assertEquals(Integer.valueOf(42), updatedRecord.valueSchema().version());
+        assertEquals(42, updatedRecord.valueSchema().version());
     }
 
     @Test
@@ -109,7 +109,7 @@ public class SetSchemaMetadataTest {
         final SinkRecord updatedRecord = xform.apply(record);
 
         assertEquals("foo", updatedRecord.valueSchema().name());
-        assertEquals(Integer.valueOf(42), updatedRecord.valueSchema().version());
+        assertEquals(42, updatedRecord.valueSchema().version());
 
         // Make sure the struct's schema and fields all point to the new schema
         assertMatchingSchema((Struct) updatedRecord.value(), updatedRecord.valueSchema());
@@ -139,7 +139,7 @@ public class SetSchemaMetadataTest {
         final SinkRecord updatedRecord = xform.apply(record);
 
         assertEquals("foo", updatedRecord.valueSchema().name());
-        assertEquals(Integer.valueOf(42), updatedRecord.valueSchema().version());
+        assertEquals(42, updatedRecord.valueSchema().version());
 
         // Make sure the struct's schema and fields all point to the new schema
         assertMatchingSchema((Struct) updatedRecord.value(), updatedRecord.valueSchema());

@@ -292,7 +292,7 @@ public class HeaderFromTest {
                             asList("field1", "field2"), asList("inserted1", "inserted2"), HeaderFrom.Operation.MOVE, false,
                             new RecordBuilder()
                                     .addHeader("header1", STRING_SCHEMA, "existing-value")
-                                    .addHeader("inserted1", STRING_SCHEMA, "field1-value")
+                                    .addHeader("inserted1", SchemaBuilder.string().defaultValue("default").optional().build(), "field1-value")
                                     .addHeader("inserted2", SchemaBuilder.string().defaultValue("default").optional().build(), null)
                     ));
         }
@@ -304,7 +304,7 @@ public class HeaderFromTest {
         result.put(HeaderFrom.HEADERS_FIELD, headers);
         result.put(HeaderFrom.FIELDS_FIELD, transformFields);
         result.put(HeaderFrom.OPERATION_FIELD, operation.toString());
-        result.put(HeaderFrom.REPLACE_NULL_WITH_DEFAULT_CONFIG, useFieldDefault);
+        result.put(HeaderFrom.REPLACE_NULL_WITH_DEFAULT, useFieldDefault);
         return result;
     }
 

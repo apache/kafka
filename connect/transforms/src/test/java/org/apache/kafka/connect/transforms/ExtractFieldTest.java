@@ -24,10 +24,14 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.field.FieldSyntaxVersion;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -36,6 +40,13 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class ExtractFieldTest {
     private final ExtractField<SinkRecord> xformKey = new ExtractField.Key<>();
     private final ExtractField<SinkRecord> xformValue = new ExtractField.Value<>();
+
+    public static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of(false, null),
+                Arguments.of(true, 42)
+        );
+    }
 
     @AfterEach
     public void teardown() {
@@ -191,12 +202,13 @@ public class ExtractFieldTest {
         assertEquals(AppInfoParser.getVersion(), xformKey.version());
     }
 
-    @Test
-    public void testUnsetOptionalFieldIsNull() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testUnsetOptionalKey(boolean replaceNullWithDefault, Object expectedValue) {
 
         Map<String, Object> config = new HashMap<>();
         config.put("field", "optional_with_default");
-        config.put("replace.null.with.default", false);
+        config.put("replace.null.with.default", replaceNullWithDefault);
 
         xformKey.configure(config);
 
@@ -210,37 +222,16 @@ public class ExtractFieldTest {
         final SinkRecord transformedRecord = xformKey.apply(record);
         Integer extractedValue = (Integer) transformedRecord.key();
 
-        assertNull(extractedValue);
+        assertEquals(expectedValue, extractedValue);
     }
 
-    @Test
-    public void testUnsetOptionalFieldReplacedWithDefault() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testUnsetOptionalField(boolean replaceNullWithDefault, Object expectedValue) {
 
         Map<String, Object> config = new HashMap<>();
         config.put("field", "optional_with_default");
-
-        xformKey.configure(config);
-
-        final Schema keySchema = SchemaBuilder.struct()
-                .field("optional_with_default", SchemaBuilder.int32().optional().defaultValue(42).build())
-                .build();
-        final Struct key = new Struct(keySchema).put("optional_with_default", null);
-
-        final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
-
-        final SinkRecord transformedRecord = xformKey.apply(record);
-        Integer extractedValue = (Integer) transformedRecord.key();
-
-        assertEquals(42, extractedValue);
-    }
-
-
-    @Test
-    public void testUnsetOptionalFieldValueIsNull() {
-
-        Map<String, Object> config = new HashMap<>();
-        config.put("field", "optional_with_default");
-        config.put("replace.null.with.default", false);
+        config.put("replace.null.with.default", replaceNullWithDefault);
 
         xformValue.configure(config);
 
@@ -254,28 +245,7 @@ public class ExtractFieldTest {
         final SinkRecord transformedRecord = xformValue.apply(record);
         Integer extractedValue = (Integer) transformedRecord.value();
 
-        assertNull(extractedValue);
-    }
-
-    @Test
-    public void testUnsetOptionalFieldValueReplacedWithDefault() {
-
-        Map<String, Object> config = new HashMap<>();
-        config.put("field", "optional_with_default");
-
-        xformValue.configure(config);
-
-        final Schema valueSchema = SchemaBuilder.struct()
-                .field("optional_with_default", SchemaBuilder.int32().optional().defaultValue(42).build())
-                .build();
-        final Struct value = new Struct(valueSchema).put("optional_with_default", null);
-
-        final SinkRecord record = new SinkRecord("test", 0, null, null, valueSchema, value,  0);
-
-        final SinkRecord transformedRecord = xformValue.apply(record);
-        Integer extractedValue = (Integer) transformedRecord.value();
-
-        assertEquals(42, extractedValue);
+        assertEquals(expectedValue, extractedValue);
     }
 
 }

@@ -41,7 +41,7 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
     private static final String FIELD_CONFIG = "field";
-    private static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
+    private static final String REPLACE_NULL_WITH_DEFAULT = "replace.null.with.default";
 
     public static final ConfigDef CONFIG_DEF = FieldSyntaxVersion.appendConfigTo(
             new ConfigDef()
@@ -52,7 +52,7 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
                             ConfigDef.Importance.MEDIUM,
                             "Field name to extract."
                     )
-                    .define(REPLACE_NULL_WITH_DEFAULT_CONFIG,
+                    .define(REPLACE_NULL_WITH_DEFAULT,
                             ConfigDef.Type.BOOLEAN,
                             true,
                             ConfigDef.Importance.MEDIUM,
@@ -74,7 +74,7 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         originalPath = config.getString(FIELD_CONFIG);
         fieldPath = new SingleFieldPath(originalPath, FieldSyntaxVersion.fromConfig(config));
-        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
+        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT);
     }
 
     @Override
