@@ -4584,7 +4584,7 @@ class KafkaApisTest extends Logging {
 
     assertEquals(Errors.INVALID_REQUEST.code, responseData.errorCode)
 
-    // Testing whether the subsequent request with the incremented share session epoch works or not
+    // Testing whether the subsequent request with the incremented share session epoch works or not.
     shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
       setMemberId(memberId.toString).
@@ -4653,7 +4653,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     ).thenThrow(Errors.INVALID_REQUEST.exception)
 
-    when(sharePartitionManager.releaseAcquiredRecords(any(), any(), any())).thenReturn(
+    when(sharePartitionManager.releaseAcquiredRecords(any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareAcknowledgeResponseData.PartitionData()
@@ -4850,7 +4850,7 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
@@ -4874,7 +4874,7 @@ class KafkaApisTest extends Logging {
 
     val memberId2 = Uuid.randomUuid()
 
-    // Using wrong member ID
+    // Using wrong member ID.
     shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
       setMemberId(memberId2.toString).
@@ -4888,14 +4888,14 @@ class KafkaApisTest extends Logging {
 
     shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
     responseData = response.data()
 
     assertEquals(Errors.SHARE_SESSION_NOT_FOUND.code, responseData.errorCode)
 
-    // Using wrong groupId ID
+    // Using wrong groupId ID.
     shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
       setMemberId(memberId.toString).
@@ -4909,7 +4909,7 @@ class KafkaApisTest extends Logging {
 
     shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
     responseData = response.data()
@@ -4970,7 +4970,7 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
@@ -4995,7 +4995,7 @@ class KafkaApisTest extends Logging {
     shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
       setMemberId(memberId.toString).
-      setShareSessionEpoch(2). // Invalid share session epoch, should have 1 for the second request
+      setShareSessionEpoch(2). // Invalid share session epoch, should have 1 for the second request.
       setTopics(List(new ShareFetchRequestData.FetchTopic().
         setTopicId(topicId).
         setPartitions(List(
@@ -5005,7 +5005,7 @@ class KafkaApisTest extends Logging {
 
     shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
     responseData = response.data()
@@ -5129,7 +5129,7 @@ class KafkaApisTest extends Logging {
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
 
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
@@ -5392,7 +5392,7 @@ class KafkaApisTest extends Logging {
       new ShareSessionKey(groupId, memberId), cachedSharePartitions2, 0L, 0L, 1))
     ).thenReturn(new FinalContext())
 
-    when(sharePartitionManager.releaseAcquiredRecords(any(), any(), any())).thenReturn(
+    when(sharePartitionManager.releaseAcquiredRecords(any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)) ->
           new ShareAcknowledgeResponseData.PartitionData()
@@ -5437,7 +5437,7 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
@@ -5528,7 +5528,7 @@ class KafkaApisTest extends Logging {
 
     shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
     responseData = response.data()
@@ -5572,7 +5572,7 @@ class KafkaApisTest extends Logging {
 
     shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
     responseData = response.data()
@@ -5608,7 +5608,7 @@ class KafkaApisTest extends Logging {
       topicIdResponse4.partitions.get(0)
     )
 
-    // Final request with acknowledgements
+    // Final request with acknowledgements.
     shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
       setMemberId(memberId.toString).
@@ -5688,7 +5688,7 @@ class KafkaApisTest extends Logging {
 
     shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
     responseData = response.data()
@@ -5837,7 +5837,7 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
@@ -6027,7 +6027,7 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
@@ -6156,7 +6156,7 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
@@ -6180,7 +6180,7 @@ class KafkaApisTest extends Logging {
       case e : Exception => errorThrown = e
     }
 
-    assertNull(response); // Check if the response is null indicating an error occurred
+    assertNull(response); // Check if the response is null indicating an error occurred.
     assertNotNull(errorThrown)
   }
 
@@ -6306,7 +6306,7 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
@@ -6388,7 +6388,7 @@ class KafkaApisTest extends Logging {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
-    // topicName3 is not in the metadataCache
+    // topicName3 is not in the metadataCache.
 
     val memberId: Uuid = Uuid.ZERO_UUID
     val groupId : String = "group"
@@ -6490,7 +6490,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
 
     var authorizedTopics: Set[String] = Set.empty[String]
-    // topicName1 is not in authorizedTopic
+    // topicName1 is not in authorizedTopic.
     authorizedTopics = authorizedTopics + topicName2
     authorizedTopics = authorizedTopics + topicName3
 
@@ -6527,7 +6527,7 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
+    // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
