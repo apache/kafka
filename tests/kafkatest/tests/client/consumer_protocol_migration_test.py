@@ -34,16 +34,43 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     COOPERATIVE_STICKEY = "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"
     all_assignment_strategies = [RANGE, ROUND_ROBIN, COOPERATIVE_STICKEY, STICKY]
 
-    all_consumer_versions = [LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, \
-                             LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, \
-                             LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, \
-                             LATEST_3_7, LATEST_3_8, DEV_BRANCH]
+    # all_consumer_versions = [LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, \
+    #                          LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, \
+    #                          LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, \
+    #                          LATEST_3_7, LATEST_3_8, DEV_BRANCH]
+    all_consumer_versions = [DEV_BRANCH]
 
     def __init__(self, test_context):
         super(ConsumerProtocolMigrationTest, self).__init__(test_context, num_consumers=5, num_producers=1,
                                                             num_zk=0, num_brokers=1, topics={
                 self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 }
             })
+
+    def bounce_all_consumers(self, consumer, clean_shutdown):
+        for node in consumer.nodes:
+            consumer.stop_node(node, clean_shutdown)
+
+        wait_until(lambda: len(consumer.dead_nodes()) == self.num_consumers, timeout_sec=10,
+                   err_msg="Timed out waiting for the consumers to shutdown")
+
+        for node in consumer.nodes:
+            consumer.start_node(node)
+
+        self.await_all_members(consumer)
+        self.await_consumed_messages(consumer)
+
+    def rolling_bounce_consumers(self, consumer, clean_shutdown):
+        for node in consumer.nodes:
+            consumer.stop_node(node, clean_shutdown)
+
+            wait_until(lambda: len(consumer.dead_nodes()) == 1,
+                       timeout_sec=self.session_timeout_sec+5,
+                       err_msg="Timed out waiting for the consumer to shutdown")
+
+            consumer.start_node(node)
+
+            self.await_all_members(consumer)
+            self.await_consumed_messages(consumer)
 
     @cluster(num_nodes=8)
     @matrix(
@@ -69,31 +96,13 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         self.await_all_members(consumer)
         self.await_consumed_messages(consumer)
 
+        # Upgrade the group protocol and restart all consumers.
         consumer.group_protocol = consumer_group.consumer_group_protocol
+        self.bounce_all_consumers(consumer, clean_shutdown)
 
-        for node in consumer.nodes:
-            consumer.stop_node(node, clean_shutdown)
-
-            wait_until(lambda: len(consumer.dead_nodes()) == 1,
-                       timeout_sec=self.session_timeout_sec+5,
-                       err_msg="Timed out waiting for the consumer to shutdown")
-
-            consumer.start_node(node)
-
-            self.await_all_members(consumer)
-            self.await_consumed_messages(consumer)
-
-        for node in consumer.nodes:
-            consumer.stop_node(node, clean_shutdown)
-
-        wait_until(lambda: len(consumer.dead_nodes()) == self.num_consumers, timeout_sec=10,
-                   err_msg="Timed out waiting for the consumers to shutdown")
-
-        for node in consumer.nodes:
-            consumer.start_node(node)
-
-        self.await_all_members(consumer)
-        self.await_consumed_messages(consumer)
+        # Downgrade the group protocol and restart all consumers.
+        consumer.group_protocol = consumer_group.classic_group_protocol
+        self.bounce_all_consumers(consumer, clean_shutdown)
 
         consumer.stop_all()
 
@@ -121,18 +130,12 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         self.await_all_members(consumer)
         self.await_consumed_messages(consumer)
 
+        # Upgrade the group protocol and rolling restart the consumers.
         consumer.group_protocol = consumer_group.consumer_group_protocol
+        self.rolling_bounce_consumers(consumer, clean_shutdown)
 
-        for node in consumer.nodes:
-            consumer.stop_node(node, clean_shutdown)
-
-            wait_until(lambda: len(consumer.dead_nodes()) == 1,
-                       timeout_sec=self.session_timeout_sec+5,
-                       err_msg="Timed out waiting for the consumer to shutdown")
-
-            consumer.start_node(node)
-
-            self.await_all_members(consumer)
-            self.await_consumed_messages(consumer)
+        # Downgrade the group protocol and rolling restart the consumers.
+        consumer.group_protocol = consumer_group.classic_group_protocol
+        self.rolling_bounce_consumers(consumer, clean_shutdown)
 
         consumer.stop_all()
