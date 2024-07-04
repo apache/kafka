@@ -1656,6 +1656,11 @@ public final class Utils {
             throw new IllegalArgumentException("requirement failed");
     }
 
+    public static void require(boolean requirement, String errorMessage) {
+        if (!requirement)
+            throw new IllegalArgumentException(errorMessage);
+    }
+
     /**
      * Merge multiple {@link ConfigDef} into one
      * @param configDefs List of {@link ConfigDef}
