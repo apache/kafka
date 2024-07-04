@@ -384,7 +384,7 @@ class DumpLogSegmentsTest {
 
   @Test
   def testDumpRemoteLogMetadataWithCorruption(): Unit = {
-    val metadataRecords = Array(new SimpleRecord(null, Array.fill(20)((scala.util.Random.nextInt(256) - 128).toByte)))
+    val metadataRecords = Array(new SimpleRecord(null, "corrupted".getBytes()))
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
     log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
