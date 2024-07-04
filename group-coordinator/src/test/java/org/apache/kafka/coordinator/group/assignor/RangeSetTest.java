@@ -18,11 +18,13 @@ package org.apache.kafka.coordinator.group.assignor;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -30,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
-class RangeSetTest {
+public class RangeSetTest {
     @Test
     void testSize() {
         RangeSet rangeSet = new RangeSet(5, 10);
@@ -67,14 +69,27 @@ class RangeSetTest {
     @Test
     void testUnsupportedOperations() {
         RangeSet rangeSet = new RangeSet(5, 10);
-        assertThrows(UnsupportedOperationException.class, rangeSet::toArray);
-        assertThrows(UnsupportedOperationException.class, () -> rangeSet.toArray(new Integer[0]));
         assertThrows(UnsupportedOperationException.class, () -> rangeSet.add(5));
         assertThrows(UnsupportedOperationException.class, () -> rangeSet.remove(5));
         assertThrows(UnsupportedOperationException.class, () -> rangeSet.addAll(null));
         assertThrows(UnsupportedOperationException.class, () -> rangeSet.retainAll(null));
         assertThrows(UnsupportedOperationException.class, () -> rangeSet.removeAll(null));
         assertThrows(UnsupportedOperationException.class, rangeSet::clear);
+    }
+
+    @Test
+    void testToArray() {
+        RangeSet rangeSet = new RangeSet(5, 10);
+        Object[] expectedArray = {5, 6, 7, 8, 9};
+        assertArrayEquals(expectedArray, rangeSet.toArray());
+    }
+
+    @Test
+    void testToArrayWithArrayParameter() {
+        RangeSet rangeSet = new RangeSet(5, 10);
+        Integer[] inputArray = new Integer[5];
+        Integer[] expectedArray = {5, 6, 7, 8, 9};
+        assertArrayEquals(expectedArray, rangeSet.toArray(inputArray));
     }
 
     @Test
@@ -96,10 +111,12 @@ class RangeSetTest {
         RangeSet rangeSet2 = new RangeSet(5, 10);
         RangeSet rangeSet3 = new RangeSet(6, 10);
         Set<Integer> set = mkSet(5, 6, 7, 8, 9);
+        HashSet<Integer> hashSet = new HashSet<>(mkSet(6, 7, 8, 9));
 
         assertEquals(rangeSet1, rangeSet2);
         assertNotEquals(rangeSet1, rangeSet3);
         assertEquals(rangeSet1, set);
+        assertEquals(rangeSet3, hashSet);
         assertNotEquals(rangeSet1, new Object());
     }
 

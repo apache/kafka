@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -151,13 +150,12 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
         List<String> memberIds = sortMemberIds(groupSpec);
-
-        MemberSubscription subs = groupSpec.memberSubscription(memberIds.get(0));
-        Set<Uuid> subscribedTopics = new HashSet<>(subs.subscribedTopicIds());
-        List<TopicMetadata> topics = new ArrayList<>(subscribedTopics.size());
         int numMembers = groupSpec.memberIds().size();
 
-        for (Uuid topicId : subscribedTopics) {
+        MemberSubscription subs = groupSpec.memberSubscription(memberIds.get(0));
+        List<TopicMetadata> topics = new ArrayList<>(subs.subscribedTopicIds().size());
+
+        for (Uuid topicId : subs.subscribedTopicIds()) {
             int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
             if (numPartitions == -1) {
                 throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
@@ -171,7 +169,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         }
 
         Map<String, MemberAssignment> assignments = new HashMap<>((int) ((groupSpec.memberIds().size() / 0.75f) + 1));
-        int memberAssignmentInitialCapacity = (int) ((subscribedTopics.size() / 0.75f) + 1);
+        int memberAssignmentInitialCapacity = (int) ((topics.size() / 0.75f) + 1);
 
         for (String memberId : memberIds) {
             Map<Uuid, Set<Integer>> assignment = new HashMap<>(memberAssignmentInitialCapacity);
@@ -192,7 +190,6 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         GroupSpec groupSpec,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
-
         List<String> memberIds = sortMemberIds(groupSpec);
 
         Map<Uuid, TopicMetadata> topics = new HashMap<>();
@@ -233,27 +230,25 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
     }
 
     /**
-     * Sorts the member Ids in the group based on their instance Id if present, otherwise by member Id.
-     * This is done to ensure that the relative ordering of members doesn't change with static members
-     * thus resulting in a sticky assignment.
+     * Sorts members based on their instance Ids if available or by member Ids if not.
+     *
+     * Static members are placed first and non-static members follow.
+     *
+     * Prioritizing static members helps them retain their partitions, enhancing stickiness
+     * and stability. Non-static members, which do not have guaranteed rejoining Ids, are placed
+     * later, allowing for more dynamic and flexible partition assignments.
      *
      * @param groupSpec     The group specification containing the member information.
-     * @return a sorted list of member Ids.
+     * @return A sorted list of member Ids.
      */
     private List<String> sortMemberIds(
         GroupSpec groupSpec
     ) {
         List<String> sortedMemberIds = new ArrayList<>(groupSpec.memberIds());
-        Map<String, Optional<String>> instanceIdCache = new HashMap<>();
-
-        // Caching the instanceIds improves performance.
-        for (String memberId : sortedMemberIds) {
-            instanceIdCache.put(memberId, groupSpec.memberSubscription(memberId).instanceId());
-        }
 
         sortedMemberIds.sort((memberId1, memberId2) -> {
-            Optional<String> instanceId1 = instanceIdCache.get(memberId1);
-            Optional<String> instanceId2 = instanceIdCache.get(memberId2);
+            Optional<String> instanceId1 = groupSpec.memberSubscription(memberId1).instanceId();
+            Optional<String> instanceId2 = groupSpec.memberSubscription(memberId2).instanceId();
 
             if (instanceId1.isPresent() && instanceId2.isPresent()) {
                 return instanceId1.get().compareTo(instanceId2.get());
@@ -279,22 +274,21 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         TopicMetadata topicMetadata,
         Map<Uuid, Set<Integer>> memberAssignment
     ) {
-        if (topicMetadata.nextRange >= topicMetadata.numPartitions) {
-            memberAssignment.put(topicMetadata.topicId, Collections.emptySet());
-        } else {
-            int start = topicMetadata.nextRange;
-            int quota = topicMetadata.minQuota;
+        int start = topicMetadata.nextRange;
+        int quota = topicMetadata.minQuota;
 
-            // Adjust quota to account for extra partitions if available.
-            if (topicMetadata.extraPartitions > 0) {
-                quota++;
-                topicMetadata.extraPartitions--;
-            }
+        // Adjust quota to account for extra partitions if available.
+        if (topicMetadata.extraPartitions > 0) {
+            quota++;
+            topicMetadata.extraPartitions--;
+        }
 
-            // Calculate the end using the quota.
-            int end = Math.min(start + quota, topicMetadata.numPartitions);
+        // Calculate the end using the quota.
+        int end = Math.min(start + quota, topicMetadata.numPartitions);
 
-            topicMetadata.nextRange = end;
+        topicMetadata.nextRange = end;
+
+        if (start < end) {
             memberAssignment.put(topicMetadata.topicId, new RangeSet(start, end));
         }
     }
@@ -312,7 +306,9 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         GroupSpec groupSpec,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
-        if (groupSpec.subscriptionType() == SubscriptionType.HOMOGENEOUS) {
+        if (groupSpec.memberIds().isEmpty()) {
+            return new GroupAssignment(Collections.emptyMap());
+        } else if (groupSpec.subscriptionType() == SubscriptionType.HOMOGENEOUS) {
             return assignHomogeneousGroup(groupSpec, subscribedTopicDescriber);
         } else {
             return assignHeterogeneousGroup(groupSpec, subscribedTopicDescriber);

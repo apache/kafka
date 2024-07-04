@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
+import java.lang.reflect.Array;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -80,12 +81,28 @@ class RangeSet implements Set<Integer> {
 
     @Override
     public Object[] toArray() {
-        throw new UnsupportedOperationException();
+        Object[] array = new Object[size()];
+        for (int i = 0; i < size(); i++) {
+            array[i] = from + i;
+        }
+        return array;
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> T[] toArray(T[] a) {
-        throw new UnsupportedOperationException();
+        int size = size();
+        if (a.length < size) {
+            // Create a new array of the same type as a with the correct size
+            a = (T[]) Array.newInstance(a.getClass().getComponentType(), size);
+        }
+        for (int i = 0; i < size; i++) {
+            a[i] = (T) Integer.valueOf(from + i);
+        }
+        if (a.length > size) {
+            a[size] = null;
+        }
+        return a;
     }
 
     @Override
@@ -143,9 +160,7 @@ class RangeSet implements Set<Integer> {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) {
-            if (!(o instanceof Set)) return false;
-        }
+        if (!(o instanceof Set)) return false;
 
         if (o instanceof RangeSet) {
             RangeSet other = (RangeSet) o;
