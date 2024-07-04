@@ -811,6 +811,45 @@ public class LogValidatorTest {
     }
 
     @Test
+    public void testNoKeyCompactedTopic() {
+        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V0, Compression.gzip().build(), CompressionType.GZIP);
+        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V1, Compression.gzip().build(), CompressionType.GZIP);
+        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V2, Compression.gzip().build(), CompressionType.GZIP);
+        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V0, Compression.lz4().build(), CompressionType.LZ4);
+        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V1, Compression.lz4().build(), CompressionType.LZ4);
+        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V2, Compression.lz4().build(), CompressionType.LZ4);
+        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V0, Compression.snappy().build(), CompressionType.SNAPPY);
+        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V1, Compression.snappy().build(), CompressionType.SNAPPY);
+        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V2, Compression.snappy().build(), CompressionType.SNAPPY);
+        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V2, Compression.zstd().build(), CompressionType.ZSTD);
+    }
+
+    void checkNoKeyCompactedTopic(byte magic, Compression codec, CompressionType type) {
+        MemoryRecords records = createRecords(magic, RecordBatch.NO_TIMESTAMP, codec);
+        Assertions.assertThrows(RecordValidationException.class, () -> new LogValidator(
+                records,
+                topicPartition,
+                time,
+                type,
+                codec,
+                true,
+                magic,
+                TimestampType.CREATE_TIME,
+                1000L,
+                1000L,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                AppendOrigin.CLIENT,
+                MetadataVersion.latestTesting()
+        ).validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0),
+                metricsRecorder,
+                RequestLocal.withThreadConfinedCaching().bufferSupplier()
+        ));
+
+        assertTrue(metricsRecorder.recordNoKeyCompactedTopicCount > 0);
+    }
+
+    @Test
     public void testInvalidCreateTimeCompressedV2() {
         long now = System.currentTimeMillis();
         Compression compression = Compression.gzip().build();
