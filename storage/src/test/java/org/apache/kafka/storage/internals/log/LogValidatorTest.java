@@ -24,6 +24,7 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.compress.GzipCompression;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
@@ -761,6 +762,53 @@ public class LogValidatorTest {
         );
     }
 
+    @Test
+    public void testInvalidChecksum() {
+        checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V0, Compression.gzip().build(), CompressionType.GZIP);
+        checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V1, Compression.gzip().build(), CompressionType.GZIP);
+        checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V0, Compression.lz4().build(), CompressionType.LZ4);
+        checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V1, Compression.lz4().build(), CompressionType.LZ4);
+        checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V0, Compression.snappy().build(), CompressionType.SNAPPY);
+        checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V1, Compression.snappy().build(), CompressionType.SNAPPY);
+    }
+
+    private void checkInvalidChecksum(byte magic, Compression compression, CompressionType type) {
+        LegacyRecord record = LegacyRecord.create(magic, 0L, null, "hello".getBytes());
+        ByteBuffer buf = record.buffer();
+
+        // enforce modify crc to make checksum error
+        buf.put(LegacyRecord.CRC_OFFSET, (byte) 0);
+
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
+                TimestampType.CREATE_TIME, 0L);
+        builder.appendUncheckedWithOffset(0, record);
+
+        MemoryRecords memoryRecords = builder.build();
+        LogValidator logValidator = new LogValidator(memoryRecords,
+                topicPartition,
+                time,
+                type,
+                compression,
+                false,
+                magic,
+                TimestampType.CREATE_TIME,
+                1000L,
+                1000L,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                AppendOrigin.CLIENT,
+                MetadataVersion.latestTesting()
+        );
+
+
+        assertThrows(CorruptRecordException.class, () -> logValidator.validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0),
+                metricsRecorder,
+                RequestLocal.withThreadConfinedCaching().bufferSupplier()
+        ));
+
+        assertTrue(metricsRecorder.recordInvalidChecksumsCount > 0);
+    }
 
     @Test
     public void testInvalidCreateTimeCompressedV2() {
