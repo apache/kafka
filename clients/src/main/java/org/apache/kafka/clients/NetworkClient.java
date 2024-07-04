@@ -1181,7 +1181,7 @@ public class NetworkClient implements KafkaClient {
             // Check if any topic's metadata failed to get updated
             Map<String, Errors> errors = response.errors();
             if (!errors.isEmpty())
-                log.warn("The metadata response from the cluster reported a recoverable issue with correlation id {} : {}", requestHeader.correlationId(), response.errors());
+                log.warn("The metadata response from the cluster reported a recoverable issue with correlation id {} : {}", requestHeader.correlationId(), errors);
 
             // When talking to the startup phase of a broker, it is possible to receive an empty metadata set, which
             // we should retry later.
