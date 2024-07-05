@@ -217,8 +217,11 @@ public enum MetadataVersion {
     // Add ELR related supports (KIP-966).
     IBP_3_9_IV1(22, "3.9", "IV1", true),
 
+    // Support for new fields in TopicRecord (KIP-950).
+    IBP_3_9_IV2(23, "3.9", "IV2", true),
+
     // Introduce version 1 of the GroupVersion feature (KIP-848).
-    IBP_4_0_IV0(23, "4.0", "IV0", false);
+    IBP_4_0_IV0(24, "4.0", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -344,6 +347,10 @@ public enum MetadataVersion {
 
     public boolean isElrSupported() {
         return this.isAtLeast(IBP_3_9_IV1);
+    }
+
+    public boolean tieredStorageDisablementSupported() {
+        return this.isAtLeast(IBP_3_9_IV2);
     }
 
     public boolean isKRaftSupported() {
