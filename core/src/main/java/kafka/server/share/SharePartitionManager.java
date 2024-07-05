@@ -779,7 +779,7 @@ public class SharePartitionManager implements AutoCloseable {
                         metrics.metricName(
                             RECORD_ACK_RATE,
                             METRICS_GROUP_NAME,
-                            "The number of records acknowledged per acknowledgement type per second.",
+                            "The rate of number of records acknowledged per acknowledgement type.",
                             ACK_TYPE, entry.getValue()),
                         metrics.metricName(
                             RECORD_ACK_COUNT,
