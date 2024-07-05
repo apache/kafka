@@ -17,13 +17,13 @@
 
 package org.apache.kafka.jmh.controller;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.concurrent.TimeUnit;
+import kafka.cluster.Broker;
+import kafka.controller.ControllerContext;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -37,8 +37,10 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
-import kafka.cluster.Broker;
-import kafka.controller.ControllerContext;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.concurrent.TimeUnit;
+
 import scala.jdk.javaapi.CollectionConverters;
 
 @State(Scope.Benchmark)
