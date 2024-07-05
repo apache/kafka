@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
-import java.util.Objects;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 
 import java.util.Arrays;
+import java.util.Objects;
 
 public class SubscriptionResponseWrapper<FV> {
     static final byte CURRENT_VERSION = 0;

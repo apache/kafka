@@ -21,10 +21,10 @@ import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.Response;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -36,6 +36,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+
+import javax.ws.rs.core.Response;
 
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 
@@ -99,7 +101,7 @@ public class ConnectAssertions {
      */
     protected Optional<Boolean> checkWorkersUp(int numWorkers, BiFunction<Integer, Integer, Boolean> comp) {
         try {
-            int numUp = connect.activeWorkers().size();
+            int numUp = connect.healthyWorkers().size();
             return Optional.of(comp.apply(numUp, numWorkers));
         } catch (Exception e) {
             log.error("Could not check active workers.", e);

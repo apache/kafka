@@ -220,6 +220,7 @@ class ControllerApisTest {
   def testFetchSentToKRaft(): Unit = {
     when(
       raftManager.handleRequest(
+        any(classOf[RequestContext]),
         any(classOf[RequestHeader]),
         any(classOf[ApiMessage]),
         any(classOf[Long])
@@ -234,6 +235,7 @@ class ControllerApisTest {
     verify(raftManager).handleRequest(
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
       ArgumentMatchers.any()
     )
   }
@@ -246,6 +248,7 @@ class ControllerApisTest {
 
     when(
       raftManager.handleRequest(
+        any(classOf[RequestContext]),
         any(classOf[RequestHeader]),
         any(classOf[ApiMessage]),
         any(classOf[Long])
@@ -263,6 +266,7 @@ class ControllerApisTest {
 
 
     verify(raftManager).handleRequest(
+      ArgumentMatchers.eq(request.context),
       ArgumentMatchers.eq(request.header),
       ArgumentMatchers.eq(fetchRequestData),
       ArgumentMatchers.eq(initialTimeMs)
@@ -286,6 +290,7 @@ class ControllerApisTest {
   def testFetchSnapshotSentToKRaft(): Unit = {
     when(
       raftManager.handleRequest(
+        any(classOf[RequestContext]),
         any(classOf[RequestHeader]),
         any(classOf[ApiMessage]),
         any(classOf[Long])
@@ -298,6 +303,7 @@ class ControllerApisTest {
     controllerApis.handleFetchSnapshot(buildRequest(new FetchSnapshotRequest(new FetchSnapshotRequestData(), 0)))
 
     verify(raftManager).handleRequest(
+      ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any()
@@ -1212,7 +1218,7 @@ class ControllerApisTest {
     val response = new FetchResponseData()
     val responseFuture = new CompletableFuture[ApiMessage]()
     val errorResponseFuture = new AtomicReference[AbstractResponse]()
-    when(raftManager.handleRequest(any(), any(), any())).thenReturn(responseFuture)
+    when(raftManager.handleRequest(any(), any(), any(), any())).thenReturn(responseFuture)
     when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
       // Simulate an encoding failure in the initial fetch response
       throw new UnsupportedVersionException("Something went wrong")

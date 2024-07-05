@@ -31,23 +31,17 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TemporaryFolder;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -59,33 +53,20 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
-import static org.junit.Assert.assertTrue;
-
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test the unclean shutdown behavior around state store cleanup.
  */
-@RunWith(Parameterized.class)
-@Category(IntegrationTest.class)
+@SuppressWarnings("deprecation")
+@Tag("integration")
+@Timeout(600)
 public class EOSUncleanShutdownIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-
-    @SuppressWarnings("deprecation")
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<String[]> data() {
-        return Arrays.asList(new String[][] {
-            {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_V2}
-        });
-    }
-
-    @Parameterized.Parameter
-    public String eosConfig;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
+    private static final File TEST_FOLDER = TestUtils.tempDirectory();
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
         STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -93,16 +74,13 @@ public class EOSUncleanShutdownIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
-        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TEST_FOLDER.getRoot().getPath());
+        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TEST_FOLDER.getPath());
     }
 
-    @AfterClass
-    public static void closeCluster() {
+    @AfterAll
+    public static void closeCluster() throws IOException {
         CLUSTER.stop();
     }
-
-    @ClassRule
-    public static final TemporaryFolder TEST_FOLDER = new TemporaryFolder(TestUtils.tempDirectory());
 
     private static final Properties STREAMS_CONFIG = new Properties();
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
@@ -110,8 +88,9 @@ public class EOSUncleanShutdownIntegrationTest {
 
     private static final int RECORD_TOTAL = 3;
 
-    @Test
-    public void shouldWorkWithUncleanShutdownWipeOutStateStore() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    public void shouldWorkWithUncleanShutdownWipeOutStateStore(final String eosConfig) throws InterruptedException {
         final String appId = "shouldWorkWithUncleanShutdownWipeOutStateStore";
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
@@ -149,7 +128,7 @@ public class EOSUncleanShutdownIntegrationTest {
         driver.start();
 
         // Task's StateDir
-        final File taskStateDir = new File(String.join("/", TEST_FOLDER.getRoot().getPath(), appId, "0_0"));
+        final File taskStateDir = new File(String.join("/", TEST_FOLDER.getPath(), appId, "0_0"));
         final File taskCheckpointFile = new File(taskStateDir, ".checkpoint");
 
         try {

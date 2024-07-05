@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.state;
 
-import java.util.Map;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.TopologyConfig;
+
+import java.util.Map;
 
 /**
  * {@code DslStoreSuppliers} defines a grouping of factories to construct

@@ -41,7 +41,6 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -50,14 +49,12 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.hamcrest.Matchers;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.rocksdb.WriteBatch;
 
 import java.io.File;
@@ -74,6 +71,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SimpleTimeZone;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -82,12 +80,12 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasEntry;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(Parameterized.class)
+
 public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> {
 
     private final long windowSizeForTimeWindow = 500;
@@ -101,16 +99,15 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     final long segmentInterval = 60_000L;
     final String storeName = "bytes-store";
 
-    @Parameter
     public SegmentedBytesStore.KeySchema schema;
 
-    @Parameters(name = "{0}")
-    public static Object[] getKeySchemas() {
-        return new Object[] {new SessionKeySchema(), new WindowKeySchema()};
+    public static Stream<Arguments> getKeySchemas() {
+        return Stream.of(Arguments.of(new SessionKeySchema()),
+                Arguments.of(new WindowKeySchema()));
     }
 
-    @Before
-    public void before() {
+    public void before(final SegmentedBytesStore.KeySchema schema) {
+        this.schema = schema;
         if (schema instanceof SessionKeySchema) {
             windows[0] = new SessionWindow(10L, 10L);
             windows[1] = new SessionWindow(500L, 1000L);
@@ -147,7 +144,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.init((StateStoreContext) context, bytesStore);
     }
 
-    @After
+    @AfterEach
     public void close() {
         bytesStore.close();
     }
@@ -156,8 +153,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
     abstract AbstractSegments<S> newSegments();
 
-    @Test
-    public void shouldPutAndFetch() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldPutAndFetch(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         final String keyA = "a";
         final String keyB = "b";
         final String keyC = "c";
@@ -210,8 +209,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         }
     }
 
-    @Test
-    public void shouldPutAndBackwardFetch() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldPutAndBackwardFetch(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         final String keyA = "a";
         final String keyB = "b";
         final String keyC = "c";
@@ -267,8 +268,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         }
     }
 
-    @Test
-    public void shouldFindValuesWithinRange() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldFindValuesWithinRange(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         final String key = "a";
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(10));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(50));
@@ -291,8 +294,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         }
     }
 
-    @Test
-    public void shouldRemove() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldRemove(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(30));
         bytesStore.put(serializeKey(new Windowed<>("a", windows[1])), serializeValue(50));
 
@@ -302,8 +307,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         }
     }
 
-    @Test
-    public void shouldRollSegments() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldRollSegments(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         // just to validate directories
         final AbstractSegments<S> segments = newSegments();
         final String key = "a";
@@ -327,8 +334,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         segments.close();
     }
 
-    @Test
-    public void shouldGetAllSegments() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldGetAllSegments(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         // just to validate directories
         final AbstractSegments<S> segments = newSegments();
         final String key = "a";
@@ -358,8 +367,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         segments.close();
     }
 
-    @Test
-    public void shouldFetchAllSegments() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldFetchAllSegments(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         // just to validate directories
         final AbstractSegments<S> segments = newSegments();
         final String key = "a";
@@ -389,8 +400,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         segments.close();
     }
 
-    @Test
-    public void shouldLoadSegmentsWithOldStyleDateFormattedName() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldLoadSegmentsWithOldStyleDateFormattedName(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         final AbstractSegments<S> segments = newSegments();
         final String key = "a";
 
@@ -425,8 +438,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         segments.close();
     }
 
-    @Test
-    public void shouldLoadSegmentsWithOldStyleColonFormattedName() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldLoadSegmentsWithOldStyleColonFormattedName(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         final AbstractSegments<S> segments = newSegments();
         final String key = "a";
 
@@ -457,8 +472,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         segments.close();
     }
 
-    @Test
-    public void shouldBeAbleToWriteToReInitializedStore() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldBeAbleToWriteToReInitializedStore(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         final String key = "a";
         // need to create a segment so we can attempt to write to it again.
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
@@ -467,8 +484,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(100));
     }
 
-    @Test
-    public void shouldCreateWriteBatches() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldCreateWriteBatches(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         final String key = "a";
         final Collection<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
         records.add(new ConsumerRecord<>("", 0, 0L, serializeKey(new Windowed<>(key, windows[0])).get(), serializeValue(50L)));
@@ -481,18 +500,22 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         }
     }
 
-    @Test
-    public void shouldRestoreToByteStoreForActiveTask() {
-        shouldRestoreToByteStore(TaskType.ACTIVE);
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldRestoreToByteStoreForActiveTask(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
+        shouldRestoreToByteStore();
     }
 
-    @Test
-    public void shouldRestoreToByteStoreForStandbyTask() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldRestoreToByteStoreForStandbyTask(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         context.transitionToStandby(null);
-        shouldRestoreToByteStore(TaskType.STANDBY);
+        shouldRestoreToByteStore();
     }
 
-    private void shouldRestoreToByteStore(final TaskType taskType) {
+    private void shouldRestoreToByteStore() {
         bytesStore.init((StateStoreContext) context, bytesStore);
         // 0 segments initially.
         assertEquals(0, bytesStore.getSegments().size());
@@ -515,8 +538,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         assertEquals(expected, results);
     }
 
-    @Test
-    public void shouldMatchPositionAfterPut() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldMatchPositionAfterPut(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         bytesStore.init((StateStoreContext) context, bytesStore);
 
         final String keyA = "a";
@@ -537,8 +562,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         assertEquals(expected, actual);
     }
 
-    @Test
-    public void shouldRestoreRecordsAndConsistencyVectorSingleTopic() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldRestoreRecordsAndConsistencyVectorSingleTopic(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
@@ -575,8 +602,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         assertThat(bytesStore.getPosition().getPartitionPositions(""), hasEntry(0, 3L));
     }
 
-    @Test
-    public void shouldRestoreRecordsAndConsistencyVectorMultipleTopics() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldRestoreRecordsAndConsistencyVectorMultipleTopics(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
@@ -615,8 +644,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         assertThat(bytesStore.getPosition().getPartitionPositions("B"), hasEntry(0, 2L));
     }
 
-    @Test
-    public void shouldHandleTombstoneRecords() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldHandleTombstoneRecords(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
@@ -657,8 +688,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         assertThat(bytesStore.getPosition().getPartitionPositions("A"), hasEntry(0, 2L));
     }
 
-    @Test
-    public void shouldNotThrowWhenRestoringOnMissingHeaders() {
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldNotThrowWhenRestoringOnMissingHeaders(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
@@ -777,11 +810,11 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         records.add(new ConsumerRecord<>("", 0, 0L, serializeKey(new Windowed<>("a", windows[2])).get(), serializeValue(50L)));
         return records;
     }
-
-
-
-    @Test
-    public void shouldMeasureExpiredRecords() {
+    
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldMeasureExpiredRecords(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         final AbstractRocksDBSegmentedBytesStore<S> bytesStore = getBytesStore();
         final InternalMockProcessorContext context = new InternalMockProcessorContext(

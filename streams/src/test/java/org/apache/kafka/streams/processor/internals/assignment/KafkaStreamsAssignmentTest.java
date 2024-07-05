@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask;
+
+import org.junit.jupiter.api.Test;
+
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
@@ -23,10 +28,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask;
-import org.junit.Test;
 
 public class KafkaStreamsAssignmentTest {
     @Test

@@ -78,12 +78,9 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.TemporaryStage;
+
 import org.slf4j.Logger;
 
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -111,6 +108,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
@@ -370,15 +372,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.info("Herder starting");
             herderThread = Thread.currentThread();
 
-            try (TickThreadStage stage = new TickThreadStage("reading to the end of internal topics")) {
+            try (TickThreadStage stage = new TickThreadStage("initializing and reading to the end of internal topics")) {
                 startServices();
             }
 
-            log.info("Herder started");
-            running = true;
-
             while (!stopping.get()) {
                 tick();
+
+                if (!isReady()) {
+                    ready();
+                    log.info("Herder started");
+                }
             }
 
             recordTickThreadStage("shutting down");
@@ -389,8 +393,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.error("Uncaught exception in herder work thread, exiting: ", t);
             Utils.closeQuietly(this::stopServices, "herder services");
             Exit.exit(1);
-        } finally {
-            running = false;
         }
     }
 
@@ -846,7 +848,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         ThreadUtils.shutdownExecutorServiceQuietly(forwardRequestExecutor, FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         ThreadUtils.shutdownExecutorServiceQuietly(startAndStopExecutor, START_AND_STOP_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         log.info("Herder stopped");
-        running = false;
+    }
+
+    @Override
+    public void healthCheck(Callback<Void> callback) {
+        addRequest(
+                () -> {
+                    callback.onCompletion(null, null);
+                    return null;
+                },
+                forwardErrorAndTickThreadStages(callback)
+        );
     }
 
     @Override

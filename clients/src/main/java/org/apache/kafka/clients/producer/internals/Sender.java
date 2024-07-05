@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
-
-import java.util.Optional;
-import java.util.Set;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -59,6 +55,7 @@ import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -69,8 +66,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata

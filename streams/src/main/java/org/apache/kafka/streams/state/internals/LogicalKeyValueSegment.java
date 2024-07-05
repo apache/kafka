@@ -16,7 +16,20 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWithoutOverflow;
+import org.apache.kafka.common.serialization.BytesSerializer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreSegment;
+
+import org.rocksdb.ReadOptions;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.Snapshot;
+import org.rocksdb.WriteBatchInterface;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -28,19 +41,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.serialization.BytesSerializer;
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreSegment;
-import org.rocksdb.ReadOptions;
-import org.rocksdb.RocksDBException;
-import org.rocksdb.Snapshot;
-import org.rocksdb.WriteBatchInterface;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWithoutOverflow;
 
 /**
  * This "logical segment" is a segment which shares its underlying physical store with other

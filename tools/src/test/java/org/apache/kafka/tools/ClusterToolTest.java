@@ -16,19 +16,83 @@
  */
 package org.apache.kafka.tools;
 
+import kafka.test.ClusterInstance;
+import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.Type;
+import kafka.test.junit.ClusterTestExtensions;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 60)
+@ExtendWith(value = ClusterTestExtensions.class)
 public class ClusterToolTest {
+
+    @ClusterTest
+    public void testClusterId(ClusterInstance clusterInstance) {
+        String output = ToolsTestUtils.captureStandardOut(() ->
+                assertDoesNotThrow(() -> ClusterTool.execute("cluster-id", "--bootstrap-server", clusterInstance.bootstrapServers())));
+        assertTrue(output.contains("Cluster ID: " + clusterInstance.clusterId()));
+    }
+
+    @ClusterTest(brokers = 3)
+    public void testUnregister(ClusterInstance clusterInstance) {
+        int brokerId;
+        if (!clusterInstance.isKRaftTest()) {
+            brokerId = assertDoesNotThrow(() -> clusterInstance.brokerIds().stream().findFirst().get());
+        } else {
+            Set<Integer> brokerIds = clusterInstance.brokerIds();
+            brokerIds.removeAll(clusterInstance.controllerIds());
+            brokerId = assertDoesNotThrow(() -> brokerIds.stream().findFirst().get());
+        }
+        clusterInstance.shutdownBroker(brokerId);
+        String output = ToolsTestUtils.captureStandardOut(() ->
+                assertDoesNotThrow(() -> ClusterTool.execute("unregister", "--bootstrap-server", clusterInstance.bootstrapServers(), "--id", String.valueOf(brokerId))));
+
+        if (clusterInstance.isKRaftTest()) {
+            assertTrue(output.contains("Broker " + brokerId + " is no longer registered."));
+        } else {
+            assertTrue(output.contains("The target cluster does not support the broker unregistration API."));
+        }
+    }
+
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
+    public void testClusterIdWithBootstrapController(ClusterInstance clusterInstance) {
+        String output = ToolsTestUtils.captureStandardOut(() ->
+                assertDoesNotThrow(() -> ClusterTool.execute("cluster-id", "--bootstrap-controller", clusterInstance.bootstrapControllers())));
+        assertTrue(output.contains("Cluster ID: " + clusterInstance.clusterId()));
+    }
+
+    @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})
+    public void testUnregisterWithBootstrapController(ClusterInstance clusterInstance) {
+        Set<Integer> brokerIds = clusterInstance.brokerIds();
+        brokerIds.removeAll(clusterInstance.controllerIds());
+        int brokerId = assertDoesNotThrow(() -> brokerIds.stream().findFirst().get());
+        clusterInstance.shutdownBroker(brokerId);
+        ExecutionException exception =
+                assertThrows(ExecutionException.class,
+                        () -> ClusterTool.execute("unregister", "--bootstrap-controller", clusterInstance.bootstrapControllers(), "--id", String.valueOf(brokerId)));
+        assertNotNull(exception.getCause());
+        assertEquals(UnsupportedEndpointTypeException.class, exception.getCause().getClass());
+        assertEquals("This Admin API is not yet supported when communicating directly with " +
+                "the controller quorum.", exception.getCause().getMessage());
+    }
 
     @Test
     public void testPrintClusterId() throws Exception {

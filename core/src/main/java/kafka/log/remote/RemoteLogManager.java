@@ -21,8 +21,8 @@ import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
 import kafka.log.remote.quota.RLMQuotaManager;
 import kafka.log.remote.quota.RLMQuotaManagerConfig;
+import kafka.log.remote.quota.RLMQuotaMetrics;
 import kafka.server.BrokerTopicStats;
-import kafka.server.KafkaConfig;
 import kafka.server.QuotaType;
 import kafka.server.StopPartition;
 
@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
@@ -138,6 +139,7 @@ import java.util.stream.Stream;
 import scala.Option;
 import scala.collection.JavaConverters;
 
+import static kafka.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
@@ -155,7 +157,7 @@ public class RemoteLogManager implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
     private static final String REMOTE_LOG_READER_THREAD_NAME_PREFIX = "remote-log-reader";
-    private final KafkaConfig config;
+    private final RemoteLogManagerConfig rlmConfig;
     private final int brokerId;
     private final String logDir;
     private final Time time;
@@ -172,6 +174,8 @@ public class RemoteLogManager implements Closeable {
     private final Condition copyQuotaManagerLockCondition = copyQuotaManagerLock.newCondition();
     private final RLMQuotaManager rlmCopyQuotaManager;
     private final RLMQuotaManager rlmFetchQuotaManager;
+    private final Sensor fetchThrottleTimeSensor;
+    private final Sensor copyThrottleTimeSensor;
 
     private final RemoteIndexCache indexCache;
     private final RemoteStorageThreadPool remoteStorageReaderThreadPool;
@@ -196,7 +200,7 @@ public class RemoteLogManager implements Closeable {
     /**
      * Creates RemoteLogManager instance with the given arguments.
      *
-     * @param config Configuration required for remote logging subsystem(tiered storage) at the broker level.
+     * @param rlmConfig Configuration required for remote logging subsystem(tiered storage) at the broker level.
      * @param brokerId  id of the current broker.
      * @param logDir    directory of Kafka log segments.
      * @param time      Time instance.
@@ -206,7 +210,7 @@ public class RemoteLogManager implements Closeable {
      * @param brokerTopicStats BrokerTopicStats instance to update the respective metrics.
      * @param metrics  Metrics instance
      */
-    public RemoteLogManager(KafkaConfig config,
+    public RemoteLogManager(RemoteLogManagerConfig rlmConfig,
                             int brokerId,
                             String logDir,
                             String clusterId,
@@ -215,7 +219,7 @@ public class RemoteLogManager implements Closeable {
                             BiConsumer<TopicPartition, Long> updateRemoteLogStartOffset,
                             BrokerTopicStats brokerTopicStats,
                             Metrics metrics) throws IOException {
-        this.config = config;
+        this.rlmConfig = rlmConfig;
         this.brokerId = brokerId;
         this.logDir = logDir;
         this.clusterId = clusterId;
@@ -230,8 +234,12 @@ public class RemoteLogManager implements Closeable {
         rlmCopyQuotaManager = createRLMCopyQuotaManager();
         rlmFetchQuotaManager = createRLMFetchQuotaManager();
 
-        RemoteLogManagerConfig rlmConfig = config.remoteLogManagerConfig();
-        indexCache = new RemoteIndexCache(config.remoteLogIndexFileCacheTotalSizeBytes(), remoteLogStorageManager, logDir);
+        fetchThrottleTimeSensor = new RLMQuotaMetrics(metrics, "remote-fetch-throttle-time", RemoteLogManager.class.getSimpleName(),
+            "The %s time in millis remote fetches was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS).sensor();
+        copyThrottleTimeSensor = new RLMQuotaMetrics(metrics, "remote-copy-throttle-time", RemoteLogManager.class.getSimpleName(),
+            "The %s time in millis remote copies was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS).sensor();
+
+        indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteLogStorageManager, logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
 
@@ -279,29 +287,31 @@ public class RemoteLogManager implements Closeable {
     }
 
     RLMQuotaManager createRLMCopyQuotaManager() {
-        return new RLMQuotaManager(copyQuotaManagerConfig(config), metrics, QuotaType.RLMCopy$.MODULE$,
+        return new RLMQuotaManager(copyQuotaManagerConfig(rlmConfig), metrics, QuotaType.RLMCopy$.MODULE$,
           "Tracking copy byte-rate for Remote Log Manager", time);
     }
 
     RLMQuotaManager createRLMFetchQuotaManager() {
-        return new RLMQuotaManager(fetchQuotaManagerConfig(config), metrics, QuotaType.RLMFetch$.MODULE$,
+        return new RLMQuotaManager(fetchQuotaManagerConfig(rlmConfig), metrics, QuotaType.RLMFetch$.MODULE$,
           "Tracking fetch byte-rate for Remote Log Manager", time);
     }
 
-    public boolean isRemoteLogFetchQuotaExceeded() {
-        return rlmFetchQuotaManager.isQuotaExceeded();
+    public long getFetchThrottleTimeMs() {
+        return rlmFetchQuotaManager.getThrottleTimeMs();
     }
 
-    static RLMQuotaManagerConfig copyQuotaManagerConfig(KafkaConfig config) {
-        RemoteLogManagerConfig rlmConfig = config.remoteLogManagerConfig();
-        return new RLMQuotaManagerConfig(config.remoteLogManagerCopyMaxBytesPerSecond(),
+    public Sensor fetchThrottleTimeSensor() {
+        return fetchThrottleTimeSensor;
+    }
+
+    static RLMQuotaManagerConfig copyQuotaManagerConfig(RemoteLogManagerConfig rlmConfig) {
+        return new RLMQuotaManagerConfig(rlmConfig.remoteLogManagerCopyMaxBytesPerSecond(),
           rlmConfig.remoteLogManagerCopyNumQuotaSamples(),
           rlmConfig.remoteLogManagerCopyQuotaWindowSizeSeconds());
     }
 
-    static RLMQuotaManagerConfig fetchQuotaManagerConfig(KafkaConfig config) {
-        RemoteLogManagerConfig rlmConfig = config.remoteLogManagerConfig();
-        return new RLMQuotaManagerConfig(config.remoteLogManagerFetchMaxBytesPerSecond(),
+    static RLMQuotaManagerConfig fetchQuotaManagerConfig(RemoteLogManagerConfig rlmConfig) {
+        return new RLMQuotaManagerConfig(rlmConfig.remoteLogManagerFetchMaxBytesPerSecond(),
           rlmConfig.remoteLogManagerFetchNumQuotaSamples(),
           rlmConfig.remoteLogManagerFetchQuotaWindowSizeSeconds());
     }
@@ -318,7 +328,6 @@ public class RemoteLogManager implements Closeable {
 
     @SuppressWarnings("removal")
     RemoteStorageManager createRemoteStorageManager() {
-        RemoteLogManagerConfig rlmConfig = config.remoteLogManagerConfig();
         return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteStorageManager>() {
             private final String classPath = rlmConfig.remoteStorageManagerClassPath();
 
@@ -335,14 +344,13 @@ public class RemoteLogManager implements Closeable {
     }
 
     private void configureRSM() {
-        final Map<String, Object> rsmProps = new HashMap<>(config.remoteLogManagerConfig().remoteStorageManagerProps());
+        final Map<String, Object> rsmProps = new HashMap<>(rlmConfig.remoteStorageManagerProps());
         rsmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
         remoteLogStorageManager.configure(rsmProps);
     }
 
     @SuppressWarnings("removal")
     RemoteLogMetadataManager createRemoteLogMetadataManager() {
-        RemoteLogManagerConfig rlmConfig = config.remoteLogManagerConfig();
         return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteLogMetadataManager>() {
             private final String classPath = rlmConfig.remoteLogMetadataManagerClassPath();
 
@@ -369,7 +377,7 @@ public class RemoteLogManager implements Closeable {
             rlmmProps.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol", e.securityProtocol().name);
         });
         // update the remoteLogMetadataProps here to override endpoint config if any
-        rlmmProps.putAll(config.remoteLogManagerConfig().remoteLogMetadataManagerProps());
+        rlmmProps.putAll(rlmConfig.remoteLogMetadataManagerProps());
 
         rlmmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
         rlmmProps.put(LOG_DIR_CONFIG, logDir);
@@ -421,7 +429,7 @@ public class RemoteLogManager implements Closeable {
                                    Map<String, Uuid> topicIds) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
-        if (config.remoteLogManagerConfig().isRemoteStorageSystemEnabled() && !isRemoteLogManagerConfigured()) {
+        if (rlmConfig.isRemoteStorageSystemEnabled() && !isRemoteLogManagerConfigured()) {
             throw new KafkaException("RemoteLogManager is not configured when remote storage system is enabled");
         }
 
@@ -810,13 +818,16 @@ public class RemoteLogManager implements Closeable {
 
                             copyQuotaManagerLock.lock();
                             try {
-                                while (rlmCopyQuotaManager.isQuotaExceeded()) {
+                                long throttleTimeMs = rlmCopyQuotaManager.getThrottleTimeMs();
+                                while (throttleTimeMs > 0) {
+                                    copyThrottleTimeSensor.record(throttleTimeMs, time.milliseconds());
                                     logger.debug("Quota exceeded for copying log segments, waiting for the quota to be available.");
                                     // If the thread gets interrupted while waiting, the InterruptedException is thrown
                                     // back to the caller. It's important to note that the task being executed is already
                                     // cancelled before the executing thread is interrupted. The caller is responsible
                                     // for handling the exception gracefully by checking if the task is already cancelled.
                                     boolean ignored = copyQuotaManagerLockCondition.await(quotaTimeout().toMillis(), TimeUnit.MILLISECONDS);
+                                    throttleTimeMs = rlmCopyQuotaManager.getThrottleTimeMs();
                                 }
                                 rlmCopyQuotaManager.record(candidateLogSegment.logSegment.log().sizeInBytes());
                                 // Signal waiting threads to check the quota again
@@ -856,6 +867,7 @@ public class RemoteLogManager implements Closeable {
             RemoteLogSegmentId id = RemoteLogSegmentId.generateNew(topicIdPartition);
 
             long endOffset = nextSegmentBaseOffset - 1;
+            int tieredEpoch = 0;
             File producerStateSnapshotFile = log.producerStateManager().fetchSnapshot(nextSegmentBaseOffset).orElse(null);
 
             List<EpochEntry> epochEntries = getLeaderEpochEntries(log, segment.baseOffset(), nextSegmentBaseOffset);
@@ -864,7 +876,7 @@ public class RemoteLogManager implements Closeable {
 
             RemoteLogSegmentMetadata copySegmentStartedRlsm = new RemoteLogSegmentMetadata(id, segment.baseOffset(), endOffset,
                     segment.largestTimestamp(), brokerId, time.milliseconds(), segment.log().sizeInBytes(),
-                    segmentLeaderEpochs);
+                    segmentLeaderEpochs, tieredEpoch);
 
             remoteLogMetadataManager.addRemoteLogSegmentMetadata(copySegmentStartedRlsm).get();
 
@@ -1751,7 +1763,6 @@ public class RemoteLogManager implements Closeable {
 
     void doHandleLeaderOrFollowerPartitions(TopicIdPartition topicPartition,
                                             Consumer<RLMTask> convertToLeaderOrFollower) {
-        RemoteLogManagerConfig rlmConfig = config.remoteLogManagerConfig();
         RLMTaskWithFuture rlmTaskWithFuture = leaderOrFollowerTasks.computeIfAbsent(topicPartition,
                 topicIdPartition -> {
                     RLMTask task = new RLMTask(topicIdPartition, rlmConfig.remoteLogMetadataCustomMetadataMaxBytes());

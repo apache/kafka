@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
+import org.apache.kafka.common.TopicPartition;
+
 import java.util.Optional;
 import java.util.Set;
-import org.apache.kafka.common.TopicPartition;
 
 /**
  * This is a simple container class used during the assignment process to distinguish

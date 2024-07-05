@@ -25,11 +25,13 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.StateStoreProviderStub;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -42,15 +44,17 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class CompositeReadOnlyWindowStoreTest {
 
     private static final long WINDOW_SIZE = 30_000;
@@ -62,7 +66,7 @@ public class CompositeReadOnlyWindowStoreTest {
     private ReadOnlyWindowStoreStub<String, String> underlyingWindowStore;
     private ReadOnlyWindowStoreStub<String, String> otherUnderlyingStore;
 
-    @Before
+    @BeforeEach
     public void before() {
         stubProviderOne = new StateStoreProviderStub(false);
         stubProviderTwo = new StateStoreProviderStub(false);
@@ -214,9 +218,9 @@ public class CompositeReadOnlyWindowStoreTest {
             );
         try {
             store.fetch("key", ofEpochMilli(1), ofEpochMilli(10));
-            Assert.fail("InvalidStateStoreException was expected");
+            fail("InvalidStateStoreException was expected");
         } catch (final InvalidStateStoreException e) {
-            Assert.assertEquals("State store is not available anymore and may have been migrated to another instance; " +
+            assertEquals("State store is not available anymore and may have been migrated to another instance; " +
                 "please re-discover its location from the state metadata.", e.getMessage());
         }
     }
@@ -232,9 +236,9 @@ public class CompositeReadOnlyWindowStoreTest {
             );
         try {
             store.backwardFetch("key", ofEpochMilli(1), ofEpochMilli(10));
-            Assert.fail("InvalidStateStoreException was expected");
+            fail("InvalidStateStoreException was expected");
         } catch (final InvalidStateStoreException e) {
-            Assert.assertEquals("State store is not available anymore and may have been migrated to another instance; " +
+            assertEquals("State store is not available anymore and may have been migrated to another instance; " +
                 "please re-discover its location from the state metadata.", e.getMessage());
         }
     }
@@ -252,7 +256,7 @@ public class CompositeReadOnlyWindowStoreTest {
         try (final WindowStoreIterator<Object> windowStoreIterator =
                  store.backwardFetch("key", ofEpochMilli(1), ofEpochMilli(10))) {
 
-            Assert.assertFalse(windowStoreIterator.hasNext());
+            assertFalse(windowStoreIterator.hasNext());
         }
     }
 
@@ -269,7 +273,7 @@ public class CompositeReadOnlyWindowStoreTest {
         try (final WindowStoreIterator<Object> windowStoreIterator =
                  store.fetch("key", ofEpochMilli(1), ofEpochMilli(10))) {
 
-            Assert.assertFalse(windowStoreIterator.hasNext());
+            assertFalse(windowStoreIterator.hasNext());
         }
     }
 
