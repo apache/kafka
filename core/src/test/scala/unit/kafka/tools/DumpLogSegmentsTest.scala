@@ -444,9 +444,12 @@ class DumpLogSegmentsTest {
   @Test
   def testDumpRemoteLogMetadataNoFilesFlag(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
-    val thrown = assertThrows(classOf[IllegalArgumentException], () => runDumpLogSegments(Array("--remote-log-metadata-decoder")))
-    Exit.resetExitProcedure()
-    assertTrue(thrown.getMessage.equals("Missing required argument \"[files]\""))
+    try {
+      val thrown = assertThrows(classOf[IllegalArgumentException], () => runDumpLogSegments(Array("--remote-log-metadata-decoder")))
+      assertTrue(thrown.getMessage.equals("Missing required argument \"[files]\""))
+    } finally {
+      Exit.resetExitProcedure()
+    }
   }
 
   @Test
