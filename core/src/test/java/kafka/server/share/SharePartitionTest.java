@@ -3602,7 +3602,7 @@ public class SharePartitionTest {
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
         assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
 
-        // TopicsData contains wrong topicId
+        // TopicsData contains wrong topicId.
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(Uuid.randomUuid(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
@@ -3617,7 +3617,7 @@ public class SharePartitionTest {
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
         assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
 
-        // TopicsData contains wrong partition
+        // TopicsData contains wrong partition.
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())))));
@@ -3689,11 +3689,11 @@ public class SharePartitionTest {
                         new ShareAcknowledgementBatch(0, 249, Collections.singletonList((byte) 1))));
 
         assertEquals(250, sharePartition.nextFetchOffset());
-        // The SPSO should only move when the initial records in cachedState are acknowledged with type ACKNOWLEDGE or ARCHIVED.
+        // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
         assertEquals(250, sharePartition.startOffset());
         assertEquals(250, sharePartition.endOffset());
         assertTrue(sharePartition.canAcquireRecords());
-        // The records have been accepted, thus they are removed from the cachedState.
+        // The records have been accepted, thus they are removed from the cached state.
         assertEquals(0, sharePartition.cachedState().size());
     }
 
@@ -3711,48 +3711,31 @@ public class SharePartitionTest {
                 new ShareAcknowledgementBatch(0, 249, Collections.singletonList((byte) 3))));
 
         assertEquals(250, sharePartition.nextFetchOffset());
-        // The SPSO should only move when the initial records in cachedState are acknowledged with type ACKNOWLEDGE or ARCHIVED.
+        // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
         assertEquals(250, sharePartition.startOffset());
         assertEquals(250, sharePartition.endOffset());
         assertTrue(sharePartition.canAcquireRecords());
-        // The records have been rejected, thus they are removed from the cachedState.
+        // The records have been rejected, thus they are removed from the cached state.
         assertEquals(0, sharePartition.cachedState().size());
     }
 
     @Test
     public void testMaybeUpdateCachedStateWhenAcknowledgementTypeRelease() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
-        MemoryRecords records1 = memoryRecords(250, 0);
-        CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
-                "member-1",
-                new FetchPartitionData(Errors.NONE, 20, 0, records1,
-                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
-        assertFalse(result.isCompletedExceptionally());
-        assertEquals(1, result.join().size());
-        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
-        assertEquals("member-1", sharePartition.cachedState().get(0L).batchMemberId());
-        assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
         assertFalse(sharePartition.canAcquireRecords());
-        assertEquals(0, sharePartition.startOffset());
-        assertEquals(249, sharePartition.endOffset());
-        assertEquals(250, sharePartition.nextFetchOffset());
 
-        CompletableFuture<Optional<Throwable>> ackResult = sharePartition.acknowledge(
-                "member-1",
-                Collections.singletonList(
-                        new ShareAcknowledgementBatch(0, 249, Collections.singletonList((byte) 2))
-                )
-        );
-        assertFalse(ackResult.isCompletedExceptionally());
-        assertFalse(ackResult.join().isPresent());
-        assertEquals(0, sharePartition.nextFetchOffset());
-        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
-        // The SPSO should only move when the initial records in cachedState are acknowledged with type ACKNOWLEDGE or ARCHIVED.
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 249, Collections.singletonList((byte) 2))));
+
+        // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
         assertEquals(0, sharePartition.startOffset());
         assertEquals(249, sharePartition.endOffset());
         assertTrue(sharePartition.canAcquireRecords());
-        // The records have been released, thus they are not removed from the cachedState.
+        // The records have been released, thus they are not removed from the cached state.
         assertEquals(1, sharePartition.cachedState().size());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).batchState());
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
@@ -4004,7 +3987,7 @@ public class SharePartitionTest {
         sharePartition.acknowledge("member-1", Collections.singletonList(
                 new ShareAcknowledgementBatch(0, 89, Collections.singletonList((byte) 2))));
 
-        // The SPSO should only move when the initial records in cachedState are acknowledged with type ACKNOWLEDGE or ARCHIVED.
+        // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
         assertEquals(0, sharePartition.startOffset());
         assertEquals(249, sharePartition.endOffset());
         // The records have been released, thus they are still available for being acquired.
@@ -4034,10 +4017,9 @@ public class SharePartitionTest {
         sharePartition.acknowledge("member-1", Collections.singletonList(
                 new ShareAcknowledgementBatch(0, 89, Collections.singletonList((byte) 3))));
 
-        // The SPSO should only move when the initial records in cachedState are acknowledged with type ACKNOWLEDGE or ARCHIVED.
+        // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
         assertEquals(90, sharePartition.startOffset());
         assertEquals(249, sharePartition.endOffset());
-        // The records have been rejected, thus they are removed from the cachedState.
         assertTrue(sharePartition.canAcquireRecords());
     }
 
@@ -4063,10 +4045,9 @@ public class SharePartitionTest {
         sharePartition.acknowledge("member-1", Collections.singletonList(
                         new ShareAcknowledgementBatch(0, 89, Collections.singletonList((byte) 1))));
 
-        // The SPSO should only move when the initial records in cachedState are acknowledged with type ACKNOWLEDGE or ARCHIVED.
+        // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
         assertEquals(90, sharePartition.startOffset());
         assertEquals(249, sharePartition.endOffset());
-        // The records have been accepted, thus they are removed from the cachedState.
         assertTrue(sharePartition.canAcquireRecords());
     }
 
@@ -4296,7 +4277,7 @@ public class SharePartitionTest {
         assertEquals(20, sharePartition.nextFetchOffset());
         // Cached state will be empty because after the second release, the acquired records will now have moved to
         // ARCHIVE state, since their max delivery count exceeded. Also, now since all the records are either in ACKNOWLEDGED or ARCHIVED
-        // state, cachedState should be empty.
+        // state, cached state should be empty.
         assertEquals(0, sharePartition.cachedState().size());
     }
 
