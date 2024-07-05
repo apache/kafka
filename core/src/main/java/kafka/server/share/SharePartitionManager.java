@@ -808,8 +808,6 @@ public class SharePartitionManager implements AutoCloseable {
         void recordAcknowledgement(byte ackType) {
             if (recordAcksSensorMap.containsKey(ackType)) {
                 recordAcksSensorMap.get(ackType).record();
-            } else {
-                log.error("Unknown ack type {}", ackType);
             }
         }
 
