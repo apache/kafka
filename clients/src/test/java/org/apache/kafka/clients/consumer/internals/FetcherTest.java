@@ -2884,6 +2884,11 @@ public class FetcherTest {
                             verifySessionPartitions();
                             handler.handleError(t);
                         }
+                        
+                        @Override
+                        public Map<Uuid, String> sessionTopicNames() {
+                            return handler.sessionTopicNames();
+                        }
 
                         // Verify that session partitions can be traversed safely.
                         private void verifySessionPartitions() {
@@ -3664,6 +3669,52 @@ public class FetcherTest {
 
         // Validate subscription is still valid & fetch-able for tp1.
         assertTrue(subscriptions.isFetchable(tp1));
+    }
+    
+    @Test
+    public void testFetcherDontCacheAnyData() {
+        buildFetcher();
+
+        subscriptions.assignFromUser(singleton(tp0));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4),
+                tp -> validLeaderEpoch, topicIds, false));
+        subscriptions.seek(tp0, 0);
+
+        // Send fetches
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // Prepare response with records
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchRecords().forEach((tp, records) -> {
+            assertEquals(3, records.size());
+            assertEquals(4L, subscriptions.position(tp).offset);
+        });
+
+        // Send fetches again
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // Prepare response with no records
+        client.prepareResponse(fullFetchResponse(tidp0, emptyRecords, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchRecords();
+
+        // Send fetches again
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // Prepare response with records
+        client.prepareResponse(fullFetchResponse(tidp0, nextRecords, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchRecords().forEach((tp, records) -> {
+            assertEquals(2, records.size());
+            assertEquals(6L, subscriptions.position(tp).offset);
+        });
     }
 
     private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(
