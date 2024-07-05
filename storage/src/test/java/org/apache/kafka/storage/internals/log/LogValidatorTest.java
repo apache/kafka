@@ -829,6 +829,57 @@ public class LogValidatorTest {
     }
 
     @Test
+    public void testInvalidSequence() {
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.gzip().build(), CompressionType.GZIP);
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.lz4().build(), CompressionType.LZ4);
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.snappy().build(), CompressionType.SNAPPY);
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.zstd().build(), CompressionType.ZSTD);
+    }
+
+    private void checkInvalidSequence(byte magic, Compression compression, CompressionType type) {
+        long producerId = 1234;
+        short producerEpoch = 0;
+        int baseSequence = 0;
+
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, compression,
+                 0L, producerId, producerEpoch, baseSequence, false);
+        builder.append(new SimpleRecord("hello".getBytes()));
+
+        MemoryRecords memoryRecords = builder.build();
+        ByteBuffer buf = memoryRecords.buffer();
+
+        // overwrite baseSequence to make InvalidSequence
+        // BASE_SEQUENCE_OFFSET is defined in DefaultRecordBatch and it is private
+        // so we write this number directly.
+        buf.putInt(53, -2);
+
+        LogValidator logValidator = new LogValidator(memoryRecords,
+                topicPartition,
+                time,
+                type,
+                compression,
+                false,
+                magic,
+                TimestampType.CREATE_TIME,
+                1000L,
+                1000L,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                AppendOrigin.CLIENT,
+                MetadataVersion.latestTesting()
+        );
+
+
+        assertThrows(InvalidRecordException.class, () -> logValidator.validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0),
+                metricsRecorder,
+                RequestLocal.withThreadConfinedCaching().bufferSupplier()
+        ));
+
+        assertTrue(metricsRecorder.recordInvalidSequenceCount > 0);
+    }
+
+    @Test
     public void testNoKeyCompactedTopic() {
         checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V0, Compression.gzip().build(), CompressionType.GZIP);
         checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V1, Compression.gzip().build(), CompressionType.GZIP);
