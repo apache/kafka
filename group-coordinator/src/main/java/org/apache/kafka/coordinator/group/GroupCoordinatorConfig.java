@@ -43,6 +43,9 @@ import static org.apache.kafka.common.utils.Utils.require;
 
 /**
  * The group coordinator configurations.
+ * This configuration utilizes several local variables instead of calling AbstractConfig#get.... as all configs here
+ * are static and non-dynamic, with some being accessed extremely frequently (e.g., offsets.commit.timeout.ms).
+ * Using local variable is advantageous as it avoids the overhead of repeatedly looking up these configurations in AbstractConfig.
  */
 public class GroupCoordinatorConfig {
     /** ********* Group coordinator configuration ***********/
