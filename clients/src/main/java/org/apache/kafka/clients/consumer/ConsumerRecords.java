@@ -25,7 +25,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Predicate;
 
 /**
  * A container that holds the list {@link ConsumerRecord} per partition for a
@@ -71,7 +70,27 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     public Iterable<ConsumerRecord<K, V>> records(String topic) {
         if (topic == null)
             throw new IllegalArgumentException("Topic must be non-null.");
-        return new ConcatenatedIterable<>(records.values(), record -> record.topic().equals(topic));
+        return () -> new AbstractIterator<ConsumerRecord<K, V>>() {
+            private final Iterator<Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>>> partitionIterator
+                    = records.entrySet().iterator();
+            private Iterator<ConsumerRecord<K, V>> currentRecordIterator = null;
+
+            @Override
+            protected ConsumerRecord<K, V> makeNext() {
+                if (currentRecordIterator == null || !currentRecordIterator.hasNext()) {
+                    while (partitionIterator.hasNext()) {
+                        Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> nextPartitionIterator = partitionIterator.next();
+                        List<ConsumerRecord<K, V>> records = nextPartitionIterator.getValue();
+                        if (topic.equals(nextPartitionIterator.getKey().topic()) && !records.isEmpty()) {
+                            currentRecordIterator = records.iterator();
+                            return currentRecordIterator.next();
+                        }
+                    }
+                    return allDone();
+                }
+                return currentRecordIterator.next();
+            }
+        };
     }
 
     /**
@@ -100,15 +119,9 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     private static class ConcatenatedIterable<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
         private final Iterable<? extends Iterable<ConsumerRecord<K, V>>> iterables;
-        private Predicate<ConsumerRecord<K, V>> predicate = null;
 
         public ConcatenatedIterable(Iterable<? extends Iterable<ConsumerRecord<K, V>>> iterables) {
             this.iterables = iterables;
-        }
-
-        public ConcatenatedIterable(Iterable<? extends Iterable<ConsumerRecord<K, V>>> iterables, Predicate<ConsumerRecord<K, V>> predicate) {
-            this.iterables = iterables;
-            this.predicate = predicate;
         }
 
         @Override
@@ -118,29 +131,13 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
                 Iterator<ConsumerRecord<K, V>> current;
 
                 protected ConsumerRecord<K, V> makeNext() {
-                    while (true) {
-                        if (current == null || !current.hasNext()) {
-                            if (!advanceToNextIterator()) {
-                                return allDone();
-                            }
-                        }
-
-                        ConsumerRecord<K, V> next = current.next();
-
-                        if (predicate == null || predicate.test(next)) {
-                            return next;
-                        }
+                    while (current == null || !current.hasNext()) {
+                        if (iters.hasNext())
+                            current = iters.next().iterator();
+                        else
+                            return allDone();
                     }
-                }
-
-                private boolean advanceToNextIterator() {
-                    while (iters.hasNext()) {
-                        current = iters.next().iterator();
-                        if (current.hasNext()) {
-                            return true;
-                        }
-                    }
-                    return false;
+                    return current.next();
                 }
             };
         }
