@@ -214,7 +214,7 @@ public interface ReplicatedLog extends AutoCloseable {
         final long truncationOffset;
         int leaderEpoch = endOffset.epoch();
         if (leaderEpoch == 0) {
-            truncationOffset = Math.min(endOffset.offset(), endOffset().offset);
+            truncationOffset = Math.min(endOffset.offset(), endOffset().offset());
         } else {
             OffsetAndEpoch localEndOffset = endOffsetForEpoch(leaderEpoch);
             if (localEndOffset.epoch() == leaderEpoch) {

@@ -320,7 +320,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             onUpdateLeaderHighWatermark(state, currentTimeMs);
         }
 
-        fetchPurgatory.maybeComplete(endOffsetMetadata.offset, currentTimeMs);
+        fetchPurgatory.maybeComplete(endOffsetMetadata.offset(), currentTimeMs);
     }
 
     private void onUpdateLeaderHighWatermark(
@@ -334,12 +334,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // After updating the high watermark, we first clear the append
             // purgatory so that we have an opportunity to route the pending
             // records still held in memory directly to the listener
-            appendPurgatory.maybeComplete(highWatermark.offset, currentTimeMs);
+            appendPurgatory.maybeComplete(highWatermark.offset(), currentTimeMs);
 
             // It is also possible that the high watermark is being updated
             // for the first time following the leader election, so we need
             // to give lagging listeners an opportunity to catch up as well
-            updateListenersProgress(highWatermark.offset);
+            updateListenersProgress(highWatermark.offset());
         });
     }
 
@@ -469,7 +469,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // so there are no unknown voter connections. Report this metric as 0.
         kafkaRaftMetrics.updateNumUnknownVoterConnections(0);
 
-        quorum.initialize(new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch()));
+        quorum.initialize(new OffsetAndEpoch(log.endOffset().offset(), log.lastFetchedEpoch()));
 
         long currentTimeMs = time.milliseconds();
         if (quorum.isLeader()) {
@@ -514,7 +514,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private OffsetAndEpoch endOffset() {
-        return new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch());
+        return new OffsetAndEpoch(log.endOffset().offset(), log.lastFetchedEpoch());
     }
 
     private void resetConnections() {
@@ -522,7 +522,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void onBecomeLeader(long currentTimeMs) {
-        long endOffset = log.endOffset().offset;
+        long endOffset = log.endOffset().offset();
 
         BatchAccumulator<T> accumulator = new BatchAccumulator<>(
             quorum.epoch(),
@@ -1201,7 +1201,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     .setErrorCode(error.code())
                     .setLogStartOffset(log.startOffset())
                     .setHighWatermark(
-                        highWatermark.map(offsetMetadata -> offsetMetadata.offset).orElse(-1L)
+                        highWatermark.map(offsetMetadata -> offsetMetadata.offset()).orElse(-1L)
                     );
 
                 partitionData.currentLeader()
@@ -1515,7 +1515,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     divergingEpoch.endOffset(), divergingEpoch.epoch());
 
                 state.highWatermark().ifPresent(highWatermark -> {
-                    if (divergingOffsetAndEpoch.offset() < highWatermark.offset) {
+                    if (divergingOffsetAndEpoch.offset() < highWatermark.offset()) {
                         throw new KafkaException("The leader requested truncation to offset " +
                             divergingOffsetAndEpoch.offset() + ", which is below the current high watermark" +
                             " " + highWatermark);
@@ -1694,7 +1694,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         FetchSnapshotRequestData.PartitionSnapshot partitionSnapshot = partitionSnapshotOpt.get();
         Optional<Errors> leaderValidation = validateLeaderOnlyRequest(
-                partitionSnapshot.currentLeaderEpoch()
+            partitionSnapshot.currentLeaderEpoch()
         );
         if (leaderValidation.isPresent()) {
             return RaftUtil.singletonFetchSnapshotResponse(
@@ -1935,7 +1935,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 // is always less than the snapshot id just downloaded.
                 partitionState.updateState();
 
-                updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark().offset));
+                updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark().offset()));
             } else {
                 throw new IllegalStateException(
                     String.format(
@@ -2365,7 +2365,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             fetchPartition -> fetchPartition
                 .setCurrentLeaderEpoch(quorum.epoch())
                 .setLastFetchedEpoch(log.lastFetchedEpoch())
-                .setFetchOffset(log.endOffset().offset)
+                .setFetchOffset(log.endOffset().offset())
                 .setReplicaDirectoryId(quorum.localDirectoryId())
         );
 
@@ -2766,7 +2766,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         // Check listener progress to see if reads are expected
         quorum.highWatermark().ifPresent(highWatermarkMetadata -> {
-            updateListenersProgress(highWatermarkMetadata.offset);
+            updateListenersProgress(highWatermarkMetadata.offset());
         });
 
         // Notify the new listeners of the latest leader and epoch
@@ -3024,7 +3024,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public long logEndOffset() {
-        return log.endOffset().offset;
+        return log.endOffset().offset();
     }
 
     @Override
@@ -3042,7 +3042,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     @Override
     public OptionalLong highWatermark() {
         if (isInitialized() && quorum.highWatermark().isPresent()) {
-            return OptionalLong.of(quorum.highWatermark().get().offset);
+            return OptionalLong.of(quorum.highWatermark().get().offset());
         } else {
             return OptionalLong.empty();
         }

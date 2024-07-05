@@ -16,35 +16,11 @@
  */
 package org.apache.kafka.coordinator.group.api.assignor;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Optional;
-import java.util.Set;
-
 /**
- * Interface representing the subscription metadata for a group member.
+ * Server-side partition assignor for share groups used by the GroupCoordinator.
  */
 @InterfaceStability.Unstable
-public interface MemberSubscription {
-    /**
-     * Gets the rack Id if present.
-     *
-     * @return An Optional containing the rack Id, or an empty Optional if not present.
-     */
-    Optional<String> rackId();
-
-    /**
-     * Gets the instance Id if present.
-     *
-     * @return An Optional containing the instance Id, or an empty Optional if not present.
-     */
-    Optional<String> instanceId();
-
-    /**
-     * Gets the set of subscribed topic Ids.
-     *
-     * @return The set of subscribed topic Ids.
-     */
-    Set<Uuid> subscribedTopicIds();
+public interface ShareGroupPartitionAssignor extends PartitionAssignor {
 }

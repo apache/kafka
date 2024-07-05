@@ -30,6 +30,7 @@ import java.util.Set;
  */
 public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, MemberAssignment {
     private final Optional<String> rackId;
+    private final Optional<String> instanceId;
     private final Set<Uuid> subscribedTopicIds;
     private final Assignment memberAssignment;
 
@@ -42,10 +43,12 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
      */
     public MemberSubscriptionAndAssignmentImpl(
         Optional<String> rackId,
+        Optional<String> instanceId,
         Set<Uuid> subscribedTopicIds,
         Assignment memberAssignment
     ) {
         this.rackId = Objects.requireNonNull(rackId);
+        this.instanceId = Objects.requireNonNull(instanceId);
         this.subscribedTopicIds = Objects.requireNonNull(subscribedTopicIds);
         this.memberAssignment = Objects.requireNonNull(memberAssignment);
     }
@@ -53,6 +56,11 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
     @Override
     public Optional<String> rackId() {
         return rackId;
+    }
+
+    @Override
+    public Optional<String> instanceId() {
+        return instanceId;
     }
 
     @Override
@@ -71,6 +79,7 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
         if (o == null || getClass() != o.getClass()) return false;
         MemberSubscriptionAndAssignmentImpl that = (MemberSubscriptionAndAssignmentImpl) o;
         return rackId.equals(that.rackId) &&
+            instanceId.equals(that.instanceId) &&
             subscribedTopicIds.equals(that.subscribedTopicIds) &&
             memberAssignment.equals(that.memberAssignment);
     }
@@ -78,6 +87,7 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
     @Override
     public int hashCode() {
         int result = rackId.hashCode();
+        result = 31 * result + instanceId.hashCode();
         result = 31 * result + subscribedTopicIds.hashCode();
         result = 31 * result + memberAssignment.hashCode();
         return result;
@@ -86,6 +96,7 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
     @Override
     public String toString() {
         return "MemberSubscriptionAndAssignmentImpl(rackId=" + rackId.orElse("N/A") +
+            ", instanceId=" + instanceId +
             ", subscribedTopicIds=" + subscribedTopicIds +
             ", memberAssignment=" + memberAssignment +
             ')';
