@@ -22,6 +22,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
@@ -544,10 +545,7 @@ public class RaftEventSimulationTest {
             this.random = random;
 
             for (int nodeId = 0; nodeId < numVoters; nodeId++) {
-                voters.put(
-                    nodeId,
-                    new Node(nodeId, String.format("host-node-%d", nodeId), 1234)
-                );
+                voters.put(nodeId, nodeFromId(nodeId));
                 nodes.put(nodeId, new PersistentState(nodeId));
             }
 
@@ -731,8 +729,27 @@ public class RaftEventSimulationTest {
             nodes.put(nodeId, new PersistentState(nodeId));
         }
 
+        private static final int PORT = 1234;
+
         private static InetSocketAddress nodeAddress(Node node) {
             return InetSocketAddress.createUnresolved(node.host(), node.port());
+        }
+
+        private static Node nodeFromId(int nodeId) {
+            return new Node(nodeId, hostFromId(nodeId), PORT);
+        }
+
+        private static String hostFromId(int nodeId) {
+            return String.format("host-node-%d", nodeId);
+        }
+
+        private static Endpoints endpointsFromId(int nodeId, ListenerName listenerName) {
+            return Endpoints.fromInetSocketAddresses(
+                Collections.singletonMap(
+                    listenerName,
+                    InetSocketAddress.createUnresolved(hostFromId(nodeId), PORT)
+                )
+            );
         }
 
         void start(int nodeId) {
@@ -773,7 +790,7 @@ public class RaftEventSimulationTest {
                 FETCH_MAX_WAIT_MS,
                 clusterId.toString(),
                 Collections.emptyList(),
-                Endpoints.empty(), // KAFKA-16529 will fix this
+                endpointsFromId(nodeId, channel.listenerName()),
                 logContext,
                 random,
                 quorumConfig
@@ -849,12 +866,12 @@ public class RaftEventSimulationTest {
 
         long highWatermark() {
             return client.quorum().highWatermark()
-                .map(hw -> hw.offset)
+                .map(LogOffsetMetadata::offset)
                 .orElse(0L);
         }
 
         long logEndOffset() {
-            return log.endOffset().offset;
+            return log.endOffset().offset();
         }
 
         @Override
@@ -999,7 +1016,7 @@ public class RaftEventSimulationTest {
             cluster.leaderHighWatermark().ifPresent(highWatermark -> {
                 long numReachedHighWatermark = cluster.nodes.entrySet().stream()
                     .filter(entry -> cluster.voters.containsKey(entry.getKey()))
-                    .filter(entry -> entry.getValue().log.endOffset().offset >= highWatermark)
+                    .filter(entry -> entry.getValue().log.endOffset().offset() >= highWatermark)
                     .count();
                 assertTrue(
                     numReachedHighWatermark >= cluster.majoritySize(),

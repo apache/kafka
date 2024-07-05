@@ -21,8 +21,6 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
-import org.apache.kafka.coordinator.group.consumer.Assignment;
-import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
@@ -591,6 +589,73 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
             }
         }
         return HOMOGENEOUS;
+    }
+
+    /**
+     * Removes the partition epochs based on the provided assignment.
+     *
+     * @param assignment    The assignment.
+     * @param expectedEpoch The expected epoch.
+     * @throws IllegalStateException if the epoch does not match the expected one.
+     * package-private for testing.
+     */
+    public void removePartitionEpochs(
+        Map<Uuid, Set<Integer>> assignment,
+        int expectedEpoch
+    ) {
+        assignment.forEach((topicId, assignedPartitions) -> {
+            currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
+                if (partitionsOrNull != null) {
+                    assignedPartitions.forEach(partitionId -> {
+                        Integer prevValue = partitionsOrNull.remove(partitionId);
+                        if (prevValue != expectedEpoch) {
+                            throw new IllegalStateException(
+                                String.format("Cannot remove the epoch %d from %s-%s because the partition is " +
+                                    "still owned at a different epoch %d", expectedEpoch, topicId, partitionId, prevValue));
+                        }
+                    });
+                    if (partitionsOrNull.isEmpty()) {
+                        return null;
+                    } else {
+                        return partitionsOrNull;
+                    }
+                } else {
+                    throw new IllegalStateException(
+                        String.format("Cannot remove the epoch %d from %s because it does not have any epoch",
+                            expectedEpoch, topicId));
+                }
+            });
+        });
+    }
+
+    /**
+     * Adds the partitions epoch based on the provided assignment.
+     *
+     * @param assignment    The assignment.
+     * @param epoch         The new epoch.
+     * @throws IllegalStateException if the partition already has an epoch assigned.
+     * package-private for testing.
+     */
+    public void addPartitionEpochs(
+        Map<Uuid, Set<Integer>> assignment,
+        int epoch
+    ) {
+        assignment.forEach((topicId, assignedPartitions) -> {
+            currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
+                if (partitionsOrNull == null) {
+                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedPartitions.size());
+                }
+                for (Integer partitionId : assignedPartitions) {
+                    Integer prevValue = partitionsOrNull.put(partitionId, epoch);
+                    if (prevValue != null) {
+                        throw new IllegalStateException(
+                            String.format("Cannot set the epoch of %s-%s to %d because the partition is " +
+                                "still owned at epoch %d", topicId, partitionId, epoch, prevValue));
+                    }
+                }
+                return partitionsOrNull;
+            });
+        });
     }
 
     /**

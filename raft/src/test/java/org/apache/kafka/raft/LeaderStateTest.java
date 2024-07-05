@@ -57,6 +57,7 @@ public class LeaderStateTest {
     private final MockTime time = new MockTime();
     private final int fetchTimeoutMs = 2000;
     private final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
+    private final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
 
     private LeaderState<?> newLeaderState(
         VoterSet voters,
@@ -122,16 +123,16 @@ public class LeaderStateTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testFollowerAcknowledgement(boolean withDirectoryId) {
-        int node1 = 1;
-        int node2 = 2;
+        ReplicaKey node1 = replicaKey(1, withDirectoryId);
+        ReplicaKey node2 = replicaKey(2, withDirectoryId);
         LeaderState<?> state = newLeaderState(
-            localWithRemoteVoterSet(IntStream.of(node1, node2), withDirectoryId),
+            localWithRemoteVoterSet(Stream.of(node1, node2), withDirectoryId),
             0L
         );
         assertEquals(mkSet(node1, node2), state.nonAcknowledgingVoters());
-        state.addAcknowledgementFrom(node1);
+        state.addAcknowledgementFrom(node1.id());
         assertEquals(singleton(node2), state.nonAcknowledgingVoters());
-        state.addAcknowledgementFrom(node2);
+        state.addAcknowledgementFrom(node2.id());
         assertEquals(emptySet(), state.nonAcknowledgingVoters());
     }
 
@@ -187,7 +188,7 @@ public class LeaderStateTest {
 
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateLocalState(new LogOffsetMetadata(10L), voters));
-        assertEquals(mkSet(nodeKey1.id(), nodeKey2.id()), state.nonAcknowledgingVoters());
+        assertEquals(mkSet(nodeKey1, nodeKey2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
 
         // Node 1 falls behind
@@ -366,7 +367,7 @@ public class LeaderStateTest {
         LeaderState<?> state = newLeaderState(voters, 10L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(13L), voters));
-        assertEquals(singleton(otherNodeKey.id()), state.nonAcknowledgingVoters());
+        assertEquals(singleton(otherNodeKey), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(otherNodeKey, 0, new LogOffsetMetadata(10L)));
         assertEquals(emptySet(), state.nonAcknowledgingVoters());
@@ -387,10 +388,10 @@ public class LeaderStateTest {
         LeaderState<?> state = newLeaderState(voters, 10L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), voters));
-        assertEquals(mkSet(nodeKey1.id(), nodeKey2.id()), state.nonAcknowledgingVoters());
+        assertEquals(mkSet(nodeKey1, nodeKey2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(10L)));
-        assertEquals(singleton(nodeKey2.id()), state.nonAcknowledgingVoters());
+        assertEquals(singleton(nodeKey2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(10L)));
         assertEquals(emptySet(), state.nonAcknowledgingVoters());
@@ -573,7 +574,7 @@ public class LeaderStateTest {
 
         // Leader should not be included; the follower with larger offset should be prioritized.
         assertEquals(
-            Arrays.asList(nodeKey2.id(), nodeKey1.id()),
+            Arrays.asList(nodeKey2, nodeKey1),
             state.nonLeaderVotersByDescendingFetchOffset()
         );
     }
@@ -595,10 +596,10 @@ public class LeaderStateTest {
         assertEquals(epoch, partitionData.leaderEpoch());
         assertEquals(Collections.emptyList(), partitionData.observers());
         assertEquals(1, partitionData.currentVoters().size());
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localReplicaKey.id())
-                .setReplicaDirectoryId(localReplicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(-1)
                 .setLastFetchTimestamp(time.milliseconds())
                 .setLastCaughtUpTimestamp(time.milliseconds()),
@@ -618,10 +619,10 @@ public class LeaderStateTest {
         assertEquals(epoch, partitionData.leaderEpoch());
         assertEquals(Collections.emptyList(), partitionData.observers());
         assertEquals(1, partitionData.currentVoters().size());
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localReplicaKey.id())
-                .setReplicaDirectoryId(localReplicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(leaderEndOffset)
                 .setLastFetchTimestamp(time.milliseconds())
                 .setLastCaughtUpTimestamp(time.milliseconds()),
@@ -633,9 +634,6 @@ public class LeaderStateTest {
     @ValueSource(booleans = {true, false})
     public void testDescribeQuorumWithMultipleVoters(boolean withDirectoryId) {
         MockTime time = new MockTime();
-        Uuid localVoterDirectoryId = withDirectoryId ?
-            localReplicaKey.directoryId().get() :
-            ReplicaKey.NO_DIRECTORY_ID;
         ReplicaKey activeFollowerKey = replicaKey(1, withDirectoryId);
         ReplicaKey inactiveFollowerKey = replicaKey(2, withDirectoryId);
         long leaderStartOffset = 10L;
@@ -675,10 +673,10 @@ public class LeaderStateTest {
             localReplicaKey.id(),
             partitionData.currentVoters()
         );
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localReplicaKey.id())
-                .setReplicaDirectoryId(localVoterDirectoryId)
                 .setLogEndOffset(leaderEndOffset)
                 .setLastFetchTimestamp(time.milliseconds())
                 .setLastCaughtUpTimestamp(time.milliseconds()),
@@ -692,7 +690,6 @@ public class LeaderStateTest {
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(activeFollowerKey.id())
-                .setReplicaDirectoryId(activeFollowerKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(leaderEndOffset)
                 .setLastFetchTimestamp(activeFollowerFetchTimeMs)
                 .setLastCaughtUpTimestamp(activeFollowerFetchTimeMs),
@@ -706,7 +703,6 @@ public class LeaderStateTest {
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(inactiveFollowerKey.id())
-                .setReplicaDirectoryId(inactiveFollowerKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(-1)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1),
@@ -718,9 +714,6 @@ public class LeaderStateTest {
     @ValueSource(booleans = {true, false})
     public void testDescribeQuorumWithObservers(boolean withDirectoryId) {
         MockTime time = new MockTime();
-        Uuid localVoterDirectoryId = withDirectoryId ?
-            localReplicaKey.directoryId().get() :
-            ReplicaKey.NO_DIRECTORY_ID;
 
         ReplicaKey observerKey = replicaKey(10, withDirectoryId);
         long epochStartOffset = 10L;
@@ -748,8 +741,9 @@ public class LeaderStateTest {
 
         assertEquals(1, partitionData.currentVoters().size());
         assertEquals(localReplicaKey.id(), partitionData.currentVoters().get(0).replicaId());
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(
-            localVoterDirectoryId,
+            ReplicaKey.NO_DIRECTORY_ID,
             partitionData.currentVoters().get(0).replicaDirectoryId()
         );
 
@@ -757,9 +751,9 @@ public class LeaderStateTest {
         assertEquals(1, observerStates.size());
 
         DescribeQuorumResponseData.ReplicaState observerState = observerStates.get(0);
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(observerKey.id())
-                .setReplicaDirectoryId(observerKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(epochStartOffset + 1)
                 .setLastFetchTimestamp(observerFetchTimeMs)
                 .setLastCaughtUpTimestamp(observerFetchTimeMs),
@@ -795,8 +789,9 @@ public class LeaderStateTest {
         assertEquals(epoch, partitionData.leaderEpoch());
         DescribeQuorumResponseData.ReplicaState observer = partitionData.observers().get(0);
         assertEquals(nodeKey1.id(), observer.replicaId());
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(
-            nodeKey1.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID),
+            ReplicaKey.NO_DIRECTORY_ID,
             observer.replicaDirectoryId()
         );
         assertEquals(epochStartOffset + 1, observer.logEndOffset());
@@ -1069,8 +1064,9 @@ public class LeaderStateTest {
 
         DescribeQuorumResponseData.ReplicaState observerState = observerStates.get(0);
         assertEquals(observerKey.id(), observerState.replicaId());
+        // KAFKA-16953 will add support for including the directory id
         assertEquals(
-            observerKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID),
+            ReplicaKey.NO_DIRECTORY_ID,
             observerState.replicaDirectoryId()
         );
 
@@ -1096,6 +1092,30 @@ public class LeaderStateTest {
         assertFalse(
             state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
         );
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBeginQuorumEpochTimer(boolean withDirectoryId) {
+        int follower1 = 1;
+        long epochStartOffset = 10L;
+
+        VoterSet voters = localWithRemoteVoterSet(IntStream.of(follower1), withDirectoryId);
+        LeaderState<?> state = newLeaderState(
+            voters,
+            epochStartOffset
+        );
+        assertEquals(0, state.timeUntilBeginQuorumEpochTimerExpires(time.milliseconds()));
+
+        time.sleep(5);
+        state.resetBeginQuorumEpochTimer(time.milliseconds());
+        assertEquals(beginQuorumEpochTimeoutMs, state.timeUntilBeginQuorumEpochTimerExpires(time.milliseconds()));
+
+        time.sleep(5);
+        assertEquals(beginQuorumEpochTimeoutMs - 5, state.timeUntilBeginQuorumEpochTimerExpires(time.milliseconds()));
+
+        time.sleep(beginQuorumEpochTimeoutMs);
+        assertEquals(0, state.timeUntilBeginQuorumEpochTimerExpires(time.milliseconds()));
     }
 
     private static class MockOffsetMetadata implements OffsetMetadata {

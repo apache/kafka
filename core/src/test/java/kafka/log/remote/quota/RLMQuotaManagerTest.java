@@ -47,19 +47,19 @@ public class RLMQuotaManagerTest {
         RLMQuotaManager quotaManager = new RLMQuotaManager(
             new RLMQuotaManagerConfig(50, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
 
-        assertFalse(quotaManager.isQuotaExceeded());
+        assertEquals(0L, quotaManager.getThrottleTimeMs());
         quotaManager.record(500);
         // Move clock by 1 sec, quota is violated
         moveClock(1);
-        assertTrue(quotaManager.isQuotaExceeded());
+        assertEquals(9_000L, quotaManager.getThrottleTimeMs());
 
         // Move clock by another 8 secs, quota is still violated for the window
         moveClock(8);
-        assertTrue(quotaManager.isQuotaExceeded());
+        assertEquals(1_000L, quotaManager.getThrottleTimeMs());
 
         // Move clock by 1 sec, quota is no more violated
         moveClock(1);
-        assertFalse(quotaManager.isQuotaExceeded());
+        assertEquals(0L, quotaManager.getThrottleTimeMs());
     }
 
     @Test
@@ -67,9 +67,9 @@ public class RLMQuotaManagerTest {
         RLMQuotaManager quotaManager = new RLMQuotaManager(
             new RLMQuotaManagerConfig(50, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
 
-        assertFalse(quotaManager.isQuotaExceeded());
+        assertFalse(quotaManager.getThrottleTimeMs() > 0);
         quotaManager.record(51);
-        assertTrue(quotaManager.isQuotaExceeded());
+        assertTrue(quotaManager.getThrottleTimeMs() > 0);
 
         Map<MetricName, KafkaMetric> fetchQuotaMetrics = metrics.metrics().entrySet().stream()
             .filter(entry -> entry.getKey().name().equals("byte-rate") && entry.getKey().group().equals(QUOTA_TYPE.toString()))
@@ -88,7 +88,7 @@ public class RLMQuotaManagerTest {
         // Update quota to 60, quota is no more violated
         Quota quota60Bytes = new Quota(60, true);
         quotaManager.updateQuota(quota60Bytes);
-        assertFalse(quotaManager.isQuotaExceeded());
+        assertFalse(quotaManager.getThrottleTimeMs() > 0);
 
         // Verify quota metrics were updated
         Map<MetricName, MetricConfig> configForQuotaMetricsAfterFirstUpdate = extractMetricConfig(fetchQuotaMetrics);
@@ -100,7 +100,7 @@ public class RLMQuotaManagerTest {
         // Update quota to 40, quota is violated again
         Quota quota40Bytes = new Quota(40, true);
         quotaManager.updateQuota(quota40Bytes);
-        assertTrue(quotaManager.isQuotaExceeded());
+        assertTrue(quotaManager.getThrottleTimeMs() > 0);
 
         // Verify quota metrics were updated
         assertNotEquals(configForQuotaMetricsAfterFirstUpdate, extractMetricConfig(fetchQuotaMetrics));

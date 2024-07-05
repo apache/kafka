@@ -1770,16 +1770,16 @@ object GroupCoordinator {
 
   @nowarn("cat=deprecation")
   private[group] def offsetConfig(config: KafkaConfig) = new OffsetConfig(
-    config.offsetMetadataMaxSize,
-    config.offsetsLoadBufferSize,
-    config.offsetsRetentionMinutes * 60L * 1000L,
-    config.offsetsRetentionCheckIntervalMs,
-    config.offsetsTopicPartitions,
-    config.offsetsTopicSegmentBytes,
-    config.offsetsTopicReplicationFactor,
-    config.offsetsTopicCompressionType,
-    config.offsetCommitTimeoutMs,
-    config.offsetCommitRequiredAcks
+    config.groupCoordinatorConfig.offsetMetadataMaxSize,
+    config.groupCoordinatorConfig.offsetsLoadBufferSize,
+    config.groupCoordinatorConfig.offsetsRetentionMs,
+    config.groupCoordinatorConfig.offsetsRetentionCheckIntervalMs,
+    config.groupCoordinatorConfig.offsetsTopicPartitions,
+    config.groupCoordinatorConfig.offsetsTopicSegmentBytes,
+    config.groupCoordinatorConfig.offsetsTopicReplicationFactor,
+    config.groupCoordinatorConfig.offsetTopicCompressionType,
+    config.groupCoordinatorConfig.offsetCommitTimeoutMs,
+    config.groupCoordinatorConfig.offsetCommitRequiredAcks
   )
 
   private[group] def apply(
@@ -1791,10 +1791,10 @@ object GroupCoordinator {
     metrics: Metrics
   ): GroupCoordinator = {
     val offsetConfig = this.offsetConfig(config)
-    val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
-      groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs,
-      groupMaxSize = config.groupMaxSize,
-      groupInitialRebalanceDelayMs = config.groupInitialRebalanceDelay)
+    val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupCoordinatorConfig.classicGroupMinSessionTimeoutMs,
+      groupMaxSessionTimeoutMs = config.groupCoordinatorConfig.classicGroupMaxSessionTimeoutMs,
+      groupMaxSize = config.groupCoordinatorConfig.classicGroupMaxSize,
+      groupInitialRebalanceDelayMs = config.groupCoordinatorConfig.classicGroupInitialRebalanceDelayMs)
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
       offsetConfig, replicaManager, time, metrics)
