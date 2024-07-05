@@ -21,7 +21,9 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
@@ -31,15 +33,92 @@ import java.util.Set;
  * user and performs the conversion lazily with TopicsImage.
  */
 public class TopicIds implements Set<Uuid> {
+    public interface TopicResolver {
+        String name(Uuid id);
+        Uuid id(String name);
+        void clear();
+    }
+
+    public static class DefaultTopicResolver implements TopicResolver {
+        private final TopicsImage image;
+
+        public DefaultTopicResolver(
+            TopicsImage image
+        ) {
+            this.image = Objects.requireNonNull(image);
+        }
+
+        @Override
+        public String name(Uuid id) {
+            TopicImage topic = image.getTopic(id);
+            if (topic == null) return null;
+            return topic.name();
+        }
+
+        @Override
+        public Uuid id(String name) {
+            TopicImage topic = image.getTopic(name);
+            if (topic == null) return null;
+            return topic.id();
+        }
+
+        @Override
+        public void clear() {}
+    }
+
+    public static class CachedTopicResolver implements TopicResolver {
+        private final Map<String, Uuid> topicIds = new HashMap<>();
+        private final Map<Uuid, String> topicNames = new HashMap<>();
+        private final TopicsImage image;
+
+        public CachedTopicResolver(
+            TopicsImage image
+        ) {
+            this.image = Objects.requireNonNull(image);
+        }
+
+        @Override
+        public String name(Uuid id) {
+            return topicNames.computeIfAbsent(id, __ -> {
+                TopicImage topic = image.getTopic(id);
+                if (topic == null) return null;
+                return topic.name();
+            });
+        }
+
+        @Override
+        public Uuid id(String name) {
+            return topicIds.computeIfAbsent(name, __ -> {
+                TopicImage topic = image.getTopic(name);
+                if (topic == null) return null;
+                return topic.id();
+            });
+        }
+
+        @Override
+        public void clear() {
+            this.topicNames.clear();
+            this.topicIds.clear();
+        }
+    }
+
     private final Set<String> topicNames;
-    private final TopicsImage image;
+    private final TopicResolver resolver;
 
     public TopicIds(
         Set<String> topicNames,
         TopicsImage image
     ) {
         this.topicNames = Objects.requireNonNull(topicNames);
-        this.image = Objects.requireNonNull(image);
+        this.resolver = new DefaultTopicResolver(image);
+    }
+
+    public TopicIds(
+        Set<String> topicNames,
+        TopicResolver resolver
+    ) {
+        this.topicNames = Objects.requireNonNull(topicNames);
+        this.resolver = Objects.requireNonNull(resolver);
     }
 
     @Override
@@ -56,24 +135,24 @@ public class TopicIds implements Set<Uuid> {
     public boolean contains(Object o) {
         if (o instanceof Uuid) {
             Uuid topicId = (Uuid) o;
-            TopicImage topicImage = image.getTopic(topicId);
-            if (topicImage == null) return false;
-            return topicNames.contains(topicImage.name());
+            String topicName = resolver.name(topicId);
+            if (topicName == null) return false;
+            return topicNames.contains(topicName);
         }
         return false;
     }
 
     private static class TopicIdIterator implements Iterator<Uuid> {
         final Iterator<String> iterator;
-        final TopicsImage image;
+        final TopicResolver resolver;
         private Uuid next = null;
 
         private TopicIdIterator(
             Iterator<String> iterator,
-            TopicsImage image
+            TopicResolver resolver
         ) {
             this.iterator = Objects.requireNonNull(iterator);
-            this.image = Objects.requireNonNull(image);
+            this.resolver = Objects.requireNonNull(resolver);
         }
 
         @Override
@@ -85,9 +164,9 @@ public class TopicIds implements Set<Uuid> {
                     return false;
                 }
                 String next = iterator.next();
-                TopicImage topicImage = image.getTopic(next);
-                if (topicImage != null) {
-                    result = topicImage.id();
+                Uuid topicId = resolver.id(next);
+                if (topicId != null) {
+                    result = topicId;
                 }
             } while (result == null);
             next = result;
@@ -105,7 +184,7 @@ public class TopicIds implements Set<Uuid> {
 
     @Override
     public Iterator<Uuid> iterator() {
-        return new TopicIdIterator(topicNames.iterator(), image);
+        return new TopicIdIterator(topicNames.iterator(), resolver);
     }
 
     @Override
@@ -164,20 +243,20 @@ public class TopicIds implements Set<Uuid> {
         TopicIds uuids = (TopicIds) o;
 
         if (!Objects.equals(topicNames, uuids.topicNames)) return false;
-        return Objects.equals(image, uuids.image);
+        return Objects.equals(resolver, uuids.resolver);
     }
 
     @Override
     public int hashCode() {
         int result = topicNames.hashCode();
-        result = 31 * result + image.hashCode();
+        result = 31 * result + resolver.hashCode();
         return result;
     }
 
     @Override
     public String toString() {
         return "TopicIds(topicNames=" + topicNames +
-            ", image=" + image +
+            ", resolver=" + resolver +
             ')';
     }
 }

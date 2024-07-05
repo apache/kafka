@@ -95,16 +95,16 @@ public class ServerSideAssignorBenchmark {
         FULL, INCREMENTAL
     }
 
-    @Param({"100", "500", "1000", "5000", "10000"})
+    @Param({"10000"})
     private int memberCount;
 
-    @Param({"5", "10", "50"})
+    @Param({"10"})
     private int partitionsToMemberRatio;
 
-    @Param({"10", "100", "1000"})
+    @Param({"1000"})
     private int topicCount;
 
-    @Param({"true", "false"})
+    @Param({"false"})
     private boolean isRackAware;
 
     @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
@@ -113,7 +113,7 @@ public class ServerSideAssignorBenchmark {
     @Param({"RANGE", "UNIFORM"})
     private AssignorType assignorType;
 
-    @Param({"FULL", "INCREMENTAL"})
+    @Param({"INCREMENTAL"})
     private AssignmentType assignmentType;
 
     private PartitionAssignor partitionAssignor;
@@ -129,6 +129,7 @@ public class ServerSideAssignorBenchmark {
     private final List<String> allTopicNames = new ArrayList<>();
 
     private TopicsImage topicsImage = TopicsImage.EMPTY;
+    private TopicIds.TopicResolver resolver;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -173,6 +174,7 @@ public class ServerSideAssignorBenchmark {
         }
 
         topicsImage = delta.apply(MetadataProvenance.EMPTY).topics();
+        resolver = new TopicIds.CachedTopicResolver(topicsImage);
         return topicMetadata;
     }
 
@@ -185,7 +187,7 @@ public class ServerSideAssignorBenchmark {
 
         if (subscriptionType == HOMOGENEOUS) {
             for (int i = 0; i < numberOfMembers; i++) {
-                addMemberSpec(members, i, new TopicIds(new HashSet<>(allTopicNames), topicsImage));
+                addMemberSpec(members, i, new TopicIds(new HashSet<>(allTopicNames), resolver));
             }
         } else {
             // Adjust bucket count based on member count when member count < max bucket count.
@@ -207,7 +209,7 @@ public class ServerSideAssignorBenchmark {
                 int topicStartIndex = bucket * bucketSizeTopics;
                 int topicEndIndex = Math.min((bucket + 1) * bucketSizeTopics, topicCount);
 
-                TopicIds bucketTopics = new TopicIds(new HashSet<>(allTopicNames.subList(topicStartIndex, topicEndIndex)), topicsImage);
+                TopicIds bucketTopics = new TopicIds(new HashSet<>(allTopicNames.subList(topicStartIndex, topicEndIndex)), resolver);
 
                 // Assign topics to each member in the current bucket
                 for (int i = memberStartIndex; i < memberEndIndex; i++) {
@@ -281,7 +283,7 @@ public class ServerSideAssignorBenchmark {
         if (subscriptionType == HETEROGENEOUS) {
             subscribedTopicIdsForNewMember = updatedMemberSpec.get("member" + (memberCount - 2)).subscribedTopicIds();
         } else {
-            subscribedTopicIdsForNewMember = new TopicIds(new HashSet<>(allTopicNames), topicsImage);
+            subscribedTopicIdsForNewMember = new TopicIds(new HashSet<>(allTopicNames), resolver);
         }
 
         Optional<String> rackId = rackId(memberCount - 1);
@@ -303,6 +305,7 @@ public class ServerSideAssignorBenchmark {
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void doAssignment() {
+        resolver.clear();
         partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
     }
 }
