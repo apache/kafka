@@ -433,21 +433,6 @@ class DumpLogSegmentsTest {
 
   @Test
   def testDumpRemoteLogMetadataNoFilesFlag(): Unit = {
-    val topicId = Uuid.randomUuid
-    val topicName = "foo"
-
-    val metadata = Seq(new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-      RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
-
-    val records: Array[SimpleRecord] = metadata.map(message => {
-      new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
-    }).toArray
-
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
-    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
-    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
-    log.flush(false)
-    
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
     val thrown = assertThrows(classOf[IllegalArgumentException], () => runDumpLogSegments(Array("--remote-log-metadata-decoder")))
     Exit.resetExitProcedure()
