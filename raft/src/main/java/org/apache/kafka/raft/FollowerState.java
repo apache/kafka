@@ -134,7 +134,7 @@ public class FollowerState implements EpochState {
         }
 
         if (highWatermark.isPresent()) {
-            long previousHighWatermark = highWatermark.get().offset;
+            long previousHighWatermark = highWatermark.get().offset();
             long updatedHighWatermark = newHighWatermark.getAsLong();
 
             if (updatedHighWatermark < 0) {
