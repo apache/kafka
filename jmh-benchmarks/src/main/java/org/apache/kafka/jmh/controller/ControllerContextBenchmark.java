@@ -41,7 +41,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
-import scala.jdk.javaapi.CollectionConverters;
+import scala.collection.JavaConverters;
 
 @State(Scope.Benchmark)
 @Fork(1)
@@ -56,11 +56,12 @@ public class ControllerContextBenchmark {
     private ControllerContext context;
 
     @Setup(Level.Trial)
+    @SuppressWarnings("deprecation")
     public void setup() throws IOException {
         context = new ControllerContext();
         for (int i = 0; i < numBrokers; i++) {
             int brokerId = i;
-            context.addLiveBrokers(CollectionConverters.asScala(new HashMap<Broker, Object>() {{
+            context.addLiveBrokers(JavaConverters.mapAsScalaMap(new HashMap<Broker, Object>() {{
                     put(new Broker(brokerId, "localhost", 0, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT), (Object) 1L);
                 }}));
         }
