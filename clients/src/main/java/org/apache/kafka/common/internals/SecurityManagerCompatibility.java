@@ -19,7 +19,6 @@ package org.apache.kafka.common.internals;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.security.auth.Subject;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.security.PrivilegedAction;
@@ -30,6 +29,8 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+
+import javax.security.auth.Subject;
 
 /**
  * This is a compatibility class to provide dual-support for JREs with and without SecurityManager support.
