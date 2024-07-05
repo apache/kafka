@@ -216,29 +216,29 @@ commons-lang3-3.12.0
 commons-logging-1.2
 commons-validator-1.7
 error_prone_annotations-2.10.0
-jackson-annotations-2.16.1
-jackson-core-2.16.1
-jackson-databind-2.16.1
-jackson-dataformat-csv-2.16.1
-jackson-datatype-jdk8-2.16.1
-jackson-jaxrs-base-2.16.1
-jackson-jaxrs-json-provider-2.16.1
-jackson-module-afterburner-2.16.1
-jackson-module-jaxb-annotations-2.16.1
-jackson-module-scala_2.13-2.16.1
-jackson-module-scala_2.12-2.16.1
+jackson-annotations-2.16.2
+jackson-core-2.16.2
+jackson-databind-2.16.2
+jackson-dataformat-csv-2.16.2
+jackson-datatype-jdk8-2.16.2
+jackson-jaxrs-base-2.16.2
+jackson-jaxrs-json-provider-2.16.2
+jackson-module-afterburner-2.16.2
+jackson-module-jaxb-annotations-2.16.2
+jackson-module-scala_2.13-2.16.2
+jackson-module-scala_2.12-2.16.2
 jakarta.validation-api-2.0.2
 javassist-3.29.2-GA
-jetty-client-9.4.53.v20231009
-jetty-continuation-9.4.53.v20231009
-jetty-http-9.4.53.v20231009
-jetty-io-9.4.53.v20231009
-jetty-security-9.4.53.v20231009
-jetty-server-9.4.53.v20231009
-jetty-servlet-9.4.53.v20231009
-jetty-servlets-9.4.53.v20231009
-jetty-util-9.4.53.v20231009
-jetty-util-ajax-9.4.53.v20231009
+jetty-client-9.4.54.v20240208
+jetty-continuation-9.4.54.v20240208
+jetty-http-9.4.54.v20240208
+jetty-io-9.4.54.v20240208
+jetty-security-9.4.54.v20240208
+jetty-server-9.4.54.v20240208
+jetty-servlet-9.4.54.v20240208
+jetty-servlets-9.4.54.v20240208
+jetty-util-9.4.54.v20240208
+jetty-util-ajax-9.4.54.v20240208
 jose4j-0.9.4
 lz4-java-1.8.0
 maven-artifact-3.9.6
@@ -262,8 +262,8 @@ scala-collection-compat_2.12-2.10.0
 scala-collection-compat_2.13-2.10.0
 scala-library-2.12.19
 scala-library-2.13.14
-scala-logging_2.12-3.9.4
-scala-logging_2.13-3.9.4
+scala-logging_2.12-3.9.5
+scala-logging_2.13-3.9.5
 scala-reflect-2.12.19
 scala-reflect-2.13.14
 scala-java8-compat_2.12-1.0.2
@@ -328,7 +328,7 @@ pcollections-4.0.1, see: licenses/pcollections-MIT
 ---------------------------------------
 BSD 2-Clause
 
-zstd-jni-1.5.5-11 see: licenses/zstd-jni-BSD-2-clause
+zstd-jni-1.5.6-3 see: licenses/zstd-jni-BSD-2-clause
 
 ---------------------------------------
 BSD 3-Clause

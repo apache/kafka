@@ -126,8 +126,8 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
      *
      * @return true if any worker is running, or false otherwise
      */
-    public boolean anyWorkersRunning() {
-        return workers().stream().anyMatch(WorkerHandle::isRunning);
+    public boolean anyWorkersHealthy() {
+        return workers().stream().anyMatch(this::isHealthy);
     }
 
     /**
@@ -135,8 +135,8 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
      *
      * @return true if all workers are running, or false otherwise
      */
-    public boolean allWorkersRunning() {
-        return workers().stream().allMatch(WorkerHandle::isRunning);
+    public boolean allWorkersHealthy() {
+        return workers().stream().allMatch(this::isHealthy);
     }
 
     @Override

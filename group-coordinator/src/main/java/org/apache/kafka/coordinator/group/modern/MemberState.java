@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.modern;
 
-import org.apache.kafka.coordinator.group.consumer.CurrentAssignmentBuilder;
+import org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilder;
 
 import java.util.HashMap;
 import java.util.Map;
