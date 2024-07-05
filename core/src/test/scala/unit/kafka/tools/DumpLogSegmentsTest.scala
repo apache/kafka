@@ -248,6 +248,16 @@ class DumpLogSegmentsTest {
 
   def countSubstring(str: String, sub: String): Int =
     str.sliding(sub.length).count(_ == sub)
+  
+  // the number of batches in the log dump is equal to 
+  // the number of occurrences of the "baseOffset:" substring
+  def batchCount(str: String): Int =
+    countSubstring(str, "baseOffset:")
+
+  // the number of records in the log dump is equal to 
+  // the number of occurrences of the "payload:" substring
+  def recordCount(str: String): Int =
+    countSubstring(str, "payload:")
 
   @Test
   def testDumpRemoteLogMetadataEmpty(): Unit = {
@@ -255,8 +265,8 @@ class DumpLogSegmentsTest {
     log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
 
     val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
-    assertTrue(countSubstring(output, "baseOffset:") == 0)
-    assertTrue(countSubstring(output, "payload:") == 0)
+    assertTrue(batchCount(output) == 0)
+    assertTrue(recordCount(output) == 0)
     assertTrue(output.contains("Log starting offset: 0"))
   }
 
@@ -281,8 +291,8 @@ class DumpLogSegmentsTest {
       "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName)
 
     val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
-    assertTrue(countSubstring(output, "baseOffset:") == 1)
-    assertTrue(countSubstring(output, "payload:") == 1)
+    assertTrue(batchCount(output) == 1)
+    assertTrue(recordCount(output) == 1)
     assertTrue(output.contains("Log starting offset: 0"))
     assertTrue(output.contains(expectedDeletePayload))
   }
@@ -316,8 +326,8 @@ class DumpLogSegmentsTest {
       "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName)
     
     val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
-    assertTrue(countSubstring(output, "baseOffset:") == 1)
-    assertTrue(countSubstring(output, "payload:") == 2)
+    assertTrue(batchCount(output) == 1)
+    assertTrue(recordCount(output) == 2)
     assertTrue(output.contains("Log starting offset: 0"))
     assertTrue(output.contains(expectedUpdatePayload))
     assertTrue(output.contains(expectedDeletePayload))
@@ -355,8 +365,8 @@ class DumpLogSegmentsTest {
       "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName)
 
     val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
-    assertTrue(countSubstring(output, "baseOffset:") == 2)
-    assertTrue(countSubstring(output, "payload:") == 4)
+    assertTrue(batchCount(output) == 2)
+    assertTrue(recordCount(output) == 4)
     assertTrue(output.contains("Log starting offset: 0"))
     assertTrue(countSubstring(output, expectedUpdatePayload) == 2)
     assertTrue(countSubstring(output, expectedDeletePayload) == 2)
@@ -386,8 +396,8 @@ class DumpLogSegmentsTest {
       "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName)
 
     val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logPaths(1)))
-    assertTrue(countSubstring(output, "baseOffset:") == 1)
-    assertTrue(countSubstring(output, "payload:") == 1)
+    assertTrue(batchCount(output) == 1)
+    assertTrue(recordCount(output) == 1)
     assertTrue(output.contains("Log starting offset: 1"))
     assertTrue(output.contains(expectedDeletePayload))
   }
@@ -402,8 +412,8 @@ class DumpLogSegmentsTest {
     log.flush(false)
 
     val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
-    assertTrue(countSubstring(output, "baseOffset:") == 1)
-    assertTrue(countSubstring(output, "payload:") == 1)
+    assertTrue(batchCount(output) == 1)
+    assertTrue(recordCount(output) == 1)
     assertTrue(output.contains("Log starting offset: 0"))
     assertTrue(output.contains("Could not deserialize metadata record"))
   }
