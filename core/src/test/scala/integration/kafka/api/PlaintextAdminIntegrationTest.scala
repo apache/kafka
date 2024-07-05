@@ -2714,6 +2714,24 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, Collections.emptyList(), null, null),
       topicConfigs.get(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG))
   }
+
+  /**
+   * Test that createTopics returns the dynamic configurations of the topics that were created.
+   *
+   * Note: this test requires some custom static broker and controller configurations, which are set up in
+   * BaseAdminIntegrationTest.modifyConfigs.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testConsistentReturnsConfigs(quorum: String): Unit = {
+    client = createAdminClient
+    val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    val newTopics = Seq(new NewTopic(topic, 1, 1.toShort))
+    val create = client.createTopics(newTopics.asJava).config(topic).get().get("segment.bytes")
+    val describe = client.describeConfigs(Collections.singletonList(resource)).values().get(resource).get().get("segment.bytes")
+//    println(s"create $create \ndescribe: $describe")
+    assertEquals(create, describe)
+  }
 }
 
 object PlaintextAdminIntegrationTest {

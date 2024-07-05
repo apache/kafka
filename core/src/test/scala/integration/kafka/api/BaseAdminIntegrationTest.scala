@@ -206,6 +206,11 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
         config.setProperty(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG, "123")
       })
     }
+    if (testInfo.getTestMethod.toString.contains("testConsistentReturnsConfigs")) {
+      configs.foreach(config => {
+        config.setProperty(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "573741824")
+      })
+    }
     configs.foreach { config =>
       config.setProperty(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "true")
       config.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
