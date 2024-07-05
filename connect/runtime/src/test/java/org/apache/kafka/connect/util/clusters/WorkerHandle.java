@@ -23,6 +23,7 @@ import org.apache.kafka.connect.runtime.rest.RestServer;
 import java.net.URI;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Future;
 
 /**
  * A handle to a worker executing in a Connect cluster.
@@ -35,6 +36,11 @@ public class WorkerHandle {
     protected WorkerHandle(String workerName, Connect<?> worker) {
         this.workerName = workerName;
         this.worker = worker;
+    }
+
+    // public for testing
+    public Future<?> getDistributedHerderFuture() {
+        return worker.getDistributedHerderFuture();
     }
 
     /**

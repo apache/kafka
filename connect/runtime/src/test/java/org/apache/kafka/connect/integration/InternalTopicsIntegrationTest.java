@@ -32,6 +32,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import javax.ws.rs.core.Response;
 
@@ -152,11 +156,20 @@ public class InternalTopicsIntegrationTest {
                     "Body did not contain expected message detailing the worker's in-progress operation: " + body
             );
         }
+
         connect.resetRequestTimeout();
 
+        Future<?> future = worker.getDistributedHerderFuture();
+
+        try {
+            future.get(5000, TimeUnit.MILLISECONDS);
+        }  catch (TimeoutException | ExecutionException exception) {
+            log.error("Failed to start a worker:", exception);
+            future.cancel(true);
+        }
+
         // Verify that the offset and config topic don't exist;
-        // the status topic may have been created if timing was right but we don't care
-        // TODO: Synchronously await and verify that the worker fails during startup
+        // the status topic may have been created if timing was right, but we don't care
         log.info("Verifying the internal topics for Connect");
         connect.assertions().assertTopicsDoNotExist(configTopic(), offsetTopic());
     }

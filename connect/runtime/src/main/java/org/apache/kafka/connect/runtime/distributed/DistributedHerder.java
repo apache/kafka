@@ -99,6 +99,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -232,6 +233,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private final DistributedConfig config;
 
+    // visible for testing
+    public Future<?> herderFuture;
+
     /**
      * Create a herder that will form a Connect cluster with other {@link DistributedHerder} instances (in this or other JVMs)
      * that have the same group ID.
@@ -363,7 +367,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     @Override
     public void start() {
-        this.herderExecutor.submit(this);
+        herderFuture = this.herderExecutor.submit(this);
     }
 
     @Override

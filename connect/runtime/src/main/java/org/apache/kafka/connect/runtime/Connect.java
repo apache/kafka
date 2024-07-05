@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.rest.ConnectRestServer;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 
@@ -24,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -34,6 +36,7 @@ public class Connect<H extends Herder> {
     private static final Logger log = LoggerFactory.getLogger(Connect.class);
 
     private final H herder;
+    private Future<?> distributedHerderFuture;
     private final ConnectRestServer rest;
     private final CountDownLatch startLatch = new CountDownLatch(1);
     private final CountDownLatch stopLatch = new CountDownLatch(1);
@@ -47,6 +50,11 @@ public class Connect<H extends Herder> {
         shutdownHook = new ShutdownHook();
     }
 
+    // public for testing
+    public Future<?> getDistributedHerderFuture() {
+        return this.distributedHerderFuture;
+    }
+
     public H herder() {
         return herder;
     }
@@ -58,6 +66,10 @@ public class Connect<H extends Herder> {
 
             herder.start();
             rest.initializeResources(herder);
+
+            if (herder instanceof DistributedHerder) {
+                distributedHerderFuture = ((DistributedHerder) herder).herderFuture;
+            }
 
             log.info("Kafka Connect started");
         } finally {
