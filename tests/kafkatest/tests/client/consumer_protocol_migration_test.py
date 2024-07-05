@@ -35,13 +35,13 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     all_assignment_strategies = [RANGE, ROUND_ROBIN, COOPERATIVE_STICKEY, STICKY]
 
     all_consumer_versions = [LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, \
-                             LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, \
+                             LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_4, LATEST_2_5, LATEST_2_6, \
                              LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, \
                              LATEST_3_7, LATEST_3_8, DEV_BRANCH]
-    # all_consumer_versions = [DEV_BRANCH]
+    # all_consumer_versions = [LATEST_2_3]
 
     def __init__(self, test_context):
-        super(ConsumerProtocolMigrationTest, self).__init__(test_context, num_consumers=2, num_producers=1,
+        super(ConsumerProtocolMigrationTest, self).__init__(test_context, num_consumers=5, num_producers=1,
                                                             num_zk=0, num_brokers=1, topics={
                 self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 }
             })
