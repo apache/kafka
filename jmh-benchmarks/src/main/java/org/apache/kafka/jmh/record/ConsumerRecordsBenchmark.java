@@ -36,12 +36,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -77,11 +72,15 @@ public class ConsumerRecordsBenchmark {
     @Benchmark
     public void records(Blackhole blackhole) {
         // original one
-        blackhole.consume(records.recordsWithNestedList("topic2"));
+        for (ConsumerRecord<Integer, String> record : records.recordsWithNestedList("topic2")) {
+            blackhole.consume(record);
+        }
     }
 
     @Benchmark
     public void recordsWithFilterIterator(Blackhole blackhole) {
-        blackhole.consume(records.records("topic2"));
+        for (ConsumerRecord<Integer, String> record : records.records("topic2")) {
+            blackhole.consume(record);
+        }
     }
 }
