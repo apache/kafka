@@ -389,7 +389,7 @@ class DumpLogSegmentsTest {
     log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
-    log.flush(false)
+    log.flush(true)
 
     val logPaths = logDir.listFiles.filter(_.getName.endsWith(".log")).map(_.getAbsolutePath)
     val expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
