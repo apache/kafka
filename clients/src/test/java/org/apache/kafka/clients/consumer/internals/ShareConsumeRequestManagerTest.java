@@ -100,6 +100,7 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -138,7 +139,7 @@ public class ShareConsumeRequestManagerTest {
     private ShareFetchMetricsManager metricsManager;
     private MockClient client;
     private Metrics metrics;
-    private TestableShareConsumeRequestManager<?, ?> fetcher;
+    private TestableShareConsumeRequestManager<?, ?> shareConsumeRequestManager;
     private TestableNetworkClientDelegate networkClientDelegate;
     private MemoryRecords records;
     private List<ShareFetchResponseData.AcquiredRecords> acquiredRecords;
@@ -172,27 +173,27 @@ public class ShareConsumeRequestManagerTest {
     public void teardown() throws Exception {
         if (metrics != null)
             metrics.close();
-        if (fetcher != null)
-            fetcher.close();
+        if (shareConsumeRequestManager != null)
+            shareConsumeRequestManager.close();
     }
 
     private int sendFetches() {
-        return fetcher.sendFetches();
+        return shareConsumeRequestManager.sendFetches();
     }
 
     @Test
     public void testFetchNormal() {
-        buildFetcher();
+        buildRequestManager();
 
         assignFromSubscribed(Collections.singleton(tp0));
 
         // normal fetch
         assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
@@ -203,18 +204,18 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testFetchWithAcquiredRecords() {
-        buildFetcher();
+        buildRequestManager();
 
         assignFromSubscribed(Collections.singleton(tp0));
 
         // normal fetch
         assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         client.prepareResponse(fullFetchResponse(tip0, records,
                 ShareCompletedFetchTest.acquiredRecords(1L, 1), Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
@@ -226,17 +227,17 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testMultipleFetches() {
-        buildFetcher();
+        buildRequestManager();
 
         assignFromSubscribed(Collections.singleton(tp0));
 
         assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         client.prepareResponse(fullFetchResponse(tip0, records,
                 ShareCompletedFetchTest.acquiredRecords(1L, 1), Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
@@ -247,15 +248,15 @@ public class ShareConsumeRequestManagerTest {
 
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
-        fetcher.fetch(Collections.singletonMap(tip0, acknowledgements));
+        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, acknowledgements));
 
         assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         client.prepareResponse(fullFetchResponse(tip0, records,
                 ShareCompletedFetchTest.acquiredRecords(2L, 1), Errors.NONE, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
         assertEquals(1.0,
                 metrics.metrics().get(metrics.metricInstance(shareFetchMetricsRegistry.acknowledgementSendTotal)).metricValue());
 
@@ -266,16 +267,16 @@ public class ShareConsumeRequestManagerTest {
 
         Acknowledgements acknowledgements2 = Acknowledgements.empty();
         acknowledgements2.add(2L, AcknowledgeType.REJECT);
-        fetcher.fetch(Collections.singletonMap(tip0, acknowledgements2));
+        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, acknowledgements2));
 
         assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         // Preparing a response with an acknowledgement error.
         client.prepareResponse(fullFetchResponse(tip0, records,
                 Collections.emptyList(), Errors.NONE, Errors.INVALID_RECORD_STATE));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
         assertEquals(2.0,
                 metrics.metrics().get(metrics.metricInstance(shareFetchMetricsRegistry.acknowledgementSendTotal)).metricValue());
         assertEquals(1.0,
@@ -288,63 +289,92 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testCommitSync() {
-        buildFetcher();
+        buildRequestManager();
 
         assignFromSubscribed(Collections.singleton(tp0));
 
         // normal fetch
         assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements.add(3L, AcknowledgeType.REJECT);
 
-        fetcher.commitSync(Collections.singletonMap(tip0, acknowledgements), time.milliseconds() + 2000);
+        shareConsumeRequestManager.commitSync(Collections.singletonMap(tip0, acknowledgements), time.milliseconds() + 2000);
 
-        assertEquals(1, fetcher.sendAcknowledgements());
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
     }
 
     @Test
     public void testCommitAsync() {
-        buildFetcher();
+        buildRequestManager();
 
         assignFromSubscribed(Collections.singleton(tp0));
 
         // normal fetch
         assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements.add(3L, AcknowledgeType.REJECT);
 
-        fetcher.commitAsync(Collections.singletonMap(tip0, acknowledgements));
+        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements));
 
-        assertEquals(1, fetcher.sendAcknowledgements());
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+    }
+
+    @Test
+    public void testAcknowledgeOnClose() {
+        buildRequestManager();
+
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        // normal fetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.acknowledgeOnClose(Collections.singletonMap(tip0, acknowledgements),
+                calculateDeadlineMs(time.timer(100)));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
     }
 
     @Test
     public void testMultipleTopicsFetch() {
-        buildFetcher();
+        buildRequestManager();
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp0);
         partitions.add(tp1);
@@ -352,7 +382,7 @@ public class ShareConsumeRequestManagerTest {
         assignFromSubscribed(partitions);
 
         assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
         partitionDataMap.put(tip0, partitionDataForFetch(tip0, records, acquiredRecords, Errors.NONE, Errors.NONE));
@@ -360,7 +390,7 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, partitionDataMap, Collections.emptyList()));
 
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         ShareFetch<Object, Object> shareFetch = collectFetch();
         assertEquals(1, shareFetch.records().size());
@@ -373,7 +403,7 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testMultipleTopicsFetchError() {
-        buildFetcher();
+        buildRequestManager();
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp0);
         partitions.add(tp1);
@@ -381,7 +411,7 @@ public class ShareConsumeRequestManagerTest {
         assignFromSubscribed(partitions);
 
         assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
         partitionDataMap.put(tip1, partitionDataForFetch(tip1, records, emptyAcquiredRecords, Errors.TOPIC_AUTHORIZATION_FAILED, Errors.NONE));
@@ -389,7 +419,7 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, partitionDataMap, Collections.emptyList()));
 
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         // The first call throws TopicAuthorizationException because there are no records ready to return when the
         // exception is noticed.
@@ -405,27 +435,27 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testCloseShouldBeIdempotent() {
-        buildFetcher();
+        buildRequestManager();
 
-        fetcher.close();
-        fetcher.close();
-        fetcher.close();
+        shareConsumeRequestManager.close();
+        shareConsumeRequestManager.close();
+        shareConsumeRequestManager.close();
 
-        verify(fetcher, times(1)).closeInternal();
+        verify(shareConsumeRequestManager, times(1)).closeInternal();
     }
 
     @Test
     public void testFetchError() {
-        buildFetcher();
+        buildRequestManager();
 
         assignFromSubscribed(singleton(tp0));
 
         assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         client.prepareResponse(fullFetchResponse(tip0, records, emptyAcquiredRecords, Errors.NOT_LEADER_OR_FOLLOWER));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertFalse(partitionRecords.containsKey(tp0));
@@ -433,7 +463,7 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testInvalidDefaultRecordBatch() {
-        buildFetcher();
+        buildRequestManager();
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         ByteBufferOutputStream out = new ByteBufferOutputStream(buffer);
@@ -472,7 +502,7 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testParseInvalidRecordBatch() {
-        buildFetcher();
+        buildRequestManager();
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
                 Compression.NONE, TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
@@ -498,7 +528,7 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testHeaders() {
-        buildFetcher();
+        buildRequestManager();
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE, TimestampType.CREATE_TIME, 1L);
         builder.append(0L, "key".getBytes(), "value-1".getBytes());
@@ -545,7 +575,7 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testUnauthorizedTopic() {
-        buildFetcher();
+        buildRequestManager();
 
         assignFromSubscribed(singleton(tp0));
 
@@ -562,7 +592,7 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testUnknownTopicIdError() {
-        buildFetcher();
+        buildRequestManager();
         assignFromSubscribed(singleton(tp0));
 
         assertEquals(1, sendFetches());
@@ -577,7 +607,7 @@ public class ShareConsumeRequestManagerTest {
     public void testHandleFetchResponseError(Errors error,
                                              boolean hasTopLevelError,
                                              boolean shouldRequestMetadataUpdate) {
-        buildFetcher();
+        buildRequestManager();
         assignFromSubscribed(singleton(tp0));
 
         assertEquals(1, sendFetches());
@@ -618,7 +648,7 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testFetchDisconnected() {
-        buildFetcher();
+        buildRequestManager();
 
         assignFromSubscribed(singleton(tp0));
 
@@ -630,7 +660,7 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testFetchWithLastRecordMissingFromBatch() {
-        buildFetcher();
+        buildRequestManager();
 
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
                 new SimpleRecord("0".getBytes(), "v".getBytes()),
@@ -660,7 +690,7 @@ public class ShareConsumeRequestManagerTest {
                 ShareCompletedFetchTest.acquiredRecords(0L, 3),
                 Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> allFetchedRecords = fetchRecords();
         assertTrue(allFetchedRecords.containsKey(tp0));
@@ -681,11 +711,11 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testCorruptMessageError() {
-        buildFetcher();
+        buildRequestManager();
         assignFromSubscribed(singleton(tp0));
 
         assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         // Prepare a response with the CORRUPT_MESSAGE error.
         client.prepareResponse(fullFetchResponse(
@@ -694,7 +724,7 @@ public class ShareConsumeRequestManagerTest {
                 ShareCompletedFetchTest.acquiredRecords(1L, 1),
                 Errors.CORRUPT_MESSAGE));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         // Trigger the exception.
         assertThrows(KafkaException.class, this::fetchRecords);
@@ -772,32 +802,32 @@ public class ShareConsumeRequestManagerTest {
 
     @SuppressWarnings("unchecked")
     private <K, V> ShareFetch<K, V> collectFetch() {
-        return (ShareFetch<K, V>) fetcher.collectFetch();
+        return (ShareFetch<K, V>) shareConsumeRequestManager.collectFetch();
     }
 
-    private void buildFetcher() {
-        buildFetcher(new ByteArrayDeserializer(), new ByteArrayDeserializer());
+    private void buildRequestManager() {
+        buildRequestManager(new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
-    private <K, V> void buildFetcher(Deserializer<K> keyDeserializer,
-                                     Deserializer<V> valueDeserializer) {
-        buildFetcher(new MetricConfig(), keyDeserializer, valueDeserializer);
+    private <K, V> void buildRequestManager(Deserializer<K> keyDeserializer,
+                                            Deserializer<V> valueDeserializer) {
+        buildRequestManager(new MetricConfig(), keyDeserializer, valueDeserializer);
     }
 
-    private <K, V> void buildFetcher(MetricConfig metricConfig,
-                                     Deserializer<K> keyDeserializer,
-                                     Deserializer<V> valueDeserializer) {
+    private <K, V> void buildRequestManager(MetricConfig metricConfig,
+                                            Deserializer<K> keyDeserializer,
+                                            Deserializer<V> valueDeserializer) {
         LogContext logContext = new LogContext();
         SubscriptionState subscriptionState = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST);
-        buildFetcher(metricConfig, keyDeserializer, valueDeserializer,
+        buildRequestManager(metricConfig, keyDeserializer, valueDeserializer,
                 subscriptionState, logContext);
     }
 
-    private <K, V> void buildFetcher(MetricConfig metricConfig,
-                                     Deserializer<K> keyDeserializer,
-                                     Deserializer<V> valueDeserializer,
-                                     SubscriptionState subscriptionState,
-                                     LogContext logContext) {
+    private <K, V> void buildRequestManager(MetricConfig metricConfig,
+                                            Deserializer<K> keyDeserializer,
+                                            Deserializer<V> valueDeserializer,
+                                            SubscriptionState subscriptionState,
+                                            LogContext logContext) {
         buildDependencies(metricConfig, subscriptionState, logContext);
         Deserializers<K, V> deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
         int maxWaitMs = 0;
@@ -819,7 +849,7 @@ public class ShareConsumeRequestManagerTest {
                 fetchConfig,
                 deserializers);
         BackgroundEventHandler backgroundEventHandler = new TestableBackgroundEventHandler(completedAcknowledgements);
-        fetcher = spy(new TestableShareConsumeRequestManager<>(
+        shareConsumeRequestManager = spy(new TestableShareConsumeRequestManager<>(
                 logContext,
                 groupId,
                 metadata,

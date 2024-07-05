@@ -507,8 +507,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             if (!handler.handleResponse(response, requestVersion)) {
                 acknowledgeRequestState.onFailedAttempt(currentTimeMs);
-                if (response.error().exception() instanceof RetriableException) {
-                    // We retry the request until the timer expires.
+                if (response.error().exception() instanceof RetriableException && !closing) {
+                    // We retry the request until the timer expires, unless we are closing.
                 } else {
                     requestData.topics().forEach(topic -> topic.partitions().forEach(partition -> {
                         TopicIdPartition tip = new TopicIdPartition(topic.topicId(),
