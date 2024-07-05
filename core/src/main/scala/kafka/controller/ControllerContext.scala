@@ -238,7 +238,12 @@ class ControllerContext extends ControllerChannelContext {
   def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition, includeShuttingDownBrokers: Boolean): Boolean = {
     val brokerOnline = {
       if (includeShuttingDownBrokers) liveOrShuttingDownBrokerIds.contains(brokerId)
-      else liveBrokerIds.contains(brokerId)
+        // NOTE: this membership test is identical to test against liveBrokerIds, but we don't use it here
+        // because we want to avoid the overhead of constructing the set of live broker IDs,
+        // which is costly.
+        // isReplicaOnline is called in the hot path of the controller, so it's important to keep it efficient.
+        // See KAFKA-17061 for the details.
+      else liveBrokerEpochs.contains(brokerId) && !shuttingDownBrokerIds(brokerId)
     }
     brokerOnline && !replicasOnOfflineDirs.getOrElse(brokerId, Set.empty).contains(topicPartition)
   }
