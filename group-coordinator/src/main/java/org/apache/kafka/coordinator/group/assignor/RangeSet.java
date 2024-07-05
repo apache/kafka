@@ -100,7 +100,9 @@ class RangeSet implements Set<Integer> {
             a[i] = (T) Integer.valueOf(from + i);
         }
         if (a.length > size) {
-            a[size] = null;
+            for (int i = size; i < a.length; i++) {
+                a[i] = null;
+            }
         }
         return a;
     }
