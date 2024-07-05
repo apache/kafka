@@ -22,6 +22,7 @@ import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
@@ -54,6 +55,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         String TIMESTAMP_FIELD = "timestamp.field";
         String STATIC_FIELD = "static.field";
         String STATIC_VALUE = "static.value";
+        String CURRENT_TIMESTAMP_FIELD = "current.timestamp.field";
     }
 
     private static final String OPTIONALITY_DOC = "Suffix with <code>!</code> to make this a required field, or <code>?</code> to keep it optional (the default).";
@@ -70,7 +72,9 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
             .define(ConfigName.STATIC_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for static data field. " + OPTIONALITY_DOC)
             .define(ConfigName.STATIC_VALUE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
-                    "Static field value, if field name configured.");
+                    "Static field value, if field name configured.")
+            .define(ConfigName.CURRENT_TIMESTAMP_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
+                    "Field name for current timestamp value.");
 
     private static final String PURPOSE = "field insertion";
 
@@ -103,8 +107,15 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     private InsertionSpec timestampField;
     private InsertionSpec staticField;
     private String staticValue;
+    private InsertionSpec currentTimestampField;
 
     private Cache<Schema, Schema> schemaUpdateCache;
+
+    private final Time time;
+
+    protected InsertField(Time time) {
+        this.time = time;
+    }
 
     @Override
     public String version() {
@@ -120,8 +131,9 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         timestampField = InsertionSpec.parse(config.getString(ConfigName.TIMESTAMP_FIELD));
         staticField = InsertionSpec.parse(config.getString(ConfigName.STATIC_FIELD));
         staticValue = config.getString(ConfigName.STATIC_VALUE);
+        currentTimestampField = InsertionSpec.parse(config.getString(ConfigName.CURRENT_TIMESTAMP_FIELD));
 
-        if (topicField == null && partitionField == null && offsetField == null && timestampField == null && staticField == null) {
+        if (topicField == null && partitionField == null && offsetField == null && timestampField == null && staticField == null && currentTimestampField == null) {
             throw new ConfigException("No field insertion configured");
         }
 
@@ -163,6 +175,9 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         if (staticField != null && staticValue != null) {
             updatedValue.put(staticField.name, staticValue);
         }
+        if (currentTimestampField != null) {
+            updatedValue.put(currentTimestampField.name, currentTimestamp());
+        }
 
         return newRecord(record, null, updatedValue);
     }
@@ -182,23 +197,50 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
             updatedValue.put(field.name(), value.get(field));
         }
 
+        putTopic(record, updatedValue);
+        putParition(record, updatedValue);
+        putOffsetValue(record, updatedValue);
+        putTimestamp(record, updatedValue);
+        putStaticValue(updatedValue);
+        putCurrentTimestamp(updatedValue);
+
+        return newRecord(record, updatedSchema, updatedValue);
+    }
+
+    private void putTopic(R record, Struct updatedValue) {
         if (topicField != null) {
             updatedValue.put(topicField.name, record.topic());
         }
+    }
+
+    private void putParition(R record, Struct updatedValue) {
         if (partitionField != null && record.kafkaPartition() != null) {
             updatedValue.put(partitionField.name, record.kafkaPartition());
         }
+    }
+
+    private void putOffsetValue(R record, Struct updatedValue) {
         if (offsetField != null) {
             updatedValue.put(offsetField.name, requireSinkRecord(record, PURPOSE).kafkaOffset());
         }
+    }
+
+    private void putTimestamp(R record, Struct updatedValue) {
         if (timestampField != null && record.timestamp() != null) {
             updatedValue.put(timestampField.name, new Date(record.timestamp()));
         }
+    }
+
+    private void putStaticValue(Struct updatedValue) {
         if (staticField != null && staticValue != null) {
             updatedValue.put(staticField.name, staticValue);
         }
+    }
 
-        return newRecord(record, updatedSchema, updatedValue);
+    private void putCurrentTimestamp(Struct updatedValue) {
+        if (currentTimestampField != null) {
+            updatedValue.put(currentTimestampField.name, new Date(currentTimestamp()));
+        }
     }
 
     private Schema makeUpdatedSchema(Schema schema) {
@@ -208,23 +250,24 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
             builder.field(field.name(), field.schema());
         }
 
-        if (topicField != null) {
-            builder.field(topicField.name, topicField.optional ? Schema.OPTIONAL_STRING_SCHEMA : Schema.STRING_SCHEMA);
-        }
-        if (partitionField != null) {
-            builder.field(partitionField.name, partitionField.optional ? Schema.OPTIONAL_INT32_SCHEMA : Schema.INT32_SCHEMA);
-        }
-        if (offsetField != null) {
-            builder.field(offsetField.name, offsetField.optional ? Schema.OPTIONAL_INT64_SCHEMA : Schema.INT64_SCHEMA);
-        }
-        if (timestampField != null) {
-            builder.field(timestampField.name, timestampField.optional ? OPTIONAL_TIMESTAMP_SCHEMA : Timestamp.SCHEMA);
-        }
-        if (staticField != null) {
-            builder.field(staticField.name, staticField.optional ? Schema.OPTIONAL_STRING_SCHEMA : Schema.STRING_SCHEMA);
-        }
+        addField(topicField, builder, Schema.OPTIONAL_STRING_SCHEMA, Schema.STRING_SCHEMA);
+        addField(partitionField, builder, Schema.OPTIONAL_INT32_SCHEMA, Schema.INT32_SCHEMA);
+        addField(offsetField, builder, Schema.OPTIONAL_INT64_SCHEMA, Schema.INT64_SCHEMA);
+        addField(timestampField, builder, OPTIONAL_TIMESTAMP_SCHEMA, Timestamp.SCHEMA);
+        addField(staticField, builder, Schema.OPTIONAL_STRING_SCHEMA, Schema.STRING_SCHEMA);
+        addField(currentTimestampField, builder, OPTIONAL_TIMESTAMP_SCHEMA, Timestamp.SCHEMA);
 
         return builder.build();
+    }
+
+    private void addField(InsertionSpec spec, SchemaBuilder builder, Schema optionalSchema, Schema schema) {
+        if (spec != null) {
+            builder.field(spec.name, spec.optional ? optionalSchema : schema);
+        }
+    }
+
+    private long currentTimestamp() {
+        return time.milliseconds();
     }
 
     @Override
@@ -245,6 +288,14 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
 
     public static class Key<R extends ConnectRecord<R>> extends InsertField<R> {
 
+        public Key() {
+            this(Time.SYSTEM);
+        }
+
+        public Key(Time time) {
+            super(time);
+        }
+
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
@@ -263,6 +314,14 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     }
 
     public static class Value<R extends ConnectRecord<R>> extends InsertField<R> {
+
+        public Value() {
+            this(Time.SYSTEM);
+        }
+
+        public Value(Time time) {
+            super(time);
+        }
 
         @Override
         protected Schema operatingSchema(R record) {

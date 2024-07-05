@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -27,10 +28,14 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -38,8 +43,29 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class InsertFieldTest {
-    private final InsertField<SourceRecord> xformKey = new InsertField.Key<>();
-    private final InsertField<SourceRecord> xformValue = new InsertField.Value<>();
+    private final Time mockTime = new Time() {
+        private final Clock fixedClock = Clock.fixed(Instant.now(), ZoneId.of("UTC"));
+        @Override
+        public long milliseconds() {
+            return fixedClock.millis();
+        }
+
+        @Override
+        public long nanoseconds() {
+            return fixedClock.instant().getNano();
+        }
+
+        @Override
+        public void sleep(long ms) {
+        }
+
+        @Override
+        public void waitObject(Object obj, Supplier<Boolean> condition, long deadlineMs) {
+        }
+    };
+
+    private final InsertField<SourceRecord> xformKey = new InsertField.Key<>(mockTime);
+    private final InsertField<SourceRecord> xformValue = new InsertField.Value<>(mockTime);
 
     @AfterEach
     public void teardown() {
@@ -61,6 +87,7 @@ public class InsertFieldTest {
         props.put("timestamp.field", "timestamp_field?");
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
+        props.put("current.timestamp.field", "current_timestamp_field?");
 
         xformValue.configure(props);
 
@@ -89,6 +116,9 @@ public class InsertFieldTest {
         assertEquals(Schema.OPTIONAL_STRING_SCHEMA, transformedRecord.valueSchema().field("instance_id").schema());
         assertEquals("my-instance-id", ((Struct) transformedRecord.value()).getString("instance_id"));
 
+        assertEquals(Timestamp.builder().optional().build(), transformedRecord.valueSchema().field("current_timestamp_field").schema());
+        assertEquals(mockTime.milliseconds(), ((Date) ((Struct) transformedRecord.value()).get("current_timestamp_field")).getTime());
+
         // Exercise caching
         final SourceRecord transformedRecord2 = xformValue.apply(
                 new SourceRecord(null, null, "test", 1, simpleStructSchema, new Struct(simpleStructSchema)));
@@ -103,6 +133,7 @@ public class InsertFieldTest {
         props.put("timestamp.field", "timestamp_field?");
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
+        props.put("current.timestamp.field", "current_timestamp_field?");
 
         xformValue.configure(props);
 
@@ -116,6 +147,7 @@ public class InsertFieldTest {
         assertEquals(0, ((Map<?, ?>) transformedRecord.value()).get("partition_field"));
         assertEquals(123L, ((Map<?, ?>) transformedRecord.value()).get("timestamp_field"));
         assertEquals("my-instance-id", ((Map<?, ?>) transformedRecord.value()).get("instance_id"));
+        assertEquals(mockTime.milliseconds(), ((Map<?, ?>) transformedRecord.value()).get("current_timestamp_field"));
     }
 
     @Test
@@ -126,6 +158,7 @@ public class InsertFieldTest {
         props.put("timestamp.field", "timestamp_field?");
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
+        props.put("current.timestamp.field", "current_timestamp_field?");
 
         xformValue.configure(props);
 
@@ -146,6 +179,7 @@ public class InsertFieldTest {
         props.put("timestamp.field", "timestamp_field?");
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
+        props.put("current.timestamp.field", "current_timestamp_field?");
 
         xformValue.configure(props);
 
@@ -168,6 +202,7 @@ public class InsertFieldTest {
         props.put("timestamp.field", "timestamp_field?");
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
+        props.put("current.timestamp.field", "current_timestamp_field?");
 
         xformKey.configure(props);
 
@@ -181,6 +216,7 @@ public class InsertFieldTest {
         assertEquals(0, ((Map<?, ?>) transformedRecord.key()).get("partition_field"));
         assertNull(((Map<?, ?>) transformedRecord.key()).get("timestamp_field"));
         assertEquals("my-instance-id", ((Map<?, ?>) transformedRecord.key()).get("instance_id"));
+        assertEquals(mockTime.milliseconds(), ((Map<?, ?>) transformedRecord.key()).get("current_timestamp_field"));
         assertNull(transformedRecord.value());
     }
 
@@ -192,6 +228,7 @@ public class InsertFieldTest {
         props.put("timestamp.field", "timestamp_field?");
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
+        props.put("current.timestamp.field", "current_timestamp_field?");
 
         xformKey.configure(props);
 
