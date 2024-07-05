@@ -1342,6 +1342,8 @@ public class SharePartition {
         List<InFlightState> updatedStates,
         List<PersisterStateBatch> stateBatches
     ) {
+        if (stateBatches.isEmpty() && updatedStates.isEmpty())
+            return;
         lock.writeLock().lock();
         try {
             if (throwable != null || !isWriteShareGroupStateSuccessful(stateBatches)) {
@@ -1928,11 +1930,6 @@ public class SharePartition {
         // Visible for testing.
         RecordState state() {
             return state;
-        }
-
-        // Visible for testing.
-        int deliveryCount() {
-            return deliveryCount;
         }
 
         String memberId() {
