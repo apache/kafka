@@ -18,6 +18,7 @@ package kafka.log.remote.quota;
 
 import kafka.server.QuotaType;
 import kafka.server.SensorAccess;
+import kafka.utils.QuotaUtils;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -80,16 +81,16 @@ public class RLMQuotaManager {
         }
     }
 
-    public boolean isQuotaExceeded() {
+    public long getThrottleTimeMs() {
         Sensor sensorInstance = sensor();
         try {
             sensorInstance.checkQuotas();
         } catch (QuotaViolationException qve) {
             LOGGER.debug("Quota violated for sensor ({}), metric: ({}), metric-value: ({}), bound: ({})",
                 sensorInstance.name(), qve.metric().metricName(), qve.value(), qve.bound());
-            return true;
+            return QuotaUtils.throttleTime(qve, time.milliseconds());
         }
-        return false;
+        return 0L;
     }
 
     public void record(double value) {

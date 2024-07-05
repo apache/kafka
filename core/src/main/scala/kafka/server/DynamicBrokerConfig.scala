@@ -222,7 +222,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private[server] def initialize(zkClientOpt: Option[KafkaZkClient], clientMetricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin]): Unit = {
-    currentConfig = new KafkaConfig(kafkaConfig.props, false, None)
+    currentConfig = new KafkaConfig(kafkaConfig.props, false)
     metricsReceiverPluginOpt = clientMetricsReceiverPluginOpt
 
     zkClientOpt.foreach { zkClient =>
@@ -366,7 +366,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       .foreach {
         case reconfigurable: ListenerReconfigurable =>
           val kafkaProps = validatedKafkaProps(newProps, perBrokerConfig = true)
-          val newConfig = new KafkaConfig(kafkaProps.asJava, false, None)
+          val newConfig = new KafkaConfig(kafkaProps.asJava, false)
           processListenerReconfigurable(reconfigurable, newConfig, Collections.emptyMap(), validateOnly = false, reloadOnly = true)
         case reconfigurable =>
           trace(s"Files will not be reloaded without config change for $reconfigurable")
@@ -571,7 +571,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private def processReconfiguration(newProps: Map[String, String], validateOnly: Boolean, doLog: Boolean = false): (KafkaConfig, List[BrokerReconfigurable]) = {
-    val newConfig = new KafkaConfig(newProps.asJava, doLog, None)
+    val newConfig = new KafkaConfig(newProps.asJava, doLog)
     val (changeMap, deletedKeySet) = updatedConfigs(newConfig.originalsFromThisConfig, currentConfig.originals)
     if (changeMap.nonEmpty || deletedKeySet.nonEmpty) {
       try {

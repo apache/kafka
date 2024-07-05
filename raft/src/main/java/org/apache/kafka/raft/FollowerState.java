@@ -96,10 +96,6 @@ public class FollowerState implements EpochState {
     }
 
     public Node leaderNode(ListenerName listener) {
-        /* KAFKA-16529 is going to change this so that the leader is not required to be in the set
-         * of voters. In other words, don't throw an IllegalStateException if the leader is not in
-         * the set of voters.
-         */
         return endpoints
             .address(listener)
             .map(address -> new Node(leaderId, address.getHostString(), address.getPort()))
@@ -138,7 +134,7 @@ public class FollowerState implements EpochState {
         }
 
         if (highWatermark.isPresent()) {
-            long previousHighWatermark = highWatermark.get().offset;
+            long previousHighWatermark = highWatermark.get().offset();
             long updatedHighWatermark = newHighWatermark.getAsLong();
 
             if (updatedHighWatermark < 0) {

@@ -184,7 +184,7 @@ public class SourceConnectorsIntegrationTest {
 
         connect.assertions().assertTopicsDoNotExist(FOO_TOPIC);
 
-        connect.activeWorkers().forEach(w -> connect.removeWorker(w));
+        connect.healthyWorkers().forEach(w -> connect.removeWorker(w));
 
         workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(true));
 
