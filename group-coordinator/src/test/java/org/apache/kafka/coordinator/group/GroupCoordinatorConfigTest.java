@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
@@ -149,6 +151,26 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 20);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 40);
         assertEquals("group.consumer.session.timeout.ms must be less than or equals to group.consumer.max.session.timeout.ms",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, Object.class);
+        assertEquals("Invalid value class java.lang.Object for configuration group.consumer.assignors: Expected a comma separated list.",
+                assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, Collections.singletonList(Object.class));
+        assertEquals("class java.lang.Object is not an instance of org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor",
+                assertThrows(KafkaException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, "foobar");
+        assertEquals("Invalid value foobar for configuration group.consumer.migration.policy: String must be one of (case insensitive): DISABLED, DOWNGRADE, UPGRADE, BIDIRECTIONAL",
+                assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, -100);
+        assertEquals("Unknown compression type id: -100",
                 assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
     }
 
