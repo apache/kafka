@@ -955,16 +955,8 @@ public class TopicCommandIntegrationTest {
             TopicPartition tp = new TopicPartition(testTopicName, 0);
 
             // Produce multiple batches.
-            List<ProducerRecord<String, String>> records = generateProduceMessage(testTopicName, 10);
-            List<Future<RecordMetadata>> features = records.stream().map(producer::send).collect(Collectors.toList());
-
-            assertDoesNotThrow(() -> features.forEach(s -> {
-                try {
-                    s.get();
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
-                }
-            }));
+            sendProducerRecords(testTopicName, producer, 10);
+            sendProducerRecords(testTopicName, producer, 10);
 
             // Enable throttling. Note the broker config sets the replica max fetch bytes to `1` upon to minimize replication
             // throughput so the reassignment doesn't complete quickly.
@@ -1337,6 +1329,19 @@ public class TopicCommandIntegrationTest {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         producerProps.put(ProducerConfig.ACKS_CONFIG, "-1");
-        return new KafkaProducer<String, String>(producerProps, new StringSerializer(), new StringSerializer());
+        return new KafkaProducer<>(producerProps, new StringSerializer(), new StringSerializer());
+    }
+
+    private void sendProducerRecords(String testTopicName, KafkaProducer<String, String> producer, Integer numMessage) {
+        List<ProducerRecord<String, String>> records = generateProduceMessage(testTopicName, numMessage);
+        List<Future<RecordMetadata>> features = records.stream().map(producer::send).collect(Collectors.toList());
+
+        assertDoesNotThrow(() -> features.forEach(s -> {
+            try {
+                s.get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }));
     }
 }
