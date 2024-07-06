@@ -57,11 +57,6 @@ public abstract class ModernGroupMember {
     protected String rackId;
 
     /**
-     * The rebalance timeout provided by the member.
-     */
-    protected int rebalanceTimeoutMs;
-
-    /**
      * The client id reported by the member.
      */
     protected String clientId;
@@ -87,7 +82,6 @@ public abstract class ModernGroupMember {
         int previousMemberEpoch,
         String instanceId,
         String rackId,
-        int rebalanceTimeoutMs,
         String clientId,
         String clientHost,
         Set<String> subscribedTopicNames,
@@ -100,7 +94,6 @@ public abstract class ModernGroupMember {
         this.state = state;
         this.instanceId = instanceId;
         this.rackId = rackId;
-        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.clientId = clientId;
         this.clientHost = clientHost;
         this.subscribedTopicNames = subscribedTopicNames;
@@ -140,13 +133,6 @@ public abstract class ModernGroupMember {
      */
     public String rackId() {
         return rackId;
-    }
-
-    /**
-     * @return The rebalance timeout in millis.
-     */
-    public int rebalanceTimeoutMs() {
-        return rebalanceTimeoutMs;
     }
 
     /**

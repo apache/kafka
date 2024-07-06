@@ -854,6 +854,8 @@ project(':server') {
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jReload4j
+
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   task createVersionFile() {
@@ -989,7 +991,9 @@ project(':core') {
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jReload4j
     testImplementation libs.caffeine
-    
+
+    testRuntimeOnly libs.junitPlatformLanucher
+
     generator project(':generator')
   }
 
@@ -1262,6 +1266,9 @@ project(':metadata') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
+
+    testRuntimeOnly libs.junitPlatformLanucher
+
     generator project(':generator')
   }
 
@@ -1392,6 +1399,7 @@ project(':group-coordinator') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
 
     generator project(':generator')
   }
@@ -1492,6 +1500,8 @@ project(':generator') {
     implementation libs.jacksonJDK8Datatypes
     implementation libs.jacksonJaxrsJsonProvider
     testImplementation libs.junitJupiter
+
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -1537,6 +1547,7 @@ project(':clients') {
     testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
+    testRuntimeOnly libs.junitPlatformLanucher
 
     generator project(':generator')
   }
@@ -1700,6 +1711,7 @@ project(':raft') {
     testImplementation libs.jqwik
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
 
     generator project(':generator')
   }
@@ -1794,6 +1806,7 @@ project(':server-common') {
     testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   task createVersionFile() {
@@ -1851,6 +1864,7 @@ project(':storage:storage-api') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   task createVersionFile() {
@@ -1935,6 +1949,7 @@ project(':storage') {
     testImplementation libs.bcpkix
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
 
     generator project(':generator')
   }
@@ -2030,6 +2045,7 @@ project(':tools:tools-api') {
   dependencies {
     implementation project(':clients')
     testImplementation libs.junitJupiter
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   task createVersionFile() {
@@ -2122,6 +2138,8 @@ project(':tools') {
       exclude group: 'junit', module: 'junit'
     }
     testImplementation libs.reload4j
+
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2172,6 +2190,7 @@ project(':trogdor') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2224,6 +2243,7 @@ project(':shell') {
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2291,6 +2311,7 @@ project(':streams') {
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
 
     generator project(':generator')
   }
@@ -2441,6 +2462,7 @@ project(':streams:streams-scala') {
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.hamcrest
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2493,6 +2515,7 @@ project(':streams:test-utils') {
     testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2533,6 +2556,8 @@ project(':streams:examples') {
     testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testImplementation libs.junitJupiter
     testImplementation libs.hamcrest
+
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2989,6 +3014,8 @@ project(':log4j-appender') {
     testImplementation libs.junitJupiter
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -3008,6 +3035,7 @@ project(':connect:api') {
     implementation libs.jaxrsApi
 
     testImplementation libs.junitJupiter
+    testRuntimeOnly libs.junitPlatformLanucher
     testRuntimeOnly libs.slf4jReload4j
     testImplementation project(':clients').sourceSets.test.output
   }
@@ -3047,6 +3075,7 @@ project(':connect:transforms') {
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
     testImplementation project(':clients').sourceSets.test.output
   }
 
@@ -3089,6 +3118,7 @@ project(':connect:json') {
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
     testImplementation project(':clients').sourceSets.test.output
   }
 
@@ -3172,6 +3202,7 @@ project(':connect:runtime') {
 
     testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.bcpkix
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -3273,6 +3304,7 @@ project(':connect:file') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
@@ -3320,6 +3352,7 @@ project(':connect:basic-auth-extension') {
 
     testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.jerseyContainerServlet
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -3382,6 +3415,7 @@ project(':connect:mirror') {
     testRuntimeOnly project(':connect:runtime')
     testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.bcpkix
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -3447,6 +3481,7 @@ project(':connect:mirror-client') {
     testImplementation project(':clients').sourceSets.test.output
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
