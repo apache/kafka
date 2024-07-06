@@ -78,7 +78,7 @@ final class KRaftControlRecordStateMachineTest {
         short kraftVersion = 1;
         log.appendAsLeader(
             MemoryRecords.withKRaftVersionRecord(
-                log.endOffset().offset,
+                log.endOffset().offset(),
                 0,
                 epoch,
                 bufferSupplier.get(300),
@@ -91,7 +91,7 @@ final class KRaftControlRecordStateMachineTest {
         VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(4, 5, 6), true));
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
-                log.endOffset().offset,
+                log.endOffset().offset(),
                 0,
                 epoch,
                 bufferSupplier.get(300),
@@ -104,8 +104,8 @@ final class KRaftControlRecordStateMachineTest {
         partitionState.updateState();
 
         assertEquals(voterSet, partitionState.lastVoterSet());
-        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset - 1));
-        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset - 1));
+        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
+        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
     }
 
     @Test
@@ -129,7 +129,7 @@ final class KRaftControlRecordStateMachineTest {
         short kraftVersion = 1;
         log.appendAsLeader(
             MemoryRecords.withKRaftVersionRecord(
-                log.endOffset().offset,
+                log.endOffset().offset(),
                 0,
                 epoch,
                 bufferSupplier.get(300),
@@ -142,7 +142,7 @@ final class KRaftControlRecordStateMachineTest {
         VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(4, 5, 6), true));
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
-                log.endOffset().offset,
+                log.endOffset().offset(),
                 0,
                 epoch,
                 bufferSupplier.get(300),
@@ -155,8 +155,8 @@ final class KRaftControlRecordStateMachineTest {
         partitionState.updateState();
 
         assertEquals(voterSet, partitionState.lastVoterSet());
-        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset - 1));
-        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset - 1));
+        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
+        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
     }
 
     @Test
@@ -184,8 +184,8 @@ final class KRaftControlRecordStateMachineTest {
         partitionState.updateState();
 
         assertEquals(voterSet, partitionState.lastVoterSet());
-        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset - 1));
-        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset - 1));
+        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
+        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
     }
 
     @Test
@@ -215,7 +215,7 @@ final class KRaftControlRecordStateMachineTest {
         VoterSet voterSet = snapshotVoterSet.addVoter(VoterSetTest.voterNode(7, true)).get();
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
-                log.endOffset().offset,
+                log.endOffset().offset(),
                 0,
                 epoch,
                 bufferSupplier.get(300),
@@ -228,8 +228,8 @@ final class KRaftControlRecordStateMachineTest {
         partitionState.updateState();
 
         assertEquals(voterSet, partitionState.lastVoterSet());
-        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset - 1));
-        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset - 1));
+        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
+        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
 
         // Check the voter set at the snapshot
         assertEquals(Optional.of(snapshotVoterSet), partitionState.voterSetAtOffset(snapshotId.offset() - 1));
@@ -248,7 +248,7 @@ final class KRaftControlRecordStateMachineTest {
         short kraftVersion = 1;
         log.appendAsLeader(
             MemoryRecords.withKRaftVersionRecord(
-                log.endOffset().offset,
+                log.endOffset().offset(),
                 0,
                 epoch,
                 bufferSupplier.get(300),
@@ -258,7 +258,7 @@ final class KRaftControlRecordStateMachineTest {
         );
 
         // Append the voter set control record
-        long firstVoterSetOffset = log.endOffset().offset;
+        long firstVoterSetOffset = log.endOffset().offset();
         VoterSet firstVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(4, 5, 6), true));
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
@@ -272,7 +272,7 @@ final class KRaftControlRecordStateMachineTest {
         );
 
         // Append another voter set control record
-        long voterSetOffset = log.endOffset().offset;
+        long voterSetOffset = log.endOffset().offset();
         VoterSet voterSet = firstVoterSet.addVoter(VoterSetTest.voterNode(7, true)).get();
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
@@ -313,7 +313,7 @@ final class KRaftControlRecordStateMachineTest {
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
 
         // Append the kraft.version control record
-        long kraftVersionOffset = log.endOffset().offset;
+        long kraftVersionOffset = log.endOffset().offset();
         short kraftVersion = 1;
         log.appendAsLeader(
             MemoryRecords.withKRaftVersionRecord(
@@ -327,7 +327,7 @@ final class KRaftControlRecordStateMachineTest {
         );
 
         // Append the voter set control record
-        long firstVoterSetOffset = log.endOffset().offset;
+        long firstVoterSetOffset = log.endOffset().offset();
         VoterSet firstVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(4, 5, 6), true));
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
@@ -341,7 +341,7 @@ final class KRaftControlRecordStateMachineTest {
         );
 
         // Append another voter set control record
-        long voterSetOffset = log.endOffset().offset;
+        long voterSetOffset = log.endOffset().offset();
         VoterSet voterSet = firstVoterSet.addVoter(VoterSetTest.voterNode(7, true)).get();
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(

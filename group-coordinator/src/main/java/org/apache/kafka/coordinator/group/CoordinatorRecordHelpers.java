@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
@@ -36,6 +37,7 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -209,14 +211,40 @@ public class CoordinatorRecordHelpers {
     public static CoordinatorRecord newGroupEpochTombstoneRecord(
         String groupId
     ) {
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupMetadataKey()
-                    .setGroupId(groupId),
-                (short) 3
-            ),
-            null // Tombstone.
-        );
+        return newGroupEpochTombstoneRecord(groupId, GroupType.CONSUMER);
+    }
+
+    /**
+     * Creates a ConsumerGroupMetadata tombstone.
+     *
+     * @param groupId   The consumer group id.
+     * @param groupType The group type.
+     * @return The record.
+     */
+    public static CoordinatorRecord newGroupEpochTombstoneRecord(
+        String groupId,
+        GroupType groupType
+    ) {
+        if (groupType == GroupType.CONSUMER) {
+            return new CoordinatorRecord(
+                new ApiMessageAndVersion(
+                    new ConsumerGroupMetadataKey()
+                        .setGroupId(groupId),
+                    (short) 3
+                ),
+                null // Tombstone.
+            );
+        } else if (groupType == GroupType.SHARE) {
+            return new CoordinatorRecord(
+                new ApiMessageAndVersion(
+                    new ShareGroupMetadataKey()
+                        .setGroupId(groupId),
+                    (short) 11
+                ),
+                null // Tombstone.
+            );
+        }
+        throw new IllegalArgumentException("Unsupported group type: " + groupType);
     }
 
     /**

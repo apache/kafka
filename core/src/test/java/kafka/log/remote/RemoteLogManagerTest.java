@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.FileRecords;
@@ -192,6 +193,8 @@ public class RemoteLogManagerTest {
     private final String remoteLogMetadataConsumerTestProp = REMOTE_LOG_METADATA_CONSUMER_PREFIX + "consumer.test";
     private final String remoteLogMetadataConsumerTestVal = "consumer.test";
     private final String remoteLogMetadataTopicPartitionsNum = "1";
+    private final long quotaExceededThrottleTime = 1000L;
+    private final long quotaAvailableThrottleTime = 0L;
 
     private final RemoteStorageManager remoteStorageManager = mock(RemoteStorageManager.class);
     private final RemoteLogMetadataManager remoteLogMetadataManager = mock(RemoteLogMetadataManager.class);
@@ -536,6 +539,7 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
         when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class)))
                 .thenReturn(Optional.empty());
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
 
         // Verify the metrics for remote writes and for failures is zero before attempt to copy log segment
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
@@ -652,6 +656,7 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
         when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class)))
                 .thenReturn(Optional.of(customMetadata));
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, customMetadataSizeLimit);
         task.convertToLeader(2);
@@ -879,6 +884,7 @@ public class RemoteLogManagerTest {
             copyLogSegmentLatch.await(5000, TimeUnit.MILLISECONDS);
             return Optional.empty();
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
 
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
         List<RemoteLogSegmentMetadata> metadataList = listRemoteLogSegmentMetadata(leaderTopicIdPartition, segmentCount, 100, 1024, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
@@ -1022,6 +1028,7 @@ public class RemoteLogManagerTest {
             latch.await(5000, TimeUnit.MILLISECONDS);
             return Optional.empty();
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
 
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
 
@@ -1139,6 +1146,7 @@ public class RemoteLogManagerTest {
         dummyFuture.complete(null);
         when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
         doThrow(new RuntimeException()).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
 
         // Verify the metrics for remote write requests/failures is zero before attempt to copy log segment
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
@@ -2860,6 +2868,12 @@ public class RemoteLogManagerTest {
             // Verify that the copy operation times out, since no segments can be copied due to quota being exceeded
             assertThrows(AssertionFailedError.class, () -> assertTimeoutPreemptively(Duration.ofMillis(200), () -> task.copyLogSegmentsToRemote(mockLog)));
 
+            Map<org.apache.kafka.common.MetricName, KafkaMetric> allMetrics = metrics.metrics();
+            KafkaMetric avgMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-avg", "RemoteLogManager"));
+            KafkaMetric maxMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-max", "RemoteLogManager"));
+            assertEquals(quotaExceededThrottleTime, ((Double) avgMetric.metricValue()).longValue());
+            assertEquals(quotaExceededThrottleTime, ((Double) maxMetric.metricValue()).longValue());
+
             // Verify the highest offset in remote storage is updated only once
             ArgumentCaptor<Long> capture = ArgumentCaptor.forClass(Long.class);
             verify(mockLog, times(1)).updateHighestOffsetInRemoteStorage(capture.capture());
@@ -2873,6 +2887,12 @@ public class RemoteLogManagerTest {
             verify(rlmCopyQuotaManager, times(1)).getThrottleTimeMs();
             // Verify bytes to copy was recorded with the quota manager
             verify(rlmCopyQuotaManager, times(1)).record(10);
+
+            Map<org.apache.kafka.common.MetricName, KafkaMetric> allMetrics = metrics.metrics();
+            KafkaMetric avgMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-avg", "RemoteLogManager"));
+            KafkaMetric maxMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-max", "RemoteLogManager"));
+            assertEquals(Double.NaN, avgMetric.metricValue());
+            assertEquals(Double.NaN, maxMetric.metricValue());
 
             // Verify the highest offset in remote storage is updated
             ArgumentCaptor<Long> capture = ArgumentCaptor.forClass(Long.class);
