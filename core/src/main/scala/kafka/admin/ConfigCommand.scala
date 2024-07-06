@@ -366,21 +366,22 @@ object ConfigCommand extends Logging {
 
     entityTypeHead match {
       case ConfigType.TOPIC =>
-        val oldConfig = getResourceConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = false, describeAll = false)
-          .map { entry => (entry.name, entry) }.toMap
+        entityNames.foreach { entityName =>
+          val oldConfig = getResourceConfig(adminClient, entityTypeHead, entityName, includeSynonyms = false, describeAll = false)
+            .map { entry => (entry.name, entry) }.toMap
 
-        // fail the command if any of the configs to be deleted does not exist
-        val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
-        if (invalidConfigs.nonEmpty)
-          throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+          // fail the command if any of the configs to be deleted does not exist
+          val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
+          if (invalidConfigs.nonEmpty)
+            throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
-        val configResource = new ConfigResource(ConfigResource.Type.TOPIC, entityNameHead)
-        val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
-        val alterEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
-          ++ configsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
-        ).asJavaCollection
-        adminClient.incrementalAlterConfigs(Map(configResource -> alterEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
-
+          val configResource = new ConfigResource(ConfigResource.Type.TOPIC, entityName)
+          val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+          val alterEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
+            ++ configsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
+            ).asJavaCollection
+          adminClient.incrementalAlterConfigs(Map(configResource -> alterEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+        }
       case ConfigType.BROKER =>
         entityNames.foreach { entityName =>
           val oldConfig = getResourceConfig(adminClient, entityTypeHead, entityName, includeSynonyms = false, describeAll = false)
