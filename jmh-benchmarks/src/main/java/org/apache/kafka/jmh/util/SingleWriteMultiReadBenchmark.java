@@ -66,9 +66,9 @@ public class SingleWriteMultiReadBenchmark {
     private int writeTimes;
     private volatile ImmutableMap<Integer, Integer> pcollectionsImmutableMap;
 
-    final static String PCOLLECTIONSIMMUTABLEMAPGROUP = "PcollectionsImmutableMap";
-    final static String CONCURRENTHASHMAPGROUP = "ConcurrentHashMap";
-    final static String COPYONWRITEGROUP = "ConcurrentHashMap";
+    static final String PCOLLECTIONSIMMUTABLEMAPGROUP = "PcollectionsImmutableMap";
+    static final String CONCURRENTHASHMAPGROUP = "ConcurrentHashMap";
+    static final String COPYONWRITEGROUP = "ConcurrentHashMap";
 
     @Setup(Level.Invocation)
     public void setup() {
