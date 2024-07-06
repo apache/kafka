@@ -3673,48 +3673,12 @@ public class FetcherTest {
     
     @Test
     public void testFetcherDontCacheAnyData() {
-        buildFetcher();
-
-        subscriptions.assignFromUser(singleton(tp0));
-        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4),
-                tp -> validLeaderEpoch, topicIds, false));
-        subscriptions.seek(tp0, 0);
-
-        // Send fetches
-        assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
-
-        // Prepare response with records
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
-        consumerClient.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
-        fetchRecords().forEach((tp, records) -> {
-            assertEquals(3, records.size());
-            assertEquals(4L, subscriptions.position(tp).offset);
-        });
-
-        // Send fetches again
-        assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
-
-        // Prepare response with no records
-        client.prepareResponse(fullFetchResponse(tidp0, emptyRecords, Errors.NONE, 100L, 0));
-        consumerClient.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
-        fetchRecords();
-
-        // Send fetches again
-        assertEquals(1, sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
-
-        // Prepare response with records
-        client.prepareResponse(fullFetchResponse(tidp0, nextRecords, Errors.NONE, 100L, 0));
-        consumerClient.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
-        fetchRecords().forEach((tp, records) -> {
-            assertEquals(2, records.size());
-            assertEquals(6L, subscriptions.position(tp).offset);
-        });
+        short version = 17;
+        FetchResponse fetchResponse = fetchResponse(tidp0, records, Errors.NONE, 100L, -1L, 0L, 0);
+        fetchResponse.responseData(topicNames, version)
+                .forEach((topicPartition, partitionData) -> assertEquals(records, partitionData.records()));
+        fetchResponse.responseData(new HashMap<>(), version)
+                .forEach((topicPartition, partitionData) -> assertEquals(MemoryRecords.EMPTY, partitionData.records()));
     }
 
     private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(
