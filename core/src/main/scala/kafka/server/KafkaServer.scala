@@ -259,6 +259,7 @@ class KafkaServer(
 
         /* generate brokerId */
         config.brokerId = getOrGenerateBrokerId(initialMetaPropsEnsemble)
+        config.updateCurrentConfig(new KafkaConfig(config.props))
         logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix
 
