@@ -55,6 +55,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
+
 import java.util.Optional;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -681,6 +682,10 @@ public class TopicCommandIntegrationTest {
                     () -> adminClient.listTopics().listings().get().stream().noneMatch(topic -> topic.name().equals(topicWithCollidingChar)),
                     60000, "Delete topic fail in 60000 ms"
             );
+
+            kafka.utils.TestUtils.verifyTopicDeletion(null, topicWithCollidingChar, 1, JavaConverters.asScalaIteratorConverter(
+                            clusterInstance.brokers().values().iterator())
+                    .asScala().toBuffer());
 
             // recreate same topic
             adminClient.createTopics(Collections.singletonList(new NewTopic(topicWithCollidingChar, defaultNumPartitions, defaultReplicationFactor)));
