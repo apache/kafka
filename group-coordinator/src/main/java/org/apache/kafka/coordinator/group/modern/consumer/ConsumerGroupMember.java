@@ -250,6 +250,10 @@ public class ConsumerGroupMember extends ModernGroupMember {
         }
     }
 
+    /**
+     * The rebalance timeout provided by the member.
+     */
+    private int rebalanceTimeoutMs;
 
     /**
      * The subscription pattern configured by the member.
@@ -294,17 +298,24 @@ public class ConsumerGroupMember extends ModernGroupMember {
             previousMemberEpoch,
             instanceId,
             rackId,
-            rebalanceTimeoutMs,
             clientId,
             clientHost,
             subscribedTopicNames,
             state,
             assignedPartitions
         );
+        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.subscribedTopicRegex = subscribedTopicRegex;
         this.serverAssignorName = serverAssignorName;
         this.partitionsPendingRevocation = partitionsPendingRevocation;
         this.classicMemberMetadata = classicMemberMetadata;
+    }
+
+    /**
+     * @return The rebalance timeout in millis.
+     */
+    public int rebalanceTimeoutMs() {
+        return rebalanceTimeoutMs;
     }
 
     /**
