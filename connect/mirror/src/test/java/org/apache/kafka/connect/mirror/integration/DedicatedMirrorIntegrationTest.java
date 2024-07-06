@@ -38,6 +38,7 @@ import org.apache.kafka.test.NoRetryException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -194,7 +195,7 @@ public class DedicatedMirrorIntegrationTest {
      * See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-710%3A+Full+support+for+distributed+mode+in+dedicated+MirrorMaker+2.0+clusters">KIP-710</a>
      * for more detail on the necessity for this test case.
      */
-    @Test
+    @RepeatedTest(25)
     public void testMultiNodeCluster() throws Exception {
         Properties brokerProps = new Properties();
         brokerProps.put("transaction.state.log.replication.factor", "1");
