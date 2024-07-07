@@ -16,19 +16,30 @@
  */
 package org.apache.kafka.streams.processor.api;
 
-import org.apache.kafka.streams.test.TestRecord;
+import org.apache.kafka.common.header.Headers;
 
-public class TestFixedKeyRecordFactory {
+public final class TestFixedKeyRecordFactory {
     private TestFixedKeyRecordFactory() {
     }
 
-    // Potentially not even allow this, just for the sake of testing
+    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(K key, V value, Headers headers) {
+        return createFixedKeyRecord(key, value, 0L, headers);
+    }
+
+    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(K key, V value, long timestamp) {
+        return createFixedKeyRecord(key, value, timestamp, null);
+    }
+
+    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(K key, V value) {
+        return createFixedKeyRecord(key, value, 0L, null);
+    }
+
+    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(K key, V value, long timestamp, Headers headers) {
+        return createFixedKeyRecord(new Record<>(key, value, timestamp, headers));
+    }
+
     public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(final Record<K, V> record) {
         return InternalFixedKeyRecordFactory.create(record);
     }
 
-    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(final TestRecord<K, V> testRecord) {
-        return InternalFixedKeyRecordFactory.create(
-                new Record<>(testRecord.getKey(), testRecord.getValue(), testRecord.timestamp(), testRecord.getHeaders()));
-    }
 }
