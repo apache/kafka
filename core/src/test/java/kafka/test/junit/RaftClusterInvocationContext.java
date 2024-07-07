@@ -189,7 +189,9 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 if (started.compareAndSet(false, true)) {
                     clusterTestKit.startup();
                     kafka.utils.TestUtils.waitUntilTrue(
-                            () -> this.clusterTestKit.brokers().get(0).brokerState() == BrokerState.RUNNING,
+                            () -> this.clusterTestKit.brokers().values().stream().allMatch(
+                                    brokers -> brokers.brokerState() == BrokerState.RUNNING
+                            ),
                             () -> "Broker never made it to RUNNING state.",
                             org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
                             100L);
