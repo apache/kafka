@@ -22,19 +22,19 @@ public final class TestFixedKeyRecordFactory {
     private TestFixedKeyRecordFactory() {
     }
 
-    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(K key, V value, Headers headers) {
+    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(final K key, final V value, final Headers headers) {
         return createFixedKeyRecord(key, value, 0L, headers);
     }
 
-    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(K key, V value, long timestamp) {
+    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(final K key, final V value, final long timestamp) {
         return createFixedKeyRecord(key, value, timestamp, null);
     }
 
-    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(K key, V value) {
+    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(final K key, final V value) {
         return createFixedKeyRecord(key, value, 0L, null);
     }
 
-    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(K key, V value, long timestamp, Headers headers) {
+    public static <K, V> FixedKeyRecord<K, V> createFixedKeyRecord(final K key, final V value, final long timestamp, final Headers headers) {
         return createFixedKeyRecord(new Record<>(key, value, timestamp, headers));
     }
 

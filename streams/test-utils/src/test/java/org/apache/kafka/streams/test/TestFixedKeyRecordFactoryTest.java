@@ -1,13 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.test;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -35,14 +33,14 @@ class TestFixedKeyRecordFactoryTest {
 
     @Test
     void testFullFixedKeyRecord() {
-        String key = "key";
-        String value = "value";
-        RecordHeaders headers = new RecordHeaders();
-        long timeStamp = 1L;
+        final String key = "key";
+        final String value = "value";
+        final RecordHeaders headers = new RecordHeaders();
+        final long timeStamp = 1L;
 
-        FixedKeyRecord<String, String> expected = InternalFixedKeyRecordFactory.create(
+        final FixedKeyRecord<String, String> expected = InternalFixedKeyRecordFactory.create(
                 new Record<>(key, value, timeStamp, headers));
-        FixedKeyRecord<String, String> testFixedKeyRecord = TestFixedKeyRecordFactory.createFixedKeyRecord(
+        final FixedKeyRecord<String, String> testFixedKeyRecord = TestFixedKeyRecordFactory.createFixedKeyRecord(
                 key, value, timeStamp, headers);
 
         assertThat(testFixedKeyRecord, equalTo(expected));
@@ -62,23 +60,23 @@ class TestFixedKeyRecordFactoryTest {
 
     @Test
     void testPartialFixedKeyRecord() {
-        String key = "key";
-        String value = "value";
-        RecordHeaders headers = new RecordHeaders();
+        final String key = "key";
+        final String value = "value";
+        final RecordHeaders headers = new RecordHeaders();
 
-        List<FixedKeyRecord<String, String>> expectedFixedKeyRecords = Arrays.asList(
+        final List<FixedKeyRecord<String, String>> expectedFixedKeyRecords = Arrays.asList(
                 InternalFixedKeyRecordFactory.create(new Record<>(key, value, 0L, headers)),
                 InternalFixedKeyRecordFactory.create(new Record<>(key, value, 0L, null)),
                 InternalFixedKeyRecordFactory.create(new Record<>(key, value, 1L, null)));
 
-        List<FixedKeyRecord<String, String>> testFixedKeyRecords = Arrays.asList(
+        final List<FixedKeyRecord<String, String>> testFixedKeyRecords = Arrays.asList(
                 TestFixedKeyRecordFactory.createFixedKeyRecord(key, value, headers),
                 TestFixedKeyRecordFactory.createFixedKeyRecord(key, value),
                 TestFixedKeyRecordFactory.createFixedKeyRecord(key, value, 1L));
 
-        for(int i = 0; i < expectedFixedKeyRecords.size(); i++){
-            FixedKeyRecord<String, String> expected = expectedFixedKeyRecords.get(i);
-            FixedKeyRecord<String, String> testFixedKeyRecord = testFixedKeyRecords.get(i);
+        for (int i = 0; i < expectedFixedKeyRecords.size(); i++) {
+            final FixedKeyRecord<String, String> expected = expectedFixedKeyRecords.get(i);
+            final FixedKeyRecord<String, String> testFixedKeyRecord = testFixedKeyRecords.get(i);
 
             assertThat(testFixedKeyRecord, equalTo(expected));
             assertThat(testFixedKeyRecord.key(), equalTo(expected.key()));
