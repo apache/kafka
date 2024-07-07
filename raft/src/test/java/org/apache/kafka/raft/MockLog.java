@@ -81,7 +81,7 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public void truncateTo(long offset) {
-        if (offset < highWatermark.offset) {
+        if (offset < highWatermark.offset()) {
             throw new IllegalArgumentException("Illegal attempt to truncate to offset " + offset +
                 " which is below the current high watermark " + highWatermark);
         }
@@ -89,7 +89,7 @@ public class MockLog implements ReplicatedLog {
         logger.debug("Truncating log to end offset {}", offset);
         batches.removeIf(entry -> entry.lastOffset() >= offset);
         epochStartOffsets.removeIf(epochStartOffset -> epochStartOffset.startOffset >= offset);
-        firstUnflushedOffset = Math.min(firstUnflushedOffset, endOffset().offset);
+        firstUnflushedOffset = Math.min(firstUnflushedOffset, endOffset().offset());
     }
 
     @Override
@@ -98,7 +98,7 @@ public class MockLog implements ReplicatedLog {
         latestSnapshotId().ifPresent(snapshotId -> {
             if (snapshotId.epoch() > logLastFetchedEpoch().orElse(0) ||
                 (snapshotId.epoch() == logLastFetchedEpoch().orElse(0) &&
-                 snapshotId.offset() > endOffset().offset)) {
+                 snapshotId.offset() > endOffset().offset())) {
 
                 logger.debug("Truncating to the latest snapshot at {}", snapshotId);
 
@@ -117,13 +117,13 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public void updateHighWatermark(LogOffsetMetadata offsetMetadata) {
-        if (this.highWatermark.offset > offsetMetadata.offset) {
+        if (this.highWatermark.offset() > offsetMetadata.offset()) {
             throw new IllegalArgumentException("Non-monotonic update of current high watermark " +
                 highWatermark + " to new value " + offsetMetadata);
-        } else if (offsetMetadata.offset > endOffset().offset) {
+        } else if (offsetMetadata.offset() > endOffset().offset()) {
             throw new IllegalArgumentException("Attempt to update high watermark to " + offsetMetadata +
                 " which is larger than the current end offset " + endOffset());
-        } else if (offsetMetadata.offset < startOffset()) {
+        } else if (offsetMetadata.offset() < startOffset()) {
             throw new IllegalArgumentException("Attempt to update high watermark to " + offsetMetadata +
                 " which is smaller than the current start offset " + startOffset());
         }
@@ -148,8 +148,8 @@ public class MockLog implements ReplicatedLog {
     }
 
     private Optional<OffsetMetadata> metadataForOffset(long offset) {
-        if (offset == endOffset().offset) {
-            return endOffset().metadata;
+        if (offset == endOffset().offset()) {
+            return endOffset().metadata();
         }
 
         for (LogBatch batch : batches) {
@@ -167,12 +167,12 @@ public class MockLog implements ReplicatedLog {
     }
 
     private void assertValidHighWatermarkMetadata(LogOffsetMetadata offsetMetadata) {
-        if (!offsetMetadata.metadata.isPresent()) {
+        if (!offsetMetadata.metadata().isPresent()) {
             return;
         }
 
-        long id = ((MockOffsetMetadata) offsetMetadata.metadata.get()).id;
-        long offset = offsetMetadata.offset;
+        long id = ((MockOffsetMetadata) offsetMetadata.metadata().get()).id;
+        long offset = offsetMetadata.offset();
 
         metadataForOffset(offset).ifPresent(metadata -> {
             long entryId = ((MockOffsetMetadata) metadata).id;
@@ -211,7 +211,7 @@ public class MockLog implements ReplicatedLog {
             epochLowerBound = epochStartOffset.epoch;
         }
 
-        return new OffsetAndEpoch(endOffset().offset, lastFetchedEpoch());
+        return new OffsetAndEpoch(endOffset().offset(), lastFetchedEpoch());
     }
 
     private Optional<LogEntry> lastEntry() {
@@ -300,10 +300,10 @@ public class MockLog implements ReplicatedLog {
         if (records.sizeInBytes() == 0)
             throw new IllegalArgumentException("Attempt to append an empty record set");
 
-        long baseOffset = endOffset().offset;
+        long baseOffset = endOffset().offset();
         long lastOffset = baseOffset;
         for (RecordBatch batch : records.batches()) {
-            if (batch.baseOffset() != endOffset().offset) {
+            if (batch.baseOffset() != endOffset().offset()) {
                 /* KafkaMetadataLog throws an kafka.common.UnexpectedAppendOffsetException this is the
                  * best we can do from this module.
                  */
@@ -311,7 +311,7 @@ public class MockLog implements ReplicatedLog {
                     String.format(
                         "Illegal append at offset %s with current end offset of %s",
                         batch.baseOffset(),
-                        endOffset().offset
+                        endOffset().offset()
                     )
                 );
             }
@@ -340,7 +340,7 @@ public class MockLog implements ReplicatedLog {
     @Override
     public void flush(boolean forceFlushActiveSegment) {
         flushedSinceLastChecked = true;
-        firstUnflushedOffset = endOffset().offset;
+        firstUnflushedOffset = endOffset().offset();
     }
 
     @Override
@@ -373,7 +373,7 @@ public class MockLog implements ReplicatedLog {
     public List<LogBatch> readBatches(long startOffset, OptionalLong maxOffsetOpt) {
         verifyOffsetInRange(startOffset);
 
-        long maxOffset = maxOffsetOpt.orElse(endOffset().offset);
+        long maxOffset = maxOffsetOpt.orElse(endOffset().offset());
         if (startOffset == maxOffset) {
             return Collections.emptyList();
         }
@@ -384,9 +384,9 @@ public class MockLog implements ReplicatedLog {
     }
 
     private void verifyOffsetInRange(long offset) {
-        if (offset > endOffset().offset) {
+        if (offset > endOffset().offset()) {
             throw new OffsetOutOfRangeException("Requested offset " + offset + " is larger than " +
-                "then log end offset " + endOffset().offset);
+                "then log end offset " + endOffset().offset());
         }
 
         if (offset < this.startOffset()) {
@@ -399,7 +399,7 @@ public class MockLog implements ReplicatedLog {
     public LogFetchInfo read(long startOffset, Isolation isolation) {
         verifyOffsetInRange(startOffset);
 
-        long maxOffset = isolation == Isolation.COMMITTED ? highWatermark.offset : endOffset().offset;
+        long maxOffset = isolation == Isolation.COMMITTED ? highWatermark.offset() : endOffset().offset();
         if (startOffset >= maxOffset) {
             return new LogFetchInfo(MemoryRecords.EMPTY, new LogOffsetMetadata(
                 startOffset, metadataForOffset(startOffset)));
@@ -450,7 +450,7 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public void initializeLeaderEpoch(int epoch) {
-        long startOffset = endOffset().offset;
+        long startOffset = endOffset().offset();
         epochStartOffsets.removeIf(epochStartOffset ->
             epochStartOffset.startOffset >= startOffset || epochStartOffset.epoch >= epoch);
         epochStartOffsets.add(new EpochStartOffset(epoch, startOffset));
@@ -468,7 +468,7 @@ public class MockLog implements ReplicatedLog {
             return Optional.empty();
         }
 
-        long highWatermarkOffset = highWatermark().offset;
+        long highWatermarkOffset = highWatermark().offset();
         if (snapshotId.offset() > highWatermarkOffset) {
             throw new IllegalArgumentException(
                 String.format(
@@ -542,12 +542,12 @@ public class MockLog implements ReplicatedLog {
                 )
             );
         }
-        if (highWatermark.offset < snapshotId.offset()) {
+        if (highWatermark.offset() < snapshotId.offset()) {
             throw new OffsetOutOfRangeException(
                 String.format(
                     "New log start (%s) is greater than the high watermark (%s)",
                     snapshotId,
-                    highWatermark.offset
+                    highWatermark.offset()
                 )
             );
         }

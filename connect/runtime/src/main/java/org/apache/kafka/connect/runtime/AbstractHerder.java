@@ -132,8 +132,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private final String kafkaClusterId;
     protected final StatusBackingStore statusBackingStore;
     protected final ConfigBackingStore configBackingStore;
+    private volatile boolean ready = false;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
-    protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
     private final Time time;
     protected final Loggers loggers;
@@ -180,9 +180,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Utils.closeQuietly(this.connectorClientConfigOverridePolicy, "connector client config override policy");
     }
 
+    protected void ready() {
+        this.ready = true;
+    }
+
     @Override
-    public boolean isRunning() {
-        return running;
+    public boolean isReady() {
+        return ready;
     }
 
     @Override

@@ -39,7 +39,10 @@ import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.DataOutputStreamWritable;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -60,6 +63,8 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -204,7 +209,7 @@ public final class RaftClientTestContext {
         public Builder appendToLog(int epoch, List<String> records) {
             MemoryRecords batch = buildBatch(
                 time.milliseconds(),
-                log.endOffset().offset,
+                log.endOffset().offset(),
                 epoch,
                 records
             );
@@ -228,7 +233,7 @@ public final class RaftClientTestContext {
         }
 
         Builder deleteBeforeSnapshot(OffsetAndEpoch snapshotId) {
-            if (snapshotId.offset() > log.highWatermark().offset) {
+            if (snapshotId.offset() > log.highWatermark().offset()) {
                 log.updateHighWatermark(new LogOffsetMetadata(snapshotId.offset()));
             }
             log.deleteBeforeSnapshot(snapshotId);
@@ -457,10 +462,10 @@ public final class RaftClientTestContext {
         pollUntilRequest();
 
         List<RaftRequest.Outbound> voteRequests = collectVoteRequests(epoch,
-            log.lastFetchedEpoch(), log.endOffset().offset);
+            log.lastFetchedEpoch(), log.endOffset().offset());
 
         for (RaftRequest.Outbound request : voteRequests) {
-            VoteResponseData voteResponse = voteResponse(true, Optional.empty(), epoch);
+            VoteResponseData voteResponse = voteResponse(true, OptionalInt.empty(), epoch);
             deliverResponse(request.correlationId(), request.destination(), voteResponse);
         }
 
@@ -563,17 +568,8 @@ public final class RaftClientTestContext {
             .setCurrentVoters(voterStates)
             .setObservers(observerStates);
 
+        // KAFKA-16953 will add support for including the node listeners in the node collection
         DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection();
-        voterStates.forEach(replicaState -> {
-            if (kip853Rpc && nodes.find(replicaState.replicaId()) == null) {
-                // KAFKA-16953 will add support for including the node listeners in the node
-                // collection
-                nodes.add(
-                    new DescribeQuorumResponseData.Node()
-                        .setNodeId(replicaState.replicaId())
-                );
-            }
-        });
 
         DescribeQuorumResponseData expectedResponse = DescribeQuorumResponse.singletonResponse(
             metadataPartition,
@@ -623,6 +619,7 @@ public final class RaftClientTestContext {
             Endpoints expectedLeaderEndpoints = voters.listeners(leaderId.getAsInt());
             Endpoints responseEndpoints = Endpoints.fromVoteResponse(
                 channel.listenerName(),
+                leaderId.getAsInt(),
                 response.nodeEndpoints()
             );
             assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -650,12 +647,33 @@ public final class RaftClientTestContext {
         return voteRequests;
     }
 
+    private ApiMessage roundTripApiMessage(ApiMessage message, short version) {
+        ObjectSerializationCache cache =  new ObjectSerializationCache();
+        ByteArrayOutputStream  buffer = new ByteArrayOutputStream(message.size(cache, version));
+
+        // Endode the message to a byte array with the given version
+        DataOutputStreamWritable writer = new DataOutputStreamWritable(new DataOutputStream(buffer));
+        message.write(writer, cache, version);
+
+        // Decode the message from the byte array
+        ByteBufferAccessor reader = new ByteBufferAccessor(ByteBuffer.wrap(buffer.toByteArray()));
+        message.read(reader, version);
+
+        return message;
+    }
+
     void deliverRequest(ApiMessage request) {
+        short version = raftRequestVersion(request);
+        deliverRequest(request, version);
+    }
+
+    void deliverRequest(ApiMessage request, short version) {
+        ApiMessage versionedRequest = roundTripApiMessage(request, version);
         RaftRequest.Inbound inboundRequest = new RaftRequest.Inbound(
             channel.listenerName(),
             channel.newCorrelationId(),
-            raftRequestVersion(request),
-            request,
+            version,
+            versionedRequest,
             time.milliseconds()
         );
         inboundRequest.completion.whenComplete((response, exception) -> {
@@ -669,7 +687,9 @@ public final class RaftClientTestContext {
     }
 
     void deliverResponse(int correlationId, Node source, ApiMessage response) {
-        channel.mockReceive(new RaftResponse.Inbound(correlationId, response, source));
+        short version = raftResponseVersion(response);
+        ApiMessage versionedResponse = roundTripApiMessage(response, version);
+        channel.mockReceive(new RaftResponse.Inbound(correlationId, versionedResponse, source));
     }
 
     void assertSentBeginQuorumEpochRequest(int epoch, Set<Integer> destinationIds) {
@@ -714,6 +734,7 @@ public final class RaftClientTestContext {
                 Endpoints expectedLeaderEndpoints = voters.listeners(leaderId);
                 Endpoints responseEndpoints = Endpoints.fromBeginQuorumEpochResponse(
                     channel.listenerName(),
+                    leaderId,
                     response.nodeEndpoints()
                 );
                 assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -744,6 +765,7 @@ public final class RaftClientTestContext {
             Endpoints expectedLeaderEndpoints = voters.listeners(leaderId.getAsInt());
             Endpoints responseEndpoints = Endpoints.fromBeginQuorumEpochResponse(
                 channel.listenerName(),
+                leaderId.getAsInt(),
                 response.nodeEndpoints()
             );
             assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -781,6 +803,7 @@ public final class RaftClientTestContext {
                 Endpoints expectedLeaderEndpoints = voters.listeners(leaderId);
                 Endpoints responseEndpoints = Endpoints.fromEndQuorumEpochResponse(
                     channel.listenerName(),
+                    leaderId,
                     response.nodeEndpoints()
                 );
                 assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -811,6 +834,7 @@ public final class RaftClientTestContext {
             Endpoints expectedLeaderEndpoints = voters.listeners(leaderId.getAsInt());
             Endpoints responseEndpoints = Endpoints.fromEndQuorumEpochResponse(
                 channel.listenerName(),
+                leaderId.getAsInt(),
                 response.nodeEndpoints()
             );
             assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -855,6 +879,7 @@ public final class RaftClientTestContext {
             Endpoints expectedLeaderEndpoints = voters.listeners(leaderId);
             Endpoints responseEndpoints = Endpoints.fromFetchResponse(
                 channel.listenerName(),
+                leaderId,
                 response.nodeEndpoints()
             );
             assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -944,6 +969,7 @@ public final class RaftClientTestContext {
             Endpoints expectedLeaderEndpoints = voters.listeners(leaderId);
             Endpoints responseEndpoints = Endpoints.fromFetchSnapshotResponse(
                 channel.listenerName(),
+                leaderId,
                 response.nodeEndpoints()
             );
             assertEquals(expectedLeaderEndpoints, responseEndpoints);
@@ -1035,7 +1061,7 @@ public final class RaftClientTestContext {
             Errors.NONE,
             epoch,
             leaderId.orElse(-1),
-            Endpoints.empty() // KAFKA-16529 will fix this
+            leaderId.isPresent() ? voters.listeners(leaderId.getAsInt()) : Endpoints.empty()
         );
     }
 
@@ -1073,8 +1099,8 @@ public final class RaftClientTestContext {
 
     BeginQuorumEpochRequestData beginEpochRequest(String clusterId, int epoch, int leaderId) {
         ReplicaKey localReplicaKey = kip853Rpc ?
-            ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID) :
-            ReplicaKey.of(localIdOrThrow(), localDirectoryId);
+            ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
+            ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID);
 
         return beginEpochRequest(clusterId, epoch, leaderId, localReplicaKey);
     }
@@ -1104,7 +1130,7 @@ public final class RaftClientTestContext {
             Errors.NONE,
             epoch,
             leaderId,
-            Endpoints.empty() // KAFKA-16529 will fix this
+            voters.listeners(leaderId)
         );
     }
 
@@ -1131,8 +1157,8 @@ public final class RaftClientTestContext {
         long lastEpochOffset
     ) {
         ReplicaKey localReplicaKey = kip853Rpc ?
-            ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID) :
-            ReplicaKey.of(localIdOrThrow(), localDirectoryId);
+            ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
+            ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID);
 
         return voteRequest(
             clusterId,
@@ -1163,7 +1189,7 @@ public final class RaftClientTestContext {
         );
     }
 
-    VoteResponseData voteResponse(boolean voteGranted, Optional<Integer> leaderId, int epoch) {
+    VoteResponseData voteResponse(boolean voteGranted, OptionalInt leaderId, int epoch) {
         return RaftUtil.singletonVoteResponse(
             channel.listenerName(),
             voteRpcVersion(),
@@ -1173,7 +1199,7 @@ public final class RaftClientTestContext {
             epoch,
             leaderId.orElse(-1),
             voteGranted,
-            Endpoints.empty() // KAFKA-16529 will fix this
+            leaderId.isPresent() ? voters.listeners(leaderId.getAsInt()) : Endpoints.empty()
         );
     }
 
@@ -1310,7 +1336,7 @@ public final class RaftClientTestContext {
             metadataTopicId,
             Errors.NONE,
             leaderId,
-            Endpoints.empty(), // KAFKA-16529 will fix this
+            voters.listeners(leaderId),
             partitionData -> {
                 partitionData
                     .setRecords(records)
@@ -1338,7 +1364,7 @@ public final class RaftClientTestContext {
             metadataTopicId,
             Errors.NONE,
             leaderId,
-            Endpoints.empty(), // KAFKA-16529 will fix this
+            voters.listeners(leaderId),
             partitionData -> {
                 partitionData.setHighWatermark(highWatermark);
 
@@ -1366,7 +1392,7 @@ public final class RaftClientTestContext {
             metadataTopicId,
             Errors.NONE,
             leaderId,
-            Endpoints.empty(), // KAFKA-16529 will fix this
+            voters.listeners(leaderId),
             partitionData -> {
                 partitionData.setHighWatermark(highWatermark);
 
@@ -1390,7 +1416,7 @@ public final class RaftClientTestContext {
             fetchSnapshotRpcVersion(),
             metadataPartition,
             leaderId,
-            Endpoints.empty(), // KAFKA-16529 will fix this
+            voters.listeners(leaderId),
             operator
         );
     }
@@ -1465,9 +1491,27 @@ public final class RaftClientTestContext {
         }
     }
 
+    private short raftResponseVersion(ApiMessage response) {
+        if (response instanceof FetchResponseData) {
+            return fetchRpcVersion();
+        } else if (response instanceof FetchSnapshotResponseData) {
+            return fetchSnapshotRpcVersion();
+        } else if (response instanceof VoteResponseData) {
+            return voteRpcVersion();
+        } else if (response instanceof BeginQuorumEpochResponseData) {
+            return beginQuorumEpochRpcVersion();
+        } else if (response instanceof EndQuorumEpochResponseData) {
+            return endQuorumEpochRpcVersion();
+        } else if (response instanceof DescribeQuorumResponseData) {
+            return describeQuorumRpcVersion();
+        } else {
+            throw new IllegalArgumentException(String.format("Request %s is not a raft response", response));
+        }
+    }
+
     public void advanceLocalLeaderHighWatermarkToLogEndOffset() throws InterruptedException {
         assertEquals(localId, currentLeader());
-        long localLogEndOffset = log.endOffset().offset;
+        long localLogEndOffset = log.endOffset().offset();
 
         Iterable<ReplicaKey> followers = () -> voters
             .voterKeys()

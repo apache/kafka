@@ -24,13 +24,13 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
-import org.apache.kafka.coordinator.group.consumer.Assignment;
-import org.apache.kafka.coordinator.group.consumer.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.consumer.MemberAssignmentImpl;
-import org.apache.kafka.coordinator.group.consumer.MemberSubscriptionAndAssignmentImpl;
-import org.apache.kafka.coordinator.group.consumer.SubscribedTopicDescriberImpl;
-import org.apache.kafka.coordinator.group.consumer.TopicIds;
-import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
+import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
+import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
+import org.apache.kafka.coordinator.group.modern.TopicIds;
+import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -237,6 +237,7 @@ public class ServerSideAssignorBenchmark {
 
         members.put(memberId, new MemberSubscriptionAndAssignmentImpl(
             rackId,
+            Optional.empty(),
             subscribedTopicIds,
             Assignment.EMPTY
         ));
@@ -270,6 +271,7 @@ public class ServerSideAssignorBenchmark {
 
             updatedMemberSpec.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 groupSpec.memberSubscription(memberId).rackId(),
+                Optional.empty(),
                 groupSpec.memberSubscription(memberId).subscribedTopicIds(),
                 new Assignment(Collections.unmodifiableMap(memberAssignment.partitions()))
             ));
@@ -285,6 +287,7 @@ public class ServerSideAssignorBenchmark {
         Optional<String> rackId = rackId(memberCount - 1);
         updatedMemberSpec.put("newMember", new MemberSubscriptionAndAssignmentImpl(
             rackId,
+            Optional.empty(),
             subscribedTopicIdsForNewMember,
             Assignment.EMPTY
         ));
