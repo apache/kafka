@@ -806,6 +806,7 @@ public class SharePartitionManager implements AutoCloseable {
         }
 
         void recordAcknowledgement(byte ackType) {
+            // unknown ack types (such as gaps for control records) are intentionally ignored
             if (recordAcksSensorMap.containsKey(ackType)) {
                 recordAcksSensorMap.get(ackType).record();
             }
