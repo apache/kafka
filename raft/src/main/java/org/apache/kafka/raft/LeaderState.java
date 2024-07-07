@@ -235,22 +235,26 @@ public class LeaderState<T> implements EpochState {
                     currentTimeMs,
                     leaderChangeMessage
                 );
-                VoterSetOffset voterSetOffset = lastVoterSetOffset.orElse(null);
-                // if lastVoterOffset is -1 we know the leader hasn't written the bootstrap snapshot records to the log yet
-                if (voterSetOffset != null && voterSetOffset.offset() == -1) {
-                    if (kraftVersion > 0) {
-                        builder.appendKRaftVersionMessage(
-                            currentTimeMs,
-                            new KRaftVersionRecord()
-                                .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
-                                .setKRaftVersion(kraftVersion)
-                        );
-                        builder.appendVotersMessage(
-                            currentTimeMs,
-                            voterSetOffset.voterSet().toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
-                        );
+                lastVoterSetOffset.ifPresent(voterSetOffset -> {
+                    // if lastVoterOffset is -1 we know the leader hasn't written the bootstrap snapshot records to the log yet
+                    if (voterSetOffset.offset() == -1) {
+                        if (kraftVersion < 1) {
+                            throw new IllegalStateException("The bootstrap snapshot file contains voter set information " +
+                                "when the KRaft version is less than 1.");
+                        } else {
+                            builder.appendKRaftVersionMessage(
+                                currentTimeMs,
+                                new KRaftVersionRecord()
+                                    .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
+                                    .setKRaftVersion(kraftVersion)
+                            );
+                            builder.appendVotersMessage(
+                                currentTimeMs,
+                                voterSetOffset.voterSet().toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
+                            );
+                        }
                     }
-                }
+                });
                 return builder.build();
             }
         });

@@ -18,9 +18,9 @@ package org.apache.kafka.raft.internals;
 
 public class VoterSetOffset {
     private final VoterSet voterSet;
-    private final Long offset;
+    private final long offset;
 
-    public VoterSetOffset(VoterSet voterSet, Long offset) {
+    public VoterSetOffset(VoterSet voterSet, long offset) {
         this.voterSet = voterSet;
         this.offset = offset;
     }
@@ -29,7 +29,7 @@ public class VoterSetOffset {
         return voterSet;
     }
 
-    public Long offset() {
+    public long offset() {
         return offset;
     }
 }

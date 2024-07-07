@@ -56,7 +56,6 @@ import java.util.stream.Collectors;
 
 public class MockLog implements ReplicatedLog {
     private static final AtomicLong ID_GENERATOR = new AtomicLong();
-    private static final OffsetAndEpoch BOOTSTRAP_SNAPSHOT_ID = new OffsetAndEpoch(0, 0);
 
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();
     private final List<LogBatch> batches = new ArrayList<>();
