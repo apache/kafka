@@ -3677,7 +3677,7 @@ public class FetcherTest {
         FetchResponse fetchResponse = fetchResponse(tidp0, records, Errors.NONE, 100L, -1L, 0L, 0);
         fetchResponse.responseData(topicNames, version)
                 .forEach((topicPartition, partitionData) -> assertEquals(records, partitionData.records()));
-        fetchResponse.responseData(new HashMap<>(), version)
+        fetchResponse.responseData(Collections.emptyMap(), version)
                 .forEach((topicPartition, partitionData) -> assertEquals(MemoryRecords.EMPTY, partitionData.records()));
     }
 
