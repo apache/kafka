@@ -477,6 +477,14 @@ public final class RemoteLogManagerConfig {
         return config.getInt(REMOTE_FETCH_MAX_WAIT_MS_PROP);
     }
 
+    public long logLocalRetentionBytes() {
+        return config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP);
+    }
+
+    public long logLocalRetentionMs() {
+        return config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP);
+    }
+
     public static void main(String[] args) {
         System.out.println(configDef().toHtml(4, config -> "remote_log_manager_" + config));
     }
