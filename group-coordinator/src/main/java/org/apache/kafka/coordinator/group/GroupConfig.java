@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -29,7 +28,6 @@ import java.util.Set;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
-import static org.apache.kafka.common.utils.Utils.require;
 
 /**
  * Group configuration related parameters and supporting methods like validation, etc. are
@@ -41,15 +39,32 @@ public class GroupConfig extends AbstractConfig {
 
     public static final String CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG = "consumer.heartbeat.interval.ms";
 
+    public final int consumerSessionTimeoutMs;
+
+    public final int consumerHeartbeatIntervalMs;
+
     private static final ConfigDef CONFIG = new ConfigDef()
-            .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, INT, GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DOC)
-            .define(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, INT, GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DOC);
+        .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
+            INT,
+            GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
+            atLeast(1),
+            MEDIUM,
+            GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DOC)
+        .define(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
+            INT,
+            GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
+            atLeast(1),
+            MEDIUM,
+            GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DOC);
+
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
+        consumerSessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
+        consumerHeartbeatIntervalMs = getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
     }
 
     public static Set<String> configNames() {
-        return new HashSet<>(CONFIG.names());
+        return CONFIG.names();
     }
 
     /**
@@ -67,28 +82,35 @@ public class GroupConfig extends AbstractConfig {
     /**
      * Validates the values of the given properties.
      */
-    public static void validateValues(Map<?, ?> valueMaps, Properties groupConfigBounds) {
+    private static void validateValues(Map<?, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig) {
         int consumerHeartbeatInterval = (Integer) valueMaps.get(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
         int consumerSessionTimeout = (Integer) valueMaps.get(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
-        require(consumerHeartbeatInterval >= (int) groupConfigBounds.get(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG),
-            CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG + "must be greater than or equals to" +
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
-        require(consumerHeartbeatInterval <= (int) groupConfigBounds.get(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG),
-            CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG + "must be less than or equals to" +
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
-        require(consumerSessionTimeout >= (int) groupConfigBounds.get(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG),
-            CONSUMER_SESSION_TIMEOUT_MS_CONFIG + "must be greater than or equals to" +
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
-        require(consumerSessionTimeout <= (int) groupConfigBounds.get(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG),
-            CONSUMER_SESSION_TIMEOUT_MS_CONFIG + "must be greater than or equals to" +
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
-
+        if (consumerHeartbeatInterval < groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs()) {
+            throw new InvalidConfigurationException(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equals to " +
+                GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
+        }
+        if (consumerHeartbeatInterval > groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs()) {
+            throw new InvalidConfigurationException(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG + " must be less than or equals to " +
+                GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
+        }
+        if (consumerSessionTimeout < groupCoordinatorConfig.consumerGroupMinSessionTimeoutMs()) {
+            throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be greater than or equals to " +
+                GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+        }
+        if (consumerSessionTimeout > groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs()) {
+            throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be greater than or equals to " +
+                GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+        }
     }
 
-    public static void validate(Properties props, Properties groupConfigBounds) {
+    /**
+     * Check that the given properties contain only valid consumer group config names and that all values can be
+     * parsed and are valid.
+     */
+    public static void validate(Properties props, GroupCoordinatorConfig groupCoordinatorConfig) {
         validateNames(props);
         Map<?, ?> valueMaps = CONFIG.parse(props);
-        validateValues(valueMaps, groupConfigBounds);
+        validateValues(valueMaps, groupCoordinatorConfig);
     }
 
     /**
@@ -101,11 +123,17 @@ public class GroupConfig extends AbstractConfig {
         return new GroupConfig(props);
     }
 
+    /**
+     * The consumer group session timeout in milliseconds.
+     */
     public int sessionTimeoutMs() {
-        return getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
+        return consumerSessionTimeoutMs;
     }
 
+    /**
+     * The consumer group heartbeat interval in milliseconds.
+     */
     public int heartbeatIntervalMs() {
-        return getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
+        return consumerHeartbeatIntervalMs;
     }
 }

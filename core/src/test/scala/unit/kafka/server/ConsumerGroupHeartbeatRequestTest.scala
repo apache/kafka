@@ -421,8 +421,10 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
     // Alter consumer heartbeat interval config
     val resource = new ConfigResource(ConfigResource.Type.GROUP, consumerGroupId)
-    val op = new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, newHeartbeatIntervalMs.toString),
-      OpType.SET)
+    val op = new AlterConfigOp(
+      new ConfigEntry(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, newHeartbeatIntervalMs.toString),
+      OpType.SET
+    )
     admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
 
     // Prepare the next heartbeat.

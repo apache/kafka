@@ -83,9 +83,7 @@ import java.net.InetAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -96,8 +94,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
-import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfigManagerTest.createConfigManager;
 import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -120,17 +117,6 @@ public class GroupCoordinatorServiceTest {
 
     private GroupCoordinatorConfig createConfig() {
         return GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 600000L, 24);
-    }
-
-    private GroupConfigManager createConfigManager() {
-        Map<String, String> defaultConfig = new HashMap<>();
-        defaultConfig.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT));
-        defaultConfig.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT));
-        return new GroupConfigManager(defaultConfig,
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT,
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT,
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT,
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT);
     }
 
     @Test

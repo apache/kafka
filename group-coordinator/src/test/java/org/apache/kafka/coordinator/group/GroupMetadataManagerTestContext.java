@@ -79,6 +79,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -87,6 +88,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.Assertions.assertSyncGroupResponseEquals;
+import static org.apache.kafka.coordinator.group.GroupConfigManagerTest.createConfigManager;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
@@ -377,7 +379,7 @@ public class GroupMetadataManagerTestContext {
         private final LogContext logContext = new LogContext();
         private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         private MetadataImage metadataImage;
-        private GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
+        private GroupConfigManager groupConfigManager;
         private List<ConsumerGroupPartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
         private final List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
@@ -440,14 +442,10 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
-        public Builder withGroupConfigManager(GroupConfigManager configManager) {
-            this.groupConfigManager = configManager;
-            return this;
-        }
-
         public GroupMetadataManagerTestContext build() {
             if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
             if (consumerGroupAssignors == null) consumerGroupAssignors = Collections.emptyList();
+            if (groupConfigManager == null) groupConfigManager = createConfigManager();
 
             GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext(
                 time,
@@ -474,6 +472,7 @@ public class GroupMetadataManagerTestContext {
                     .withConsumerGroupMigrationPolicy(consumerGroupMigrationPolicy)
                     .withGroupConfigManager(groupConfigManager)
                     .build(),
+                groupConfigManager,
                 classicGroupInitialRebalanceDelayMs,
                 classicGroupNewMemberJoinTimeoutMs
             );
@@ -491,6 +490,7 @@ public class GroupMetadataManagerTestContext {
     final SnapshotRegistry snapshotRegistry;
     final GroupCoordinatorMetricsShard metrics;
     final GroupMetadataManager groupMetadataManager;
+    final GroupConfigManager groupConfigManager;
     final int classicGroupInitialRebalanceDelayMs;
     final int classicGroupNewMemberJoinTimeoutMs;
 
@@ -503,6 +503,7 @@ public class GroupMetadataManagerTestContext {
         SnapshotRegistry snapshotRegistry,
         GroupCoordinatorMetricsShard metrics,
         GroupMetadataManager groupMetadataManager,
+        GroupConfigManager groupConfigManager,
         int classicGroupInitialRebalanceDelayMs,
         int classicGroupNewMemberJoinTimeoutMs
     ) {
@@ -511,6 +512,7 @@ public class GroupMetadataManagerTestContext {
         this.snapshotRegistry = snapshotRegistry;
         this.metrics = metrics;
         this.groupMetadataManager = groupMetadataManager;
+        this.groupConfigManager = groupConfigManager;
         this.classicGroupInitialRebalanceDelayMs = classicGroupInitialRebalanceDelayMs;
         this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
         snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
@@ -1433,5 +1435,9 @@ public class GroupMetadataManagerTestContext {
 
     void onUnloaded() {
         groupMetadataManager.onUnloaded();
+    }
+
+    public void updateGroupConfig(String groupId, Properties newGroupConfig) {
+        groupConfigManager.updateGroupConfig(groupId, newGroupConfig);
     }
 }

@@ -582,13 +582,7 @@ class BrokerServer(
       val writer = new CoordinatorPartitionWriter(
         replicaManager
       )
-      val groupConfigManager = new GroupConfigManager(
-        config.extractGroupConfigMap,
-        config.groupCoordinatorConfig.consumerGroupMinSessionTimeoutMs,
-        config.groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs,
-        config.groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs,
-        config.groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs
-      )
+      val groupConfigManager = new GroupConfigManager(config.extractGroupConfigMap)
       new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
         .withTime(time)
         .withTimer(timer)

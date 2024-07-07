@@ -1183,6 +1183,9 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     logProps
   }
 
+  /**
+   * Copy the subset of properties that are relevant to consumer group.
+   */
   def extractGroupConfigMap: java.util.Map[String, Int] = {
     val groupProps = new java.util.HashMap[String, Int]()
     groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, groupCoordinatorConfig.consumerGroupSessionTimeoutMs)

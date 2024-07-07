@@ -13430,14 +13430,13 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testDynamicUpdateSessionTimeout() {
+    public void testConsumerGroupDynamicConfigs() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
         String memberId = Uuid.randomUuid().toString();
 
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
-        GroupConfigManager configManager = createConfigManager();
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -13446,7 +13445,6 @@ public class GroupMetadataManagerTest {
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
                 .build())
-            .withGroupConfigManager(configManager)
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -13467,6 +13465,9 @@ public class GroupMetadataManagerTest {
                     .setTopicPartitions(Collections.emptyList()));
         assertEquals(1, result.response().memberEpoch());
 
+        // Verify heartbeat interval
+        assertEquals(5000, result.response().heartbeatIntervalMs());
+
         // Verify that there is a session time.
         context.assertSessionTimeout(groupId, memberId, 45000);
 
@@ -13479,7 +13480,8 @@ public class GroupMetadataManagerTest {
         // Dynamic update group config
         Properties newGroupConfig = new Properties();
         newGroupConfig.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, 50000);
-        configManager.updateGroupConfig(groupId, newGroupConfig);
+        newGroupConfig.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
+        context.updateGroupConfig(groupId, newGroupConfig);
 
         // Session timer is rescheduled on second heartbeat.
         result = context.consumerGroupHeartbeat(
@@ -13488,6 +13490,9 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(result.response().memberEpoch()));
         assertEquals(1, result.response().memberEpoch());
+
+        // Verify heartbeat interval
+        assertEquals(10000, result.response().heartbeatIntervalMs());
 
         // Verify that there is a session time.
         context.assertSessionTimeout(groupId, memberId, 50000);
@@ -13509,17 +13514,6 @@ public class GroupMetadataManagerTest {
         // Verify that there are no timers.
         context.assertNoSessionTimeout(groupId, memberId);
         context.assertNoRebalanceTimeout(groupId, memberId);
-    }
-
-    private GroupConfigManager createConfigManager() {
-        Map<String, String> defaultConfig = new HashMap<>();
-        defaultConfig.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT));
-        defaultConfig.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT));
-        return new GroupConfigManager(defaultConfig,
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT,
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT,
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT,
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT);
     }
 
     private static void checkJoinGroupResponse(

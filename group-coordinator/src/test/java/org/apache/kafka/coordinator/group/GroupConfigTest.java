@@ -70,7 +70,7 @@ public class GroupConfigTest {
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, sessionTimeoutMs);
         props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, heartbeatIntervalMs);
-        assertThrows(IllegalArgumentException.class, () -> GroupConfig.validate(props, createGroupConfigBounds()));
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig()));
     }
 
     @Test
@@ -92,15 +92,10 @@ public class GroupConfigTest {
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         props.put("invalid.config.name", "10");
-        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupConfigBounds()));
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig()));
     }
 
-    private Properties createGroupConfigBounds() {
-        Properties bounds = new Properties();
-        bounds.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 10);
-        bounds.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, 100);
-        bounds.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 10);
-        bounds.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        return bounds;
+    private GroupCoordinatorConfig createGroupCoordinatorConfig() {
+        return GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 24 * 60);
     }
 }

@@ -582,8 +582,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.GROUP, consumerGroupId)
-      val op = new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, newSessionTimeoutMs.toString),
-        OpType.SET)
+      val op = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, newSessionTimeoutMs.toString),
+        OpType.SET
+      )
       admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
     } finally {
       admin.close()

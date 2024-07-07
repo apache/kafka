@@ -502,8 +502,8 @@ class KafkaApisTest extends Logging {
     val requestHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS,
       ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion, clientId, 0)
 
-    val incrementalAlterConfigsRequest = getIncrementalConsumerGroupAlterConfigRequestBuilder(
-      Seq(resource)).build(requestHeader.apiVersion)
+    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(
+      Seq(resource), "consumer.session.timeout.ms", "45000").build(requestHeader.apiVersion)
     val request = buildRequest(incrementalAlterConfigsRequest,
       fromPrivilegedListener = true, requestHeader = Option(requestHeader))
 
@@ -515,17 +515,9 @@ class KafkaApisTest extends Logging {
 
     createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
     val response = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
-    verifyIncrementalAlterConfigResult(response, Map(consumerGroupId -> Errors.NONE ))
+    verifyIncrementalAlterConfigResult(response, Map(consumerGroupId -> Errors.NONE))
     verify(authorizer, times(1)).authorize(any(), any())
     verify(adminManager).incrementalAlterConfigs(any(), anyBoolean())
-  }
-
-  private def getIncrementalConsumerGroupAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {
-    val resourceMap = configResources.map(configResource => {
-      val entryToBeModified = new ConfigEntry("consumer.session.timeout.ms", "45000")
-      configResource -> Set(new AlterConfigOp(entryToBeModified, OpType.SET)).asJavaCollection
-    }).toMap.asJava
-    new IncrementalAlterConfigsRequest.Builder(resourceMap, false)
   }
 
   @Test
@@ -574,8 +566,8 @@ class KafkaApisTest extends Logging {
     val requestHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS,
       ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion, clientId, 0)
 
-    val incrementalAlterConfigsRequest = getIncrementalClientMetricsAlterConfigRequestBuilder(
-      Seq(resource)).build(requestHeader.apiVersion)
+    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(
+      Seq(resource), "metrics", "foo.bar").build(requestHeader.apiVersion)
     val request = buildRequest(incrementalAlterConfigsRequest,
       fromPrivilegedListener = true, requestHeader = Option(requestHeader))
 
@@ -592,9 +584,11 @@ class KafkaApisTest extends Logging {
     verify(adminManager).incrementalAlterConfigs(any(), anyBoolean())
   }
 
-  private def getIncrementalClientMetricsAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {
+  private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource],
+                                                      configName: String,
+                                                      configValue: String): IncrementalAlterConfigsRequest.Builder = {
     val resourceMap = configResources.map(configResource => {
-      val entryToBeModified = new ConfigEntry("metrics", "foo.bar")
+      val entryToBeModified = new ConfigEntry(configName, configValue)
       configResource -> Set(new AlterConfigOp(entryToBeModified, OpType.SET)).asJavaCollection
     }).toMap.asJava
     new IncrementalAlterConfigsRequest.Builder(resourceMap, false)

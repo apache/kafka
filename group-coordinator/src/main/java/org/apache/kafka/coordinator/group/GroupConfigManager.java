@@ -17,6 +17,7 @@
 
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 
 import java.util.Map;
@@ -33,21 +34,9 @@ public class GroupConfigManager implements AutoCloseable {
 
     private final Map<String, GroupConfig> configMap;
 
-    private static final Properties GROUP_CONFIG_BOUNDS = new Properties();
-
-    public GroupConfigManager(
-        Map<?, ?> defaultConfig,
-        int consumerGroupMinSessionTimeoutMs,
-        int consumerGroupMaxSessionTimeoutMs,
-        int consumerGroupMinHeartbeatIntervalMs,
-        int consumerGroupMaxHeartbeatIntervalMs
-    ) {
+    public GroupConfigManager(Map<?, ?> defaultConfig) {
         this.configMap = new ConcurrentHashMap<>();
         this.defaultConfig = new GroupConfig(defaultConfig);
-        GROUP_CONFIG_BOUNDS.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, consumerGroupMinSessionTimeoutMs);
-        GROUP_CONFIG_BOUNDS.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, consumerGroupMaxSessionTimeoutMs);
-        GROUP_CONFIG_BOUNDS.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupMinHeartbeatIntervalMs);
-        GROUP_CONFIG_BOUNDS.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupMaxHeartbeatIntervalMs);
     }
 
     /**
@@ -60,9 +49,6 @@ public class GroupConfigManager implements AutoCloseable {
         if (null == groupId || groupId.isEmpty()) {
             throw new InvalidRequestException("Group name can't be empty.");
         }
-
-        // Validate the configuration
-        validate(newGroupConfig, defaultConfig.originals());
 
         final GroupConfig newConfig = GroupConfig.fromProps(
             defaultConfig.originals(),
@@ -81,11 +67,23 @@ public class GroupConfigManager implements AutoCloseable {
         return Optional.ofNullable(configMap.get(groupId));
     }
 
-    public static void validate(Properties newGroupConfig, Map<?, ?> configuredProps) {
+    /**
+     * Validate the given properties.
+     *
+     * @param newGroupConfig                 The new group config.
+     * @param configuredProps                The configured group config.
+     * @param groupCoordinatorConfig         The group coordinator config.
+     * @throws InvalidConfigurationException If validation fails
+     */
+    public static void validate(
+        Properties newGroupConfig,
+        Map<?, ?> configuredProps,
+        GroupCoordinatorConfig groupCoordinatorConfig
+    ) {
         Properties combinedConfigs = new Properties();
         combinedConfigs.putAll(configuredProps);
         combinedConfigs.putAll(newGroupConfig);
-        GroupConfig.validate(combinedConfigs, GROUP_CONFIG_BOUNDS);
+        GroupConfig.validate(combinedConfigs, groupCoordinatorConfig);
     }
 
     /**

@@ -79,14 +79,10 @@ public class GroupConfigManagerTest {
         assertEquals(6000, config.getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
     }
 
-    private GroupConfigManager createConfigManager() {
+    public static GroupConfigManager createConfigManager() {
         Map<String, String> defaultConfig = new HashMap<>();
         defaultConfig.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT));
         defaultConfig.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT));
-        return new GroupConfigManager(defaultConfig,
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT,
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT,
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT,
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT);
+        return new GroupConfigManager(defaultConfig);
     }
 }

@@ -640,6 +640,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     );
                     load();
                     break;
+
                 case ACTIVE:
                     state = CoordinatorState.ACTIVE;
                     highWatermarklistener = new HighWatermarkListener();

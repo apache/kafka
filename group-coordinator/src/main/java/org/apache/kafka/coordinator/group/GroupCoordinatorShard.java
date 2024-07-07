@@ -138,13 +138,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return this;
         }
 
-        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withGroupConfigManager(
-            GroupConfigManager groupConfigManager
-        ) {
-            this.groupConfigManager = groupConfigManager;
-            return this;
-        }
-
         @Override
         public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withCoordinatorMetrics(
             CoordinatorMetrics coordinatorMetrics
