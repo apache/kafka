@@ -278,23 +278,25 @@ public enum ApiKeys {
         return messageType.listeners().contains(listener);
     }
 
-    private static String toHtml() {
+    static String toHtml() {
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>");
         b.append("<th>Name</th>\n");
         b.append("<th>Key</th>\n");
         b.append("</tr>");
-        for (ApiKeys key : clientApis()) {
-            b.append("<tr>\n");
-            b.append("<td>");
-            b.append("<a href=\"#The_Messages_" + key.name + "\">" + key.name + "</a>");
-            b.append("</td>");
-            b.append("<td>");
-            b.append(key.id);
-            b.append("</td>");
-            b.append("</tr>\n");
-        }
+        clientApis().stream()
+            .filter(apiKey -> !apiKey.messageType.latestVersionUnstable())
+            .forEach(apiKey -> {
+                b.append("<tr>\n");
+                b.append("<td>");
+                b.append("<a href=\"#The_Messages_" + apiKey.name + "\">" + apiKey.name + "</a>");
+                b.append("</td>");
+                b.append("<td>");
+                b.append(apiKey.id);
+                b.append("</td>");
+                b.append("</tr>\n");
+            });
         b.append("</tbody></table>\n");
         return b.toString();
     }

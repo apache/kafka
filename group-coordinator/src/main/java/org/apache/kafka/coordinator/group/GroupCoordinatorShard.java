@@ -592,7 +592,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             records.size(), time.milliseconds() - startMs);
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();
-        return new CoordinatorResult<>(records);
+        return new CoordinatorResult<>(records, false);
     }
 
     /**
@@ -624,7 +624,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         log.info("Generated {} tombstone records in {} milliseconds while deleting offsets for partitions {}.",
             records.size(), time.milliseconds() - startTimeMs, topicPartitions);
 
-        return new CoordinatorResult<>(records);
+        return new CoordinatorResult<>(records, false);
     }
 
     /**
