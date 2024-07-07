@@ -157,7 +157,7 @@ versions += [
   zinc: "1.9.2",
   zookeeper: "3.8.4",
   zstd: "1.5.6-3",
-  junitPlatformSuiteEngine: "1.10.2"
+  junitPlatform: "1.10.2"
 ]
 
 libs += [
@@ -201,7 +201,8 @@ libs += [
   jose4j: "org.bitbucket.b_c:jose4j:$versions.jose4j",
   junitJupiter: "org.junit.jupiter:junit-jupiter:$versions.junit",
   junitJupiterApi: "org.junit.jupiter:junit-jupiter-api:$versions.junit",
-  junitPlatformSuiteEngine: "org.junit.platform:junit-platform-suite-engine:$versions.junitPlatformSuiteEngine",
+  junitPlatformSuiteEngine: "org.junit.platform:junit-platform-suite-engine:$versions.junitPlatform",
+  junitPlatformLanucher: "org.junit.platform:junit-platform-launcher:$versions.junitPlatform",
   jqwik: "net.jqwik:jqwik:$versions.jqwik",
   hamcrest: "org.hamcrest:hamcrest:$versions.hamcrest",
   kafkaStreams_0100: "org.apache.kafka:kafka-streams:$versions.kafka_0100",

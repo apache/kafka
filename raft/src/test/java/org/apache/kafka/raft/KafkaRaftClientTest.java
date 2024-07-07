@@ -87,7 +87,7 @@ public class KafkaRaftClientTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
         context.assertElectedLeader(1, localId);
-        assertEquals(context.log.endOffset().offset, context.client.logEndOffset());
+        assertEquals(context.log.endOffset().offset(), context.client.logEndOffset());
     }
 
     @ParameterizedTest
@@ -103,8 +103,8 @@ public class KafkaRaftClientTest {
             .withElectedLeader(initialEpoch, localId)
             .build();
 
-        context.pollUntil(() -> context.log.endOffset().offset == 1L);
-        assertEquals(1L, context.log.endOffset().offset);
+        context.pollUntil(() -> context.log.endOffset().offset() == 1L);
+        assertEquals(1L, context.log.endOffset().offset());
         assertEquals(initialEpoch + 1, context.log.lastFetchedEpoch());
         assertEquals(new LeaderAndEpoch(OptionalInt.of(localId), initialEpoch + 1),
             context.currentLeaderAndEpoch());
@@ -125,7 +125,7 @@ public class KafkaRaftClientTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        assertEquals(0L, context.log.endOffset().offset);
+        assertEquals(0L, context.log.endOffset().offset());
         context.assertElectedLeader(epoch, localId);
 
         // Since we were the leader in epoch 2, we should ensure that we will not vote for any
@@ -135,7 +135,7 @@ public class KafkaRaftClientTest {
                 epoch,
                 remoteKey,
                 context.log.lastFetchedEpoch(),
-                context.log.endOffset().offset
+                context.log.endOffset().offset()
             )
         );
         context.pollUntilResponse();
@@ -156,7 +156,7 @@ public class KafkaRaftClientTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        assertEquals(0L, context.log.endOffset().offset);
+        assertEquals(0L, context.log.endOffset().offset());
         context.assertVotedCandidate(epoch, localId);
 
         // Since we were the leader in epoch 2, we should ensure that we will not vote for any
@@ -166,7 +166,7 @@ public class KafkaRaftClientTest {
                 epoch,
                 remoteKey,
                 context.log.lastFetchedEpoch(),
-                context.log.endOffset().offset
+                context.log.endOffset().offset()
             )
         );
         context.pollUntilResponse();
@@ -189,7 +189,7 @@ public class KafkaRaftClientTest {
 
         // Resign from leader, will restart in resigned state
         assertTrue(context.client.quorum().isResigned());
-        assertEquals(0L, context.log.endOffset().offset);
+        assertEquals(0L, context.log.endOffset().offset());
         context.assertElectedLeader(epoch, localId);
 
         // Send vote request with higher epoch
@@ -198,7 +198,7 @@ public class KafkaRaftClientTest {
                 epoch + 1,
                 remoteKey,
                 context.log.lastFetchedEpoch(),
-                context.log.endOffset().offset
+                context.log.endOffset().offset()
             )
         );
         context.client.poll();
@@ -225,7 +225,7 @@ public class KafkaRaftClientTest {
 
         // Resign from candidate, will restart in candidate state
         assertTrue(context.client.quorum().isCandidate());
-        assertEquals(0L, context.log.endOffset().offset);
+        assertEquals(0L, context.log.endOffset().offset());
         context.assertVotedCandidate(epoch, localId);
 
         // Send vote request with higher epoch
@@ -234,7 +234,7 @@ public class KafkaRaftClientTest {
                 epoch + 1,
                 remoteKey,
                 context.log.lastFetchedEpoch(),
-                context.log.endOffset().offset
+                context.log.endOffset().offset()
             )
         );
         context.client.poll();
@@ -269,7 +269,7 @@ public class KafkaRaftClientTest {
                 epoch + 1,
                 remoteKey,
                 context.log.lastFetchedEpoch(),
-                context.log.endOffset().offset
+                context.log.endOffset().offset()
             )
         );
         context.client.poll();
@@ -296,7 +296,7 @@ public class KafkaRaftClientTest {
 
         // Resign from leader, will restart in resigned state
         assertTrue(context.client.quorum().isResigned());
-        assertEquals(0L, context.log.endOffset().offset);
+        assertEquals(0L, context.log.endOffset().offset());
         context.assertElectedLeader(epoch, localId);
 
         // Election timeout
@@ -323,7 +323,7 @@ public class KafkaRaftClientTest {
 
         // The node will remain elected, but start up in a resigned state
         // in which no additional writes are accepted.
-        assertEquals(0L, context.log.endOffset().offset);
+        assertEquals(0L, context.log.endOffset().offset());
         context.assertElectedLeader(epoch, localId);
         context.client.poll();
         assertThrows(NotLeaderException.class, () -> context.client.scheduleAppend(epoch, Arrays.asList("a", "b")));
@@ -492,12 +492,12 @@ public class KafkaRaftClientTest {
 
         // send fetch request when become leader
         int epoch = context.currentEpoch();
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, context.log.endOffset().offset, epoch, 1000));
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, context.log.endOffset().offset(), epoch, 1000));
         context.client.poll();
 
         // append some record, but the fetch in purgatory will still fail
         context.log.appendAsLeader(
-            context.buildDataBatch(context.log.endOffset().offset, epoch, singletonList("raft")),
+            context.buildDataBatch(context.log.endOffset().offset(), epoch, singletonList("raft")),
             epoch
         );
 
@@ -800,7 +800,7 @@ public class KafkaRaftClientTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
         context.assertVotedCandidate(2, localId);
-        assertEquals(0L, context.log.endOffset().offset);
+        assertEquals(0L, context.log.endOffset().offset());
 
         // The candidate will resume the election after reinitialization
         context.pollUntilRequest();
@@ -832,12 +832,12 @@ public class KafkaRaftClientTest {
         );
 
         // Become leader after receiving the vote
-        context.pollUntil(() -> context.log.endOffset().offset == 1L);
+        context.pollUntil(() -> context.log.endOffset().offset() == 1L);
         context.assertElectedLeader(1, localId);
         long electionTimestamp = context.time.milliseconds();
 
         // Leader change record appended
-        assertEquals(1L, context.log.endOffset().offset);
+        assertEquals(1L, context.log.endOffset().offset());
         assertEquals(1L, context.log.firstUnflushedOffset());
 
         // Send BeginQuorumEpoch to voters
@@ -879,12 +879,12 @@ public class KafkaRaftClientTest {
         );
 
         // Become leader after receiving the vote
-        context.pollUntil(() -> context.log.endOffset().offset == 1L);
+        context.pollUntil(() -> context.log.endOffset().offset() == 1L);
         context.assertElectedLeader(1, localId);
         long electionTimestamp = context.time.milliseconds();
 
         // Leader change record appended
-        assertEquals(1L, context.log.endOffset().offset);
+        assertEquals(1L, context.log.endOffset().offset());
         assertEquals(1L, context.log.firstUnflushedOffset());
 
         // Send BeginQuorumEpoch to voters
@@ -1110,7 +1110,7 @@ public class KafkaRaftClientTest {
 
         assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
         context.deliverRequest(
-            context.voteRequest(epoch + 1, otherNodeKey, epoch, context.log.endOffset().offset)
+            context.voteRequest(epoch + 1, otherNodeKey, epoch, context.log.endOffset().offset())
         );
         context.pollUntilResponse();
 
@@ -1168,7 +1168,7 @@ public class KafkaRaftClientTest {
 
         context.becomeLeader();
         assertEquals(OptionalInt.of(localId), context.currentLeader());
-        assertEquals(1L, context.log.endOffset().offset);
+        assertEquals(1L, context.log.endOffset().offset());
 
         int epoch = context.currentEpoch();
         assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
@@ -1183,7 +1183,7 @@ public class KafkaRaftClientTest {
 
         context.time.sleep(30);
         context.client.poll();
-        assertEquals(2L, context.log.endOffset().offset);
+        assertEquals(2L, context.log.endOffset().offset());
     }
 
     @ParameterizedTest
@@ -1204,7 +1204,7 @@ public class KafkaRaftClientTest {
 
         context.becomeLeader();
         assertEquals(OptionalInt.of(localId), context.currentLeader());
-        assertEquals(1L, context.log.endOffset().offset);
+        assertEquals(1L, context.log.endOffset().offset());
 
         int epoch = context.currentEpoch();
         assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
@@ -1219,7 +1219,7 @@ public class KafkaRaftClientTest {
         assertTrue(context.messageQueue.wakeupRequested());
 
         context.client.poll();
-        assertEquals(3L, context.log.endOffset().offset);
+        assertEquals(3L, context.log.endOffset().offset());
     }
 
     @ParameterizedTest
@@ -1481,7 +1481,7 @@ public class KafkaRaftClientTest {
         // First poll has no high watermark advance
         context.client.poll();
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
-        assertEquals(1L, context.log.endOffset().offset);
+        assertEquals(1L, context.log.endOffset().offset());
 
         // Let follower send a fetch to initialize the high watermark,
         // note the offset 0 would be a control message for becoming the leader
@@ -1984,7 +1984,7 @@ public class KafkaRaftClientTest {
         // First poll has no high watermark advance.
         context.client.poll();
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
-        assertEquals(1L, context.log.endOffset().offset);
+        assertEquals(1L, context.log.endOffset().offset());
 
         // Now we will advance the high watermark with a follower fetch request.
         FetchRequestData fetchRequestData = context.fetchRequest(epoch, otherNodeKey, 1L, epoch, 0);
@@ -2433,7 +2433,7 @@ public class KafkaRaftClientTest {
         );
 
         context.client.poll();
-        assertEquals(0, context.log.endOffset().offset);
+        assertEquals(0, context.log.endOffset().offset());
         context.assertVotedCandidate(epoch + 1, localId);
     }
 
@@ -2475,7 +2475,7 @@ public class KafkaRaftClientTest {
         );
 
         context.client.poll();
-        assertEquals(0, context.log.endOffset().offset);
+        assertEquals(0, context.log.endOffset().offset());
         context.assertElectedLeader(epoch + 1, voter3);
     }
 
@@ -2956,7 +2956,7 @@ public class KafkaRaftClientTest {
         );
 
         context.client.poll();
-        assertEquals(2L, context.log.endOffset().offset);
+        assertEquals(2L, context.log.endOffset().offset());
         assertEquals(2L, context.log.firstUnflushedOffset());
     }
 
@@ -2990,7 +2990,7 @@ public class KafkaRaftClientTest {
             fetchResponse
         );
         context.client.poll();
-        assertEquals(0L, context.log.endOffset().offset);
+        assertEquals(0L, context.log.endOffset().offset());
         assertEquals(OptionalLong.of(0L), context.client.highWatermark());
 
         // Receive some records in the next poll, but do not advance high watermark
@@ -3004,7 +3004,7 @@ public class KafkaRaftClientTest {
             fetchResponse
         );
         context.client.poll();
-        assertEquals(2L, context.log.endOffset().offset);
+        assertEquals(2L, context.log.endOffset().offset());
         assertEquals(OptionalLong.of(0L), context.client.highWatermark());
 
         // The next fetch response is empty, but should still advance the high watermark
@@ -3023,7 +3023,7 @@ public class KafkaRaftClientTest {
             fetchResponse
         );
         context.client.poll();
-        assertEquals(2L, context.log.endOffset().offset);
+        assertEquals(2L, context.log.endOffset().offset());
         assertEquals(OptionalLong.of(2L), context.client.highWatermark());
     }
 
@@ -3074,7 +3074,7 @@ public class KafkaRaftClientTest {
             .build();
         long now = context.time.milliseconds();
 
-        context.pollUntil(() -> context.log.endOffset().offset == 1L);
+        context.pollUntil(() -> context.log.endOffset().offset() == 1L);
         context.assertElectedLeader(1, localId);
 
         // We still write the leader change message
@@ -3156,7 +3156,7 @@ public class KafkaRaftClientTest {
             .build();
 
         context.assertElectedLeader(epoch, otherNodeId);
-        assertEquals(3L, context.log.endOffset().offset);
+        assertEquals(3L, context.log.endOffset().offset());
 
         context.pollUntilRequest();
 
@@ -3168,7 +3168,7 @@ public class KafkaRaftClientTest {
 
         // Poll again to complete truncation
         context.client.poll();
-        assertEquals(2L, context.log.endOffset().offset);
+        assertEquals(2L, context.log.endOffset().offset());
         assertEquals(2L, context.log.firstUnflushedOffset());
 
         // Now we should be fetching
@@ -3184,7 +3184,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId))
             .withKip853Rpc(withKip853Rpc)
             .build();
-        context.pollUntil(() -> context.log.endOffset().offset == 1L);
+        context.pollUntil(() -> context.log.endOffset().offset() == 1L);
 
         assertNotNull(getMetric(context.metrics, "current-state"));
         assertNotNull(getMetric(context.metrics, "current-leader"));
@@ -3350,7 +3350,7 @@ public class KafkaRaftClientTest {
         int epoch = context.currentEpoch();
 
         // After becoming leader, we expect the `LeaderChange` record to be appended.
-        assertEquals(1L, context.log.endOffset().offset);
+        assertEquals(1L, context.log.endOffset().offset());
 
         // The high watermark is not known to the leader until the followers
         // begin fetching, so we should not have fired the `handleLeaderChange` callback.
@@ -3407,7 +3407,7 @@ public class KafkaRaftClientTest {
 
         // After becoming leader, we expect the `LeaderChange` record to be appended
         // in addition to the initial 9 records in the log.
-        assertEquals(10L, context.log.endOffset().offset);
+        assertEquals(10L, context.log.endOffset().offset());
 
         // The high watermark is not known to the leader until the followers
         // begin fetching, so we should not have fired the `handleLeaderChange` callback.
@@ -3470,7 +3470,7 @@ public class KafkaRaftClientTest {
 
         context.becomeLeader();
         context.client.poll();
-        assertEquals(10L, context.log.endOffset().offset);
+        assertEquals(10L, context.log.endOffset().offset());
 
         // Let the initial listener catch up
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, 10L, epoch, 0));
@@ -3513,7 +3513,7 @@ public class KafkaRaftClientTest {
 
         context.becomeLeader();
         context.client.poll();
-        assertEquals(10L, context.log.endOffset().offset);
+        assertEquals(10L, context.log.endOffset().offset());
 
         // Let the initial listener catch up
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
@@ -3662,7 +3662,7 @@ public class KafkaRaftClientTest {
 
         // Start off as the leader and receive a fetch to initialize the high watermark
         context.becomeLeader();
-        assertEquals(10L, context.log.endOffset().offset);
+        assertEquals(10L, context.log.endOffset().offset());
 
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, 10L, epoch, 0));
         context.pollUntilResponse();
@@ -3813,7 +3813,7 @@ public class KafkaRaftClientTest {
             context.fetchResponse(leaderEpoch, leaderId, batch1, 0L, Errors.NONE)
         );
         context.client.poll();
-        assertEquals(3L, context.log.endOffset().offset);
+        assertEquals(3L, context.log.endOffset().offset());
         assertEquals(3, context.log.lastFetchedEpoch());
     }
 
