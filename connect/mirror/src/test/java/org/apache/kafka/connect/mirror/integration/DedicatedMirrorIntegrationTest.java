@@ -354,10 +354,8 @@ public class DedicatedMirrorIntegrationTest {
                         .stream()
                         .map(TaskInfo::config)
                         .allMatch(predicate);
-            } catch (Exception ex) {
-                boolean retriable = (ex instanceof RebalanceNeededException)
-                        || ((ex instanceof ExecutionException) && (ex.getCause() instanceof RebalanceNeededException));
-                if (retriable) {
+            } catch (ExecutionException ex) {
+                if (ex.getCause() instanceof RebalanceNeededException) {
                     // RebalanceNeededException should be retriable
                     // This happens when a worker has read a new config from the config topic, but hasn't completed the
                     // subsequent rebalance yet
