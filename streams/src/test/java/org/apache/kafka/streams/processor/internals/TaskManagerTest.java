@@ -1339,6 +1339,26 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldCloseCleanTasksPendingInitOnPartitionLost() {
+        final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask task2 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId02Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.drainPendingActiveTasksToInit()).thenReturn(mkSet(task1, task2));
+        final TaskManager taskManager = setupForRevocationAndLost(emptySet(), tasks);
+
+        taskManager.handleLostAll();
+
+        verify(task1).suspend();
+        verify(task1).closeClean();
+        verify(task2).suspend();
+        verify(task2).closeClean();
+    }
+
+    @Test
     public void shouldCloseDirtyWhenRemoveFailedActiveTasksFromStateUpdaterOnPartitionLost() {
         final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING)
@@ -1353,15 +1373,48 @@ public class TaskManagerTest {
         future1.complete(new StateUpdater.RemovedTaskResult(task1, new StreamsException("Something happened")));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future3 = new CompletableFuture<>();
         when(stateUpdater.remove(task2.id())).thenReturn(future3);
-        future3.complete(new StateUpdater.RemovedTaskResult(task2));
+        future3.complete(new StateUpdater.RemovedTaskResult(task2, new StreamsException("Something else happened")));
 
         taskManager.handleLostAll();
 
         verify(task1).prepareCommit();
         verify(task1).suspend();
         verify(task1).closeDirty();
+        verify(task2).prepareCommit();
         verify(task2).suspend();
-        verify(task2).closeClean();
+        verify(task2).closeDirty();
+    }
+
+    @Test
+    public void shouldCloseTasksWhenRemoveFailedActiveTasksFromStateUpdaterOnPartitionLost() {
+        final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask task2 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId02Partitions).build();
+        final StreamTask task3 = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId03Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.drainPendingActiveTasksToInit()).thenReturn(mkSet(task1));
+        final TaskManager taskManager = setupForRevocationAndLost(mkSet(task2, task3), tasks);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = new CompletableFuture<>();
+        when(stateUpdater.remove(task2.id())).thenReturn(future2);
+        future2.complete(new StateUpdater.RemovedTaskResult(task2, new StreamsException("Something happened")));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future3 = new CompletableFuture<>();
+        when(stateUpdater.remove(task3.id())).thenReturn(future3);
+        future3.complete(new StateUpdater.RemovedTaskResult(task3));
+
+        taskManager.handleLostAll();
+
+        verify(task1).suspend();
+        verify(task1).closeClean();
+        verify(task2).prepareCommit();
+        verify(task2).suspend();
+        verify(task2).closeDirty();
+        verify(task3).suspend();
+        verify(task3).closeClean();
     }
 
     private TaskManager setupForRevocationAndLost(final Set<Task> tasksInStateUpdater,
