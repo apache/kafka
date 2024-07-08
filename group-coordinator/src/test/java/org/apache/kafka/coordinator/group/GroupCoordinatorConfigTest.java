@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
@@ -32,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings("deprecation")
 public class GroupCoordinatorConfigTest {
@@ -46,8 +49,8 @@ public class GroupCoordinatorConfigTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG, 10);
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG, 10);
-        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 30);
-        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 10);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 555);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 200);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG, 55);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, Collections.singletonList(RangeAssignor.class));
         configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG, 2222);
@@ -70,12 +73,11 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 111);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 222);
 
-        GroupCoordinatorConfig config = new GroupCoordinatorConfig(
-                new AbstractConfig(Utils.mergeConfigs(GROUP_COORDINATOR_CONFIG_DEFS), configs, false));
+        GroupCoordinatorConfig config = createConfig(configs);
 
         assertEquals(10, config.numThreads());
-        assertEquals(30, config.consumerGroupSessionTimeoutMs());
-        assertEquals(10, config.consumerGroupHeartbeatIntervalMs());
+        assertEquals(555, config.consumerGroupSessionTimeoutMs());
+        assertEquals(200, config.consumerGroupHeartbeatIntervalMs());
         assertEquals(55, config.consumerGroupMaxSize());
         assertEquals(1, config.consumerGroupAssignors().size());
         assertEquals(RangeAssignor.RANGE_ASSIGNOR_NAME, config.consumerGroupAssignors().get(0).name());
@@ -101,6 +103,77 @@ public class GroupCoordinatorConfigTest {
         assertEquals(222, config.consumerGroupMaxHeartbeatIntervalMs());
     }
 
+    @Test
+    public void testInvalidConfigs() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG, (short) -2);
+        configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, (short) 3);
+        assertEquals("offsets.commit.required.acks must be greater or equal to -1 and less or equal to offsets.topic.replication.factor",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 10);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 20);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 20);
+        assertEquals("group.consumer.max.heartbeat.interval.ms must be greater than or equals to group.consumer.min.heartbeat.interval.ms",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 30);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 20);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 10);
+        assertEquals("group.consumer.heartbeat.interval.ms must be greater than or equals to group.consumer.min.heartbeat.interval.ms",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 30);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 20);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 40);
+        assertEquals("group.consumer.heartbeat.interval.ms must be less than or equals to group.consumer.max.heartbeat.interval.ms",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, 10);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 20);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 20);
+        assertEquals("group.consumer.max.session.timeout.ms must be greater than or equals to group.consumer.min.session.timeout.ms",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, 30);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 20);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 10);
+        assertEquals("group.consumer.session.timeout.ms must be greater than or equals to group.consumer.min.session.timeout.ms",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, 30);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 20);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 40);
+        assertEquals("group.consumer.session.timeout.ms must be less than or equals to group.consumer.max.session.timeout.ms",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, Object.class);
+        assertEquals("Invalid value class java.lang.Object for configuration group.consumer.assignors: Expected a comma separated list.",
+                assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, Collections.singletonList(Object.class));
+        assertEquals("class java.lang.Object is not an instance of org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor",
+                assertThrows(KafkaException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, "foobar");
+        assertEquals("Invalid value foobar for configuration group.consumer.migration.policy: String must be one of (case insensitive): DISABLED, DOWNGRADE, UPGRADE, BIDIRECTIONAL",
+                assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, -100);
+        assertEquals("Unknown compression type id: -100",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+    }
+
     public static GroupCoordinatorConfig createGroupCoordinatorConfig(
         int offsetMetadataMaxSize,
         long offsetsRetentionCheckIntervalMs,
@@ -110,7 +183,9 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG, 1);
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG, 10);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 45);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 45);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG, Integer.MAX_VALUE);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, Collections.singletonList(RangeAssignor.class));
         configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG, 1000);
@@ -125,6 +200,10 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.DISABLED.name());
         configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, (int) CompressionType.NONE.id);
 
+        return createConfig(configs);
+    }
+
+    private static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {
         return new GroupCoordinatorConfig(
                 new AbstractConfig(Utils.mergeConfigs(GROUP_COORDINATOR_CONFIG_DEFS), configs, false));
     }
