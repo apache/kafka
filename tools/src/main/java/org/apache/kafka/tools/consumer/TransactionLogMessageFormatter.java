@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.tools.consumer;
 
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -42,27 +44,36 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
     private static final String DATA = "data";
     private static final String KEY = "key";
     private static final String VALUE = "value";
-    
+    private static final String UNKNOWN = "unknown";
+
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
         ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
-        
+
         byte[] key = consumerRecord.key();
         if (Objects.nonNull(key)) {
             short keyVersion = ByteBuffer.wrap(key).getShort();
-            Optional<TransactionLogKey> transactionLogKey = readToTransactionLogKey(ByteBuffer.wrap(key));
-            settingKeyNode(json, transactionLogKey, keyVersion);
+            JsonNode dataNode = readToTransactionLogKey(ByteBuffer.wrap(key))
+                    .map(logKey -> TransactionLogKeyJsonConverter.write(logKey, keyVersion))
+                    .orElseGet(() -> new TextNode(UNKNOWN));
+            json.putObject(KEY)
+                    .put(VERSION, keyVersion)
+                    .set(DATA, dataNode);
         } else {
-            json.put(KEY, "NULL");
+            json.set(KEY, NullNode.getInstance());
         }
 
         byte[] value = consumerRecord.value();
         if (Objects.nonNull(value)) {
             short valueVersion = ByteBuffer.wrap(value).getShort();
-            Optional<TransactionLogValue> transactionLogValue = readToTransactionLogValue(ByteBuffer.wrap(value));
-            settingValueNode(json, transactionLogValue, valueVersion);
+            JsonNode dataNode = readToTransactionLogValue(ByteBuffer.wrap(value))
+                    .map(logValue -> TransactionLogValueJsonConverter.write(logValue, valueVersion))
+                    .orElseGet(() -> new TextNode(UNKNOWN));
+            json.putObject(VALUE)
+                    .put(VERSION, valueVersion)
+                    .set(DATA, dataNode);
         } else {
-            json.put(VALUE, "NULL");
+            json.set(VALUE, NullNode.getInstance());
         }
 
         try {
@@ -90,36 +101,5 @@ public class TransactionLogMessageFormatter implements MessageFormatter {
         } else {
             return Optional.empty();
         }
-    }
-
-    private void settingKeyNode(ObjectNode json, Optional<TransactionLogKey> transactionLogKey, short keyVersion) {
-        if (transactionLogKey.isPresent()) {
-            addDataNode(json, KEY, keyVersion,
-                    TransactionLogKeyJsonConverter.write(transactionLogKey.get(), keyVersion));
-        } else {
-            addUnknownNode(json, KEY, keyVersion);
-        }
-    }
-
-    private void settingValueNode(ObjectNode json, Optional<TransactionLogValue> transactionLogValue, short valueVersion) {
-        if (transactionLogValue.isPresent()) {
-            addDataNode(json, VALUE, valueVersion,
-                    TransactionLogValueJsonConverter.write(transactionLogValue.get(), valueVersion));
-        } else {
-            addUnknownNode(json, VALUE, valueVersion);
-        }
-    }
-
-    private void addUnknownNode(ObjectNode json, String nodeName, short keyVersion) {
-        json.putObject(nodeName)
-                .put(VERSION, Short.toString(keyVersion))
-                .put(DATA, "unknown");
-    }
-
-    private static void addDataNode(ObjectNode json, String value,
-                                    short valueVersion, JsonNode data) {
-        json.putObject(value)
-                .put(VERSION, Short.toString(valueVersion))
-                .set(DATA, data);
     }
 }
