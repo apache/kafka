@@ -24,18 +24,28 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ConsumerGroupHeartbeatRequestTest {
+    private void testGetError(Errors e) {
+        ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
+        ConsumerGroupHeartbeatRequest request = new ConsumerGroupHeartbeatRequest.Builder(data).build();
+        int throttleTimeMs = 1000;
+        ConsumerGroupHeartbeatResponse response = request.getErrorResponse(throttleTimeMs, e.exception());
+        assertEquals(response.throttleTimeMs(), throttleTimeMs);
+        assertEquals(response.data().errorCode(), e.code());
+        assertEquals(response.data().errorMessage(), e.message());
+    }
 
     @Test
     void testGetErrorConsumerGroupHeartbeatResponse() {
-        ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
-        ConsumerGroupHeartbeatRequest request = new ConsumerGroupHeartbeatRequest.Builder(data).build();
-        Throwable e = Errors.UNSUPPORTED_VERSION.exception();
-        int throttleTimeMs = 1000;
-        ConsumerGroupHeartbeatResponse response = request.getErrorResponse(throttleTimeMs, e);
-
-        assertEquals(throttleTimeMs, response.throttleTimeMs());
-        ApiError apiError = ApiError.fromThrowable(e);
-        assertEquals(apiError.code(), response.data().errorCode());
-        assertEquals(e.getMessage(), response.data().errorMessage());
+        testGetError(Errors.UNSUPPORTED_VERSION);
+        testGetError(Errors.GROUP_AUTHORIZATION_FAILED);
+        testGetError(Errors.NOT_COORDINATOR);
+        testGetError(Errors.COORDINATOR_NOT_AVAILABLE);
+        testGetError(Errors.COORDINATOR_LOAD_IN_PROGRESS);
+        testGetError(Errors.INVALID_REQUEST);
+        testGetError(Errors.UNKNOWN_MEMBER_ID);
+        testGetError(Errors.FENCED_MEMBER_EPOCH);
+        testGetError(Errors.UNSUPPORTED_ASSIGNOR);
+        testGetError(Errors.UNRELEASED_INSTANCE_ID);
+        testGetError(Errors.GROUP_MAX_SIZE_REACHED);
     }
 }
