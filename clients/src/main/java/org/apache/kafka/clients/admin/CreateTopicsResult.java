@@ -64,7 +64,7 @@ public class CreateTopicsResult {
      * If broker returned an error for topic configs, throw appropriate exception. For example,
      * {@link org.apache.kafka.common.errors.TopicAuthorizationException} is thrown if user does not
      * have permission to describe topic configs.
-     * Note that it is possible to obtain type and documentation with null values even if they are not defined
+     * Note that type and documentation must be null since the protocol doesn't specify these fields.
      */
     public KafkaFuture<Config> config(String topic) {
         return futures.get(topic).thenApply(TopicMetadataAndConfig::config);
