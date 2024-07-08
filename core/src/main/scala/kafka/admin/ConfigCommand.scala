@@ -354,7 +354,6 @@ object ConfigCommand extends Logging {
     }
   }
 
-  @nowarn("cat=deprecation")
   def alterConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
@@ -411,6 +410,7 @@ object ConfigCommand extends Logging {
     oldConfig
   }
 
+  @nowarn("cat=deprecation")
   private def alterBrokerConfig(adminClient: Admin, entityTypeHead: String, entityNames: List[String], configsToBeAdded: Predef.Map[String, ConfigEntry], configsToBeDeleted: Seq[String]): Unit = {
     entityNames.foreach { entityName =>
       val oldConfig = getOldConfig(adminClient, entityTypeHead, configsToBeDeleted, entityName)
