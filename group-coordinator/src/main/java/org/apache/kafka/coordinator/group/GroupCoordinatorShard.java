@@ -87,6 +87,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
@@ -265,7 +267,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * The coordinator metrics shard.
      */
-    private final CoordinatorMetricsShard metricsShard;
+    private final GroupCoordinatorMetricsShard metricsShard;
 
     /**
      * Constructor.
@@ -284,7 +286,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         CoordinatorTimer<Void, CoordinatorRecord> timer,
         GroupCoordinatorConfig config,
         CoordinatorMetrics coordinatorMetrics,
-        CoordinatorMetricsShard metricsShard
+        GroupCoordinatorMetricsShard metricsShard
     ) {
         this.log = logContext.logger(GroupCoordinatorShard.class);
         this.groupMetadataManager = groupMetadataManager;
@@ -579,15 +581,15 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public CoordinatorResult<Void, CoordinatorRecord> cleanupGroupMetadata() {
         long startMs = time.milliseconds();
         List<CoordinatorRecord> records = new ArrayList<>();
-        List<ClassicGroupState> prevStates = new ArrayList<>();
+        AtomicInteger deletedClassicGroupCount = new AtomicInteger(0);
         groupMetadataManager.groupIds().forEach(groupId -> {
             boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
             if (allOffsetsExpired) {
-                Group group = groupMetadataManager.group(groupId);
-                if (group.type() == Group.GroupType.CLASSIC) {
-                    prevStates.add(((ClassicGroup) group).currentState());
+                if (groupMetadataManager.maybeDeleteGroup(groupId, records)) {
+                    if (groupMetadataManager.group(groupId).type() == Group.GroupType.CLASSIC) {
+                        deletedClassicGroupCount.incrementAndGet();
+                    }
                 }
-                groupMetadataManager.maybeDeleteGroup(groupId, records);
             }
         });
 
@@ -596,14 +598,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();
 
-        // If the append operation fails, revert 
+        // If the append operation fails, revert classic group state transitions. Groups were only deleted
+        // if they were in Empty state.
         CompletableFuture<Void> appendFuture = new CompletableFuture<>();
-        appendFuture.whenComplete((__, t) -> {
-            if (t != null) {
-                prevStates.forEach(prevState ->
-                    ((GroupCoordinatorMetricsShard) metricsShard).onClassicGroupStateTransition(null, prevState)
-                );
-            }
+        appendFuture.exceptionally(__ -> {
+            IntStream.range(0, deletedClassicGroupCount.get()).forEach(___ ->
+                metricsShard.onClassicGroupStateTransition(null, ClassicGroupState.EMPTY));
+            return null;
         });
         return new CoordinatorResult<>(records, null, appendFuture, true, false);
     }
