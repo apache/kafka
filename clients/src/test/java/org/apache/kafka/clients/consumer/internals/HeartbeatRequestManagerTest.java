@@ -138,10 +138,7 @@ public class HeartbeatRequestManagerTest {
                 backgroundEventHandler,
                 metrics);
 
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
-        Map<Uuid, SortedSet<Integer>> map = new HashMap<>();
-        LocalAssignment local = new LocalAssignment(0, map);
-        when(membershipManager.currentAssignment()).thenReturn(local);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mock(Node.class)));
     }
 
     private void createHeartbeatStateWith0HeartbeatInterval() {
@@ -163,18 +160,18 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testHeartbeatOnStartup() {
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size());
 
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mock(Node.class)));
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
 
         // Ensure we do not resend the request without the first request being completed
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(heartbeatRequestState.requestInFlight()).thenReturn(true);
         NetworkClientDelegate.PollResult result2 = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result2.unsentRequests.size());
     }
@@ -260,7 +257,6 @@ public class HeartbeatRequestManagerTest {
 
         // Create a ConsumerHeartbeatRequest and verify the payload
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(0, "", 0)));
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
@@ -370,7 +366,6 @@ public class HeartbeatRequestManagerTest {
     public void testNetworkTimeout() {
         // The initial heartbeatInterval is set to 0
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
@@ -394,7 +389,6 @@ public class HeartbeatRequestManagerTest {
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
 
         when(membershipManager.isLeavingGroup()).thenReturn(true);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
@@ -498,7 +492,6 @@ public class HeartbeatRequestManagerTest {
                 backgroundEventHandler);
 
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
 
         Uuid topicId = Uuid.randomUuid();
         ConsumerGroupHeartbeatRequestData.TopicPartitions expectedTopicPartitions =
@@ -746,7 +739,6 @@ public class HeartbeatRequestManagerTest {
                 heartbeatState,
                 heartbeatRequestState,
                 backgroundEventHandler);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
 
         // On poll timer expiration, the member should send a last heartbeat to leave the group
