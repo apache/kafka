@@ -109,7 +109,7 @@ public class HeartbeatRequestManagerTest {
     public void setUp() {
         this.time = new MockTime();
         this.logContext = new LogContext();
-        this.pollTimer = spy(time.timer(1000));
+        this.pollTimer = mock(Timer.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.heartbeatState = mock(HeartbeatState.class);
         this.backgroundEventHandler = mock(BackgroundEventHandler.class);
@@ -303,7 +303,7 @@ public class HeartbeatRequestManagerTest {
 
         assertEquals(0, result.unsentRequests.size());
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS - 100, result.timeUntilNextPollMs);
-        //when(pollTimer.remainingMs()).thenReturn(1000L);
+        when(pollTimer.remainingMs()).thenReturn(1800L);
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS - 100, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
 
         // Member in state where it should not send Heartbeat anymore
