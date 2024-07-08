@@ -68,6 +68,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
     public static final String SPEC_CONFIG = "spec";
+    public static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(SPEC_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.Validator() {
@@ -89,7 +90,12 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             ConfigDef.Importance.HIGH,
             "List of fields and the type to cast them to of the form field1:type,field2:type to cast fields of "
                     + "Maps or Structs. A single type to cast the entire value. Valid types are int8, int16, int32, "
-                    + "int64, float32, float64, boolean, and string. Note that binary fields can only be cast to string.");
+                    + "int64, float32, float64, boolean, and string. Note that binary fields can only be cast to string.")
+            .define(REPLACE_NULL_WITH_DEFAULT_CONFIG,
+                    ConfigDef.Type.BOOLEAN,
+                    true,
+                    ConfigDef.Importance.MEDIUM,
+                    "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
     private static final String PURPOSE = "cast types";
 
@@ -112,6 +118,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     private Map<String, Schema.Type> casts;
     private Schema.Type wholeValueCastType;
     private Cache<Schema, Schema> schemaUpdateCache;
+    private boolean replaceNullWithDefault;
 
     @Override
     public String version() {
@@ -124,6 +131,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         casts = parseFieldTypes(config.getList(SPEC_CONFIG));
         wholeValueCastType = casts.get(WHOLE_VALUE_CAST);
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
+        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
     }
 
     @Override
@@ -176,13 +184,20 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
 
         final Struct updatedValue = new Struct(updatedSchema);
         for (Field field : value.schema().fields()) {
-            final Object origFieldValue = value.get(field);
+            final Object origFieldValue = getFieldValue(value, field);
             final Schema.Type targetType = casts.get(field.name());
             final Object newFieldValue = targetType != null ? castValueToType(field.schema(), origFieldValue, targetType) : origFieldValue;
             log.trace("Cast field '{}' from '{}' to '{}'", field.name(), origFieldValue, newFieldValue);
             updatedValue.put(updatedSchema.field(field.name()), newFieldValue);
         }
         return newRecord(record, updatedSchema, updatedValue);
+    }
+
+    private Object getFieldValue(Struct value, Field field) {
+        if (replaceNullWithDefault) {
+            return value.get(field);
+        }
+        return value.getWithoutDefault(field.name());
     }
 
     private Schema getOrBuildSchema(Schema valueSchema) {

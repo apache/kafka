@@ -62,6 +62,7 @@ public class MaskFieldTest {
             .field("decimal", Decimal.schema(0))
             .field("array", SchemaBuilder.array(Schema.INT32_SCHEMA))
             .field("map", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA))
+            .field("withDefault", SchemaBuilder.string().optional().defaultValue("default").build())
             .build();
     private static final Map<String, Object> VALUES = new HashMap<>();
     private static final Struct VALUES_WITH_SCHEMA = new Struct(SCHEMA);
@@ -97,6 +98,7 @@ public class MaskFieldTest {
         VALUES_WITH_SCHEMA.put("decimal", new BigDecimal(42));
         VALUES_WITH_SCHEMA.put("array", Arrays.asList(1, 2, 3));
         VALUES_WITH_SCHEMA.put("map", Collections.singletonMap("what", "what"));
+        VALUES_WITH_SCHEMA.put("withDefault", null);
     }
 
     private static MaskField<SinkRecord> transform(List<String> fields, String replacement) {
@@ -104,6 +106,7 @@ public class MaskFieldTest {
         Map<String, Object> props = new HashMap<>();
         props.put("fields", fields);
         props.put("replacement", replacement);
+        props.put("replace.null.with.default", false);
         xform.configure(props);
         return xform;
     }
@@ -181,6 +184,7 @@ public class MaskFieldTest {
         assertEquals(BigDecimal.ZERO, updatedValue.get("decimal"));
         assertEquals(Collections.emptyList(), updatedValue.get("array"));
         assertEquals(Collections.emptyMap(), updatedValue.get("map"));
+        assertEquals(null, updatedValue.getWithoutDefault("withDefault"));
     }
 
     @Test
