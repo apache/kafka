@@ -57,7 +57,6 @@ import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -66,7 +65,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -117,26 +115,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     private GroupCoordinatorConfig createConfig() {
-        return new GroupCoordinatorConfig(
-            1,
-            10,
-            45,
-            5,
-            Integer.MAX_VALUE,
-            Collections.singletonList(new RangeAssignor()),
-            1000,
-            4096,
-            Integer.MAX_VALUE,
-            3000,
-            5 * 60 * 1000,
-            120,
-            10 * 5 * 1000,
-            600000L,
-            24 * 60 * 1000L,
-            5000,
-            ConsumerGroupMigrationPolicy.DISABLED,
-            CompressionType.NONE
-        );
+        return GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 600000L, 24);
     }
 
     @Test
