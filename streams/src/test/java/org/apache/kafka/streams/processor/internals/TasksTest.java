@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -47,6 +48,7 @@ public class TasksTest {
     private static final TaskId TASK_0_0 = new TaskId(0, 0);
     private static final TaskId TASK_0_1 = new TaskId(0, 1);
     private static final TaskId TASK_1_0 = new TaskId(1, 0);
+    private static final TaskId TASK_1_1 = new TaskId(1, 1);
 
     private final Tasks tasks = new Tasks(new LogContext());
 
@@ -139,7 +141,27 @@ public class TasksTest {
 
         assertTrue(tasks.hasPendingTasksToInit());
 
-        tasks.drainPendingTasksToInit();
+        final Set<Task> tasksToInit = tasks.drainPendingTasksToInit();
+        assertEquals(2, tasksToInit.size());
+        assertTrue(tasksToInit.contains(activeTask));
+        assertTrue(tasksToInit.contains(standbyTask));
         assertFalse(tasks.hasPendingTasksToInit());
+    }
+
+    @Test
+    public void shouldVerifyIfPendingActiveTaskToInitAreDrained() {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_B_0)).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, mkSet(TOPIC_PARTITION_B_1)).build();
+        final StandbyTask standbyTask1 = standbyTask(TASK_1_0, mkSet(TOPIC_PARTITION_A_0)).build();
+        final StandbyTask standbyTask2 = standbyTask(TASK_1_1, mkSet(TOPIC_PARTITION_A_1)).build();
+        tasks.addPendingTasksToInit(mkSet(activeTask1, activeTask2, standbyTask1, standbyTask2));
+
+        final Set<Task> activeTasksToInit = tasks.drainPendingActiveTasksToInit();
+        assertEquals(2, activeTasksToInit.size());
+        assertTrue(activeTasksToInit.containsAll(mkSet(activeTask1, activeTask2)));
+        assertFalse(activeTasksToInit.containsAll(mkSet(standbyTask1, standbyTask2)));
+        assertEquals(2, tasks.pendingTasksToInit().size());
+        assertTrue(tasks.hasPendingTasksToInit());
+        assertTrue(tasks.pendingTasksToInit().containsAll(mkSet(standbyTask1, standbyTask2)));
     }
 }
