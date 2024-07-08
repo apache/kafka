@@ -288,12 +288,16 @@ public class ApiVersionsResponseTest {
             setSuppressFeatureLevel0(suppressV0Features).
             build();
         if (suppressV0Features) {
-            assertNull(response.data().supportedFeatures().find("my.feature"));
+            assertEquals(new SupportedFeatureKey().
+                setName("my.feature").
+                setMinVersion((short) 1).
+                setMaxVersion((short) 1),
+                response.data().supportedFeatures().find("my.feature"));
         } else {
             assertEquals(new SupportedFeatureKey().
-                    setName("my.feature").
-                    setMinVersion((short) 0).
-                    setMaxVersion((short) 1),
+                setName("my.feature").
+                setMinVersion((short) 0).
+                setMaxVersion((short) 1),
                 response.data().supportedFeatures().find("my.feature"));
         }
     }
