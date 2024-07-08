@@ -14,15 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer;
+package org.apache.kafka.jmh.record;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public class LegacyConsumerRecords<K, V> extends ConsumerRecords<K, V> {
+public final class LegacyConsumerRecords<K, V> extends ConsumerRecords<K, V> {
     public LegacyConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
         super(records);
     }
