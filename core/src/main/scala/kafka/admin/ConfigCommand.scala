@@ -370,7 +370,7 @@ object ConfigCommand extends Logging {
       case BrokerLoggerConfigType =>
         alterBrokerLoggingConfig(adminClient, entityTypeHead, entityNames, configsToBeAdded, configsToBeDeleted)
       case ConfigType.USER | ConfigType.CLIENT =>
-        alterUserOrClientConfig(adminClient, entityTypes, entityNames, entityTypeHead, configsToBeAddedMap, configsToBeAdded, configsToBeDeleted)
+        alterUserOrClientConfig(adminClient, entityTypes, entityNames, configsToBeAddedMap, configsToBeAdded, configsToBeDeleted)
       case ConfigType.IP =>
         alterIpConfig(adminClient, entityTypes, entityNames, configsToBeAddedMap, configsToBeAdded, configsToBeDeleted)
       case ConfigType.CLIENT_METRICS =>
@@ -443,7 +443,8 @@ object ConfigCommand extends Logging {
       .map(_ -> alterLogLevelEntries).toMap.asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
   }
 
-  private def alterUserOrClientConfig(adminClient: Admin, entityTypes: List[String], entityNames: List[String], entityTypeHead: String, configsToBeAddedMap: Predef.Map[String, String], configsToBeAdded: Predef.Map[String, ConfigEntry], configsToBeDeleted: Seq[String]) = {
+  private def alterUserOrClientConfig(adminClient: Admin, entityTypes: List[String], entityNames: List[String], configsToBeAddedMap: Predef.Map[String, String], configsToBeAdded: Predef.Map[String, ConfigEntry], configsToBeDeleted: Seq[String]) = {
+    val entityTypeHead = entityTypes.head
     val hasQuotaConfigsToAdd = configsToBeAdded.keys.exists(QuotaConfigs.isClientOrUserQuotaConfig)
     val scramConfigsToAddMap = configsToBeAdded.filter(entry => ScramMechanism.isScram(entry._1))
     val unknownConfigsToAdd = configsToBeAdded.keys.filterNot(key => ScramMechanism.isScram(key) || QuotaConfigs.isClientOrUserQuotaConfig(key))
