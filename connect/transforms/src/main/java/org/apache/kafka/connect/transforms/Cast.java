@@ -67,7 +67,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
     public static final String SPEC_CONFIG = "spec";
-    public static final String REPLACE_NULL_WITH_DEFAULT = "replace.null.with.default";
+    public static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(SPEC_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.Validator() {
@@ -90,7 +90,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             "List of fields and the type to cast them to of the form field1:type,field2:type to cast fields of "
                     + "Maps or Structs. A single type to cast the entire value. Valid types are int8, int16, int32, "
                     + "int64, float32, float64, boolean, and string. Note that binary fields can only be cast to string.")
-            .define(REPLACE_NULL_WITH_DEFAULT,
+            .define(REPLACE_NULL_WITH_DEFAULT_CONFIG,
                     ConfigDef.Type.BOOLEAN,
                     true,
                     ConfigDef.Importance.MEDIUM,
@@ -130,7 +130,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         casts = parseFieldTypes(config.getList(SPEC_CONFIG));
         wholeValueCastType = casts.get(WHOLE_VALUE_CAST);
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
-        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT);
+        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
     }
 
     @Override

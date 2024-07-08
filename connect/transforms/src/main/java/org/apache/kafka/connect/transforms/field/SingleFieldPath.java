@@ -185,8 +185,9 @@ public class SingleFieldPath {
             if (current == null) return null;
         }
 
-        if (current.schema().field(lastStep()) != null) {
-            return withDefault ? current.get(lastStep()) : current.getWithoutDefault(lastStep());
+        String lastStep = lastStep();
+        if (current.schema().field(lastStep) != null) {
+            return withDefault ? current.get(lastStep) : current.getWithoutDefault(lastStep);
         } else {
             return null;
         }

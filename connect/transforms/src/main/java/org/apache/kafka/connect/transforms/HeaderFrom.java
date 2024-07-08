@@ -49,7 +49,7 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
     public static final String OPERATION_FIELD = "operation";
     private static final String MOVE_OPERATION = "move";
     private static final String COPY_OPERATION = "copy";
-    public static final String REPLACE_NULL_WITH_DEFAULT = "replace.null.with.default";
+    public static final String REPLACE_NULL_WITH_DEFAULT_FIELD = "replace.null.with.default";
 
     public static final String OVERVIEW_DOC =
             "Moves or copies fields in the key/value of a record into that record's headers. " +
@@ -72,7 +72,7 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
                     ConfigDef.ValidString.in(MOVE_OPERATION, COPY_OPERATION), ConfigDef.Importance.HIGH,
                     "Either <code>move</code> if the fields are to be moved to the headers (removed from the key/value), " +
                             "or <code>copy</code> if the fields are to be copied to the headers (retained in the key/value).")
-            .define(REPLACE_NULL_WITH_DEFAULT, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
+            .define(REPLACE_NULL_WITH_DEFAULT_FIELD, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
                     "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
     private final Cache<Schema, Schema> moveSchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
@@ -100,7 +100,6 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
         public String toString() {
             return name;
         }
-
     }
 
     private List<String> fields;
@@ -253,6 +252,6 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
                     FIELDS_FIELD, HEADERS_FIELD));
         }
         operation = Operation.fromName(config.getString(OPERATION_FIELD));
-        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT);
+        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT_FIELD);
     }
 }

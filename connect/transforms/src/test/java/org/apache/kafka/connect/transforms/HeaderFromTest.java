@@ -304,7 +304,7 @@ public class HeaderFromTest {
         result.put(HeaderFrom.HEADERS_FIELD, headers);
         result.put(HeaderFrom.FIELDS_FIELD, transformFields);
         result.put(HeaderFrom.OPERATION_FIELD, operation.toString());
-        result.put(HeaderFrom.REPLACE_NULL_WITH_DEFAULT, useFieldDefault);
+        result.put(HeaderFrom.REPLACE_NULL_WITH_DEFAULT_FIELD, useFieldDefault);
         return result;
     }
 

@@ -68,7 +68,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public static final String UNIX_PRECISION_CONFIG = "unix.precision";
     private static final String UNIX_PRECISION_DEFAULT = "milliseconds";
 
-    public static final String REPLACE_NULL_WITH_DEFAULT = "replace.null.with.default";
+    public static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
     private static final String PURPOSE = "converting timestamp formats";
 
@@ -107,7 +107,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                     "The desired Unix precision for the timestamp: seconds, milliseconds, microseconds, or nanoseconds. " +
                             "Used to generate the output when type=unix or used to parse the input if the input is a Long." +
                             "Note: This SMT will cause precision loss during conversions from, and to, values with sub-millisecond components.")
-            .define(REPLACE_NULL_WITH_DEFAULT, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
+            .define(REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
                     "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
 
@@ -302,7 +302,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         String formatPattern = simpleConfig.getString(FORMAT_CONFIG);
         final String unixPrecision = simpleConfig.getString(UNIX_PRECISION_CONFIG);
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
-        replaceNullWithDefault = simpleConfig.getBoolean(REPLACE_NULL_WITH_DEFAULT);
+        replaceNullWithDefault = simpleConfig.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
 
         if (type.equals(TYPE_STRING) && Utils.isBlank(formatPattern)) {
             throw new ConfigException("TimestampConverter requires format option to be specified when using string timestamps");

@@ -569,7 +569,7 @@ public class TimestampConverterTest {
         Map<String, Object> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
         config.put(TimestampConverter.FIELD_CONFIG, "ts");
-        config.put(TimestampConverter.REPLACE_NULL_WITH_DEFAULT, false);
+        config.put(TimestampConverter.REPLACE_NULL_WITH_DEFAULT_CONFIG, false);
         xformValue.configure(config);
 
         // ts field is a unix timestamp
