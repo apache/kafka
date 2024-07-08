@@ -3675,10 +3675,12 @@ public class FetcherTest {
     public void testFetcherDontCacheAnyData() {
         short version = 17;
         FetchResponse fetchResponse = fetchResponse(tidp0, records, Errors.NONE, 100L, -1L, 0L, 0);
-        fetchResponse.responseData(topicNames, version)
-                .forEach((topicPartition, partitionData) -> assertEquals(records, partitionData.records()));
-        fetchResponse.responseData(Collections.emptyMap(), version)
-                .forEach((topicPartition, partitionData) -> assertEquals(MemoryRecords.EMPTY, partitionData.records()));
+        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = fetchResponse.responseData(topicNames, version);
+        assertEquals(topicNames.size(), responseData.size());
+        responseData.forEach((topicPartition, partitionData) -> assertEquals(records, partitionData.records()));
+        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> nonResponseData = fetchResponse.responseData(emptyMap(), version);
+        assertEquals(emptyMap().size(), nonResponseData.size());
+        nonResponseData.forEach((topicPartition, partitionData) -> assertEquals(MemoryRecords.EMPTY, partitionData.records()));
     }
 
     private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(
