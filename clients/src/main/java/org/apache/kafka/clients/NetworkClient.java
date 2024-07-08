@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.internals.AdminBootstrapAddresses;
+import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -1179,6 +1182,15 @@ public class NetworkClient implements KafkaClient {
     private void ensureBootstrapped(final long nowMs) {
         if (this.bootstrapState.isDisabled || this.bootstrapState.isBootstrapped) {
             return;
+        }
+
+        if (clientId.contains("adminclient")) {
+            AdminBootstrapAddresses adminAddresses = AdminBootstrapAddresses.fromConfig(config);
+            AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
+                    config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                    config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
+                    adminAddresses.usingBootstrapControllers());
+            metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
         }
 
         List<InetSocketAddress> servers = this.bootstrapState.tryResolveAddresses(nowMs);
