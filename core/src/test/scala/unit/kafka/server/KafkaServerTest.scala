@@ -18,18 +18,19 @@
 package kafka.server
 
 import kafka.utils.{CoreUtils, TestUtils}
+import kafka.zk.ZkVersion
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.{ReplicationConfigs, ZkConfigs}
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
 
-import java.util.Properties
 import java.net.{InetAddress, ServerSocket}
-import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.config.ZkConfigs
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
-
+import java.util.Properties
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 class KafkaServerTest extends QuorumTestHarness {
@@ -176,6 +177,35 @@ class KafkaServerTest extends QuorumTestHarness {
       case None => fail("RemoteLogManager should be initialized")
     }
     server.shutdown()
+  }
+
+  @Test
+  def testGeneratedBrokerIdSyncWithNodeId(): Unit = {
+    val configs = new mutable.HashMap[String, String]()
+    configs.put("offsets.topic.num.partitions", "1")
+    configs.put("offsets.topic.replication.factor", "1")
+    configs.put("zookeeper.connect", "localhost:2181")
+    // bind broker on random port
+    configs.put("listeners", "PLAINTEXT://:0")
+    configs.put("log.dirs", TestUtils.tempDir().getAbsolutePath)
+    // disable auto leader balance to ensure AdminTest#preferredLeaderElection works correctly.
+    configs.put("auto.leader.rebalance.enable", "false")
+    // increase the timeout in order to avoid ZkTimeoutException
+    configs.put("zookeeper.session.timeout.ms", String.valueOf(30 * 1000))
+    configs.put("reserved.broker.max.id", "1000")
+    configs.put("group.coordinator.new.enable", "false")
+    var kafkaServer: KafkaServer = null
+    try {
+      kafkaServer = new KafkaServer(KafkaConfig.apply(configs.asJava), Time.SYSTEM, Option.empty, false)
+      kafkaServer.startup()
+      assertEquals(1001, kafkaServer.config.brokerId)
+      assertEquals(1001, kafkaServer.config.nodeId)
+    } finally if (null != kafkaServer) {
+      val kafkaZkClient = kafkaServer.zkClient
+      kafkaZkClient.deletePath("/brokers/seqid", ZkVersion.MatchAnyVersion)
+      Utils.closeQuietly(kafkaZkClient, "zkClient")
+      kafkaServer.shutdown()
+    }
   }
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
