@@ -1528,7 +1528,7 @@ public class SharePartition {
 
         PartitionErrorData partitionData = state.partitions().get(0);
         if (partitionData.errorCode() != Errors.NONE.code()) {
-            Exception exception = Errors.forCode(partitionData.errorCode()).exception();
+            Exception exception = Errors.forCode(partitionData.errorCode()).exception(partitionData.errorMessage());
             log.error("Failed to write the share group state for share partition: {}-{} due to exception",
                 groupId, topicIdPartition, exception);
             return false;

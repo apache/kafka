@@ -3562,7 +3562,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(null));
-        assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
+        assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Collections.emptyList()));
     }
 
     @Test
