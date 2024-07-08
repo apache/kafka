@@ -1212,7 +1212,7 @@ public class TaskManager {
         log.debug("Closing lost active tasks as zombies.");
 
         closeRunningTasksDirty();
-        removeLostActiveTasksFromStateUpdater();
+        removeLostActiveTasksFromStateUpdaterAndPendingTasksToInit();
 
         if (processingMode == EXACTLY_ONCE_V2) {
             activeTaskCreator.reInitializeThreadProducer();
@@ -1233,11 +1233,11 @@ public class TaskManager {
         maybeUnlockTasks(allTaskIds);
     }
 
-    private void removeLostActiveTasksFromStateUpdater() {
+    private void removeLostActiveTasksFromStateUpdaterAndPendingTasksToInit() {
         if (stateUpdater != null) {
             final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
             final Map<TaskId, RuntimeException> failedTasksDuringCleanClose = new HashMap<>();
-            final Set<Task> tasksToCloseClean = new HashSet<>();
+            final Set<Task> tasksToCloseClean = new HashSet<>(tasks.drainPendingActiveTasksToInit());
             final Set<Task> tasksToCloseDirty = new HashSet<>();
             for (final Task restoringTask : stateUpdater.getTasks()) {
                 if (restoringTask.isActive()) {
