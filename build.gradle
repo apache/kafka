@@ -989,8 +989,6 @@ project(':core') {
     testImplementation libs.caffeine
 
     testRuntimeOnly libs.junitPlatformLanucher
-
-    generator project(':generator')
   }
 
   if (userEnableTestCoverage) {
