@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -117,7 +118,7 @@ public class MirrorCheckpointConfigTest {
         Map<String, String> configValues = MirrorCheckpointConfig.validate(makeProps(
                 MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "false",
                 MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED, "false"));
-        assertEquals(configValues.keySet(), Utils.mkSet(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED));
+        assertEquals(configValues.keySet(), Collections.singleton(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED));
 
         configValues = MirrorCheckpointConfig.validate(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
                 MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"));

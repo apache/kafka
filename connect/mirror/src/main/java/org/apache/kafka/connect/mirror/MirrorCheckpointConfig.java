@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -175,17 +174,13 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
             return invalidConfigs;
         }
 
-        boolean emitCheckpointDisabled = "false".equals(configs.getOrDefault(EMIT_CHECKPOINTS_ENABLED, "true"));
-        boolean syncGroupOffsetsDisabled = "false".equals(configs.getOrDefault(SYNC_GROUP_OFFSETS_ENABLED, "true"));
-
-        if (emitCheckpointDisabled && syncGroupOffsetsDisabled) {
-            Arrays.asList(SYNC_GROUP_OFFSETS_ENABLED, EMIT_CHECKPOINTS_ENABLED).forEach(configName -> {
-                invalidConfigs.putIfAbsent(configName, "MirrorCheckpointConnector can't run with both " + SYNC_GROUP_OFFSETS_ENABLED + " and " +
-                        EMIT_CHECKPOINTS_ENABLED + " set to false");
-            });
+        if ("false".equals(configs.get(EMIT_CHECKPOINTS_ENABLED))) {
+            invalidConfigs.putIfAbsent(EMIT_CHECKPOINTS_ENABLED, "MirrorCheckpointConnector can't run with " +
+                    EMIT_CHECKPOINTS_ENABLED + " set to false");
         }
-        if ("false".equals(configs.getOrDefault(EMIT_OFFSET_SYNCS_ENABLED, "true"))) {
-            invalidConfigs.put(EMIT_OFFSET_SYNCS_ENABLED, "MirrorCheckpointConnector can't run without offset syncs");
+
+        if ("false".equals(configs.get(EMIT_OFFSET_SYNCS_ENABLED))) {
+            invalidConfigs.putIfAbsent(EMIT_OFFSET_SYNCS_ENABLED, "MirrorCheckpointConnector can't run without offset syncs");
         }
 
         return invalidConfigs;
