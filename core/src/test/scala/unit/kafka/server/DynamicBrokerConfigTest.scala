@@ -734,13 +734,13 @@ class DynamicBrokerConfigTest {
     // update default config
     config.dynamicConfig.validate(newProps, perBrokerConfig = false)
     config.dynamicConfig.updateDefaultConfig(newProps)
-    assertEquals(2160000000L, config.logLocalRetentionMs)
+    assertEquals(2160000000L, config.remoteLogManagerConfig.logLocalRetentionMs)
 
     // update per broker config
     config.dynamicConfig.validate(newProps, perBrokerConfig = true)
     newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2150000000")
     config.dynamicConfig.updateBrokerConfig(0, newProps)
-    assertEquals(2150000000L, config.logLocalRetentionMs)
+    assertEquals(2150000000L, config.remoteLogManagerConfig.logLocalRetentionMs)
   }
 
   @Test
@@ -757,13 +757,13 @@ class DynamicBrokerConfigTest {
     // update default config
     config.dynamicConfig.validate(newProps, perBrokerConfig = false)
     config.dynamicConfig.updateDefaultConfig(newProps)
-    assertEquals(4294967295L, config.logLocalRetentionBytes)
+    assertEquals(4294967295L, config.remoteLogManagerConfig.logLocalRetentionBytes)
 
     // update per broker config
     config.dynamicConfig.validate(newProps, perBrokerConfig = true)
     newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967294")
     config.dynamicConfig.updateBrokerConfig(0, newProps)
-    assertEquals(4294967294L, config.logLocalRetentionBytes)
+    assertEquals(4294967294L, config.remoteLogManagerConfig.logLocalRetentionBytes)
   }
 
   @Test
