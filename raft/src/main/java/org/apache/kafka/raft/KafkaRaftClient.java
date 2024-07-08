@@ -69,6 +69,7 @@ import org.apache.kafka.raft.internals.RecordsBatchReader;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.NotifyingRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
@@ -3025,6 +3026,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     @Override
     public long logEndOffset() {
         return log.endOffset().offset();
+    }
+
+    @Override
+    public KRaftVersion kraftVersion() {
+        return partitionState.kraftVersionAtOffset(quorum.highWatermark().get().offset());
     }
 
     @Override

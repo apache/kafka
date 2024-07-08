@@ -20,7 +20,6 @@ package kafka.testkit;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
-import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
@@ -55,12 +54,7 @@ public class TestKitNodes {
         }
 
         public Builder setBootstrapMetadataVersion(MetadataVersion metadataVersion) {
-            this.bootstrapMetadata = bootstrapMetadata.withMetadataVersion(metadataVersion);
-            return this;
-        }
-
-        public Builder setKRaftVersion(KRaftVersion kraftVersion) {
-            this.bootstrapMetadata = bootstrapMetadata.withKRaftVersion(kraftVersion);
+            this.bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "testkit");
             return this;
         }
 

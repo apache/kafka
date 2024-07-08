@@ -20,10 +20,8 @@ package org.apache.kafka.metadata.bootstrap;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -43,10 +41,11 @@ public class BootstrapMetadata {
     private final String source;
 
     public static BootstrapMetadata fromVersion(MetadataVersion metadataVersion, String source) {
-        return new BootstrapMetadata(
-            Collections.singletonList(metadataVersionToRecord(metadataVersion)),
-            metadataVersion,
-            source);
+        List<ApiMessageAndVersion> records = Collections.singletonList(
+            new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(metadataVersion.featureLevel()), (short) 0));
+        return new BootstrapMetadata(records, metadataVersion, source);
     }
 
     public static BootstrapMetadata fromRecords(List<ApiMessageAndVersion> records, String source) {
@@ -64,33 +63,11 @@ public class BootstrapMetadata {
         return new BootstrapMetadata(records, metadataVersion, source);
     }
 
-    private static ApiMessageAndVersion metadataVersionToRecord(MetadataVersion metadataVersion) {
-        return new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName(MetadataVersion.FEATURE_NAME).
-            setFeatureLevel(metadataVersion.featureLevel()), (short) 0);
-    }
-
     public static Optional<MetadataVersion> recordToMetadataVersion(ApiMessage record) {
         if (record instanceof FeatureLevelRecord) {
             FeatureLevelRecord featureLevel = (FeatureLevelRecord) record;
             if (featureLevel.name().equals(MetadataVersion.FEATURE_NAME)) {
                 return Optional.of(MetadataVersion.fromFeatureLevel(featureLevel.featureLevel()));
-            }
-        }
-        return Optional.empty();
-    }
-
-    private static ApiMessageAndVersion kraftVersionToRecord(KRaftVersion version) {
-        return new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName(KRaftVersion.FEATURE_NAME).
-            setFeatureLevel(version.featureLevel()), (short) 0);
-    }
-
-    private static Optional<KRaftVersion> recordToKRaftVersion(ApiMessage record) {
-        if (record instanceof FeatureLevelRecord) {
-            FeatureLevelRecord featureLevel = (FeatureLevelRecord) record;
-            if (featureLevel.name().equals(KRaftVersion.FEATURE_NAME)) {
-                return Optional.of(KRaftVersion.fromFeatureLevel(featureLevel.featureLevel()));
             }
         }
         return Optional.empty();
@@ -137,34 +114,6 @@ public class BootstrapMetadata {
         }
         return new BootstrapMetadata(Collections.singletonList(versionRecord),
                 metadataVersion, source);
-    }
-
-    public BootstrapMetadata withMetadataVersion(MetadataVersion metadataVersion) {
-        List<ApiMessageAndVersion> newRecords = new ArrayList<>();
-        for (ApiMessageAndVersion record : records) {
-            if (recordToMetadataVersion(record.message()).isPresent()) {
-                newRecords.add(metadataVersionToRecord(metadataVersion));
-            } else {
-                newRecords.add(record);
-            }
-        }
-        return new BootstrapMetadata(newRecords, metadataVersion, source);
-    }
-
-    public BootstrapMetadata withKRaftVersion(KRaftVersion version) {
-        List<ApiMessageAndVersion> newRecords = new ArrayList<>();
-        boolean foundKRaftVersion = false;
-        for (ApiMessageAndVersion record : records) {
-            if (recordToKRaftVersion(record.message()).isPresent()) {
-                newRecords.add(kraftVersionToRecord(version));
-            } else {
-                newRecords.add(record);
-            }
-        }
-        if (!foundKRaftVersion) {
-            newRecords.add(kraftVersionToRecord(version));
-        }
-        return new BootstrapMetadata(newRecords, metadataVersion, source);
     }
 
     @Override
