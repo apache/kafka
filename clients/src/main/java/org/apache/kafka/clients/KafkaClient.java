@@ -213,5 +213,9 @@ public interface KafkaClient extends Closeable {
      */
     boolean active();
 
+    /**
+     * Returns true if the client has already been bootstrapped. Returns false if the client has not
+     * been bootstrapped or if DNS must be resolved again.
+     */
     boolean isBootstrapped();
 }

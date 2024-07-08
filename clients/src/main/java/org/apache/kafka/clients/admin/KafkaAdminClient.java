@@ -408,6 +408,9 @@ public class KafkaAdminClient extends AdminClient {
      */
     private Uuid clientInstanceId;
 
+    /**
+     * Addresses for the admin client to bootstrap
+     */
     private static AdminBootstrapAddresses adminAddresses;
 
     /**
