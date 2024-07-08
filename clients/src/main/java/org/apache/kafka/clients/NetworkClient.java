@@ -1184,14 +1184,14 @@ public class NetworkClient implements KafkaClient {
             return;
         }
 
-        if (clientId.contains("adminclient")) {
-            AdminBootstrapAddresses adminAddresses = AdminBootstrapAddresses.fromConfig(config);
-            AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
-                    config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                    config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
-                    adminAddresses.usingBootstrapControllers());
-            metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
-        }
+//        if (clientId.contains("adminclient")) {
+//            AdminBootstrapAddresses adminAddresses = AdminBootstrapAddresses.fromConfig(config);
+//            AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
+//                    config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+//                    config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
+//                    adminAddresses.usingBootstrapControllers());
+//            metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
+//        }
 
         List<InetSocketAddress> servers = this.bootstrapState.tryResolveAddresses(nowMs);
         if (!servers.isEmpty()) {
@@ -1203,6 +1203,10 @@ public class NetworkClient implements KafkaClient {
             throw new BootstrapResolutionException("Unable to Resolve Address within the configured period " +
                     this.bootstrapState.dnsResolutionTimeoutMs + "ms.");
         }
+    }
+
+    public boolean isBootstrapped() {
+        return bootstrapState.isBootstrapped;
     }
 
     class DefaultMetadataUpdater implements MetadataUpdater {

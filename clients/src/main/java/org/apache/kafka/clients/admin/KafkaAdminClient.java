@@ -408,6 +408,8 @@ public class KafkaAdminClient extends AdminClient {
      */
     private Uuid clientInstanceId;
 
+    private static AdminBootstrapAddresses adminAddresses;
+
     /**
      * Get or create a list value from a map.
      *
@@ -527,12 +529,12 @@ public class KafkaAdminClient extends AdminClient {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
             // simplifies communication with older brokers)
             // TODO
-            AdminBootstrapAddresses adminAddresses = AdminBootstrapAddresses.fromConfig(config);
+            adminAddresses = AdminBootstrapAddresses.fromConfig(config);
             AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
                 adminAddresses.usingBootstrapControllers());
-            metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
+            //metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
             // TODO
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
@@ -1530,6 +1532,9 @@ public class KafkaAdminClient extends AdminClient {
                 // Wait for network responses.
                 log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);
                 List<ClientResponse> responses = client.poll(Math.max(0L, pollTimeout), now);
+                // check if the client has been bootstrapped, if true, metadataupdater.update()
+                if(client.isBootstrapped())
+                    metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
                 log.trace("KafkaClient#poll retrieved {} response(s)", responses.size());
 
                 // unassign calls to disconnected nodes

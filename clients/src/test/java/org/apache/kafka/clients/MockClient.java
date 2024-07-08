@@ -577,6 +577,11 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
+    public boolean isBootstrapped() {
+        return false;
+    }
+
+    @Override
     public void close() {
         active = false;
         metadataUpdater.close();
