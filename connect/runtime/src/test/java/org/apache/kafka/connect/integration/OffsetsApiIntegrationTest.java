@@ -36,6 +36,8 @@ import org.apache.kafka.test.NoRetryException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
+import org.junit.jupiter.api.RepetitionInfo;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -333,13 +335,17 @@ public class OffsetsApiIntegrationTest {
         assertEquals(400, e.errorCode());
     }
 
-    @Test
-    public void testAlterSinkConnectorOffsets() throws Exception {
+    @RepeatedTest(5)
+    public void testAlterSinkConnectorOffsets(RepetitionInfo repetitionInfo) throws Exception {
+        connectorName += "-" + repetitionInfo.getCurrentRepetition();
+        topic += "-" + repetitionInfo.getCurrentRepetition();
         alterAndVerifySinkConnectorOffsets(baseSinkConnectorConfigs(), connect.kafka());
     }
 
-    @Test
-    public void testAlterSinkConnectorOffsetsOverriddenConsumerGroupId() throws Exception {
+    @RepeatedTest(5)
+    public void testAlterSinkConnectorOffsetsOverriddenConsumerGroupId(RepetitionInfo repetitionInfo) throws Exception {
+        connectorName += "-" + repetitionInfo.getCurrentRepetition();
+        topic += "-" + repetitionInfo.getCurrentRepetition();
         Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
         String overriddenGroupId = connectorName + "-overridden-group-id";
         connectorConfigs.put(
@@ -355,8 +361,10 @@ public class OffsetsApiIntegrationTest {
         }
     }
 
-    @Test
-    public void testAlterSinkConnectorOffsetsDifferentKafkaClusterTargeted() throws Exception {
+    @RepeatedTest(5)
+    public void testAlterSinkConnectorOffsetsDifferentKafkaClusterTargeted(RepetitionInfo repetitionInfo) throws Exception {
+        connectorName += "-" + repetitionInfo.getCurrentRepetition();
+        topic += "-" + repetitionInfo.getCurrentRepetition();
         EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
 
         try (AutoCloseable ignored = kafkaCluster::stop) {
@@ -723,13 +731,17 @@ public class OffsetsApiIntegrationTest {
         }
     }
 
-    @Test
-    public void testResetSinkConnectorOffsets() throws Exception {
+    @RepeatedTest(5)
+    public void testResetSinkConnectorOffsets(RepetitionInfo repetitionInfo) throws Exception {
+        connectorName += "-" + repetitionInfo.getCurrentRepetition();
+        topic += "-" + repetitionInfo.getCurrentRepetition();
         resetAndVerifySinkConnectorOffsets(baseSinkConnectorConfigs(), connect.kafka());
     }
 
-    @Test
-    public void testResetSinkConnectorOffsetsOverriddenConsumerGroupId() throws Exception {
+    @RepeatedTest(5)
+    public void testResetSinkConnectorOffsetsOverriddenConsumerGroupId(RepetitionInfo repetitionInfo) throws Exception {
+        connectorName += "-" + repetitionInfo.getCurrentRepetition();
+        topic += "-" + repetitionInfo.getCurrentRepetition();
         Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
         String overriddenGroupId = connectorName + "-overridden-group-id";
         connectorConfigs.put(
@@ -745,8 +757,10 @@ public class OffsetsApiIntegrationTest {
         }
     }
 
-    @Test
-    public void testResetSinkConnectorOffsetsDifferentKafkaClusterTargeted() throws Exception {
+    @RepeatedTest(5)
+    public void testResetSinkConnectorOffsetsDifferentKafkaClusterTargeted(RepetitionInfo repetitionInfo) throws Exception {
+        connectorName += "-" + repetitionInfo.getCurrentRepetition();
+        topic += "-" + repetitionInfo.getCurrentRepetition();
         EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
 
         try (AutoCloseable ignored = kafkaCluster::stop) {
