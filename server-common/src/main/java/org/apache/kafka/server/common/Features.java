@@ -40,7 +40,6 @@ public enum Features {
      * See {@link TestFeatureVersion} as an example. See {@link FeatureVersion} when implementing a new feature.
      */
     TEST_VERSION("test.feature.version", TestFeatureVersion.values()),
-    GROUP_VERSION("group.version", GroupVersion.values()),
     KRAFT_VERSION("kraft.version", KRaftVersion.values());
 
     public static final Features[] FEATURES;

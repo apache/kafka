@@ -18,6 +18,7 @@ package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

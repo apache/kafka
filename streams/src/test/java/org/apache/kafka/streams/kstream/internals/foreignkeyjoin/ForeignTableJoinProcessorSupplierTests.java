@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,7 +71,7 @@ public class ForeignTableJoinProcessorSupplierTests {
         context = new MockInternalNewProcessorContext<>(props, new TaskId(0, 0), stateDir);
 
         final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
-        processor = new ForeignTableJoinProcessorSupplier<String, String, String>(storeBuilder(), COMBINED_KEY_SCHEMA).get();
+        processor = new ForeignTableJoinProcessorSupplier<String, String, String>(storeBuilder().name(), COMBINED_KEY_SCHEMA).get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
         stateStore.init((StateStoreContext) context, stateStore);

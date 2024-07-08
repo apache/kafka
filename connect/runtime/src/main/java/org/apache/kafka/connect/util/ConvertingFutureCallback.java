@@ -137,4 +137,3 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
         return result;
     }
 }
-

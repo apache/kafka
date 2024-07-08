@@ -38,7 +38,7 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.junit.jupiter.api.AfterEach;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -59,10 +59,12 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer.invokeRebalanceCallbacks;
+import static org.apache.kafka.clients.consumer.internals.MembershipManagerImpl.TOPIC_PARTITION_COMPARATOR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -81,6 +83,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -96,14 +99,11 @@ public class MembershipManagerImplTest {
     private static final String MEMBER_ID = "test-member-1";
     private static final int REBALANCE_TIMEOUT = 100;
     private static final int MEMBER_EPOCH = 1;
+    private static final LogContext LOG_CONTEXT = new LogContext();
 
-    private final LogContext logContext = new LogContext();
     private SubscriptionState subscriptionState;
     private ConsumerMetadata metadata;
-
     private CommitRequestManager commitRequestManager;
-
-    private ConsumerTestBuilder testBuilder;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private BackgroundEventHandler backgroundEventHandler;
     private Time time;
@@ -112,22 +112,16 @@ public class MembershipManagerImplTest {
 
     @BeforeEach
     public void setup() {
-        testBuilder = new ConsumerTestBuilder(ConsumerTestBuilder.createDefaultGroupInformation());
-        metadata = testBuilder.metadata;
-        subscriptionState = testBuilder.subscriptions;
-        commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
-        backgroundEventQueue = testBuilder.backgroundEventQueue;
-        backgroundEventHandler = testBuilder.backgroundEventHandler;
+        metadata = mock(ConsumerMetadata.class);
+        subscriptionState = mock(SubscriptionState.class);
+        commitRequestManager = mock(CommitRequestManager.class);
+        backgroundEventQueue = new LinkedBlockingQueue<>();
+        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         time = new MockTime(0);
         metrics = new Metrics(time);
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
-    }
 
-    @AfterEach
-    public void tearDown() {
-        if (testBuilder != null) {
-            testBuilder.close();
-        }
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
     }
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup() {
@@ -143,7 +137,7 @@ public class MembershipManagerImplTest {
     private MembershipManagerImpl createMembershipManager(String groupInstanceId) {
         return spy(new MembershipManagerImpl(
             GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
-            subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
+            subscriptionState, commitRequestManager, metadata, LOG_CONTEXT, Optional.empty(),
             backgroundEventHandler, time, rebalanceMetricsManager));
     }
 
@@ -152,7 +146,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT,
                 Optional.ofNullable(serverAssignor), subscriptionState, commitRequestManager,
-                metadata, logContext, Optional.empty(), backgroundEventHandler, time,
+                metadata, LOG_CONTEXT, Optional.empty(), backgroundEventHandler, time,
                 rebalanceMetricsManager));
         manager.transitionToJoining();
         return manager;
@@ -177,7 +171,7 @@ public class MembershipManagerImplTest {
         // First join should register to get metadata updates
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
-                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
+                subscriptionState, commitRequestManager, metadata, LOG_CONTEXT, Optional.empty(),
                 backgroundEventHandler, time, rebalanceMetricsManager);
         manager.transitionToJoining();
         clearInvocations(metadata);
@@ -247,7 +241,7 @@ public class MembershipManagerImplTest {
     public void testTransitionToFailedWhenTryingToJoin() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(
                 GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
-                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
+                subscriptionState, commitRequestManager, metadata, LOG_CONTEXT, Optional.empty(),
                 backgroundEventHandler, time, rebalanceMetricsManager);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
@@ -727,7 +721,7 @@ public class MembershipManagerImplTest {
 
         // Member should update the subscription and send ack when the delayed reconciliation
         // completes.
-        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(Collections.emptySet(), Collections.emptySet());
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
 
         // Pending assignment that was discovered in metadata should be ready to reconcile in the
@@ -746,7 +740,7 @@ public class MembershipManagerImplTest {
         membershipManager.poll(time.milliseconds());
 
         assertEquals(Collections.emptySet(), membershipManager.topicsAwaitingReconciliation());
-        verify(subscriptionState).assignFromSubscribed(topicPartitions(topic2Assignment, topic2Metadata));
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(topicPartitions(topic2Assignment, topic2Metadata), topicPartitions(topic2Assignment, topic2Metadata));
     }
 
     /**
@@ -1161,7 +1155,7 @@ public class MembershipManagerImplTest {
 
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 0));
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        verify(subscriptionState).assignFromSubscribed(expectedAssignment);
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedAssignment, expectedAssignment);
 
         // When ack for the reconciled assignment is sent, member should go back to STABLE
         // because the first assignment that was not resolved should have been discarded
@@ -1255,7 +1249,7 @@ public class MembershipManagerImplTest {
 
         // Assignment should have been reconciled.
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 1));
-        verify(subscriptionState).assignFromSubscribed(expectedAssignment);
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedAssignment, expectedAssignment);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
     }
@@ -1401,6 +1395,7 @@ public class MembershipManagerImplTest {
         receiveEmptyAssignment(membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
         membershipManager.poll(time.milliseconds());
 
         // Member stays in RECONCILING while the commit request hasn't completed.
@@ -1457,11 +1452,14 @@ public class MembershipManagerImplTest {
         verifyReconciliationNotTriggered(membershipManager);
         membershipManager.poll(time.milliseconds());
 
+        TreeSet<TopicPartition> expectedSet = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        expectedSet.add(new TopicPartition(topicName, 1));
+        expectedSet.add(new TopicPartition(topicName, 2));
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertEquals(topicIdPartitionsMap(topicId, 1, 2), membershipManager.currentAssignment().partitions);
         assertFalse(membershipManager.reconciliationInProgress());
 
-        verify(subscriptionState).assignFromSubscribed(anyCollection());
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedSet, expectedSet);
     }
 
     @Test
@@ -1930,7 +1928,8 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
 
         assertEquals(MemberState.STALE, membershipManager.state());
-        verify(backgroundEventHandler).add(any(ConsumerRebalanceListenerCallbackNeededEvent.class));
+        assertFalse(backgroundEventQueue.isEmpty());
+        assertInstanceOf(ConsumerRebalanceListenerCallbackNeededEvent.class, backgroundEventQueue.peek());
 
         // Stale member triggers onPartitionLost callback that will not complete just yet
         ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = performCallback(
@@ -2429,7 +2428,7 @@ public class MembershipManagerImplTest {
 
         // Assignment applied
         List<TopicPartition> expectedTopicPartitions = buildTopicPartitions(expectedAssignment);
-        verify(subscriptionState).assignFromSubscribed(new HashSet<>(expectedTopicPartitions));
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitions)), any());
         Map<Uuid, SortedSet<Integer>> assignmentByTopicId = assignmentByTopicId(expectedAssignment);
         assertEquals(assignmentByTopicId, membershipManager.currentAssignment().partitions);
 
@@ -2488,7 +2487,8 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).markPendingRevocation(anySet());
         List<TopicPartition> expectedTopicPartitionAssignment =
                 buildTopicPartitions(expectedCurrentAssignment);
-        verify(subscriptionState).assignFromSubscribed(new HashSet<>(expectedTopicPartitionAssignment));
+        HashSet<TopicPartition> expectedSet = new HashSet<>(expectedTopicPartitionAssignment);
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedSet, Collections.emptySet());
     }
 
     private Map<Uuid, SortedSet<Integer>> assignmentByTopicId(List<TopicIdPartition> topicIdPartitions) {
@@ -2542,7 +2542,7 @@ public class MembershipManagerImplTest {
 
         if (triggerReconciliation) {
             membershipManager.poll(time.milliseconds());
-            verify(subscriptionState).assignFromSubscribed(anyCollection());
+            verify(subscriptionState).assignFromSubscribedAwaitingCallback(anyCollection(), anyCollection());
         } else {
             verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
         }

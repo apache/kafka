@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.connect.cli;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.test.TestUtils;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

@@ -67,6 +67,8 @@ import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
 
 import java.lang.reflect.Array;
 import java.util.Arrays;
@@ -75,8 +77,6 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
-import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
 
 import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
 

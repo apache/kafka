@@ -86,8 +86,7 @@ public class FileQuorumStateStoreTest {
 
         final int epoch = 2;
         final int voter1 = 1;
-        final Optional<Uuid> voter1DirectoryId = Optional.of(Uuid.randomUuid());
-        final ReplicaKey voter1Key = ReplicaKey.of(voter1, voter1DirectoryId);
+        final ReplicaKey voter1Key = ReplicaKey.of(voter1, Uuid.randomUuid());
         final int voter2 = 2;
         final int voter3 = 3;
         Set<Integer> voters = Utils.mkSet(voter1, voter2, voter3);
@@ -110,7 +109,7 @@ public class FileQuorumStateStoreTest {
             expected = Optional.of(
                 ElectionState.withVotedCandidate(
                     epoch,
-                    ReplicaKey.of(voter1, Optional.empty()),
+                    ReplicaKey.of(voter1, ReplicaKey.NO_DIRECTORY_ID),
                     voters
                 )
             );

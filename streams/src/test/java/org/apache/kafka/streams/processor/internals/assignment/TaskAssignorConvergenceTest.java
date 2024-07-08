@@ -16,14 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -39,22 +31,26 @@ import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
 
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Supplier;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -70,16 +66,15 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomNodes;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomReplica;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 
-@RunWith(Parameterized.class)
 public class TaskAssignorConvergenceTest {
     private static Random random;
     private static final Time TIME = new MockTime();
 
-    @BeforeClass
+    @BeforeAll
     public static void beforeClass() {
         final long seed = System.currentTimeMillis();
         System.out.println("Seed is " + seed);
@@ -364,11 +359,7 @@ public class TaskAssignorConvergenceTest {
 
     private int skewThreshold = 1;
 
-    @Parameter
-    public String rackAwareStrategy;
-
-    @Before
-    public void setUp() {
+    public void setUp(final String rackAwareStrategy) {
         if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
             // We take ceiling of [task_in_subtopology / total_task * original_task_assigned_to_client] as the capacity from
             // stage 1 client to stage 2 client which can result in the skew to be at most 2
@@ -380,17 +371,14 @@ public class TaskAssignorConvergenceTest {
         }
     }
 
-    @Parameterized.Parameters(name = "rackAwareStrategy={0}")
-    public static Collection<Object[]> getParamStoreType() {
-        return asList(new Object[][] {
-            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE},
-            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC},
-            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY},
-        });
-    }
-
-    @Test
-    public void staticAssignmentShouldConvergeWithTheFirstAssignment() {
+    @ParameterizedTest
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
+    public void staticAssignmentShouldConvergeWithTheFirstAssignment(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 2,
                                                                 0,
@@ -407,8 +395,14 @@ public class TaskAssignorConvergenceTest {
         verifyBalancedAssignment(harness, skewThreshold);
     }
 
-    @Test
-    public void assignmentShouldConvergeAfterAddingNode() {
+    @ParameterizedTest
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
+    public void assignmentShouldConvergeAfterAddingNode(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final int numStatelessTasks = 7;
         final int numStatefulTasks = 11;
         final int maxWarmupReplicas = 2;
@@ -438,8 +432,14 @@ public class TaskAssignorConvergenceTest {
         }
     }
 
-    @Test
-    public void droppingNodesShouldConverge() {
+    @ParameterizedTest
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
+    public void droppingNodesShouldConverge(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         final int numStatelessTasks = 11;
         final int numStatefulTasks = 13;
         final int maxWarmupReplicas = 2;
@@ -470,17 +470,23 @@ public class TaskAssignorConvergenceTest {
         }
     }
 
-    @Test
-    public void randomClusterPerturbationsShouldConverge() {
+    @ParameterizedTest
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
+    public void randomClusterPerturbationsShouldConverge(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
         // do as many tests as we can in 10 seconds
         final long deadline = System.currentTimeMillis() + 10_000L;
         do {
             final long seed = new Random().nextLong();
-            runRandomizedScenario(seed);
+            runRandomizedScenario(seed, rackAwareStrategy);
         } while (System.currentTimeMillis() < deadline);
     }
 
-    private void runRandomizedScenario(final long seed) {
+    private void runRandomizedScenario(final long seed, final String rackAwareStrategy) {
         Harness harness = null;
         try {
             final Random prng = new Random(seed);

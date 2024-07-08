@@ -21,12 +21,13 @@ import kafka.network.SocketServer;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
-import kafka.test.annotation.Type;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
+import kafka.test.annotation.Type;
 import kafka.testkit.KafkaClusterTestKit;
 import kafka.testkit.TestKitNodes;
 import kafka.zk.EmbeddedZookeeper;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.network.ListenerName;
@@ -35,11 +36,11 @@ import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
-import scala.compat.java8.OptionConverters;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,6 +56,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import scala.compat.java8.OptionConverters;
 
 /**
  * Wraps a {@link KafkaClusterTestKit} inside lifecycle methods for a test invocation. Each instance of this
@@ -186,7 +189,9 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 if (started.compareAndSet(false, true)) {
                     clusterTestKit.startup();
                     kafka.utils.TestUtils.waitUntilTrue(
-                            () -> this.clusterTestKit.brokers().get(0).brokerState() == BrokerState.RUNNING,
+                            () -> this.clusterTestKit.brokers().values().stream().allMatch(
+                                    brokers -> brokers.brokerState() == BrokerState.RUNNING
+                            ),
                             () -> "Broker never made it to RUNNING state.",
                             org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
                             100L);

@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.common.metrics;
 
+import org.apache.kafka.common.Reconfigurable;
+import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigException;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.kafka.common.Reconfigurable;
-import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.config.ConfigException;
 
 /**
  * A plugin interface to allow things to listen as new metrics are created so they can be reported.

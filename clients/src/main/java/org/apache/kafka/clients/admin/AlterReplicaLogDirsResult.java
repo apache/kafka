@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Map;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -28,6 +25,10 @@ import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.UnknownServerException;
+
+import java.util.Map;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
 
 /**
  * The result of {@link Admin#alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)}.

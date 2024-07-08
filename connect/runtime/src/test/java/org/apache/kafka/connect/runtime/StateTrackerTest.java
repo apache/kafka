@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.connect.runtime.AbstractStatus.State;
 import org.apache.kafka.common.utils.MockTime;
-import org.junit.Before;
-import org.junit.Test;
+import org.apache.kafka.connect.runtime.AbstractStatus.State;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class StateTrackerTest {
 
@@ -31,7 +32,7 @@ public class StateTrackerTest {
     private StateTracker tracker;
     private MockTime time;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         time = new MockTime();
         time.sleep(1000L);
