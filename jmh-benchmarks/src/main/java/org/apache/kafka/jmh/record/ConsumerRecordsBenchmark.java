@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.record;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.LegacyConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
@@ -52,6 +53,7 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 public class ConsumerRecordsBenchmark {
     private ConsumerRecords<Integer, String> records;
+    private LegacyConsumerRecords<Integer, String> legacyRecords;
 
     @Setup(Level.Trial)
     public void setUp() {
@@ -72,28 +74,29 @@ public class ConsumerRecordsBenchmark {
         }
 
         records = new ConsumerRecords<>(partitionToRecords);
+        legacyRecords = new LegacyConsumerRecords<>(partitionToRecords);
     }
 
     @Benchmark
     public void records(Blackhole blackhole) {
-        blackhole.consume(records.recordsWithNestedList("topic2"));
+        blackhole.consume(records.records("topic2"));
     }
 
     @Benchmark
     public void iteratorRecords(Blackhole blackhole) {
-        for (ConsumerRecord<Integer, String> record : records.recordsWithNestedList("topic2")) {
+        for (ConsumerRecord<Integer, String> record : records.records("topic2")) {
             blackhole.consume(record);
         }
     }
 
     @Benchmark
-    public void recordsByNewImplementation(Blackhole blackhole) {
-        blackhole.consume(records.records("topic2"));
+    public void recordsWithLegacyImplementation(Blackhole blackhole) {
+        blackhole.consume(legacyRecords.records("topic2"));
     }
 
     @Benchmark
-    public void iteratorRecordsByNewImplementation(Blackhole blackhole) {
-        for (ConsumerRecord<Integer, String> record : records.recordsWithNestedList("topic2")) {
+    public void iteratorRecordsByLegacyImplementation(Blackhole blackhole) {
+        for (ConsumerRecord<Integer, String> record : legacyRecords.records("topic2")) {
             blackhole.consume(record);
         }
     }
