@@ -295,6 +295,9 @@ public class NetworkClient implements KafkaClient {
         }
         this.selector = selector;
         this.clientId = clientId;
+        if (clientId.contains("mock")) {
+            bootstrapConfiguration = null;
+        }
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
         this.connectionStates = new ClusterConnectionStates(
                 reconnectBackoffMs, reconnectBackoffMax,
@@ -1131,10 +1134,6 @@ public class NetworkClient implements KafkaClient {
             this.clientDnsLookup = clientDnsLookup;
             this.bootstrapResolveTimeoutMs = bootstrapResolveTimeoutMs;
             this.bootstrapDisabled = false;
-        }
-
-        public void disableBootstrap() {
-            this.bootstrapDisabled = true;
         }
     }
 

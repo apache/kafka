@@ -372,6 +372,7 @@ public class KafkaConsumerTest {
         return consumer;
     }
 
+    // TODO: again this test needs to be modified, need constructor to fail in a different way
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testConstructorClose(GroupProtocol groupProtocol) {

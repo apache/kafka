@@ -532,6 +532,10 @@ public class KafkaProducerTest {
         assertThrows(ConfigException.class, () -> new KafkaProducer<String, String>(configs));
     }
 
+    // TODO: test will need to be modified to test different behavior
+    // The test currently makes the constructor fail by passing in a bad bootstrap server
+    // This will only make the constructor throw a KafkaException if bootstrapping is done in the constructor
+    // Will need to make the constructor fail in a different way
     @Test
     public void testConstructorFailureCloseResource() {
         Properties props = new Properties();
