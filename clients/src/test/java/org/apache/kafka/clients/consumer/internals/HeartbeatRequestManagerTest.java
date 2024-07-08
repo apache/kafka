@@ -109,7 +109,7 @@ public class HeartbeatRequestManagerTest {
     public void setUp() {
         this.time = new MockTime();
         this.logContext = new LogContext();
-        this.pollTimer = time.timer(1000);
+        this.pollTimer = spy(time.timer(1000));
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.heartbeatState = mock(HeartbeatState.class);
         this.backgroundEventHandler = mock(BackgroundEventHandler.class);
@@ -160,18 +160,15 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testHeartbeatOnStartup() {
-        when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size());
 
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        createHeartbeatStateWith0HeartbeatInterval();
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
-        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
 
         // Ensure we do not resend the request without the first request being completed
-        when(heartbeatRequestState.requestInFlight()).thenReturn(true);
         NetworkClientDelegate.PollResult result2 = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result2.unsentRequests.size());
     }
@@ -306,6 +303,7 @@ public class HeartbeatRequestManagerTest {
 
         assertEquals(0, result.unsentRequests.size());
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS - 100, result.timeUntilNextPollMs);
+        //when(pollTimer.remainingMs()).thenReturn(1000L);
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS - 100, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
 
         // Member in state where it should not send Heartbeat anymore
