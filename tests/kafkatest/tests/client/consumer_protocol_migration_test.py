@@ -87,6 +87,20 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     )
     def test_consumer_offline_migration(self, enable_autocommit, metadata_quorum, use_new_coordinator,
                                   consumer_group_migration_policy, consumer_version, assignment_strategy):
+        """
+        Verify correct consumer behavior when the consumers in the group are restarted to perform
+        offline upgrade/downgrade.
+
+        Setup: single Kafka cluster with one producer and a set of consumers in one group.
+
+        - Start a producer which continues producing new messages throughout the test.
+        - Start up the consumers with classic protocols and wait until they've joined the group.
+        - Offline upgrade: restart the consumers with consumer protocols, waiting for all consumers
+          to finish shutting down before starting up them.
+        - Offline downgrade: Restart the consumers with classic protocols, waiting for all consumers
+          to finish shutting down before starting up them.
+        - Verify delivery semantics according to the failure type.
+        """
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
                                        version=consumer_version, assignment_strategy=assignment_strategy,
@@ -124,6 +138,20 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     )
     def test_consumer_rolling_migration(self, enable_autocommit, metadata_quorum, use_new_coordinator,
                                         consumer_group_migration_policy, consumer_version, assignment_strategy):
+        """
+        Verify correct consumer behavior when the consumers in the group are restarted to perform
+        online upgrade/downgrade when the migration policy is set to be BIDIRECTIONAL.
+
+        Setup: single Kafka cluster with one producer and a set of consumers in one group.
+
+        - Start a producer which continues producing new messages throughout the test.
+        - Start up the consumers with classic protocols and wait until they've joined the group.
+        - Online upgrade: In a loop, restart each consumer with consumer protocol, waiting for
+          each one to rejoin the group before restarting the rest.
+        - Online downgrade: In a loop, restart each consumer with classic protocol, waiting for
+          each one to rejoin the group before restarting the rest.
+        - Verify delivery semantics according to the failure type.
+        """
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
                                        version=consumer_version, assignment_strategy=assignment_strategy,
@@ -161,6 +189,18 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     )
     def test_consumer_rolling_upgrade(self, enable_autocommit, metadata_quorum, use_new_coordinator,
                                         consumer_group_migration_policy, consumer_version, assignment_strategy):
+        """
+        Verify correct consumer behavior when the consumers in the group are restarted to perform
+        online upgrade when the migration policy is set to be UPGRADE.
+
+        Setup: single Kafka cluster with one producer and a set of consumers in one group.
+
+        - Start a producer which continues producing new messages throughout the test.
+        - Start up the consumers with classic protocols and wait until they've joined the group.
+        - Online upgrade: In a loop, restart each consumer with consumer protocol, waiting for
+          each one to rejoin the group before restarting the rest.
+        - Verify delivery semantics according to the failure type.
+        """
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
                                        version=consumer_version, assignment_strategy=assignment_strategy,
@@ -198,6 +238,18 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     )
     def test_consumer_rolling_downgrade(self, enable_autocommit, metadata_quorum, use_new_coordinator,
                                         consumer_group_migration_policy, consumer_version, assignment_strategy):
+        """
+        Verify correct consumer behavior when the consumers in the group are restarted to perform
+        online downgrade when the migration policy is set to be DOWNGRADE.
+
+        Setup: single Kafka cluster with one producer and a set of consumers in one group.
+
+        - Start a producer which continues producing new messages throughout the test.
+        - Start up the consumers with consumer protocols and wait until they've joined the group.
+        - Online downgrade: In a loop, restart each consumer with classic protocol, waiting for
+          each one to rejoin the group before restarting the rest.
+        - Verify delivery semantics according to the failure type.
+        """
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.consumer_group_protocol,
                                        version=consumer_version, assignment_strategy=assignment_strategy,
