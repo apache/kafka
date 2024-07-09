@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.processor.TaskId;
+
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.kafka.streams.processor.TaskId;
 
 class ClientStateTask {
     private final Map<String, Set<TaskId>> consumerToTaskIds;

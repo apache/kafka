@@ -45,8 +45,7 @@ class RemoteLogSegmentMetadataTransformTest {
                 0L, 100L, -1L, 0, 0, 1234,
                 customMetadata,
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
-                segmentLeaderEpochs
-        );
+                segmentLeaderEpochs,  0);
 
         RemoteLogSegmentMetadataTransform transform = new RemoteLogSegmentMetadataTransform();
         ApiMessageAndVersion message = transform.toApiMessageAndVersion(metadata);

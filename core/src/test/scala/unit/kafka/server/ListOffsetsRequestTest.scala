@@ -22,17 +22,26 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartit
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.util.Optional
+import java.util.{Optional, Properties}
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class ListOffsetsRequestTest extends BaseRequestTest {
 
   val topic = "topic"
   val partition = new TopicPartition(topic, 0)
+
+  override def modifyConfigs(props: Seq[Properties]): Unit = {
+    super.modifyConfigs(props)
+    props.foreach { p =>
+      p.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
+    }
+  }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))

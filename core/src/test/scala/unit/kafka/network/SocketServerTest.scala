@@ -367,7 +367,7 @@ class SocketServerTest {
     val config = KafkaConfig.fromProps(testProps)
     val testableServer = new TestableSocketServer(config)
 
-    val updatedEndPoints = config.effectiveAdvertisedListeners.map { endpoint =>
+    val updatedEndPoints = config.effectiveAdvertisedBrokerListeners.map { endpoint =>
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
     }.map(_.toJava)
 
@@ -439,8 +439,9 @@ class SocketServerTest {
   @Test
   def testDisabledRequestIsRejected(): Unit = {
     val correlationId = 57
-    val header = new RequestHeader(ApiKeys.VOTE, 0, "", correlationId)
-    val request = new VoteRequest.Builder(new VoteRequestData()).build()
+    val version: Short = 0
+    val header = new RequestHeader(ApiKeys.VOTE, version, "", correlationId)
+    val request = new VoteRequest.Builder(new VoteRequestData()).build(version)
     val serializedBytes = Utils.toArray(request.serializeWithHeader(header))
 
     val socket = connect()

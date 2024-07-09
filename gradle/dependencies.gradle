@@ -134,11 +134,11 @@ versions += [
   kafka_34: "3.4.1",
   kafka_35: "3.5.2",
   kafka_36: "3.6.2",
-  kafka_37: "3.7.0",
+  kafka_37: "3.7.1",
   lz4: "1.8.0",
   mavenArtifact: "3.9.6",
   metrics: "2.2.0",
-  netty: "4.1.110.Final",
+  netty: "4.1.111.Final",
   opentelemetryProto: "1.0.0-alpha",
   pcollections: "4.0.1",
   reflections: "0.10.2",
@@ -157,7 +157,7 @@ versions += [
   zinc: "1.9.2",
   zookeeper: "3.8.4",
   zstd: "1.5.6-3",
-  junitPlatformSuiteEngine: "1.10.2"
+  junitPlatform: "1.10.2"
 ]
 
 libs += [
@@ -201,8 +201,8 @@ libs += [
   jose4j: "org.bitbucket.b_c:jose4j:$versions.jose4j",
   junitJupiter: "org.junit.jupiter:junit-jupiter:$versions.junit",
   junitJupiterApi: "org.junit.jupiter:junit-jupiter-api:$versions.junit",
-  junitPlatformSuiteEngine: "org.junit.platform:junit-platform-suite-engine:$versions.junitPlatformSuiteEngine",
-  junitVintageEngine: "org.junit.vintage:junit-vintage-engine:$versions.junit",
+  junitPlatformSuiteEngine: "org.junit.platform:junit-platform-suite-engine:$versions.junitPlatform",
+  junitPlatformLanucher: "org.junit.platform:junit-platform-launcher:$versions.junitPlatform",
   jqwik: "net.jqwik:jqwik:$versions.jqwik",
   hamcrest: "org.hamcrest:hamcrest:$versions.hamcrest",
   kafkaStreams_0100: "org.apache.kafka:kafka-streams:$versions.kafka_0100",

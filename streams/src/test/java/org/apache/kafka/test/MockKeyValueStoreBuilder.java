@@ -42,4 +42,3 @@ public class MockKeyValueStoreBuilder extends AbstractStoreBuilder<Integer, byte
         return new StoreBuilderWrapper(this);
     }
 }
-
