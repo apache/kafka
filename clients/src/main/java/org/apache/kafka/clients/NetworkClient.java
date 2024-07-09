@@ -592,11 +592,10 @@ public class NetworkClient implements KafkaClient {
      * @param now The current time in milliseconds
      * @return The list of responses received
      */
-    // TODO
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
         ensureActive();
-        ensureBootstrapped(now);
+        ensureBootstrapped();
 
         if (!abortedSends.isEmpty()) {
             // If there are aborted sends because of unsupported version exceptions or disconnects,
@@ -1159,37 +1158,27 @@ public class NetworkClient implements KafkaClient {
             }
         }
 
-        List<InetSocketAddress> tryResolveAddresses(final long currentTimeMs) {
-            timer.update(currentTimeMs);
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers, clientDnsLookup);
-            if (!addresses.isEmpty()) {
-                timer.reset(dnsResolutionTimeoutMs);
-                return addresses;
-            }
+        List<InetSocketAddress> tryResolveAddresses() {
+            do {
+                timer.update(time.milliseconds());
+                List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers, clientDnsLookup);
+                if (!addresses.isEmpty()) {
+                    timer.reset(dnsResolutionTimeoutMs);
+                    return addresses;
+                }
 
-            if (timer.isExpired()) {
-                throw new BootstrapResolutionException("Timeout while attempting to resolve bootstrap " +
-                        "servers. ");
-            }
-            return ClientUtils.parseAndValidateAddresses(bootstrapServers, clientDnsLookup);
+            } while (timer.notExpired());
+
+            throw new BootstrapResolutionException("Timeout while attempting to resolve bootstrap servers.");
         }
     }
 
-    private void ensureBootstrapped(final long nowMs) {
+    private void ensureBootstrapped() {
         if (this.bootstrapState.isDisabled || this.bootstrapState.isBootstrapped) {
             return;
         }
 
-//        if (clientId.contains("adminclient")) {
-//            AdminBootstrapAddresses adminAddresses = AdminBootstrapAddresses.fromConfig(config);
-//            AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
-//                    config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-//                    config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
-//                    adminAddresses.usingBootstrapControllers());
-//            metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
-//        }
-
-        List<InetSocketAddress> servers = this.bootstrapState.tryResolveAddresses(nowMs);
+        List<InetSocketAddress> servers = this.bootstrapState.tryResolveAddresses();
         if (!servers.isEmpty()) {
             this.metadataUpdater.bootstrap(servers);
             this.bootstrapState.isBootstrapped = true;
@@ -1228,7 +1217,7 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public List<Node> fetchNodes() {
-            ensureBootstrapped(time.milliseconds());
+            ensureBootstrapped();
             return metadata.fetch().nodes();
         }
 
