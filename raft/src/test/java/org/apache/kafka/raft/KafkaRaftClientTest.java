@@ -3850,7 +3850,7 @@ public class KafkaRaftClientTest {
         }
     }
 
-    private static ReplicaKey replicaKey(int id, boolean withDirectoryId) {
+    static ReplicaKey replicaKey(int id, boolean withDirectoryId) {
         Uuid directoryId = withDirectoryId ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID;
         return ReplicaKey.of(id, directoryId);
     }

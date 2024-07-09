@@ -1714,8 +1714,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             partitionSnapshot.snapshotId().endOffset(),
             partitionSnapshot.snapshotId().epoch()
         );
+
         Optional<RawSnapshotReader> snapshotOpt = log.readSnapshot(snapshotId);
-        if (!snapshotOpt.isPresent()) {
+        // we do not allow fetching the bootstrap snapshot
+        if (!snapshotOpt.isPresent() || snapshotId.equals(BOOTSTRAP_SNAPSHOT_ID)) {
             return RaftUtil.singletonFetchSnapshotResponse(
                 requestMetadata.listenerName(),
                 requestMetadata.apiVersion(),

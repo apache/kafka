@@ -32,12 +32,10 @@ import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
-import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
-import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -1287,26 +1285,6 @@ public final class RaftClientTestContext {
             leaderChangeMessage.voters());
         assertEquals(grantingVoters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toSet()),
             new HashSet<>(ControlRecordUtils.deserializeLeaderChangeMessage(recordValue).grantingVoters()));
-    }
-
-    static void verifyVotersRecord(
-        Set<Integer> expectedVoterIds,
-        ByteBuffer recordKey,
-        ByteBuffer recordValue
-    ) {
-        assertEquals(ControlRecordType.KRAFT_VOTERS, ControlRecordType.parse(recordKey));
-        VotersRecord votersRecord = ControlRecordUtils.deserializeVotersRecord(recordValue);
-        assertEquals(expectedVoterIds, votersRecord.voters().stream().map(VotersRecord.Voter::voterId).collect(Collectors.toSet()));
-    }
-
-    static void verifyKRaftVersionRecord(
-        short expectedKRaftVersion,
-        ByteBuffer recordKey,
-        ByteBuffer recordValue
-    ) {
-        assertEquals(ControlRecordType.KRAFT_VERSION, ControlRecordType.parse(recordKey));
-        KRaftVersionRecord kRaftVersionRecord = ControlRecordUtils.deserializeKRaftVersionRecord(recordValue);
-        assertEquals(expectedKRaftVersion, kRaftVersionRecord.kRaftVersion());
     }
 
     void assertFetchRequestData(
