@@ -27,6 +27,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIME
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
@@ -77,7 +78,8 @@ public class AccessTokenRetrieverFactory  {
                 cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS),
                 cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
                 cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false),
-                cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false));
+                cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false),
+                cu.get(SASL_OAUTHBEARER_HEADER_URLENCODE));
         }
     }
 
