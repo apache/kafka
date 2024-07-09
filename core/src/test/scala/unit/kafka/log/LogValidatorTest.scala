@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.TestUtils.meterCount
 import org.apache.kafka.common.compress.{Compression, GzipCompression, Lz4Compression}
-import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{PrimitiveRef, Time}
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
@@ -687,6 +687,57 @@ class LogValidatorTest {
     verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
       compressed = true)
   }
+  @Test
+  def testInvalidChecksum(): Unit = {
+    checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V0, Compression.gzip().build(), CompressionType.GZIP)
+    checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V1, Compression.gzip().build(),CompressionType.GZIP)
+    checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V0, Compression.lz4().build(), CompressionType.LZ4)
+    checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V1, Compression.lz4().build(), CompressionType.LZ4)
+    checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V0, Compression.snappy().build(), CompressionType.SNAPPY)
+    checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V1, Compression.snappy().build(), CompressionType.SNAPPY)
+  }
+
+  private def checkInvalidChecksum(magic: Byte, compression: Compression , compressionType: CompressionType): Unit = {
+    val record: LegacyRecord = LegacyRecord.create(magic, 0L, null, "hello".getBytes)
+    val buf: ByteBuffer = record.buffer()
+
+    // enforce modify crc to make checksum error
+    buf.put(LegacyRecord.CRC_OFFSET, 0.toByte)
+
+    val buffer: ByteBuffer = ByteBuffer.allocate(1024)
+    val builder: MemoryRecordsBuilder = MemoryRecords.builder(buffer, magic, compression,
+      TimestampType.CREATE_TIME, 0L)
+    builder.appendUncheckedWithOffset(0, record)
+
+    val memoryRecords: MemoryRecords = builder.build()
+    val logValidator: LogValidator = new LogValidator(
+      memoryRecords,
+      topicPartition,
+      time,
+      compressionType,
+      compression,
+      false,
+      magic,
+      TimestampType.CREATE_TIME,
+      1000L,
+      1000L,
+      RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      AppendOrigin.CLIENT,
+      MetadataVersion.latestTesting
+    )
+
+    assertThrows(classOf[CorruptRecordException], () =>
+        logValidator.validateMessagesAndAssignOffsets(
+          PrimitiveRef.ofLong(0),
+          metricsRecorder,
+          RequestLocal.withThreadConfinedCaching.bufferSupplier
+        )
+    )
+
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}")), 1)
+    assertTrue(meterCount(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}") > 0)
+  }
+
 
   @Test
   def testCompressedV2(): Unit = {
