@@ -83,7 +83,7 @@ class BrokerRegistrationRequestTest {
 
     @ParameterizedTest
     @MethodSource("BrokerRegistrationRequestVersionsWithoutV0")
-    public void testSuppressFeaturesWithMinVersion0BeforeV4(short version) {
+    public void testAlterFeaturesWithMinVersion0BeforeV4(short version) {
         BrokerRegistrationRequestData data = readSerializedRequest(version,
             new BrokerRegistrationRequestData().
                 setBrokerId(1).

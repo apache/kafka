@@ -48,13 +48,13 @@ public class BrokerRegistrationRequest extends AbstractRequest {
         public BrokerRegistrationRequest build(short version) {
             if (version < 4) {
                 // Workaround for KAFKA-17011: for BrokerRegistrationRequest versions older than 4,
-                // exclude support version ranges that begin with 0.
+                // translate minSupportedVersion = 0 to minSupportedVersion = 1.
                 BrokerRegistrationRequestData newData = data.duplicate();
                 for (Iterator<BrokerRegistrationRequestData.Feature> iter = newData.features().iterator();
                      iter.hasNext(); ) {
                     BrokerRegistrationRequestData.Feature feature = iter.next();
                     if (feature.minSupportedVersion() == 0) {
-                        iter.remove();
+                        feature.setMinSupportedVersion((short) 1);
                     }
                 }
                 return new BrokerRegistrationRequest(newData, version);

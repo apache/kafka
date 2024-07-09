@@ -18,7 +18,7 @@ import org.apache.kafka.common.requests.ApiVersionsRequest
 import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ServerConfigs
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -42,9 +42,9 @@ class ApiVersionsResponseIntegrationTest extends BaseRequestTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testSendV3ApiVersionsRequest(quorum: String): Unit = {
     val response = sendApiVersionsRequest(3)
-    assertFeatureDoesNotExist("group.version", response.data().supportedFeatures())
     if (quorum.equals("kraft")) {
       assertFeatureHasMinVersion("metadata.version", response.data().supportedFeatures(), 1)
+      assertFeatureHasMinVersion("kraft.version", response.data().supportedFeatures(), 1)
     } else {
       assertEquals(0, response.data().supportedFeatures().size())
     }
@@ -55,8 +55,8 @@ class ApiVersionsResponseIntegrationTest extends BaseRequestTest {
   def testSendV4ApiVersionsRequest(quorum: String): Unit = {
     val response = sendApiVersionsRequest(4)
     if (quorum.equals("kraft")) {
-      assertFeatureHasMinVersion("group.version", response.data().supportedFeatures(), 0)
       assertFeatureHasMinVersion("metadata.version", response.data().supportedFeatures(), 1)
+      assertFeatureHasMinVersion("kraft.version", response.data().supportedFeatures(), 0)
     } else {
       assertEquals(0, response.data().supportedFeatures().size())
     }
@@ -71,13 +71,5 @@ class ApiVersionsResponseIntegrationTest extends BaseRequestTest {
     assertNotNull(key)
     assertEquals(name, key.name())
     assertEquals(expectedMinVersion, key.minVersion())
-  }
-
-  def assertFeatureDoesNotExist(
-    name: String,
-    coll: SupportedFeatureKeyCollection
-  ): Unit = {
-    val key = coll.find(name)
-    assertNull(key)
   }
 }
