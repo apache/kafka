@@ -51,7 +51,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     private static final String CONFIG_PROPERTIES_EXCLUDE_DOC = "Topic config properties that should not be replicated. Supports "
             + "comma-separated property names and regexes.";
 
-    public static final String OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR = "offset-syncs.topic.replication.factor";
+    public static final String OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR = OFFSET_SYNCS_TOPIC_CONFIG_PREFIX + "replication.factor";
     public static final String OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor for offset-syncs topic.";
     public static final short OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR_DEFAULT = 3;
 
@@ -109,10 +109,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         + "Metrics have the target, topic and partition tags. When this setting is enabled, it adds the source tag. "
         + "This configuration will be removed in Kafka 4.0 and the default behavior will be to always have the source tag.";
     public static final boolean ADD_SOURCE_ALIAS_TO_METRICS_DEFAULT = false;
-    public static final String OFFSET_SYNCS_SOURCE_PRODUCER_ROLE = "offset-syncs-source-producer";
-    public static final String OFFSET_SYNCS_TARGET_PRODUCER_ROLE = "offset-syncs-target-producer";
-    public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = "offset-syncs-source-admin";
-    public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = "offset-syncs-target-admin";
+    public static final String OFFSET_SYNCS_SOURCE_PRODUCER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-producer";
+    public static final String OFFSET_SYNCS_TARGET_PRODUCER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-producer";
+    public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-admin";
+    public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-admin";
 
     public MirrorSourceConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
@@ -218,6 +218,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
 
     boolean addSourceAliasToMetrics() {
         return getBoolean(ADD_SOURCE_ALIAS_TO_METRICS);
+    }
+
+    boolean emitOffsetSyncsEnabled() {
+        return getBoolean(EMIT_OFFSET_SYNCS_ENABLED);
     }
 
     private static ConfigDef defineSourceConfig(ConfigDef baseConfig) {
@@ -343,7 +347,14 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         ConfigDef.Type.BOOLEAN,
                         ADD_SOURCE_ALIAS_TO_METRICS_DEFAULT,
                         ConfigDef.Importance.LOW,
-                        ADD_SOURCE_ALIAS_TO_METRICS_DOC);
+                        ADD_SOURCE_ALIAS_TO_METRICS_DOC)
+                .define(
+                        EMIT_OFFSET_SYNCS_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        EMIT_OFFSET_SYNCS_ENABLED_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        EMIT_OFFSET_SYNCS_ENABLED_DOC
+                );
     }
 
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = defineSourceConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
