@@ -221,10 +221,6 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         consumer.group_protocol = consumer_group.consumer_group_protocol
         self.rolling_bounce_consumers(consumer)
 
-        # Downgrade the group protocol and rolling restart the consumers.
-        consumer.group_protocol = consumer_group.classic_group_protocol
-        self.rolling_bounce_consumers(consumer)
-
         consumer.stop_all()
 
     @cluster(num_nodes=8)

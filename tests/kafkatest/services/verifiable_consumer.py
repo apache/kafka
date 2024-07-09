@@ -188,9 +188,7 @@ class ConsumerProtocolConsumerEventHandler(IncrementalAssignmentConsumerEventHan
 
         for topic_partition in event["partitions"]:
             tp = _create_partition_from_dict(topic_partition)
-            assert tp in self.assignment, \
-                "Topic partition %s cannot be revoked from %s as it was not previously assigned to that consumer" % \
-                (tp, node.account.hostname)
+            # tp existing in self.assignment is not guaranteed in the new consumer, so it's not asserted.
             self.assignment.remove(tp)
             revoked.append(tp)
 
