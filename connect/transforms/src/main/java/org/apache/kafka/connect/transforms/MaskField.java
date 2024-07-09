@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.transforms;
 
-import java.util.ArrayList;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.components.Versioned;
@@ -31,6 +30,7 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -52,13 +52,16 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     private static final String FIELDS_CONFIG = "fields";
     private static final String REPLACEMENT_CONFIG = "replacement";
+    private static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new NonEmptyListValidator(),
                     ConfigDef.Importance.HIGH, "Names of fields to mask.")
             .define(REPLACEMENT_CONFIG, ConfigDef.Type.STRING, null, new ConfigDef.NonEmptyString(),
                     ConfigDef.Importance.LOW, "Custom value replacement, that will be applied to all"
-                            + " 'fields' values (numeric or non-empty string values only).");
+                            + " 'fields' values (numeric or non-empty string values only).")
+            .define(REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
+                    "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
     private static final String PURPOSE = "mask fields";
 
@@ -91,6 +94,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     private Set<String> maskedFields;
     private String replacement;
+    private boolean replaceNullWithDefault;
 
     @Override
     public String version() {
@@ -102,6 +106,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         maskedFields = new HashSet<>(config.getList(FIELDS_CONFIG));
         replacement = config.getString(REPLACEMENT_CONFIG);
+        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
     }
 
     @Override
@@ -126,10 +131,17 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
         final Struct value = requireStruct(operatingValue(record), PURPOSE);
         final Struct updatedValue = new Struct(value.schema());
         for (Field field : value.schema().fields()) {
-            final Object origFieldValue = value.get(field);
+            final Object origFieldValue = getFieldValue(value, field);
             updatedValue.put(field, maskedFields.contains(field.name()) ? masked(origFieldValue) : origFieldValue);
         }
         return newRecord(record, updatedValue);
+    }
+
+    private Object getFieldValue(Struct value, Field field) {
+        if (replaceNullWithDefault) {
+            return value.get(field);
+        }
+        return value.getWithoutDefault(field.name());
     }
 
     private Object masked(Object value) {

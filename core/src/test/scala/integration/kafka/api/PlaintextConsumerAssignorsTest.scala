@@ -25,7 +25,7 @@ import java.util
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import java.util.stream.Stream
-import scala.collection.mutable.Buffer
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 /**
@@ -171,7 +171,7 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
     createTopic(topic1, 3)
     createTopic(topic2, 3)
 
-    val consumersInGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
+    val consumersInGroup = mutable.Buffer[Consumer[Array[Byte], Array[Byte]]]()
     consumersInGroup += createConsumer()
     consumersInGroup += createConsumer()
 
@@ -185,7 +185,7 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
     val subscriptions = Set(tp1_0, tp1_1, tp1_2, tp2_0, tp2_1, tp2_2)
     val consumerPollers = subscribeConsumers(consumersInGroup, List(topic1, topic2))
 
-    val expectedAssignment = Buffer(Set(tp1_0, tp1_1, tp2_0, tp2_1), Set(tp1_2, tp2_2))
+    val expectedAssignment = mutable.Buffer(Set(tp1_0, tp1_1, tp2_0, tp2_1), Set(tp1_2, tp2_2))
 
     try {
       validateGroupAssignment(consumerPollers, subscriptions, expectedAssignment = expectedAssignment)
@@ -211,7 +211,7 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
 
     // subscribe all consumers to all topics and validate the assignment
 
-    val consumersInGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
+    val consumersInGroup = mutable.Buffer[Consumer[Array[Byte], Array[Byte]]]()
     consumersInGroup += createConsumer()
     consumersInGroup += createConsumer()
 

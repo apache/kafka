@@ -25,21 +25,33 @@ import java.util.stream.Collectors;
 
 public enum ConsumerGroupMigrationPolicy {
     /** Both upgrade and downgrade are enabled.*/
-    BIDIRECTIONAL("bidirectional"),
+    BIDIRECTIONAL("bidirectional", true, true),
 
     /** Only upgrade is enabled.*/
-    UPGRADE("upgrade"),
+    UPGRADE("upgrade", true, false),
 
     /** Only downgrade is enabled.*/
-    DOWNGRADE("downgrade"),
+    DOWNGRADE("downgrade", false, true),
 
     /** Neither upgrade nor downgrade is enabled.*/
-    DISABLED("disabled");
+    DISABLED("disabled", false, false);
 
     private final String name;
+    private final boolean isUpgradeEnabled;
+    private final boolean isDowngradeEnabled;
 
-    ConsumerGroupMigrationPolicy(String name) {
-        this.name = name;
+    ConsumerGroupMigrationPolicy(String config, boolean isUpgradeEnabled, boolean isDowngradeEnabled) {
+        this.name = config;
+        this.isUpgradeEnabled = isUpgradeEnabled;
+        this.isDowngradeEnabled = isDowngradeEnabled;
+    }
+
+    public boolean isUpgradeEnabled() {
+        return isUpgradeEnabled;
+    }
+
+    public boolean isDowngradeEnabled() {
+        return isDowngradeEnabled;
     }
 
     @Override
@@ -47,7 +59,7 @@ public enum ConsumerGroupMigrationPolicy {
         return name;
     }
 
-    private final static Map<String, ConsumerGroupMigrationPolicy> NAME_TO_ENUM = Arrays.stream(values())
+    private static final Map<String, ConsumerGroupMigrationPolicy> NAME_TO_ENUM = Arrays.stream(values())
         .collect(Collectors.toMap(policy -> policy.name.toLowerCase(Locale.ROOT), Function.identity()));
 
     /**

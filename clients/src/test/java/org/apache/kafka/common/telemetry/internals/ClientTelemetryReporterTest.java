@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.telemetry.internals;
 
-import io.opentelemetry.proto.common.v1.KeyValue;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -37,6 +35,7 @@ import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.telemetry.ClientTelemetryState;
 import org.apache.kafka.common.utils.MockTime;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +55,8 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
+import io.opentelemetry.proto.common.v1.KeyValue;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -563,6 +564,25 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
         assertEquals(subscription.pushIntervalMs(), telemetrySender.intervalMs());
         assertTrue(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleResponsePushTelemetryTerminating() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS));
+
+        PushTelemetryResponse response = new PushTelemetryResponse(new PushTelemetryResponseData());
+
+        telemetrySender.handleResponse(response);
+        // The telemetry sender remains in TERMINATING_PUSH_IN_PROGRESS so that a subsequent close() finishes the job
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS, telemetrySender.state());
+        assertEquals(subscription.pushIntervalMs(), telemetrySender.intervalMs());
+        assertTrue(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATED));
     }
 
     @Test

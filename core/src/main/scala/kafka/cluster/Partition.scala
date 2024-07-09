@@ -427,7 +427,7 @@ class Partition(val topicPartition: TopicPartition,
     * @param highWatermarkCheckpoints Checkpoint to load initial high watermark from
     * @return true iff the future replica is created
     */
-  def maybeCreateFutureReplica(logDir: String, highWatermarkCheckpoints: OffsetCheckpoints): Boolean = {
+  def maybeCreateFutureReplica(logDir: String, highWatermarkCheckpoints: OffsetCheckpoints, topicId: Option[Uuid] = topicId): Boolean = {
     // The writeLock is needed to make sure that while the caller checks the log directory of the
     // current replica and the existence of the future replica, no other thread can update the log directory of the
     // current replica or remove the future replica.
@@ -616,7 +616,7 @@ class Partition(val topicPartition: TopicPartition,
   def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): VerificationGuard = {
     leaderLogIfLocal match {
       case Some(log) => log.maybeStartTransactionVerification(producerId, sequence, epoch)
-      case None => throw new NotLeaderOrFollowerException();
+      case None => throw new NotLeaderOrFollowerException()
     }
   }
 
@@ -1590,8 +1590,8 @@ class Partition(val topicPartition: TopicPartition,
       "unknown epoch"
     }
 
-    // Only consider throwing an error if we get a client request (isolationLevel is defined) and the start offset
-    // is lagging behind the high watermark
+    // Only consider throwing an error if we get a client request (isolationLevel is defined) and the high watermark
+    // is lagging behind the start offset
     val maybeOffsetsError: Option[ApiException] = leaderEpochStartOffsetOpt
       .filter(epochStart => isolationLevel.isDefined && epochStart > localLog.highWatermark)
       .map(epochStart => Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +

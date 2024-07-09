@@ -16,15 +16,24 @@
  */
 package org.apache.kafka.common.network;
 
-import java.io.IOException;
-import java.io.EOFException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.SocketChannel;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.CancelledKeyException;
+import org.apache.kafka.common.errors.SslAuthenticationException;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.ByteBufferUnmapper;
+import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
 
+import org.slf4j.Logger;
+
+import java.io.EOFException;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.CancelledKeyException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
 import java.security.Principal;
+
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
@@ -35,14 +44,6 @@ import javax.net.ssl.SSLKeyException;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLProtocolException;
 import javax.net.ssl.SSLSession;
-
-import org.apache.kafka.common.errors.SslAuthenticationException;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.ByteBufferUnmapper;
-import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
 
 /*
  * Transport layer for SSL communication
@@ -682,7 +683,7 @@ public class SslTransportLayer implements TransportLayer {
 
         int totalRead = 0;
         int i = offset;
-        while (i < length) {
+        while (i < offset + length) {
             if (dsts[i].hasRemaining()) {
                 int read = read(dsts[i]);
                 if (read > 0)
@@ -755,7 +756,7 @@ public class SslTransportLayer implements TransportLayer {
             throw new IndexOutOfBoundsException();
         int totalWritten = 0;
         int i = offset;
-        while (i < length) {
+        while (i < offset + length) {
             if (srcs[i].hasRemaining() || hasPendingWrites()) {
                 int written = write(srcs[i]);
                 if (written > 0) {
@@ -886,7 +887,7 @@ public class SslTransportLayer implements TransportLayer {
      * retries and report the failure. If `flush` is true, exceptions are propagated after
      * any pending outgoing bytes are flushed to ensure that the peer is notified of the failure.
      */
-    private void handshakeFailure(SSLException sslException, boolean flush) throws IOException {
+    private void handshakeFailure(SSLException sslException, boolean flush) {
         //Release all resources such as internal buffers that SSLEngine is managing
         log.debug("SSL Handshake failed", sslException);
         sslEngine.closeOutbound();

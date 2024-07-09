@@ -125,7 +125,7 @@ DEV_BRANCH = KafkaVersion("dev")
 DEV_VERSION = KafkaVersion("3.8.0-SNAPSHOT")
 
 # This should match the LATEST_PRODUCTION version defined in MetadataVersion.java
-LATEST_STABLE_METADATA_VERSION = "3.7"
+LATEST_STABLE_METADATA_VERSION = "3.8"
 
 # 0.8.2.x versions
 V_0_8_2_1 = KafkaVersion("0.8.2.1")
@@ -268,4 +268,9 @@ LATEST_3_6 = V_3_6_2
 
 # 3.7.x version
 V_3_7_0 = KafkaVersion("3.7.0")
-LATEST_3_7 = V_3_7_0
+V_3_7_1 = KafkaVersion("3.7.1")
+LATEST_3_7 = V_3_7_1
+
+# 3.8.x version
+V_3_8_0 = KafkaVersion("3.8.0")
+LATEST_3_8 = V_3_8_0

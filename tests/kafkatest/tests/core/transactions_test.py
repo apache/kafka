@@ -17,8 +17,8 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService, quorum, consumer_group
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.transactional_message_copier import TransactionalMessageCopier
 from kafkatest.utils import is_int
+from kafkatest.utils.transactions_utils import create_and_start_copiers
 
 from ducktape.tests.test import Test
 from ducktape.mark import matrix
@@ -110,27 +110,6 @@ class TransactionsTest(Test):
 
             self.kafka.await_no_under_replicated_partitions()
 
-    def create_and_start_message_copier(self, input_topic, input_partition, output_topic, transactional_id, use_group_metadata):
-        message_copier = TransactionalMessageCopier(
-            context=self.test_context,
-            num_nodes=1,
-            kafka=self.kafka,
-            transactional_id=transactional_id,
-            consumer_group=self.consumer_group,
-            input_topic=input_topic,
-            input_partition=input_partition,
-            output_topic=output_topic,
-            max_messages=-1,
-            transaction_size=self.transaction_size,
-            transaction_timeout=self.transaction_timeout,
-            use_group_metadata=use_group_metadata
-        )
-        message_copier.start()
-        wait_until(lambda: message_copier.alive(message_copier.nodes[0]),
-                   timeout_sec=10,
-                   err_msg="Message copier failed to start after 10 s")
-        return message_copier
-
     def bounce_copiers(self, copiers, clean_shutdown):
         for _ in range(3):
             for copier in copiers:
@@ -141,18 +120,6 @@ class TransactionsTest(Test):
                 self.logger.info("%s - progress: %s" % (copier.transactional_id,
                                                         str(copier.progress_percent())))
                 copier.restart(clean_shutdown)
-
-    def create_and_start_copiers(self, input_topic, output_topic, num_copiers, use_group_metadata):
-        copiers = []
-        for i in range(0, num_copiers):
-            copiers.append(self.create_and_start_message_copier(
-                input_topic=input_topic,
-                output_topic=output_topic,
-                input_partition=i,
-                transactional_id="copier-" + str(i),
-                use_group_metadata=use_group_metadata
-            ))
-        return copiers
 
     def start_consumer(self, topic_to_read, group_id, group_protocol):
         consumer = ConsoleConsumer(context=self.test_context,
@@ -200,10 +167,15 @@ class TransactionsTest(Test):
 
         It returns the concurrently consumed messages.
         """
-        copiers = self.create_and_start_copiers(input_topic=input_topic,
-                                                output_topic=output_topic,
-                                                num_copiers=num_copiers,
-                                                use_group_metadata=use_group_metadata)
+        copiers = create_and_start_copiers(test_context=self.test_context,
+                                           kafka=self.kafka,
+                                           consumer_group=self.consumer_group,
+                                           input_topic=input_topic,
+                                           output_topic=output_topic,
+                                           transaction_size=self.transaction_size,
+                                           transaction_timeout=self.transaction_timeout,
+                                           num_copiers=num_copiers,
+                                           use_group_metadata=use_group_metadata)
         concurrent_consumer = self.start_consumer(output_topic,
                                                   group_id="concurrent_consumer",
                                                   group_protocol=group_protocol)

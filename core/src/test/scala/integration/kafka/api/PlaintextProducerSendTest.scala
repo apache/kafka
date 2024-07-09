@@ -64,7 +64,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testBatchSizeZeroNoPartitionNoRecordKey(quorum: String): Unit = {
     val producer = createProducer(batchSize = 0)
-    val numRecords = 10;
+    val numRecords = 10
     try {
       TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2)
       val futures = for (i <- 1 to numRecords) yield {

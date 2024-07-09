@@ -102,7 +102,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val fetchResponse3 = sendFetchRequest(leaderId, fetchRequest3)
     val fetchRequest3V12 = createConsumerFetchRequest(shuffledTopicPartitions3, Map(partitionWithLargeMessage1 -> messagesPerPartition), 12)
     val fetchResponse3V12 = sendFetchRequest(leaderId, fetchRequest3V12)
-    def evaluateResponse3(response: FetchResponse, version: Short = ApiKeys.FETCH.latestVersion()) = {
+    def evaluateResponse3(response: FetchResponse, version: Short = ApiKeys.FETCH.latestVersion()): Unit = {
       val responseData = response.responseData(topicNames, version)
       assertEquals(shuffledTopicPartitions3, responseData.keySet.asScala.toSeq)
       val responseSize = responseData.asScala.values.map { partitionData =>
@@ -127,7 +127,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val fetchResponse4 = sendFetchRequest(leaderId, fetchRequest4)
     val fetchRequest4V12 = createConsumerFetchRequest(shuffledTopicPartitions4, Map(partitionWithLargeMessage2 -> messagesPerPartition), 12)
     val fetchResponse4V12 = sendFetchRequest(leaderId, fetchRequest4V12)
-    def evaluateResponse4(response: FetchResponse, version: Short = ApiKeys.FETCH.latestVersion()) = {
+    def evaluateResponse4(response: FetchResponse, version: Short = ApiKeys.FETCH.latestVersion()): Unit = {
       val responseData = response.responseData(topicNames, version)
       assertEquals(shuffledTopicPartitions4, responseData.keySet.asScala.toSeq)
       val nonEmptyPartitions = responseData.asScala.toSeq.collect {
@@ -223,7 +223,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     // Force a leader change
     killBroker(firstLeaderId)
     // Write some more data in epoch 1
-    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, topicPartition, firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, topicPartition, oldLeaderOpt = Some(firstLeaderId))
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, brokers)
     val secondEpochResponses = produceData(Seq(topicPartition), 100)
     val secondEpochEndOffset = secondEpochResponses.lastOption.get.offset + 1
@@ -285,7 +285,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     killBroker(firstLeaderId)
 
     // Check leader error codes
-    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, topicPartition, firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, topicPartition, oldLeaderOpt = Some(firstLeaderId))
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, brokers)
     assertResponseErrorForEpoch(Errors.NONE, secondLeaderId, Optional.empty())
     assertResponseErrorForEpoch(Errors.NONE, secondLeaderId, Optional.of(secondLeaderEpoch))
@@ -322,7 +322,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     // -1 is treated as having no epoch at all
     killBroker(firstLeaderId)
 
-    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, topicPartition, firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, topicPartition, oldLeaderOpt = Some(firstLeaderId))
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, brokers)
     verifyFetchSessionErrors(topicPartition, secondLeaderEpoch, secondLeaderId, version)
 

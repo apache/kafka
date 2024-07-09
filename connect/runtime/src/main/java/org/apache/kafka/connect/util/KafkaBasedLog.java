@@ -37,6 +37,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -107,6 +108,8 @@ public class KafkaBasedLog<K, V> {
     private boolean stopRequested;
     private final Queue<Callback<Void>> readLogEndOffsetCallbacks;
     private final java.util.function.Consumer<TopicAdmin> initializer;
+    // initialized as false for backward compatibility
+    private volatile boolean reportErrorsToCallback = false;
 
     /**
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
@@ -243,7 +246,12 @@ public class KafkaBasedLog<K, V> {
     }
 
     public void start() {
-        log.info("Starting KafkaBasedLog with topic " + topic);
+        start(false);
+    }
+
+    public void start(boolean reportErrorsToCallback) {
+        this.reportErrorsToCallback = reportErrorsToCallback;
+        log.info("Starting KafkaBasedLog with topic {} reportErrorsToCallback={}", topic, reportErrorsToCallback);
 
         // Create the topic admin client and initialize the topic ...
         admin = topicAdminSupplier.get();   // may be null
@@ -251,7 +259,7 @@ public class KafkaBasedLog<K, V> {
             throw new ConnectException(
                     "Must provide a TopicAdmin to KafkaBasedLog when consumer is configured with "
                             + ConsumerConfig.ISOLATION_LEVEL_CONFIG + " set to "
-                            + IsolationLevel.READ_COMMITTED.toString()
+                            + IsolationLevel.READ_COMMITTED
             );
         }
         initializer.accept(admin);
@@ -468,6 +476,9 @@ public class KafkaBasedLog<K, V> {
             throw e;
         } catch (KafkaException e) {
             log.error("Error polling: " + e);
+            if (reportErrorsToCallback) {
+                consumedCallback.onCompletion(e, null);
+            }
         }
     }
 

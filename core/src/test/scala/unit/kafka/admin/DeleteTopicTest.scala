@@ -16,27 +16,30 @@
  */
 package kafka.admin
 
-import java.util
-import java.util.concurrent.ExecutionException
-import java.util.{Collections, Optional, Properties}
-import scala.collection.Seq
+import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaAssignment, ReplicaDeletionSuccessful}
 import kafka.log.UnifiedLog
-import kafka.zk.TopicPartitionZNode
-import kafka.utils._
 import kafka.server.{KafkaBroker, KafkaConfig, KafkaServer, QuorumTestHarness}
+import kafka.utils.TestUtils.waitForAllPartitionsMetadata
+import kafka.utils._
+import kafka.zk.TopicPartitionZNode
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.{TopicDeletionDisabledException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaAssignment, ReplicaDeletionSuccessful}
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions}
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{TopicDeletionDisabledException, UnknownTopicOrPartitionException}
-import org.apache.kafka.metadata.BrokerState
 
+import java.util
+import java.util.concurrent.ExecutionException
+import java.util.{Collections, Optional, Properties}
+import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 class DeleteTopicTest extends QuorumTestHarness {
 
@@ -218,7 +221,7 @@ class DeleteTopicTest extends QuorumTestHarness {
       // increase the partition count for topic
       val props = new Properties()
       props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(partitionHostingBrokers))
-      TestUtils.resource(Admin.create(props)) { adminClient =>
+      Using(Admin.create(props)) { adminClient =>
         try {
           adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
         } catch {
@@ -253,7 +256,7 @@ class DeleteTopicTest extends QuorumTestHarness {
       // increase the partition count for topic
       val props = new Properties()
       props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(partitionHostingServers))
-      TestUtils.resource(Admin.create(props)) { adminClient =>
+      Using(Admin.create(props)) { adminClient =>
         try {
           adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
         } catch {
@@ -294,7 +297,7 @@ class DeleteTopicTest extends QuorumTestHarness {
       TestUtils.waitUntilTrue(() => follower.brokerState == BrokerState.SHUTTING_DOWN,
         s"Follower ${follower.config.brokerId} was not shut down")
 
-      TestUtils.increasePartitions(admin, topic, 3, brokers.filter(_.config.brokerId != follower.config.brokerId))
+      increasePartitions(admin, topic, 3, brokers.filter(_.config.brokerId != follower.config.brokerId))
     } else {
       // capture the brokers before we shutdown so that we don't fail validation in `addPartitions`
       val brokersMetadata = adminZkClient.getBrokerMetadatas()
@@ -330,7 +333,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     if (isKRaftTest()) {
       admin.deleteTopics(Collections.singletonList(topic)).all().get()
       // pass empty list of brokers to avoid validating metadata since the topic is being deleted.
-      TestUtils.increasePartitions(admin, topic, 3, Seq.empty)
+      increasePartitions(admin, topic, 3, Seq.empty)
     } else {
       zkClient.createTopLevelPaths()
       val brokersMetadata = adminZkClient.getBrokerMetadatas()
@@ -487,7 +490,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     if (isKRaftTest()) {
       // Restart KRaft quorum with the updated config
       val overridingProps = new Properties()
-      overridingProps.put(KafkaConfig.DeleteTopicEnableProp, false.toString)
+      overridingProps.put(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, false.toString)
       if (implementation != null)
         implementation.shutdown()
       implementation = newKRaftQuorum(overridingProps)
@@ -547,5 +550,24 @@ class DeleteTopicTest extends QuorumTestHarness {
     brokers.foreach(_.startup())
     TestUtils.waitUntilTrue(() => brokers.exists(_.asInstanceOf[KafkaServer].kafkaController.isActive), "No controller is elected")
     TestUtils.verifyTopicDeletion(zkClient, topic, 2, brokers)
+  }
+
+  private def increasePartitions[B <: KafkaBroker](admin: Admin,
+                                           topic: String,
+                                           totalPartitionCount: Int,
+                                           brokersToValidate: Seq[B]
+                                          ): Unit = {
+    val newPartitionSet: Map[String, NewPartitions] = Map.apply(topic -> NewPartitions.increaseTo(totalPartitionCount))
+    admin.createPartitions(newPartitionSet.asJava)
+
+    if (brokersToValidate.nonEmpty) {
+      // wait until we've propagated all partitions metadata to all brokers
+      val allPartitionsMetadata = waitForAllPartitionsMetadata(brokersToValidate, topic, totalPartitionCount)
+      (0 until totalPartitionCount - 1).foreach(i => {
+        allPartitionsMetadata.get(new TopicPartition(topic, i)).foreach { partitionMetadata =>
+          assertEquals(totalPartitionCount, partitionMetadata.replicas.size)
+        }
+      })
+    }
   }
 }

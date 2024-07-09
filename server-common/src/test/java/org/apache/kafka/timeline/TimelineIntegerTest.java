@@ -17,11 +17,12 @@
 
 package org.apache.kafka.timeline;
 
-import java.util.Collections;
-
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

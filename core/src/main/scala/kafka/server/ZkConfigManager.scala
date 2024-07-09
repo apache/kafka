@@ -74,7 +74,7 @@ class ZkConfigManager(
   val adminZkClient = new AdminZkClient(zkClient)
 
   object ConfigChangedNotificationHandler extends NotificationHandler {
-    override def processNotification(jsonBytes: Array[Byte]) = {
+    override def processNotification(jsonBytes: Array[Byte]): Unit = {
       // Ignore non-json notifications because they can be from the deprecated TopicConfigManager
       Json.parseBytes(jsonBytes).foreach { js =>
         val jsObject = js.asJsonObjectOption.getOrElse {

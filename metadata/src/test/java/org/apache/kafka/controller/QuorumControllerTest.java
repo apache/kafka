@@ -17,32 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.io.File;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
@@ -140,6 +114,7 @@ import org.apache.kafka.snapshot.FileRawSnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -148,6 +123,32 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static java.util.Collections.singletonList;
 import static java.util.function.Function.identity;
@@ -177,7 +178,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class QuorumControllerTest {
-    private final static Logger log = LoggerFactory.getLogger(QuorumControllerTest.class);
+    private static final Logger log = LoggerFactory.getLogger(QuorumControllerTest.class);
 
     static final BootstrapMetadata SIMPLE_BOOTSTRAP = BootstrapMetadata.
             fromVersion(MetadataVersion.IBP_3_7_IV0, "test-provided bootstrap");
@@ -198,7 +199,7 @@ public class QuorumControllerTest {
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
-                setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
+                setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.latestTesting())).
                 setBrokerId(0).
                 setLogDirs(Collections.singletonList(Uuid.fromString("iiaQjkRPQcuMULNII0MUeA"))).
                 setClusterId(logEnv.clusterId())).get();
@@ -242,7 +243,7 @@ public class QuorumControllerTest {
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.latestTesting())).
                     setBrokerId(0).
                     setLogDirs(Collections.singletonList(Uuid.fromString("sTbzRAMnTpahIyIPNjiLhw"))).
                     setClusterId(logEnv.clusterId())).get();
@@ -300,7 +301,7 @@ public class QuorumControllerTest {
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.latestTesting())).
                         setIncarnationId(Uuid.randomUuid()).
                         setListeners(listeners));
                 brokerEpochs.put(brokerId, reply.get().epoch());
@@ -382,7 +383,7 @@ public class QuorumControllerTest {
                 }).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
 
-                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_8_IV0, "test-provided bootstrap ELR enabled")).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_9_IV1, "test-provided bootstrap ELR enabled")).
                 build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
@@ -396,7 +397,7 @@ public class QuorumControllerTest {
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_9_IV1)).
                         setIncarnationId(Uuid.randomUuid()).
                         setLogDirs(Collections.singletonList(Uuid.randomUuid())).
                         setListeners(listeners));
@@ -465,7 +466,7 @@ public class QuorumControllerTest {
                 new BrokerRegistrationRequestData().
                     setBrokerId(brokerToUncleanShutdown).
                     setClusterId(active.clusterId()).
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_9_IV1)).
                     setIncarnationId(Uuid.randomUuid()).
                     setLogDirs(Collections.singletonList(Uuid.randomUuid())).
                     setListeners(listeners)).get();
@@ -478,7 +479,7 @@ public class QuorumControllerTest {
                 new BrokerRegistrationRequestData().
                     setBrokerId(lastKnownElr[0]).
                     setClusterId(active.clusterId()).
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_9_IV1)).
                     setIncarnationId(Uuid.randomUuid()).
                     setLogDirs(Collections.singletonList(Uuid.randomUuid())).
                     setListeners(listeners)).get();
@@ -486,7 +487,7 @@ public class QuorumControllerTest {
             assertArrayEquals(lastKnownElr, partition.lastKnownElr, partition.toString());
 
             // Unfence the last one in the ELR, it should be elected.
-            sendBrokerHeartbeatToUnfenceBrokers(active, Arrays.asList(brokerToBeTheLeader), brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, singletonList(brokerToBeTheLeader), brokerEpochs);
             TestUtils.waitForCondition(() -> {
                     return active.clusterControl().isUnfenced(brokerToBeTheLeader);
                 }, sessionTimeoutMillis * 3,
@@ -518,7 +519,7 @@ public class QuorumControllerTest {
                 }).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
 
-                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_8_IV0, "test-provided bootstrap ELR enabled")).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_9_IV1, "test-provided bootstrap ELR enabled")).
                 build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
@@ -532,7 +533,7 @@ public class QuorumControllerTest {
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_9_IV1)).
                         setIncarnationId(Uuid.randomUuid()).
                         setLogDirs(Collections.singletonList(Uuid.randomUuid())).
                         setListeners(listeners));
@@ -850,7 +851,7 @@ public class QuorumControllerTest {
                     setBrokerId(0).
                     setClusterId(active.clusterId()).
                     setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.latestTesting())).
                     setLogDirs(Collections.singletonList(Uuid.fromString("vBpaRsZVSaGsQT53wtYGtg"))).
                     setListeners(listeners));
             assertEquals(5L, reply.get().epoch());
@@ -931,7 +932,7 @@ public class QuorumControllerTest {
                         setIncarnationId(new Uuid(3465346L, i)).
                         setZkMigrationReady(false).
                         setListeners(new ControllerRegistrationRequestData.ListenerCollection(
-                            Arrays.asList(
+                            singletonList(
                                 new ControllerRegistrationRequestData.Listener().
                                     setName("CONTROLLER").
                                     setHost("localhost").
@@ -940,7 +941,7 @@ public class QuorumControllerTest {
                                 ).iterator()
                         )).
                         setFeatures(new ControllerRegistrationRequestData.FeatureCollection(
-                            Arrays.asList(
+                            singletonList(
                                 new ControllerRegistrationRequestData.Feature().
                                     setName(MetadataVersion.FEATURE_NAME).
                                     setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
@@ -956,7 +957,7 @@ public class QuorumControllerTest {
                         setClusterId(active.clusterId()).
                         setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
-                        setListeners(new ListenerCollection(Arrays.asList(new Listener().
+                        setListeners(new ListenerCollection(singletonList(new Listener().
                             setName("PLAINTEXT").setHost("localhost").
                             setPort(9092 + i)).iterator()))).get();
                 brokerEpochs.put(i, reply.epoch());
@@ -1005,14 +1006,14 @@ public class QuorumControllerTest {
                 setControllerId(0).
                 setIncarnationId(Uuid.fromString("AAAAAAA04IIAAAAAAAAAAA")).
                 setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                    Arrays.asList(
+                    singletonList(
                         new RegisterControllerRecord.ControllerEndpoint().
                             setName("CONTROLLER").
                             setHost("localhost").
                             setPort(8000).
                             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
                 setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                    Arrays.asList(
+                    singletonList(
                         new RegisterControllerRecord.ControllerFeature().
                             setName(MetadataVersion.FEATURE_NAME).
                             setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
@@ -1022,14 +1023,14 @@ public class QuorumControllerTest {
                 setControllerId(1).
                 setIncarnationId(Uuid.fromString("AAAAAAA04IIAAAAAAAAAAQ")).
                 setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                    Arrays.asList(
+                    singletonList(
                         new RegisterControllerRecord.ControllerEndpoint().
                             setName("CONTROLLER").
                             setHost("localhost").
                             setPort(8001).
                             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
                 setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                    Arrays.asList(
+                    singletonList(
                         new RegisterControllerRecord.ControllerFeature().
                             setName(MetadataVersion.FEATURE_NAME).
                             setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
@@ -1039,14 +1040,14 @@ public class QuorumControllerTest {
                 setControllerId(2).
                 setIncarnationId(Uuid.fromString("AAAAAAA04IIAAAAAAAAAAg")).
                 setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                    Arrays.asList(
+                    singletonList(
                         new RegisterControllerRecord.ControllerEndpoint().
                             setName("CONTROLLER").
                             setHost("localhost").
                             setPort(8002).
                             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
                 setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                    Arrays.asList(
+                    singletonList(
                         new RegisterControllerRecord.ControllerFeature().
                             setName(MetadataVersion.FEATURE_NAME).
                             setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
@@ -1056,7 +1057,7 @@ public class QuorumControllerTest {
                 setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
                 setEndPoints(new BrokerEndpointCollection(
-                    Arrays.asList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                    singletonList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9092).setSecurityProtocol((short) 0)).iterator())).
                 setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
@@ -1064,7 +1065,7 @@ public class QuorumControllerTest {
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(1).setBrokerEpoch(brokerEpochs.get(1)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB1")).
-                setEndPoints(new BrokerEndpointCollection(Arrays.asList(
+                setEndPoints(new BrokerEndpointCollection(singletonList(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9093).setSecurityProtocol((short) 0)).iterator())).
                 setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
@@ -1074,7 +1075,7 @@ public class QuorumControllerTest {
                 setBrokerId(2).setBrokerEpoch(brokerEpochs.get(2)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB2")).
                 setEndPoints(new BrokerEndpointCollection(
-                    Arrays.asList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                    singletonList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9094).setSecurityProtocol((short) 0)).iterator())).
                 setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
@@ -1082,7 +1083,7 @@ public class QuorumControllerTest {
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(3).setBrokerEpoch(brokerEpochs.get(3)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB3")).
-                setEndPoints(new BrokerEndpointCollection(Arrays.asList(
+                setEndPoints(new BrokerEndpointCollection(singletonList(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9095).setSecurityProtocol((short) 0)).iterator())).
                 setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
@@ -1412,7 +1413,7 @@ public class QuorumControllerTest {
 
     @Test
     public void testFatalMetadataErrorDuringSnapshotLoading() throws Exception {
-        InitialSnapshot invalidSnapshot = new InitialSnapshot(Collections.unmodifiableList(Arrays.asList(
+        InitialSnapshot invalidSnapshot = new InitialSnapshot(Collections.unmodifiableList(singletonList(
             new ApiMessageAndVersion(new PartitionRecord(), (short) 0)))
         );
 
@@ -1437,7 +1438,7 @@ public class QuorumControllerTest {
     @Test
     public void testFatalMetadataErrorDuringLogLoading() throws Exception {
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build()) {
-            logEnv.appendInitialRecords(Collections.unmodifiableList(Arrays.asList(
+            logEnv.appendInitialRecords(Collections.unmodifiableList(singletonList(
                 new ApiMessageAndVersion(new PartitionRecord(), (short) 0))
             ));
 
@@ -1479,7 +1480,7 @@ public class QuorumControllerTest {
         }
     }
 
-    private final static List<ApiMessageAndVersion> PRE_PRODUCTION_RECORDS =
+    private static final List<ApiMessageAndVersion> PRE_PRODUCTION_RECORDS =
             Collections.unmodifiableList(Arrays.asList(
                 new ApiMessageAndVersion(new RegisterBrokerRecord().
                         setBrokerEpoch(42).
@@ -1496,7 +1497,7 @@ public class QuorumControllerTest {
                         setTopicId(Uuid.fromString("cxBT72dK4si8Ied1iP4wBA")),
                         (short) 0)));
 
-    private final static BootstrapMetadata COMPLEX_BOOTSTRAP = BootstrapMetadata.fromRecords(
+    private static final BootstrapMetadata COMPLEX_BOOTSTRAP = BootstrapMetadata.fromRecords(
             Arrays.asList(
                 new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
@@ -1908,7 +1909,7 @@ public class QuorumControllerTest {
         );
     }
 
-    private final static List<ApiMessageAndVersion> ZK_MIGRATION_RECORDS =
+    private static final List<ApiMessageAndVersion> ZK_MIGRATION_RECORDS =
         Collections.unmodifiableList(Arrays.asList(
             new ApiMessageAndVersion(new TopicRecord().
                 setName("spam").
@@ -1995,7 +1996,7 @@ public class QuorumControllerTest {
                     setIsMigratingZkBroker(true).
                     setFeatures(brokerFeatures(metadataVersion, metadataVersion)).
                     setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
-                    setListeners(new ListenerCollection(Arrays.asList(new Listener().
+                    setListeners(new ListenerCollection(singletonList(new Listener().
                         setName("PLAINTEXT").setHost("localhost").
                         setPort(9092)).iterator()))).get();
 

@@ -32,6 +32,7 @@ import org.apache.commons.validator.routines.InetAddressValidator
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.util.Csv
 import org.slf4j.event.Level
 
 import java.util
@@ -107,17 +108,6 @@ object CoreUtils {
         logger.error(s"Failed to register Mbean $name", e)
         false
     }
-  }
-
-  /**
-   * Parse a comma separated string into a sequence of strings.
-   * Whitespace surrounding the comma will be removed.
-   */
-  def parseCsvList(csvList: String): Seq[String] = {
-    if (csvList == null || csvList.isEmpty)
-      Seq.empty[String]
-    else
-      csvList.split("\\s*,\\s*").filter(v => !v.equals(""))
   }
 
   /**
@@ -219,8 +209,8 @@ object CoreUtils {
     }
 
     val endPoints = try {
-      val listenerList = parseCsvList(listeners)
-      listenerList.map(EndPoint.createEndPoint(_, Some(securityProtocolMap)))
+      val listenerList = Csv.parseCsvList(listeners)
+      listenerList.asScala.map(EndPoint.createEndPoint(_, Some(securityProtocolMap)))
     } catch {
       case e: Exception =>
         throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)

@@ -75,7 +75,7 @@ public final class KafkaMetric implements Metric {
     public Object metricValue() {
         long now = time.milliseconds();
         synchronized (this.lock) {
-            if (this.metricValueProvider instanceof Measurable)
+            if (isMeasurable())
                 return ((Measurable) metricValueProvider).measure(config, now);
             else if (this.metricValueProvider instanceof Gauge)
                 return ((Gauge<?>) metricValueProvider).value(config, now);
@@ -85,12 +85,21 @@ public final class KafkaMetric implements Metric {
     }
 
     /**
+     * The method determines if the metric value provider is of type Measurable.
+     *
+     * @return true if the metric value provider is of type Measurable, false otherwise.
+     */
+    public boolean isMeasurable() {
+        return this.metricValueProvider instanceof Measurable;
+    }
+
+    /**
      * Get the underlying metric provider, which should be a {@link Measurable}
      * @return Return the metric provider
      * @throws IllegalStateException if the underlying metric is not a {@link Measurable}.
      */
     public Measurable measurable() {
-        if (this.metricValueProvider instanceof Measurable)
+        if (isMeasurable())
             return (Measurable) metricValueProvider;
         else
             throw new IllegalStateException("Not a measurable: " + this.metricValueProvider.getClass());
@@ -103,7 +112,7 @@ public final class KafkaMetric implements Metric {
      */
     double measurableValue(long timeMs) {
         synchronized (this.lock) {
-            if (this.metricValueProvider instanceof Measurable)
+            if (isMeasurable())
                 return ((Measurable) metricValueProvider).measure(config, timeMs);
             else
                 return 0;

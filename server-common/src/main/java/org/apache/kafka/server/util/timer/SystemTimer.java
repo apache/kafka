@@ -17,6 +17,7 @@
 package org.apache.kafka.server.util.timer;
 
 import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.concurrent.DelayQueue;
@@ -110,7 +111,7 @@ public class SystemTimer implements Timer {
 
     @Override
     public void close() {
-        taskExecutor.shutdown();
+        ThreadUtils.shutdownExecutorServiceQuietly(taskExecutor, 5, TimeUnit.SECONDS);
     }
 
     // visible for testing

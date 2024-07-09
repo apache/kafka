@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -113,9 +114,7 @@ public class AbstractConfig {
         this.originals = resolveConfigVariables(configProviderProps, originalMap);
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
-        for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
-            this.values.put(update.getKey(), update.getValue());
-        }
+        this.values.putAll(configUpdates);
         definition.parse(this.values);
         this.definition = definition;
         if (doLog)
@@ -376,9 +375,9 @@ public class AbstractConfig {
      * Info level log for any unused configurations
      */
     public void logUnused() {
-        Set<String> unusedkeys = unused();
-        if (!unusedkeys.isEmpty()) {
-            log.info("These configurations '{}' were supplied but are not used yet.", unusedkeys);
+        Set<String> unusedKeys = unused();
+        if (!unusedKeys.isEmpty()) {
+            log.info("These configurations '{}' were supplied but are not used yet.", unusedKeys);
         }
     }
 

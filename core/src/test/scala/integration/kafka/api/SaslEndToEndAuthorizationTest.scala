@@ -59,32 +59,29 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testTwoConsumersWithDifferentSaslCredentials(quorum: String): Unit = {
-    if (quorum == unimplementedquorum) {
-      Console.err.println("QuorumName : " + quorum + " is not supported.")
-    } else {
-      setAclsAndProduce(tp)
-      val consumer1 = createConsumer()
+    setAclsAndProduce(tp)
+    val consumer1 = createConsumer()
 
-      // consumer2 retrieves its credentials from the static JAAS configuration, so we test also this path
-      consumerConfig.remove(SaslConfigs.SASL_JAAS_CONFIG)
-      consumerConfig.remove(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS)
+    // consumer2 retrieves its credentials from the static JAAS configuration, so we test also this path
+    consumerConfig.remove(SaslConfigs.SASL_JAAS_CONFIG)
+    consumerConfig.remove(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS)
 
-      val consumer2 = createConsumer()
-      consumer1.assign(List(tp).asJava)
-      consumer2.assign(List(tp).asJava)
+    val consumer2 = createConsumer()
+    consumer1.assign(List(tp).asJava)
+    consumer2.assign(List(tp).asJava)
 
-      consumeRecords(consumer1, numRecords)
+    consumeRecords(consumer1, numRecords)
 
-      try {
-        consumeRecords(consumer2)
-        fail("Expected exception as consumer2 has no access to topic or group")
-      } catch {
-        // Either exception is possible depending on the order that the first Metadata
-        // and FindCoordinator requests are received
-        case e: TopicAuthorizationException => assertTrue(e.unauthorizedTopics.contains(topic))
-        case e: GroupAuthorizationException => assertEquals(group, e.groupId)
-      }
-      confirmReauthenticationMetrics()
+    try {
+      consumeRecords(consumer2)
+      fail("Expected exception as consumer2 has no access to topic or group")
+    } catch {
+      // Either exception is possible depending on the order that the first Metadata
+      // and FindCoordinator requests are received
+      case e: TopicAuthorizationException => assertTrue(e.unauthorizedTopics.contains(topic))
+      case e: GroupAuthorizationException => assertEquals(group, e.groupId)
     }
+    confirmReauthenticationMetrics()
+
   }
 }

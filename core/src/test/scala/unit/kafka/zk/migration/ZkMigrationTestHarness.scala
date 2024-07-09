@@ -20,7 +20,7 @@ import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.zk.ZkMigrationClient
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
-import org.apache.kafka.security.PasswordEncoder
+import org.apache.kafka.security.{PasswordEncoder, PasswordEncoderConfigs}
 import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
@@ -42,7 +42,7 @@ class ZkMigrationTestHarness extends QuorumTestHarness {
   val encoder: PasswordEncoder = {
     val encoderProps = new Properties()
     encoderProps.put(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:1234") // Get around the config validation
-    encoderProps.put(KafkaConfig.PasswordEncoderSecretProp, SECRET) // Zk secret to encrypt the
+    encoderProps.put(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG, SECRET) // Zk secret to encrypt the
     val encoderConfig = new KafkaConfig(encoderProps)
     PasswordEncoder.encrypting(encoderConfig.passwordEncoderSecret.get,
       encoderConfig.passwordEncoderKeyFactoryAlgorithm,

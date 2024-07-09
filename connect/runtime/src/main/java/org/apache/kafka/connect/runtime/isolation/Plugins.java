@@ -34,6 +34,7 @@ import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -129,7 +130,7 @@ public class Plugins {
     }
 
     private static <T> String pluginNames(Collection<PluginDesc<T>> plugins) {
-        return Utils.join(plugins, ", ");
+        return plugins.stream().map(PluginDesc::toString).collect(Collectors.joining(", "));
     }
 
     private <T> T newPlugin(Class<T> klass) {
@@ -317,7 +318,7 @@ public class Plugins {
                         "Failed to find any class that implements Connector and which name matches "
                                 + connectorClassOrAlias
                                 + ", available connectors are: "
-                                + Utils.join(connectors, ", ")
+                                + connectors.stream().map(PluginDesc::toString).collect(Collectors.joining(", "))
                 );
             }
             if (matches.size() > 1) {
@@ -325,7 +326,7 @@ public class Plugins {
                         "More than one connector matches alias "
                                 + connectorClassOrAlias
                                 + ". Please use full package and class name instead. Classes found: "
-                                + Utils.join(connectors, ", ")
+                                + connectors.stream().map(PluginDesc::toString).collect(Collectors.joining(", "))
                 );
             }
 

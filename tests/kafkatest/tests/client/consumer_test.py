@@ -204,13 +204,15 @@ class OffsetValidationTest(VerifiableConsumerTest):
         num_bounces=[5],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
-        group_protocol=consumer_group.all_group_protocols
+        group_protocol=consumer_group.classic_group_protocol
     )
-    def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+    def test_static_consumer_bounce_with_eager_assignment(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
-        Verify correct static consumer behavior when the consumers in the group are restarted. In order to make
+        Verify correct static consumer behavior when the consumers in the group are restarted. In order to make 
         sure the behavior of static members are different from dynamic ones, we take both static and dynamic
-        membership into this test suite.
+        membership into this test suite. This test is based on the eager assignment strategy, where all dynamic consumers 
+        revoke their partitions when a global rebalance takes place (even if they are not being bounced). The test relies
+        on that eager behaviour when making sure that there is no global rebalance when static members are bounced.
 
         Setup: single Kafka cluster with one producer and a set of consumers in one group.
 
@@ -227,7 +229,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.await_produced_messages(producer)
 
         self.session_timeout_sec = 60
-        consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership, group_protocol=group_protocol)
+        consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership, group_protocol=group_protocol, 
+                                       assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor")
 
         consumer.start()
         self.await_all_members(consumer)
@@ -242,16 +245,15 @@ class OffsetValidationTest(VerifiableConsumerTest):
             self.rolling_bounce_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
 
         num_revokes_after_bounce = consumer.num_revokes_for_alive() - num_revokes_before_bounce
-
-        check_condition = num_revokes_after_bounce != 0
+            
         # under static membership, the live consumer shall not revoke any current running partitions,
         # since there is no global rebalance being triggered.
         if static_membership:
-            check_condition = num_revokes_after_bounce == 0
-
-        assert check_condition, \
-            "Total revoked count %d does not match the expectation of having 0 revokes as %d" % \
-            (num_revokes_after_bounce, check_condition)
+            assert num_revokes_after_bounce == 0, \
+                "Unexpected revocation triggered when bouncing static member. Expecting 0 but had %d revocations" % num_revokes_after_bounce
+        else:
+            assert num_revokes_after_bounce != 0, \
+                "Revocations not triggered as expected when bouncing member with eager assignment"
 
         consumer.stop_all()
         if clean_shutdown:
@@ -348,26 +350,45 @@ class OffsetValidationTest(VerifiableConsumerTest):
             consumer.start()
             self.await_members(consumer, len(consumer.nodes))
 
+            num_rebalances = consumer.num_rebalances()
             conflict_consumer.start()
-            self.await_members(conflict_consumer, num_conflict_consumers)
-            self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
+            if group_protocol == consumer_group.classic_group_protocol:
+                # Classic protocol: conflicting members should join, and the intial ones with conflicting instance id should fail.
+                self.await_members(conflict_consumer, num_conflict_consumers)
+                self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
 
-            wait_until(lambda: len(consumer.dead_nodes()) == num_conflict_consumers,
+                wait_until(lambda: len(consumer.dead_nodes()) == num_conflict_consumers,
                        timeout_sec=10,
                        err_msg="Timed out waiting for the fenced consumers to stop")
+            else:
+                # Consumer protocol: Existing members should remain active and new conflicting ones should not be able to join.
+                self.await_consumed_messages(consumer)
+                assert num_rebalances == consumer.num_rebalances(), "Static consumers attempt to join with instance id in use should not cause a rebalance"
+                assert len(consumer.joined_nodes()) == len(consumer.nodes)
+                assert len(conflict_consumer.joined_nodes()) == 0
+                
+                # Stop existing nodes, so conflicting ones should be able to join.
+                consumer.stop_all()
+                wait_until(lambda: len(consumer.dead_nodes()) == len(consumer.nodes),
+                           timeout_sec=self.session_timeout_sec+5,
+                           err_msg="Timed out waiting for the consumer to shutdown")
+                conflict_consumer.start()
+                self.await_members(conflict_consumer, num_conflict_consumers)
+
+            
         else:
             consumer.start()
             conflict_consumer.start()
 
             wait_until(lambda: len(consumer.joined_nodes()) + len(conflict_consumer.joined_nodes()) == len(consumer.nodes),
-                       timeout_sec=self.session_timeout_sec,
-                       err_msg="Timed out waiting for consumers to join, expected total %d joined, but only see %d joined from"
+                       timeout_sec=self.session_timeout_sec*2,
+                       err_msg="Timed out waiting for consumers to join, expected total %d joined, but only see %d joined from "
                                "normal consumer group and %d from conflict consumer group" % \
                                (len(consumer.nodes), len(consumer.joined_nodes()), len(conflict_consumer.joined_nodes()))
                        )
             wait_until(lambda: len(consumer.dead_nodes()) + len(conflict_consumer.dead_nodes()) == len(conflict_consumer.nodes),
-                       timeout_sec=self.session_timeout_sec,
-                       err_msg="Timed out waiting for fenced consumers to die, expected total %d dead, but only see %d dead in"
+                       timeout_sec=self.session_timeout_sec*2,
+                       err_msg="Timed out waiting for fenced consumers to die, expected total %d dead, but only see %d dead in "
                                "normal consumer group and %d dead in conflict consumer group" % \
                                (len(conflict_consumer.nodes), len(consumer.dead_nodes()), len(conflict_consumer.dead_nodes()))
                        )

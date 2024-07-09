@@ -19,15 +19,15 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import java.util.HashMap;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 
 
 /**
@@ -48,12 +48,11 @@ public class DescribeLogDirsResult {
      * @deprecated Deprecated Since Kafka 2.7. Use {@link #descriptions()}.
      */
     @Deprecated
-    @SuppressWarnings("deprecation")
     public Map<Integer, KafkaFuture<Map<String, DescribeLogDirsResponse.LogDirInfo>>> values() {
         return descriptions().entrySet().stream()
             .collect(Collectors.toMap(
                 Map.Entry::getKey,
-                entry -> entry.getValue().thenApply(map -> convertMapValues(map))));
+                entry -> entry.getValue().thenApply(this::convertMapValues)));
     }
 
     @SuppressWarnings("deprecation")
@@ -87,10 +86,9 @@ public class DescribeLogDirsResult {
      * @deprecated Deprecated Since Kafka 2.7. Use {@link #allDescriptions()}.
      */
     @Deprecated
-    @SuppressWarnings("deprecation")
     public KafkaFuture<Map<Integer, Map<String, DescribeLogDirsResponse.LogDirInfo>>> all() {
         return allDescriptions().thenApply(map -> map.entrySet().stream().collect(Collectors.toMap(
-            entry -> entry.getKey(),
+            Map.Entry::getKey,
             entry -> convertMapValues(entry.getValue())
         )));
     }

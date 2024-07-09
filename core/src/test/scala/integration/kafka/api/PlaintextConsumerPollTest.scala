@@ -12,7 +12,7 @@
   */
 package kafka.api
 
-import kafka.utils.TestInfoUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.common.utils.Utils
@@ -24,8 +24,8 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import java.time.Duration
 import java.util
 import java.util.stream.Stream
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.Buffer
 
 /**
  * Integration tests for the consumer that covers the poll logic
@@ -238,6 +238,33 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     runMultiConsumerSessionTimeoutTest(true)
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testPollEventuallyReturnsRecordsWithZeroTimeout(quorum: String, groupProtocol: String): Unit = {
+    val numMessages = 100
+    val producer = createProducer()
+    sendRecords(producer, numMessages, tp)
+
+    val consumer = createConsumer()
+    consumer.subscribe(Set(topic).asJava)
+    val records = awaitNonEmptyRecords(consumer, tp, 0L)
+    assertEquals(numMessages, records.count())
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testNoOffsetForPartitionExceptionOnPollZero(quorum: String, groupProtocol: String): Unit = {
+    this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
+    val consumer = createConsumer(configOverrides = this.consumerConfig)
+
+    consumer.assign(List(tp).asJava)
+
+    // continuous poll should eventually fail because there is no offset reset strategy set (fail only when resetting positions after coordinator is known)
+    TestUtils.tryUntilNoAssertionError() {
+      assertThrows(classOf[NoOffsetForPartitionException], () => consumer.poll(Duration.ZERO))
+    }
+  }
+
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
     // use consumers defined in this class plus one additional consumer
     // Use topic defined in this class + one additional topic
@@ -248,7 +275,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     val subscriptions = Set(tp, tp2) ++ createTopicAndSendRecords(producer, topic1, 6, 100)
 
     // first subscribe consumers that are defined in this class
-    val consumerPollers = Buffer[ConsumerAssignmentPoller]()
+    val consumerPollers = mutable.Buffer[ConsumerAssignmentPoller]()
     consumerPollers += subscribeConsumerAndStartPolling(createConsumer(), List(topic, topic1))
     consumerPollers += subscribeConsumerAndStartPolling(createConsumer(), List(topic, topic1))
 

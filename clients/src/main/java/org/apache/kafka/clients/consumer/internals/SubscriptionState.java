@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -28,8 +29,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -746,7 +749,7 @@ public class SubscriptionState {
     }
 
     public synchronized Set<TopicPartition> initializingPartitions() {
-        return collectPartitions(state -> state.fetchState.equals(FetchStates.INITIALIZING) && !state.pendingOnAssignedCallback);
+        return collectPartitions(TopicPartitionState::shouldInitialize);
     }
 
     private Set<TopicPartition> collectPartitions(Predicate<TopicPartitionState> filter) {
@@ -759,11 +762,22 @@ public class SubscriptionState {
         return result;
     }
 
-
+    /**
+     * Note: this will not attempt to reset partitions that are in the process of being assigned
+     * and are pending the completion of any {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)}
+     * callbacks.
+     *
+     * <p/>
+     *
+     * This method only appears to be invoked the by the {@link KafkaConsumer} during its
+     * {@link KafkaConsumer#poll(Duration)} logic. <em>Direct</em> calls to methods like
+     * {@link #requestOffsetReset(TopicPartition)}, {@link #requestOffsetResetIfPartitionAssigned(TopicPartition)},
+     * etc. do <em>not</em> skip partitions pending assignment.
+     */
     public synchronized void resetInitializingPositions() {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
         assignment.forEach((tp, partitionState) -> {
-            if (partitionState.fetchState.equals(FetchStates.INITIALIZING)) {
+            if (partitionState.shouldInitialize()) {
                 if (defaultResetStrategy == OffsetResetStrategy.NONE)
                     partitionsWithNoOffsets.add(tp);
                 else
@@ -1084,6 +1098,17 @@ public class SubscriptionState {
 
         private void resume() {
             this.paused = false;
+        }
+
+        /**
+         * True if the partition is in {@link FetchStates#INITIALIZING} state. While in this
+         * state, a position for the partition can be retrieved (based on committed offsets or
+         * partitions offsets).
+         * Note that retrieving a position does not mean that we can start fetching from the
+         * partition (see {@link #isFetchable()})
+         */
+        private boolean shouldInitialize() {
+            return fetchState.equals(FetchStates.INITIALIZING);
         }
 
         private boolean isFetchable() {

@@ -33,6 +33,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.when
@@ -72,9 +73,9 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     when(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
       .thenReturn(Some(numPartitions))
 
-    serverProps.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, ConsumerMinSessionTimeout.toString)
-    serverProps.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, ConsumerMaxSessionTimeout.toString)
-    serverProps.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, GroupInitialRebalanceDelay.toString)
+    serverProps.setProperty(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, ConsumerMinSessionTimeout.toString)
+    serverProps.setProperty(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, ConsumerMaxSessionTimeout.toString)
+    serverProps.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupInitialRebalanceDelay.toString)
 
     val config = KafkaConfig.fromProps(serverProps)
 
@@ -83,8 +84,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
     metrics = new Metrics
     groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, metrics)
-    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
-      false)
+    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.groupCoordinatorConfig.offsetsTopicPartitions),
+      enableMetadataExpiration = false)
 
     // Transactional appends attempt to schedule to the request handler thread using
     // a non request handler thread. Set this to avoid error.
@@ -147,15 +148,15 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   def testConcurrentJoinGroupEnforceGroupMaxSize(): Unit = {
     val groupMaxSize = 1
     val newProperties = new Properties
-    newProperties.put(KafkaConfig.GroupMaxSizeProp, groupMaxSize.toString)
+    newProperties.put(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG, groupMaxSize.toString)
     val config = KafkaConfig.fromProps(serverProps, newProperties)
 
     if (groupCoordinator != null)
       groupCoordinator.shutdown()
     groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory,
       rebalancePurgatory, timer.time, new Metrics())
-    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
-      false)
+    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.groupCoordinatorConfig.offsetsTopicPartitions),
+      enableMetadataExpiration = false)
 
     val members = new Group(s"group", nMembersPerGroup, groupCoordinator, replicaManager)
       .members

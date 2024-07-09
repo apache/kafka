@@ -19,11 +19,14 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.internals.ReplicaKey;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,12 +40,16 @@ public class UnattachedStateTest {
     private final int epoch = 5;
     private final int electionTimeoutMs = 10000;
 
-    private UnattachedState newUnattachedState(Set<Integer> voters, Optional<LogOffsetMetadata> highWatermark) {
+    private UnattachedState newUnattachedState(
+        Set<Integer> voters,
+        OptionalInt leaderId
+    ) {
         return new UnattachedState(
             time,
             epoch,
+            leaderId,
             voters,
-            highWatermark,
+            Optional.empty(),
             electionTimeoutMs,
             logContext
         );
@@ -52,10 +59,7 @@ public class UnattachedStateTest {
     public void testElectionTimeout() {
         Set<Integer> voters = Utils.mkSet(1, 2, 3);
 
-        UnattachedState state = newUnattachedState(
-            voters,
-            Optional.empty()
-        );
+        UnattachedState state = newUnattachedState(voters, OptionalInt.empty());
 
         assertEquals(epoch, state.epoch());
 
@@ -75,13 +79,52 @@ public class UnattachedStateTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testGrantVote(boolean isLogUpToDate) {
-        UnattachedState state = newUnattachedState(
-                Utils.mkSet(1, 2, 3),
-                Optional.empty()
-        );
+        UnattachedState state = newUnattachedState(Utils.mkSet(1, 2, 3), OptionalInt.empty());
 
-        assertEquals(isLogUpToDate, state.canGrantVote(1, isLogUpToDate));
-        assertEquals(isLogUpToDate, state.canGrantVote(2, isLogUpToDate));
-        assertEquals(isLogUpToDate, state.canGrantVote(3, isLogUpToDate));
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+        );
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+        );
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+        );
+    }
+
+    @Test
+    void testLeaderEndpoints() {
+        UnattachedState state = newUnattachedState(Utils.mkSet(1, 2, 3), OptionalInt.empty());
+
+        assertEquals(Endpoints.empty(), state.leaderEndpoints());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void testUnattachedWithLeader(boolean isLogUpToDate) {
+        int leaderId = 3;
+        Set<Integer> voters = Utils.mkSet(1, 2, leaderId);
+
+        UnattachedState state = newUnattachedState(voters, OptionalInt.of(leaderId));
+
+        // Check that the leader is persisted if the leader is known
+        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), state.election());
+
+        // Check that the replcia rejects all votes request if the leader is known
+        assertEquals(
+            false,
+            state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+        );
+        assertEquals(
+            false,
+            state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+        );
+        assertEquals(
+            false,
+            state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
+        );
     }
 }

@@ -37,7 +37,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatcher;
 import org.mockito.ArgumentMatchers;
@@ -91,8 +91,8 @@ public class ConsumerGroupServiceTest {
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
 
-        Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
-        assertEquals(Optional.of("Stable"), statesAndAssignments.getKey());
+        Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
+        assertEquals(Optional.of(ConsumerGroupState.STABLE), statesAndAssignments.getKey());
         assertTrue(statesAndAssignments.getValue().isPresent());
         assertEquals(TOPIC_PARTITIONS.size(), statesAndAssignments.getValue().get().size());
 
@@ -164,8 +164,8 @@ public class ConsumerGroupServiceTest {
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> unassignedTopicPartitions.contains(e.getKey()))
                 .collect(Collectors.toMap(Entry::getKey, Entry::getValue))));
 
-        Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
-        Optional<String> state = statesAndAssignments.getKey();
+        Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
+        Optional<ConsumerGroupState> state = statesAndAssignments.getKey();
         Optional<Collection<PartitionAssignmentState>> assignments = statesAndAssignments.getValue();
 
         Map<TopicPartition, Optional<Long>> returnedOffsets = assignments.map(results ->
@@ -183,7 +183,7 @@ public class ConsumerGroupServiceTest {
         expectedOffsets.put(testTopicPartition4, Optional.of(100L));
         expectedOffsets.put(testTopicPartition5, Optional.empty());
 
-        assertEquals(Optional.of("Stable"), state);
+        assertEquals(Optional.of(ConsumerGroupState.STABLE), state);
         assertEquals(expectedOffsets, returnedOffsets);
 
         verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any());
@@ -196,7 +196,7 @@ public class ConsumerGroupServiceTest {
     public void testAdminRequestsForResetOffsets() {
         List<String> args = new ArrayList<>(Arrays.asList("--bootstrap-server", "localhost:9092", "--group", GROUP, "--reset-offsets", "--to-latest"));
         List<String> topicsWithoutPartitionsSpecified = TOPICS.subList(1, TOPICS.size());
-        List<String> topicArgs = new ArrayList<>(Arrays.asList("--topic", TOPICS.get(0) + ":" + Utils.mkString(IntStream.range(0, NUM_PARTITIONS).mapToObj(Integer::toString), "", "", ",")));
+        List<String> topicArgs = new ArrayList<>(Arrays.asList("--topic", TOPICS.get(0) + ":" + (IntStream.range(0, NUM_PARTITIONS).mapToObj(Integer::toString).collect(Collectors.joining(",")))));
         topicsWithoutPartitionsSpecified.forEach(topic -> topicArgs.addAll(Arrays.asList("--topic", topic)));
 
         args.addAll(topicArgs);

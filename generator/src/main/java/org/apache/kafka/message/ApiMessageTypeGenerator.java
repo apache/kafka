@@ -366,7 +366,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                 buffer.printf("}%n");
             }
             ApiData data = entry.getValue();
-            MessageSpec spec = null;
+            MessageSpec spec;
             if (type.equals("request")) {
                 spec = data.requestSpec;
             } else if (type.equals("response")) {

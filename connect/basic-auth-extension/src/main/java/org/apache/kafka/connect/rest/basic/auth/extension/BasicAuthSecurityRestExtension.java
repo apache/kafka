@@ -21,12 +21,14 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.security.auth.login.Configuration;
 import java.util.Map;
 import java.util.function.Supplier;
+
+import javax.security.auth.login.Configuration;
 
 /**
  * Provides the ability to authenticate incoming BasicAuth credentials using the configured JAAS {@link

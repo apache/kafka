@@ -234,7 +234,7 @@ trait BaseAuthorizerTest {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val host2 = InetAddress.getByName("192.168.1.2")
-    val allHost = AclEntry.WILDCARD_HOST;
+    val allHost = AclEntry.WILDCARD_HOST
     val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
     val resource2 = new ResourcePattern(TOPIC, "sb2" + UUID.randomUUID(), LITERAL)
     val allowHost1 = new AccessControlEntry(user1.toString, host1.getHostAddress, READ, ALLOW)
@@ -312,7 +312,7 @@ trait BaseAuthorizerTest {
   }
 
   @Test
-  def testAuthorzeByResourceTypeSuperUserHasAccess(): Unit = {
+  def testAuthorizeByResourceTypeSuperUserHasAccess(): Unit = {
     val denyAllAce = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, AclOperation.ALL, DENY)
     val superUser1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, superUserName)
     val host1 = InetAddress.getByName("192.0.4.4")

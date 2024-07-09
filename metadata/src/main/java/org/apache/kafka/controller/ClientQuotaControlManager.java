@@ -18,7 +18,6 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.internals.QuotaConfigs;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
@@ -28,9 +27,11 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.config.QuotaConfigs;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+
 import org.slf4j.Logger;
 
 import java.net.InetAddress;
@@ -139,7 +140,7 @@ public class ClientQuotaControlManager {
         }
         if (record.remove()) {
             quotas.remove(record.key());
-            if (quotas.size() == 0) {
+            if (quotas.isEmpty()) {
                 clientQuotaData.remove(entity);
             }
             log.info("Replayed ClientQuotaRecord for {} removing {}.", entity, record.key());

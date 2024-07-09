@@ -17,8 +17,10 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
@@ -92,9 +94,9 @@ public final class Utils {
 
     private Utils() {}
 
-    // This matches URIs of formats: host:port and protocol:\\host:port
+    // This matches URIs of formats: host:port and protocol://host:port
     // IPv6 is supported with [ip] pattern
-    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%._:]*)\\]?:([0-9]+)");
+    private static final Pattern HOST_PORT_PATTERN = Pattern.compile("^(?:[0-9a-zA-Z\\-%._]*://)?\\[?([0-9a-zA-Z\\-%._:]*)]?:([0-9]+)");
 
     private static final Pattern VALID_HOST_CHARACTERS = Pattern.compile("([0-9a-zA-Z\\-%._:]*)");
 
@@ -104,7 +106,7 @@ public final class Utils {
 
     private static final String[] BYTE_SCALE_SUFFIXES = new String[] {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
 
-    public static final String NL = System.getProperty("line.separator");
+    public static final String NL = System.lineSeparator();
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
@@ -462,7 +464,7 @@ public final class Utils {
             return constructor.newInstance(args);
         } catch (NoSuchMethodException e) {
             throw new ClassNotFoundException(String.format("Failed to find " +
-                "constructor with %s for %s", Utils.join(argTypes, ", "), className), e);
+                "constructor with %s for %s", Arrays.stream(argTypes).map(Object::toString).collect(Collectors.joining(", ")), className), e);
         } catch (InstantiationException e) {
             throw new ClassNotFoundException(String.format("Failed to instantiate " +
                 "%s", className), e);
@@ -563,7 +565,7 @@ public final class Utils {
     }
 
     /**
-     * Formats a byte number as a human readable String ("3.2 MB")
+     * Formats a byte number as a human-readable String ("3.2 MB")
      * @param bytes some size in bytes
      * @return
      */
@@ -582,46 +584,6 @@ public final class Utils {
             //huge number?
             return String.valueOf(asDouble);
         }
-    }
-
-    /**
-     * Create a string representation of an array joined by the given separator
-     * @param strs The array of items
-     * @param separator The separator
-     * @return The string representation.
-     */
-    public static <T> String join(T[] strs, String separator) {
-        return join(Arrays.asList(strs), separator);
-    }
-
-    /**
-     * Create a string representation of a collection joined by the given separator
-     * @param collection The list of items
-     * @param separator The separator
-     * @return The string representation.
-     */
-    public static <T> String join(Collection<T> collection, String separator) {
-        Objects.requireNonNull(collection);
-        return mkString(collection.stream(), "", "", separator);
-    }
-
-    /**
-     * Create a string representation of a stream surrounded by `begin` and `end` and joined by `separator`.
-     *
-     * @return The string representation.
-     */
-    public static <T> String mkString(Stream<T> stream, String begin, String end, String separator) {
-        Objects.requireNonNull(stream);
-        StringBuilder sb = new StringBuilder();
-        sb.append(begin);
-        Iterator<T> iter = stream.iterator();
-        while (iter.hasNext()) {
-            sb.append(iter.next());
-            if (iter.hasNext())
-                sb.append(separator);
-        }
-        sb.append(end);
-        return sb.toString();
     }
 
     /**
@@ -901,15 +863,21 @@ public final class Utils {
         Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
-                // If the root path did not exist, ignore the error; otherwise throw it.
-                if (exc instanceof NoSuchFileException && path.toFile().equals(rootFile))
-                    return FileVisitResult.TERMINATE;
+                if (exc instanceof NoSuchFileException) {
+                    if (path.toFile().equals(rootFile)) {
+                        // If the root path did not exist, ignore the error and terminate;
+                        return FileVisitResult.TERMINATE;
+                    } else {
+                        // Otherwise, just continue walking as the file might already be deleted by other threads.
+                        return FileVisitResult.CONTINUE;
+                    }
+                }
                 throw exc;
             }
 
             @Override
             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-                Files.delete(path);
+                Files.deleteIfExists(path);
                 return FileVisitResult.CONTINUE;
             }
 
@@ -920,7 +888,7 @@ public final class Utils {
                     throw exc;
                 }
 
-                Files.delete(path);
+                Files.deleteIfExists(path);
                 return FileVisitResult.CONTINUE;
             }
         });
@@ -1196,7 +1164,7 @@ public final class Utils {
     // changing the signature to `public <R> List<R> tryAll(all: List[Callable<R>])`
     public static void tryAll(List<Callable<Void>> all) throws Throwable {
         Throwable exception = null;
-        for (Callable call : all) {
+        for (Callable<Void> call : all) {
             try {
                 call.call();
             } catch (Throwable t) {
@@ -1694,6 +1662,20 @@ public final class Utils {
             throw new IllegalArgumentException("requirement failed");
     }
 
+    public static void require(boolean requirement, String errorMessage) {
+        if (!requirement)
+            throw new IllegalArgumentException(errorMessage);
+    }
+
+    /**
+     * Merge multiple {@link ConfigDef} into one
+     * @param configDefs List of {@link ConfigDef}
+     */
+    public static ConfigDef mergeConfigs(List<ConfigDef> configDefs) {
+        ConfigDef all = new ConfigDef();
+        configDefs.forEach(configDef -> configDef.configKeys().values().forEach(all::define));
+        return all;
+    }
     /**
      * A runnable that can throw checked exception.
      */

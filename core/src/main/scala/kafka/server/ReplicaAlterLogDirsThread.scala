@@ -40,7 +40,7 @@ class ReplicaAlterLogDirsThread(name: String,
                                 clientId = name,
                                 leader = leader,
                                 failedPartitions,
-                                fetchTierStateMachine = new ReplicaAlterLogDirsTierStateMachine(),
+                                fetchTierStateMachine = new TierStateMachine(leader, replicaMgr, true),
                                 fetchBackOffMs = fetchBackOffMs,
                                 isInterruptible = false,
                                 brokerTopicStats) {
@@ -102,7 +102,8 @@ class ReplicaAlterLogDirsThread(name: String,
         val PromotionState(reassignmentState, topicId, originalDir) = this.promotionStates.get(topicPartition)
         // Revert any reassignments for partitions that did not complete the future replica promotion
         if (originalDir.isDefined && topicId.isDefined && reassignmentState.maybeInconsistentMetadata) {
-          directoryEventHandler.handleAssignment(new TopicIdPartition(topicId.get, topicPartition.partition()), originalDir.get, () => ())
+          directoryEventHandler.handleAssignment(new TopicIdPartition(topicId.get, topicPartition.partition()), originalDir.get,
+            "Reverting reassignment for canceled future replica", () => ())
         }
         this.promotionStates.remove(topicPartition)
       }
@@ -115,7 +116,7 @@ class ReplicaAlterLogDirsThread(name: String,
 
   // Visible for testing
   private[server] def updateReassignmentState(topicPartition: TopicPartition, state: ReassignmentState): Unit = {
-    log.debug(s"Updating future replica ${topicPartition} reassignment state to ${state}")
+    log.debug(s"Updating future replica $topicPartition reassignment state to $state")
     promotionStates.put(topicPartition, promotionStates.get(topicPartition).withAssignment(state))
   }
 
@@ -130,7 +131,7 @@ class ReplicaAlterLogDirsThread(name: String,
         partition.runCallbackIfFutureReplicaCaughtUp(_ => {
           val targetDir = partition.futureReplicaDirectoryId().get
           val topicIdPartition = new TopicIdPartition(topicId.get, topicPartition.partition())
-          directoryEventHandler.handleAssignment(topicIdPartition, targetDir, () => updateReassignmentState(topicPartition, ReassignmentState.Accepted))
+          directoryEventHandler.handleAssignment(topicIdPartition, targetDir, "Future replica promotion", () => updateReassignmentState(topicPartition, ReassignmentState.Accepted))
           updateReassignmentState(topicPartition, ReassignmentState.Queued)
         })
       case ReassignmentState.Accepted =>

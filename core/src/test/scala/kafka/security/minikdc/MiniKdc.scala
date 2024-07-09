@@ -132,7 +132,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     val instanceLayout = ds.getInstanceLayout
     val schemaPartitionDirectory = new File(instanceLayout.getPartitionsDirectory, "schema")
     val extractor = new DefaultSchemaLdifExtractor(instanceLayout.getPartitionsDirectory)
-    extractor.extractOrCopy
+    extractor.extractOrCopy()
 
     val loader = new LdifSchemaLoader(schemaPartitionDirectory)
     val schemaManager = new DefaultSchemaManager(loader)
@@ -310,7 +310,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       |sn: $principal
       |uid: $principal
       |userPassword: $password
-      |krb5PrincipalName: ${principal}@${realm}
+      |krb5PrincipalName: $principal@$realm
       |krb5KeyVersionNumber: 0""".stripMargin
     addEntriesToDirectoryService(ldifContent)
   }
@@ -328,7 +328,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     val keytab = new Keytab
     val entries = principals.flatMap { principal =>
       createPrincipal(principal, generatedPassword)
-      val principalWithRealm = s"${principal}@${realm}"
+      val principalWithRealm = s"$principal@$realm"
       val timestamp = new KerberosTime
       KerberosKeyFactory.getKerberosKeys(principalWithRealm, generatedPassword).asScala.values.map { encryptionKey =>
         val keyVersion = encryptionKey.getKeyVersion.toByte

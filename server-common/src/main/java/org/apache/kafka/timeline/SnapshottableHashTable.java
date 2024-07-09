@@ -92,7 +92,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
     /**
      * A special epoch value that represents the latest data.
      */
-    final static long LATEST_EPOCH = Long.MAX_VALUE;
+    static final long LATEST_EPOCH = Long.MAX_VALUE;
 
     interface ElementWithStartEpoch {
         void setStartEpoch(long startEpoch);

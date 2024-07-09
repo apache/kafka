@@ -21,18 +21,19 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
+import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException, TimeoutException, WakeupException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
+import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
 
 @Timeout(600)
@@ -163,7 +164,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPartitionsFor(quorum: String, groupProtocol: String): Unit = {
     val numParts = 2
-    createTopic("part-test", numParts, 1)
+    createTopic("part-test", numParts)
     val consumer = createConsumer()
     val parts = consumer.partitionsFor("part-test")
     assertNotNull(parts)
@@ -213,7 +214,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(mid, consumer.position(tp))
 
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt,
-      startingTimestamp = mid.toLong)
+      startingTimestamp = mid)
 
     // Test seek compressed message
     sendCompressedMessages(totalRecords.toInt, tp2)
@@ -230,7 +231,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.seek(tp2, mid)
     assertEquals(mid, consumer.position(tp2))
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt,
-      startingTimestamp = mid.toLong, tp = tp2)
+      startingTimestamp = mid, tp = tp2)
   }
 
   private def sendCompressedMessages(numRecords: Int, tp: TopicPartition): Unit = {
@@ -386,14 +387,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val consumer = createConsumer()
     consumer.assign(List(tp1).asJava)
-    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp1, startingOffset = 0, startingKeyAndValueIndex = 0,
+    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp1, startingOffset = 0,
       startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
 
     // Test compressed messages
     val tp2 = new TopicPartition(topicName, 1)
     sendCompressedMessages(numRecords, tp2)
     consumer.assign(List(tp2).asJava)
-    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp2, startingOffset = 0, startingKeyAndValueIndex = 0,
+    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp2, startingOffset = 0,
       startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
   }
 
@@ -404,9 +405,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val topic1 = "part-test-topic-1"
     val topic2 = "part-test-topic-2"
     val topic3 = "part-test-topic-3"
-    createTopic(topic1, numParts, 1)
-    createTopic(topic2, numParts, 1)
-    createTopic(topic3, numParts, 1)
+    createTopic(topic1, numParts)
+    createTopic(topic2, numParts)
+    createTopic(topic3, numParts)
 
     val consumer = createConsumer()
     val topics = consumer.listTopics()
@@ -645,7 +646,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val topic = "test_topic"
     val partition = 0
     val tp = new TopicPartition(topic, partition)
-    createTopic(topic, 1, 1)
+    createTopic(topic)
 
     val producer = createProducer()
     producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
@@ -722,7 +723,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val topic = "test_topic"
     val partition = 0
     val tp = new TopicPartition(topic, partition)
-    createTopic(topic, 1, 1)
+    createTopic(topic)
 
     val producer = createProducer()
     producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
@@ -858,5 +859,52 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(20, timestampTp1.offset)
     assertEquals(20, timestampTp1.timestamp)
     assertEquals(Optional.of(0), timestampTp1.leaderEpoch)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @Timeout(15)
+  def testPositionRespectsTimeout(quorum: String, groupProtocol: String): Unit = {
+    val topicPartition = new TopicPartition(topic, 15)
+    val consumer = createConsumer()
+    consumer.assign(List(topicPartition).asJava)
+
+    // When position() is called for a topic/partition that doesn't exist, the consumer will repeatedly update the
+    // local metadata. However, it should give up after the user-supplied timeout has past.
+    assertThrows(classOf[TimeoutException], () => consumer.position(topicPartition, Duration.ofSeconds(3)))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @Timeout(15)
+  def testPositionRespectsWakeup(quorum: String, groupProtocol: String): Unit = {
+    val topicPartition = new TopicPartition(topic, 15)
+    val consumer = createConsumer()
+    consumer.assign(List(topicPartition).asJava)
+
+    CompletableFuture.runAsync { () =>
+      TimeUnit.SECONDS.sleep(1)
+      consumer.wakeup()
+    }
+
+    assertThrows(classOf[WakeupException], () => consumer.position(topicPartition, Duration.ofSeconds(3)))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @Timeout(15)
+  def testPositionWithErrorConnectionRespectsWakeup(quorum: String, groupProtocol: String): Unit = {
+    val topicPartition = new TopicPartition(topic, 15)
+    val properties = new Properties()
+    properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:12345") // make sure the connection fails
+    val consumer = createConsumer(configOverrides = properties)
+    consumer.assign(List(topicPartition).asJava)
+
+    CompletableFuture.runAsync { () =>
+      TimeUnit.SECONDS.sleep(1)
+      consumer.wakeup()
+    }
+
+    assertThrows(classOf[WakeupException], () => consumer.position(topicPartition, Duration.ofSeconds(100)))
   }
 }

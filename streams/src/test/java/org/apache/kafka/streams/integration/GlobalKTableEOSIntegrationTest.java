@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.io.File;
-import java.util.Collections;
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
@@ -45,37 +42,36 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(Parameterized.class)
-@Category({IntegrationTest.class})
+@SuppressWarnings("deprecation")
+@Tag("integration")
+@Timeout(600)
 public class GlobalKTableEOSIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
 
     private static final int NUM_BROKERS = 1;
     private static final Properties BROKER_CONFIG;
@@ -88,27 +84,15 @@ public class GlobalKTableEOSIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER =
             new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
-
-    @SuppressWarnings("deprecation")
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<String[]> data() {
-        return Arrays.asList(new String[][] {
-            {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_V2}
-        });
-    }
-
-    @Parameterized.Parameter
-    public String eosConfig;
 
     private final MockTime mockTime = CLUSTER.time;
     private final KeyValueMapper<String, Long, Long> keyMapper = (key, value) -> value;
@@ -124,13 +108,10 @@ public class GlobalKTableEOSIntegrationTest {
     private KStream<String, Long> stream;
     private ForeachAction<String, String> foreachAction;
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
-    public void before() throws Exception {
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws Exception {
         builder = new StreamsBuilder();
-        final String safeTestName = safeUniqueTestName(testName);
+        final String safeTestName = safeUniqueTestName(testInfo);
         createTopics(safeTestName);
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -138,7 +119,6 @@ public class GlobalKTableEOSIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0L);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
-        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         streamsConfiguration.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
@@ -155,7 +135,7 @@ public class GlobalKTableEOSIntegrationTest {
         foreachAction = results::put;
     }
 
-    @After
+    @AfterEach
     public void after() throws Exception {
         if (kafkaStreams != null) {
             kafkaStreams.close();
@@ -163,12 +143,13 @@ public class GlobalKTableEOSIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-    @Test
-    public void shouldKStreamGlobalKTableLeftJoin() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    public void shouldKStreamGlobalKTableLeftJoin(final String eosConfig) throws Exception {
         final KStream<String, String> streamTableJoin = stream.leftJoin(globalTable, keyMapper, joiner);
         streamTableJoin.foreach(foreachAction);
         produceInitialGlobalTableValues();
-        startStreams();
+        startStreams(eosConfig);
         produceTopicValues(streamTopic);
 
         final Map<String, String> expected = new HashMap<>();
@@ -232,12 +213,13 @@ public class GlobalKTableEOSIntegrationTest {
         );
     }
 
-    @Test
-    public void shouldKStreamGlobalKTableJoin() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    public void shouldKStreamGlobalKTableJoin(final String eosConfig) throws Exception {
         final KStream<String, String> streamTableJoin = stream.join(globalTable, keyMapper, joiner);
         streamTableJoin.foreach(foreachAction);
         produceInitialGlobalTableValues();
-        startStreams();
+        startStreams(eosConfig);
         produceTopicValues(streamTopic);
 
         final Map<String, String> expected = new HashMap<>();
@@ -300,11 +282,12 @@ public class GlobalKTableEOSIntegrationTest {
         );
     }
 
-    @Test
-    public void shouldRestoreTransactionalMessages() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    public void shouldRestoreTransactionalMessages(final String eosConfig) throws Exception {
         produceInitialGlobalTableValues();
 
-        startStreams();
+        startStreams(eosConfig);
 
         final Map<Long, String> expected = new HashMap<>();
         expected.put(1L, "A");
@@ -334,21 +317,22 @@ public class GlobalKTableEOSIntegrationTest {
         );
     }
 
-    @Test
-    public void shouldSkipOverTxMarkersOnRestore() throws Exception {
-        shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(false);
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    public void shouldSkipOverTxMarkersOnRestore(final String eosConfig) throws Exception {
+        shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(false, eosConfig);
     }
 
-    @Test
-    public void shouldSkipOverAbortedMessagesOnRestore() throws Exception {
-        shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(true);
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    public void shouldSkipOverAbortedMessagesOnRestore(final String eosConfig) throws Exception {
+        shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(true, eosConfig);
     }
 
-    private void shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(final boolean appendAbortedMessages) throws Exception {
+    private void shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(final boolean appendAbortedMessages, final String eosConfig) throws Exception {
         // records with key 1L, 2L, and 4L are written into partition-0
         // record with key 3L is written into partition-1
         produceInitialGlobalTableValues();
-
         final String stateDir = streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG);
         final File globalStateDir = new File(
             stateDir
@@ -395,13 +379,13 @@ public class GlobalKTableEOSIntegrationTest {
                 public void onRestoreEnd(final TopicPartition topicPartition,
                                          final String storeName,
                                          final long totalRestored) { }
-            });
+            }, eosConfig);
             final Exception fatal = error.get();
             if (fatal != null) {
                 throw fatal;
             }
         } else {
-            startStreams();
+            startStreams(eosConfig);
         }
 
         final Map<Long, String> expected = new HashMap<>();
@@ -432,13 +416,14 @@ public class GlobalKTableEOSIntegrationTest {
         );
     }
 
-    @Test
-    public void shouldNotRestoreAbortedMessages() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    public void shouldNotRestoreAbortedMessages(final String eosConfig) throws Exception {
         produceAbortedMessages();
         produceInitialGlobalTableValues();
         produceAbortedMessages();
 
-        startStreams();
+        startStreams(eosConfig);
         
         final Map<Long, String> expected = new HashMap<>();
         expected.put(1L, "A");
@@ -471,11 +456,12 @@ public class GlobalKTableEOSIntegrationTest {
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }
     
-    private void startStreams() {
-        startStreams(null);
+    private void startStreams(final String eosConfig) {
+        startStreams(null, eosConfig);
     }
 
-    private void startStreams(final StateRestoreListener stateRestoreListener) {
+    private void startStreams(final StateRestoreListener stateRestoreListener, final String eosConfig) {
+        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.setGlobalStateRestoreListener(stateRestoreListener);
         kafkaStreams.start();

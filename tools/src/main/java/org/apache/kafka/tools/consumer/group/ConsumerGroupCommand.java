@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectReader;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import joptsimple.OptionException;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
@@ -53,6 +49,11 @@ import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.ToolsUtils;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.ObjectWriter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,6 +84,8 @@ import java.util.function.Function;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import joptsimple.OptionException;
 
 public class ConsumerGroupCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommand.class);
@@ -132,7 +135,7 @@ public class ConsumerGroupCommand {
         Set<ConsumerGroupState> parsedStates = Arrays.stream(input.split(",")).map(s -> ConsumerGroupState.parse(s.trim())).collect(Collectors.toSet());
         if (parsedStates.contains(ConsumerGroupState.UNKNOWN)) {
             Collection<ConsumerGroupState> validStates = Arrays.stream(ConsumerGroupState.values()).filter(s -> s != ConsumerGroupState.UNKNOWN).collect(Collectors.toList());
-            throw new IllegalArgumentException("Invalid state list '" + input + "'. Valid states are: " + Utils.join(validStates, ", "));
+            throw new IllegalArgumentException("Invalid state list '" + input + "'. Valid states are: " + validStates.stream().map(ConsumerGroupState::toString).collect(Collectors.joining(", ")));
         }
         return parsedStates;
     }
@@ -276,7 +279,7 @@ public class ConsumerGroupCommand {
             return new ArrayList<>(result.all().get());
         }
 
-        private boolean shouldPrintMemberState(String group, Optional<String> state, Optional<Integer> numRows) {
+        private boolean shouldPrintMemberState(String group, Optional<ConsumerGroupState> state, Optional<Integer> numRows) {
             // numRows contains the number of data rows, if any, compiled from the API call in the caller method.
             // if it's undefined or 0, there is no relevant group information to display.
             if (!numRows.isPresent()) {
@@ -286,37 +289,37 @@ public class ConsumerGroupCommand {
 
             int num = numRows.get();
 
-            String state0 = state.orElse("NONE");
+            ConsumerGroupState state0 = state.orElse(ConsumerGroupState.UNKNOWN);
             switch (state0) {
-                case "Dead":
+                case DEAD:
                     printError("Consumer group '" + group + "' does not exist.", Optional.empty());
                     break;
-                case "Empty":
+                case EMPTY:
                     System.err.println("\nConsumer group '" + group + "' has no active members.");
                     break;
-                case "PreparingRebalance":
-                case "CompletingRebalance":
-                case "Assigning":
-                case "Reconciling":
+                case PREPARING_REBALANCE:
+                case COMPLETING_REBALANCE:
+                case ASSIGNING:
+                case RECONCILING:
                     System.err.println("\nWarning: Consumer group '" + group + "' is rebalancing.");
                     break;
-                case "Stable":
+                case STABLE:
                     break;
                 default:
                     // the control should never reach here
                     throw new KafkaException("Expected a valid consumer group state, but found '" + state0 + "'.");
             }
 
-            return !state0.contains("Dead") && num > 0;
+            return !state0.equals(ConsumerGroupState.DEAD) && num > 0;
         }
 
         private Optional<Integer> size(Optional<? extends Collection<?>> colOpt) {
             return colOpt.map(Collection::size);
         }
 
-        private void printOffsets(Map<String, Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>>> offsets) {
+        private void printOffsets(Map<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>>> offsets) {
             offsets.forEach((groupId, tuple) -> {
-                Optional<String> state = tuple.getKey();
+                Optional<ConsumerGroupState> state = tuple.getKey();
                 Optional<Collection<PartitionAssignmentState>> assignments = tuple.getValue();
 
                 if (shouldPrintMemberState(groupId, state, size(assignments))) {
@@ -354,13 +357,12 @@ public class ConsumerGroupCommand {
                 }
             }
 
-            String format = "\n%" + (-maxGroupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %" + (-maxConsumerIdLen) + "s %" + (-maxHostLen) + "s %s";
-            return format;
+            return "\n%" + (-maxGroupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %" + (-maxConsumerIdLen) + "s %" + (-maxHostLen) + "s %s";
         }
 
-        private void printMembers(Map<String, Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>>> members, boolean verbose) {
+        private void printMembers(Map<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>>> members, boolean verbose) {
             members.forEach((groupId, tuple) -> {
-                Optional<String> state = tuple.getKey();
+                Optional<ConsumerGroupState> state = tuple.getKey();
                 Optional<Collection<MemberAssignmentState>> assignments = tuple.getValue();
                 int maxGroupLen = 15, maxConsumerIdLen = 15, maxGroupInstanceIdLen = 17, maxHostLen = 15, maxClientIdLen = 15;
                 boolean includeGroupInstanceId = false;
@@ -431,7 +433,7 @@ public class ConsumerGroupCommand {
                     String format = "\n%" + -coordinatorColLen + "s %-25s %-20s %-15s %s";
 
                     System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
-                    System.out.printf(format, state.group, coordinator, state.assignmentStrategy, state.state, state.numMembers);
+                    System.out.printf(format, state.group, coordinator, state.assignmentStrategy, state.state.toString(), state.numMembers);
                     System.out.println();
                 }
             });
@@ -447,11 +449,11 @@ public class ConsumerGroupCommand {
             long subActions = Stream.of(membersOptPresent, offsetsOptPresent, stateOptPresent).filter(x -> x).count();
 
             if (subActions == 0 || offsetsOptPresent) {
-                TreeMap<String, Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>>> offsets
+                TreeMap<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>>> offsets
                     = collectGroupsOffsets(groupIds);
                 printOffsets(offsets);
             } else if (membersOptPresent) {
-                TreeMap<String, Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>>> members
+                TreeMap<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>>> members
                     = collectGroupsMembers(groupIds, opts.options.has(opts.verboseOpt));
                 printMembers(members, opts.options.has(opts.verboseOpt));
             } else {
@@ -630,7 +632,7 @@ public class ConsumerGroupCommand {
 
             switch (topLevelResult) {
                 case NONE:
-                    System.out.println("Request succeed for deleting offsets with topic " + Utils.mkString(topics.stream(), "", "", ", ") + " group " + groupId);
+                    System.out.println("Request succeed for deleting offsets with topic " + String.join(", ", topics) + " group " + groupId);
                     break;
                 case INVALID_GROUP_ID:
                     printError("'" + groupId + "' is not valid.", Optional.empty());
@@ -685,16 +687,16 @@ public class ConsumerGroupCommand {
         /**
          * Returns the state of the specified consumer group and partition assignment states
          */
-        Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> collectGroupOffsets(String groupId) throws Exception {
+        Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> collectGroupOffsets(String groupId) throws Exception {
             return collectGroupsOffsets(Collections.singletonList(groupId)).getOrDefault(groupId, new SimpleImmutableEntry<>(Optional.empty(), Optional.empty()));
         }
 
         /**
          * Returns states of the specified consumer groups and partition assignment states
          */
-        TreeMap<String, Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>>> collectGroupsOffsets(Collection<String> groupIds) throws Exception {
+        TreeMap<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>>> collectGroupsOffsets(Collection<String> groupIds) throws Exception {
             Map<String, ConsumerGroupDescription> consumerGroups = describeConsumerGroups(groupIds);
-            TreeMap<String, Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>>> groupOffsets = new TreeMap<>();
+            TreeMap<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>>> groupOffsets = new TreeMap<>();
 
             consumerGroups.forEach((groupId, consumerGroup) -> {
                 ConsumerGroupState state = consumerGroup.state();
@@ -736,22 +738,22 @@ public class ConsumerGroupCommand {
 
                 rowsWithConsumer.addAll(rowsWithoutConsumer);
 
-                groupOffsets.put(groupId, new SimpleImmutableEntry<>(Optional.of(state.toString()), Optional.of(rowsWithConsumer)));
+                groupOffsets.put(groupId, new SimpleImmutableEntry<>(Optional.of(state), Optional.of(rowsWithConsumer)));
             });
 
             return groupOffsets;
         }
 
-        Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> collectGroupMembers(String groupId, boolean verbose) throws Exception {
+        Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>> collectGroupMembers(String groupId, boolean verbose) throws Exception {
             return collectGroupsMembers(Collections.singleton(groupId), verbose).get(groupId);
         }
 
-        TreeMap<String, Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>>> collectGroupsMembers(Collection<String> groupIds, boolean verbose) throws Exception {
+        TreeMap<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>>> collectGroupsMembers(Collection<String> groupIds, boolean verbose) throws Exception {
             Map<String, ConsumerGroupDescription> consumerGroups = describeConsumerGroups(groupIds);
-            TreeMap<String, Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>>> res = new TreeMap<>();
+            TreeMap<String, Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>>> res = new TreeMap<>();
 
             consumerGroups.forEach((groupId, consumerGroup) -> {
-                String state = consumerGroup.state().toString();
+                ConsumerGroupState state = consumerGroup.state();
                 List<MemberAssignmentState> memberAssignmentStates = consumerGroup.members().stream().map(consumer ->
                     new MemberAssignmentState(
                         groupId,
@@ -779,7 +781,7 @@ public class ConsumerGroupCommand {
                     groupId,
                     groupDescription.coordinator(),
                     groupDescription.partitionAssignor(),
-                    groupDescription.state().toString(),
+                    groupDescription.state(),
                     groupDescription.members().size()
             )));
             return res;
@@ -1160,7 +1162,7 @@ public class ConsumerGroupCommand {
                 ? CsvUtils.writerFor(CsvUtils.CsvRecordNoGroup.class)
                 : CsvUtils.writerFor(CsvUtils.CsvRecordWithGroup.class);
 
-            return Utils.mkString(assignments.entrySet().stream().flatMap(e -> {
+            return assignments.entrySet().stream().flatMap(e -> {
                 String groupId = e.getKey();
                 Map<TopicPartition, OffsetAndMetadata> partitionInfo = e.getValue();
 
@@ -1177,7 +1179,7 @@ public class ConsumerGroupCommand {
                         throw new RuntimeException(err);
                     }
                 });
-            }), "", "", "");
+            }).collect(Collectors.joining());
         }
 
         Map<String, Throwable> deleteGroups() {
@@ -1203,13 +1205,13 @@ public class ConsumerGroupCommand {
             });
 
             if (failed.isEmpty())
-                System.out.println("Deletion of requested consumer groups (" + Utils.mkString(success.keySet().stream(), "'", "'", "', '") + ") was successful.");
+                System.out.println("Deletion of requested consumer groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "'" + ") was successful.");
             else {
                 printError("Deletion of some consumer groups failed:", Optional.empty());
                 failed.forEach((group, error) -> System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
 
                 if (!success.isEmpty())
-                    System.out.println("\nThese consumer groups were deleted successfully: " + Utils.mkString(success.keySet().stream(), "'", "', '", "'"));
+                    System.out.println("\nThese consumer groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("'")) + "', '");
             }
 
             failed.putAll(success);

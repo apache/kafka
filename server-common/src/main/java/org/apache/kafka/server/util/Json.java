@@ -17,11 +17,12 @@
 
 package org.apache.kafka.server.util;
 
+import org.apache.kafka.server.util.json.JsonValue;
+
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.MissingNode;
-import org.apache.kafka.server.util.json.JsonValue;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -37,7 +38,7 @@ public final class Json {
      */
     public static Optional<JsonValue> parseFull(String input) {
         try {
-            return Optional.ofNullable(tryParseFull(input));
+            return Optional.of(tryParseFull(input));
         } catch (JsonProcessingException e) {
             return Optional.empty();
         }

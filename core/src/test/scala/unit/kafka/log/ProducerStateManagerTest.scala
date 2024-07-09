@@ -29,7 +29,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Utils}
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.storage.internals.log.{AppendOrigin, CompletedTxn, LogFileUtils, LogOffsetMetadata, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, TxnMetadata, VerificationStateEntry}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -47,7 +47,7 @@ class ProducerStateManagerTest {
   private val partition = new TopicPartition("test", 0)
   private val producerId = 1L
   private val maxTransactionTimeoutMs = 5 * 60 * 1000
-  private val producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, true)
+  private val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, true)
   private val lateTransactionTimeoutMs = maxTransactionTimeoutMs + ProducerStateManager.LATE_TRANSACTION_BUFFER_MS
   private val time = new MockTime
 
@@ -185,7 +185,7 @@ class ProducerStateManagerTest {
     appendEndTxnMarker(stateManager, producerId, bumpedProducerEpoch, ControlRecordType.ABORT, 1L)
 
     val maybeLastEntry = stateManager.lastEntry(producerId)
-    assertTrue(maybeLastEntry.isPresent())
+    assertTrue(maybeLastEntry.isPresent)
 
     val lastEntry = maybeLastEntry.get
     assertEquals(bumpedProducerEpoch, lastEntry.producerEpoch)
@@ -445,12 +445,12 @@ class ProducerStateManagerTest {
       new LogOffsetMetadata(15L), 20L, false)
     assertEquals(Optional.empty(), stateManager.lastEntry(producerId))
     stateManager.update(appendInfo)
-    assertTrue(stateManager.lastEntry(producerId).isPresent())
+    assertTrue(stateManager.lastEntry(producerId).isPresent)
 
     val nextAppendInfo = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT)
     nextAppendInfo.appendDataBatch(producerEpoch, 6, 10, time.milliseconds(),
       new LogOffsetMetadata(26L), 30L, false)
-    assertTrue(stateManager.lastEntry(producerId).isPresent())
+    assertTrue(stateManager.lastEntry(producerId).isPresent)
 
     var lastEntry = stateManager.lastEntry(producerId).get
     assertEquals(0, lastEntry.firstSeq)
@@ -542,7 +542,7 @@ class ProducerStateManagerTest {
   def testNonTransactionalAppendWithOngoingTransaction(): Unit = {
     val epoch = 0.toShort
     append(stateManager, producerId, epoch, 0, 0L, isTransactional = true)
-    assertThrows(classOf[InvalidTxnStateException], () => append(stateManager, producerId, epoch, 1, 1L, isTransactional = false))
+    assertThrows(classOf[InvalidTxnStateException], () => append(stateManager, producerId, epoch, 1, 1L))
   }
 
   @Test
@@ -642,7 +642,7 @@ class ProducerStateManagerTest {
     recoveredMapping.truncateAndReload(0L, 1L, time.milliseconds)
 
     val lastEntry = recoveredMapping.lastEntry(producerId)
-    assertTrue(lastEntry.isPresent())
+    assertTrue(lastEntry.isPresent)
     assertEquals(appendTimestamp, lastEntry.get.lastTimestamp)
     assertEquals(OptionalLong.empty(), lastEntry.get.currentTxnFirstOffset)
   }
@@ -660,7 +660,7 @@ class ProducerStateManagerTest {
 
     // The producer should not be expired because we want to preserve fencing epochs
     stateManager.removeExpiredProducers(time.milliseconds())
-    assertTrue(stateManager.lastEntry(producerId).isPresent())
+    assertTrue(stateManager.lastEntry(producerId).isPresent)
   }
 
   @Test
@@ -923,7 +923,7 @@ class ProducerStateManagerTest {
     time.sleep(producerStateManagerConfig.producerIdExpirationMs + 1)
     stateManager.removeExpiredProducers(time.milliseconds)
 
-    assertTrue(stateManager.lastEntry(producerId).isPresent())
+    assertTrue(stateManager.lastEntry(producerId).isPresent)
     assertEquals(OptionalLong.of(99L), stateManager.firstUndecidedOffset)
 
     stateManager.removeExpiredProducers(time.milliseconds)
@@ -989,7 +989,7 @@ class ProducerStateManagerTest {
 
     // append from old coordinator should be rejected
     assertThrows(classOf[TransactionCoordinatorFencedException], () => appendEndTxnMarker(stateManager, producerId,
-      producerEpoch, ControlRecordType.COMMIT, offset = 100, coordinatorEpoch = 0))
+      producerEpoch, ControlRecordType.COMMIT, offset = 100))
   }
 
   @Test

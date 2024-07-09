@@ -35,6 +35,7 @@ public interface Group {
     enum GroupType {
         CONSUMER("consumer"),
         CLASSIC("classic"),
+        SHARE("share"),
         UNKNOWN("unknown");
 
         private final String name;
@@ -48,7 +49,7 @@ public interface Group {
             return name;
         }
 
-        private final static Map<String, GroupType> NAME_TO_ENUM = Arrays.stream(values())
+        private static final Map<String, GroupType> NAME_TO_ENUM = Arrays.stream(values())
             .collect(Collectors.toMap(type -> type.name.toLowerCase(Locale.ROOT), Function.identity()));
 
         /**
@@ -100,12 +101,15 @@ public interface Group {
      * @param generationIdOrMemberEpoch The generation id for genetic groups or the member epoch
      *                                  for consumer groups.
      * @param isTransactional           Whether the offset commit is transactional or not.
+     * @param apiVersion                The api version.
      */
     void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int generationIdOrMemberEpoch,
-        boolean isTransactional
+        boolean isTransactional,
+        short apiVersion
+
     ) throws KafkaException;
 
     /**
@@ -145,7 +149,7 @@ public interface Group {
      *
      * @param records The list of records.
      */
-    void createGroupTombstoneRecords(List<Record> records);
+    void createGroupTombstoneRecords(List<CoordinatorRecord> records);
 
     /**
      * @return Whether the group is in Empty state.
@@ -166,4 +170,20 @@ public interface Group {
      * @return true if the state includes, false otherwise.
      */
     boolean isInStates(Set<String> statesFilter, long committedOffset);
+
+    /**
+     * Returns true if the member exists.
+     *
+     * @param memberId The member id.
+     *
+     * @return A boolean indicating whether the member exists or not.
+     */
+    boolean hasMember(String memberId);
+
+    /**
+     * Returns number of members in the group.
+     *
+     * @return The number of members.
+     */
+    int numMembers();
 }

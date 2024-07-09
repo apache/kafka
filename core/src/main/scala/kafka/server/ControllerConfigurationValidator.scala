@@ -96,22 +96,23 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
         validateTopicName(resource.name())
         val properties = new Properties()
         val nullTopicConfigs = new mutable.ArrayBuffer[String]()
-        config.entrySet().forEach(e => {
-          if (e.getValue == null) {
-            nullTopicConfigs += e.getKey
+        config.forEach((key, value) => {
+          if (value == null) {
+            nullTopicConfigs += key
           } else {
-            properties.setProperty(e.getKey, e.getValue)
+            properties.setProperty(key, value)
           }
         })
         if (nullTopicConfigs.nonEmpty) {
           throw new InvalidConfigurationException("Null value not supported for topic configs: " +
             nullTopicConfigs.mkString(","))
         }
-        LogConfig.validate(properties, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
+        LogConfig.validate(properties, kafkaConfig.extractLogConfigMap,
+          kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
       case BROKER => validateBrokerName(resource.name())
       case CLIENT_METRICS =>
         val properties = new Properties()
-        config.entrySet().forEach(e => properties.setProperty(e.getKey, e.getValue))
+        config.forEach((key, value) => properties.setProperty(key, value))
         ClientMetricsConfigs.validate(resource.name(), properties)
       case _ => throwExceptionForUnknownResourceType(resource)
     }

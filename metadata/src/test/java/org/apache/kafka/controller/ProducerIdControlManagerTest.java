@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Collections;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
@@ -27,8 +26,11 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -36,22 +38,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ProducerIdControlManagerTest {
 
-    private SnapshotRegistry snapshotRegistry;
-    private FeatureControlManager featureControl;
-    private ClusterControlManager clusterControl;
     private ProducerIdControlManager producerIdControlManager;
 
     @BeforeEach
     public void setUp() {
         final MockTime time = new MockTime();
-        snapshotRegistry = new SnapshotRegistry(new LogContext());
-        featureControl = new FeatureControlManager.Builder().
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             build();
-        clusterControl = new ClusterControlManager.Builder().
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).

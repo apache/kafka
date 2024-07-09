@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
 import java.util.{Collections, Properties}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.protocol.Errors
@@ -74,10 +75,10 @@ class ProduceRequestTest extends BaseRequestTest {
       assertTrue(partitionProduceResponse.recordErrors.isEmpty)
     }
 
-    sendAndCheck(MemoryRecords.withRecords(CompressionType.NONE,
+    sendAndCheck(MemoryRecords.withRecords(Compression.NONE,
       new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes)), 0)
 
-    sendAndCheck(MemoryRecords.withRecords(CompressionType.GZIP,
+    sendAndCheck(MemoryRecords.withRecords(Compression.gzip().build(),
       new SimpleRecord(System.currentTimeMillis(), "key1".getBytes, "value1".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
   }
@@ -92,7 +93,7 @@ class ProduceRequestTest extends BaseRequestTest {
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, 1, 1, servers, topicConfig)
     val leader = partitionToLeader(partition)
 
-    def createRecords(magicValue: Byte, timestamp: Long, codec: CompressionType): MemoryRecords = {
+    def createRecords(magicValue: Byte, timestamp: Long, codec: Compression): MemoryRecords = {
       val buf = ByteBuffer.allocate(512)
       val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
       builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
@@ -101,7 +102,7 @@ class ProduceRequestTest extends BaseRequestTest {
       builder.build()
     }
 
-    val records = createRecords(RecordBatch.MAGIC_VALUE_V2, recordTimestamp, CompressionType.GZIP)
+    val records = createRecords(RecordBatch.MAGIC_VALUE_V2, recordTimestamp, Compression.gzip().build())
     val topicPartition = new TopicPartition("topic", partition)
     val produceResponse = sendProduceRequest(leader, ProduceRequest.forCurrentMagic(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
@@ -143,7 +144,7 @@ class ProduceRequestTest extends BaseRequestTest {
     val nonReplicaId =  nonReplicaOpt.get.config.brokerId
 
     // Send the produce request to the non-replica
-    val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("key".getBytes, "value".getBytes))
+    val records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("key".getBytes, "value".getBytes))
     val topicPartition = new TopicPartition("topic", partition)
     val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
@@ -177,7 +178,7 @@ class ProduceRequestTest extends BaseRequestTest {
   def testCorruptLz4ProduceRequest(quorum: String): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
     val timestamp = 1000000
-    val memoryRecords = MemoryRecords.withRecords(CompressionType.LZ4,
+    val memoryRecords = MemoryRecords.withRecords(Compression.lz4().build(),
       new SimpleRecord(timestamp, "key".getBytes, "value".getBytes))
     // Change the lz4 checksum value (not the kafka record crc) so that it doesn't match the contents
     val lz4ChecksumOffset = 6
@@ -218,7 +219,7 @@ class ProduceRequestTest extends BaseRequestTest {
     topicConfig.setProperty(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.ZSTD.name)
     val partitionToLeader = createTopic(topic, topicConfig =  topicConfig)
     val leader = partitionToLeader(partition)
-    val memoryRecords = MemoryRecords.withRecords(CompressionType.ZSTD,
+    val memoryRecords = MemoryRecords.withRecords(Compression.zstd().build(),
       new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))
     val topicPartition = new TopicPartition("topic", partition)
     val partitionRecords = new ProduceRequestData()

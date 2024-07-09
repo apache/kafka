@@ -413,7 +413,7 @@ public interface FieldType {
             default:
                 if (string.startsWith(ARRAY_PREFIX)) {
                     String elementTypeString = string.substring(ARRAY_PREFIX.length());
-                    if (elementTypeString.length() == 0) {
+                    if (elementTypeString.isEmpty()) {
                         throw new RuntimeException("Can't parse array type " + string +
                             ".  No element type found.");
                     }

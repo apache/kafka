@@ -56,6 +56,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreation;
 import org.apache.kafka.connect.util.TopicCreationGroup;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -391,7 +392,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
         int processed = 0;
         recordBatch(toSend.size());
         final SourceRecordWriteCounter counter =
-                toSend.size() > 0 ? new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup) : null;
+                toSend.isEmpty() ? null : new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
         for (final SourceRecord preTransformRecord : toSend) {
             ProcessingContext<SourceRecord> context = new ProcessingContext<>(preTransformRecord);
             final SourceRecord record = transformationChain.apply(context, preTransformRecord);

@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.server.config.ConfigSynonym;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

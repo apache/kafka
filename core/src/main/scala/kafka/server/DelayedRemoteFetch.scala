@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
@@ -34,12 +35,13 @@ import scala.collection._
 class DelayedRemoteFetch(remoteFetchTask: Future[Void],
                          remoteFetchResult: CompletableFuture[RemoteLogReadResult],
                          remoteFetchInfo: RemoteStorageFetchInfo,
+                         remoteFetchMaxWaitMs: Long,
                          fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)],
                          fetchParams: FetchParams,
                          localReadResults: Seq[(TopicIdPartition, LogReadResult)],
                          replicaManager: ReplicaManager,
                          responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit)
-  extends DelayedOperation(fetchParams.maxWaitMs) {
+  extends DelayedOperation(remoteFetchMaxWaitMs) {
 
   if (fetchParams.isFromFollower) {
     throw new IllegalStateException(s"The follower should not invoke remote fetch. Fetch params are: $fetchParams")
@@ -124,5 +126,5 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
 
 object DelayedRemoteFetchMetrics {
   private val metricsGroup = new KafkaMetricsGroup(DelayedRemoteFetchMetrics.getClass)
-  val expiredRequestMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
+  val expiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 }

@@ -45,8 +45,7 @@ public interface ValueTransformerSupplier<V, VR> extends ConnectedStoreProvider 
      * Creating a single {@link ValueTransformer} object and returning the same object reference in {@link ValueTransformerSupplier#get()}
      * is a violation of the supplier pattern and leads to runtime exceptions.
      *
-     * @return  a new {@link ValueTransformer} instance
-     * @return  a newly constructed {@link ValueTransformer} instance
+     * @return a newly constructed {@link ValueTransformer} instance
      */
     ValueTransformer<V, VR> get();
 }

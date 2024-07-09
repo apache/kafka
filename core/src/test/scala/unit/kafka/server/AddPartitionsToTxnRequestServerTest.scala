@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.{FindCoordinatorRequestData, InitProducer
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse, FindCoordinatorRequest, FindCoordinatorResponse, InitProducerIdRequest, InitProducerIdResponse}
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -43,7 +44,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
   val numPartitions = 1
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+    properties.put(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
   }
 
   @BeforeEach
@@ -122,7 +123,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
       .setName(tp0.topic)
       .setPartitions(Collections.singletonList(tp0.partition)))
 
-    val (coordinatorId, txn1) = setUpTransactions(transactionalId1, false, Set(tp0))
+    val (coordinatorId, txn1) = setUpTransactions(transactionalId1, verifyOnly = false, Set(tp0))
 
     val transactions = new AddPartitionsToTxnTransactionCollection()
     transactions.add(txn1)
@@ -152,7 +153,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     val tp0 = new TopicPartition(topic1, 0)
 
     val transactionalId = "foobar"
-    val (coordinatorId, txn) = setUpTransactions(transactionalId, true, Set(tp0))
+    val (coordinatorId, txn) = setUpTransactions(transactionalId, verifyOnly = true, Set(tp0))
 
     val transactions = new AddPartitionsToTxnTransactionCollection()
     transactions.add(txn)
