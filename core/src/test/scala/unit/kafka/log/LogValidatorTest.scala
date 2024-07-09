@@ -699,7 +699,7 @@ class LogValidatorTest {
 
   private def checkInvalidChecksum(magic: Byte, compression: Compression , compressionType: CompressionType): Unit = {
     val record: LegacyRecord = LegacyRecord.create(magic, 0L, null, "hello".getBytes)
-    val buf: ByteBuffer = record.buffer()
+    val buf: ByteBuffer = record.buffer
 
     // enforce modify crc to make checksum error
     buf.put(LegacyRecord.CRC_OFFSET, 0.toByte)
@@ -709,7 +709,7 @@ class LogValidatorTest {
       TimestampType.CREATE_TIME, 0L)
     builder.appendUncheckedWithOffset(0, record)
 
-    val memoryRecords: MemoryRecords = builder.build()
+    val memoryRecords: MemoryRecords = builder.build
     val logValidator: LogValidator = new LogValidator(
       memoryRecords,
       topicPartition,
