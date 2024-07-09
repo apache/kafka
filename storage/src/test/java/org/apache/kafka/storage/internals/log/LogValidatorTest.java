@@ -48,6 +48,8 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -828,13 +830,33 @@ public class LogValidatorTest {
         assertTrue(metricsRecorder.recordInvalidChecksumsCount > 0);
     }
 
-    @Test
-    public void testInvalidSequence() {
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.gzip().build(), CompressionType.GZIP);
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.lz4().build(), CompressionType.LZ4);
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.snappy().build(), CompressionType.SNAPPY);
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.zstd().build(), CompressionType.ZSTD);
+    @ParameterizedTest
+    @EnumSource(CompressionType.class)
+    public void testInvalidSequenceV0(CompressionType type) {
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V0, Compression.gzip().build(), type);
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V0, Compression.lz4().build(), type);
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V0, Compression.snappy().build(), type);
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V0, Compression.zstd().build(), type);
     }
+
+    @ParameterizedTest
+    @EnumSource(CompressionType.class)
+    public void testInvalidSequenceV1(CompressionType type) {
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V1, Compression.gzip().build(), type);
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V1, Compression.lz4().build(), type);
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V1, Compression.snappy().build(), type);
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V1, Compression.zstd().build(), type);
+    }
+
+    @ParameterizedTest
+    @EnumSource(CompressionType.class)
+    public void testInvalidSequenceV2(CompressionType type) {
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.gzip().build(), type);
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.lz4().build(), type);
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.snappy().build(), type);
+        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.zstd().build(), type);
+    }
+
 
     private void checkInvalidSequence(byte magic, Compression compression, CompressionType type) {
         long producerId = 1234;
