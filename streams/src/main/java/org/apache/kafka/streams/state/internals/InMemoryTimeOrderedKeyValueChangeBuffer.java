@@ -47,11 +47,13 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -395,17 +397,17 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     @Override
     public void evictWhile(final Supplier<Boolean> predicate,
                            final Consumer<Eviction<K, Change<V>>> callback) {
-        final Iterator<Map.Entry<BufferKey, BufferValue>> delegate = sortedMap.entrySet().iterator();
+        final List<Map.Entry<BufferKey, BufferValue>> entries = new ArrayList<>(sortedMap.entrySet());
         int evictions = 0;
 
         if (predicate.get()) {
-            Map.Entry<BufferKey, BufferValue> next = null;
-            if (delegate.hasNext()) {
-                next = delegate.next();
-            }
+            for (Iterator<Map.Entry<BufferKey, BufferValue>> entryIterator = entries.iterator(); entryIterator.hasNext(); ) {
+                Map.Entry<BufferKey, BufferValue> next = entryIterator.next();
 
-            // predicate being true means we read one record, call the callback, and then remove it
-            while (next != null && predicate.get()) {
+                if (!predicate.get()) {
+                    break;
+                }
+
                 if (next.getKey().time() != minTimestamp) {
                     throw new IllegalStateException(
                         "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
@@ -420,7 +422,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                 );
                 callback.accept(new Eviction<K, Change<V>>(key, value, bufferValue.context()));
 
-                delegate.remove();
+                sortedMap.remove(next.getKey());
                 index.remove(next.getKey().key());
 
                 if (loggingEnabled) {
@@ -428,16 +430,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                 }
 
                 memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
-
-                // peek at the next record so we can update the minTimestamp
-                if (delegate.hasNext()) {
-                    next = delegate.next();
-                    minTimestamp = next == null ? Long.MAX_VALUE : next.getKey().time();
-                } else {
-                    next = null;
-                    minTimestamp = Long.MAX_VALUE;
-                }
-
+                minTimestamp = entries.isEmpty() ? Long.MAX_VALUE : entries.get(0).getKey().time();
                 evictions++;
             }
         }
