@@ -1662,19 +1662,14 @@ public final class Utils {
             throw new IllegalArgumentException("requirement failed");
     }
 
-    public static void require(boolean requirement, String errorMessage) {
-        if (!requirement)
-            throw new IllegalArgumentException(errorMessage);
-    }
-
     /**
      * Checks requirement. Throw {@link IllegalArgumentException} if {@code requirement} failed.
      * @param requirement Requirement to check.
-     * @param message String to include in the failure message
+     * @param errorMessage String to include in the failure message
      */
-    public static void require(boolean requirement, String message) {
+    public static void require(boolean requirement, String errorMessage) {
         if (!requirement)
-            throw new IllegalArgumentException("requirement failed: " + message);
+            throw new IllegalArgumentException(errorMessage);
     }
 
     /**
