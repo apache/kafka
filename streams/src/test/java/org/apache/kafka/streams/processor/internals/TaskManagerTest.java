@@ -741,7 +741,7 @@ public class TaskManagerTest {
             Collections.emptyMap()
         );
 
-        InOrder inOrder = inOrder(stateUpdater, tasks);
+        final InOrder inOrder = inOrder(stateUpdater, tasks);
         inOrder.verify(stateUpdater).remove(reassignedActiveTask2.id());
         inOrder.verify(tasks).removeTask(reassignedActiveTask1);
         inOrder.verify(stateUpdater).add(reassignedActiveTask1);
