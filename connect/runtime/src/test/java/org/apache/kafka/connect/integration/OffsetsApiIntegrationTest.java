@@ -103,12 +103,13 @@ public class OffsetsApiIntegrationTest {
     }
 
     @AfterEach
-    public void tearDown() {
+    public void tearDown() throws InterruptedException {
         Set<String> remainingConnectors = new HashSet<>(connect.connectors());
         if (remainingConnectors.remove(connectorName)) {
             connect.deleteConnector(connectorName);
         }
         try {
+            connect.assertions().assertConnectorDoesNotExist(connectorName, "Failed to clean up test connector in time");
             assertEquals(
                     Collections.emptySet(),
                     remainingConnectors,
