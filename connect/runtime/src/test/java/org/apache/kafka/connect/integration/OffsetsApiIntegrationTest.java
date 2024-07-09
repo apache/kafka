@@ -18,7 +18,9 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -389,7 +391,7 @@ public class OffsetsApiIntegrationTest {
                 OVERRIDDEN_SINK_CONNECTOR_CONSUMER_GROUP_ID,
                 SinkUtils.consumerGroupId(connectorName)
         );
-        verifyConsumerGroupMembers(kafkaCluster, groupId, NUM_TASKS);
+        verifyStableConsumerGroupMembers(kafkaCluster, groupId, NUM_TASKS);
 
         verifyExpectedSinkConnectorOffsets(connectorName, topic, numPartitions, NUM_RECORDS_PER_PARTITION,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
@@ -415,7 +417,7 @@ public class OffsetsApiIntegrationTest {
         }
 
         // Wait for the consumer group to become empty
-        verifyConsumerGroupMembers(kafkaCluster, groupId, 0);
+        verifyStableConsumerGroupMembers(kafkaCluster, groupId, 0);
 
         // Alter the sink connector's offsets
         String response = connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter));
@@ -453,7 +455,7 @@ public class OffsetsApiIntegrationTest {
                 "Connector tasks did not resume in time"
         );
 
-        verifyConsumerGroupMembers(kafkaCluster, groupId, NUM_TASKS);
+        verifyStableConsumerGroupMembers(kafkaCluster, groupId, NUM_TASKS);
 
         verifyExpectedSinkConnectorOffsets(connectorName, topic, numPartitions, NUM_RECORDS_PER_PARTITION,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
@@ -779,7 +781,7 @@ public class OffsetsApiIntegrationTest {
                 OVERRIDDEN_SINK_CONNECTOR_CONSUMER_GROUP_ID,
                 SinkUtils.consumerGroupId(connectorName)
         );
-        verifyConsumerGroupMembers(kafkaCluster, groupId, NUM_TASKS);
+        verifyStableConsumerGroupMembers(kafkaCluster, groupId, NUM_TASKS);
 
         verifyExpectedSinkConnectorOffsets(connectorName, topic, numPartitions, NUM_RECORDS_PER_PARTITION,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
@@ -791,7 +793,7 @@ public class OffsetsApiIntegrationTest {
         );
 
         // Wait for the consumer group to become empty
-        verifyConsumerGroupMembers(kafkaCluster, groupId, 0);
+        verifyStableConsumerGroupMembers(kafkaCluster, groupId, 0);
 
         // Reset the sink connector's offsets
         String response = connect.resetConnectorOffsets(connectorName);
@@ -816,7 +818,7 @@ public class OffsetsApiIntegrationTest {
                 "Connector tasks did not resume in time"
         );
 
-        verifyConsumerGroupMembers(kafkaCluster, groupId, NUM_TASKS);
+        verifyStableConsumerGroupMembers(kafkaCluster, groupId, NUM_TASKS);
 
         verifyExpectedSinkConnectorOffsets(connectorName, topic, numPartitions, NUM_RECORDS_PER_PARTITION,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
@@ -957,30 +959,36 @@ public class OffsetsApiIntegrationTest {
     }
 
     /**
-     * Wait for a consumer group to exist and have the expected number of members.
+     * Wait for a consumer group to exist, have the expected number of members, and be in a stable
+     * (or empty) state.
      * @param kafkaCluster the Kafka cluster that should host the group; may not be null
      * @param groupId the ID of the group; may not be null
      * @param expectedMembers the exact number of members that should be in the group; may not be null
      * @throws InterruptedException if the thread is interrupted while waiting for the consumer
      * group to form
      */
-    private void verifyConsumerGroupMembers(
+    private void verifyStableConsumerGroupMembers(
             EmbeddedKafkaCluster kafkaCluster,
             String groupId,
             int expectedMembers
     ) throws InterruptedException {
+        ConsumerGroupState expectedState = expectedMembers == 0
+                ? ConsumerGroupState.EMPTY
+                : ConsumerGroupState.STABLE;
         AtomicInteger latestMembers = new AtomicInteger(-1);
         waitForCondition(
                 () -> {
                     try (Admin admin = kafkaCluster.createAdminClient()) {
-                        int actualMembers = admin.describeConsumerGroups(Collections.singleton(groupId))
+                        ConsumerGroupDescription groupDescription = admin
+                                .describeConsumerGroups(Collections.singleton(groupId))
                                 .describedGroups()
                                 .get(groupId)
-                                .get()
-                                .members()
-                                .size();
+                                .get();
+                        int actualMembers = groupDescription.members().size();
+                        ConsumerGroupState actualState = groupDescription.state();
+                        log.debug("Group {} is currently in state {} with {} members", groupId, actualState, actualMembers);
                         latestMembers.set(actualMembers);
-                        return actualMembers == expectedMembers;
+                        return actualMembers == expectedMembers && actualState == expectedState;
                     } catch (Throwable t) {
                         log.error("Failed to check for members of consumer group {}", groupId, t);
                         return false;
