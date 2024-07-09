@@ -272,7 +272,7 @@ public class ApiVersionsResponseTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void testSuppressV0Features(boolean suppressV0Features) {
+    public void testAlterV0Features(boolean alterV0Features) {
         Features<SupportedVersionRange> supported =
             Features.supportedFeatures(Collections.singletonMap("my.feature",
                 new SupportedVersionRange((short) 0, (short) 1)));
@@ -285,9 +285,9 @@ public class ApiVersionsResponseTest {
             setSupportedFeatures(supported).
             setFinalizedFeatures(Collections.emptyMap()).
             setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
-            setSuppressFeatureLevel0(suppressV0Features).
+            setAlterFeatureLevel0(alterV0Features).
             build();
-        if (suppressV0Features) {
+        if (alterV0Features) {
             assertEquals(new SupportedFeatureKey().
                 setName("my.feature").
                 setMinVersion((short) 1).

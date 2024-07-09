@@ -58,7 +58,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         private Map<String, Short> finalizedFeatures = null;
         private long finalizedFeaturesEpoch = 0;
         private boolean zkMigrationEnabled = false;
-        private boolean suppressFeatureLevel0 = false;
+        private boolean alterFeatureLevel0 = false;
 
         public Builder setError(Errors error) {
             this.error = error;
@@ -95,8 +95,8 @@ public class ApiVersionsResponse extends AbstractResponse {
             return this;
         }
 
-        public Builder setSuppressFeatureLevel0(boolean suppressFeatureLevel0) {
-            this.suppressFeatureLevel0 = suppressFeatureLevel0;
+        public Builder setAlterFeatureLevel0(boolean alterFeatureLevel0) {
+            this.alterFeatureLevel0 = alterFeatureLevel0;
             return this;
         }
 
@@ -106,7 +106,7 @@ public class ApiVersionsResponse extends AbstractResponse {
             data.setApiKeys(Objects.requireNonNull(apiVersions));
             data.setThrottleTimeMs(throttleTimeMs);
             data.setSupportedFeatures(
-                maybeFilterSupportedFeatureKeys(Objects.requireNonNull(supportedFeatures), suppressFeatureLevel0));
+                maybeFilterSupportedFeatureKeys(Objects.requireNonNull(supportedFeatures), alterFeatureLevel0));
             data.setFinalizedFeatures(
                 createFinalizedFeatureKeys(Objects.requireNonNull(finalizedFeatures)));
             data.setFinalizedFeaturesEpoch(finalizedFeaturesEpoch);
@@ -284,14 +284,14 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     private static SupportedFeatureKeyCollection maybeFilterSupportedFeatureKeys(
         Features<SupportedVersionRange> latestSupportedFeatures,
-        boolean suppressV0
+        boolean alterV0
     ) {
         SupportedFeatureKeyCollection converted = new SupportedFeatureKeyCollection();
         for (Map.Entry<String, SupportedVersionRange> feature : latestSupportedFeatures.features().entrySet()) {
             final SupportedVersionRange versionRange = feature.getValue();
             final SupportedFeatureKey key = new SupportedFeatureKey();
             key.setName(feature.getKey());
-            if (suppressV0 && versionRange.min() == 0) {
+            if (alterV0 && versionRange.min() == 0) {
                 // Some older clients will have deserialization problems if a feature's
                 // minimum supported level is 0. Therefore, when preparing ApiVersionResponse
                 // at versions less than 4, we must set the minimum version for these features

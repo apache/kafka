@@ -33,7 +33,7 @@ trait ApiVersionManager {
   def listenerType: ListenerType
   def enabledApis: collection.Set[ApiKeys]
 
-  def apiVersionResponse(throttleTimeMs: Int, suppressFeatureLevel0: Boolean): ApiVersionsResponse
+  def apiVersionResponse(throttleTimeMs: Int, alterFeatureLevel0: Boolean): ApiVersionsResponse
 
   def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {
     apiKey != null && apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
@@ -104,7 +104,7 @@ class SimpleApiVersionManager(
 
   override def apiVersionResponse(
     throttleTimeMs: Int,
-    suppressFeatureLevel0: Boolean
+    alterFeatureLevel0: Boolean
   ): ApiVersionsResponse = {
     val currentFeatures = features
     new ApiVersionsResponse.Builder().
@@ -114,7 +114,7 @@ class SimpleApiVersionManager(
       setFinalizedFeatures(currentFeatures.finalizedFeatures()).
       setFinalizedFeaturesEpoch(currentFeatures.finalizedFeaturesEpoch()).
       setZkMigrationEnabled(zkMigrationEnabled).
-      setSuppressFeatureLevel0(suppressFeatureLevel0).
+      setAlterFeatureLevel0(alterFeatureLevel0).
       build()
   }
 
@@ -148,7 +148,7 @@ class DefaultApiVersionManager(
 
   override def apiVersionResponse(
     throttleTimeMs: Int,
-    suppressFeatureLevel0: Boolean
+    alterFeatureLevel0: Boolean
   ): ApiVersionsResponse = {
     val finalizedFeatures = metadataCache.features()
     val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
@@ -177,7 +177,7 @@ class DefaultApiVersionManager(
       setFinalizedFeatures(finalizedFeatures.finalizedFeatures()).
       setFinalizedFeaturesEpoch(finalizedFeatures.finalizedFeaturesEpoch()).
       setZkMigrationEnabled(zkMigrationEnabled).
-      setSuppressFeatureLevel0(suppressFeatureLevel0).
+      setAlterFeatureLevel0(alterFeatureLevel0).
       build()
   }
 
