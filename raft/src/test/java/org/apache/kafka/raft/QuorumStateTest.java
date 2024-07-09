@@ -32,7 +32,6 @@ import org.mockito.Mockito;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.util.Collections;
-import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -108,14 +107,28 @@ public class QuorumStateTest {
 
     private VoterSet localWithRemoteVoterSet(IntStream remoteIds, short kraftVersion) {
         boolean withDirectoryId = kraftVersion > 0;
-        Map<Integer, VoterSet.VoterNode> voters = VoterSetTest.voterMap(remoteIds, withDirectoryId);
-        if (withDirectoryId) {
-            voters.put(localId, VoterSetTest.voterNode(localVoterKey));
-        } else {
-            voters.put(localId, VoterSetTest.voterNode(ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID)));
-        }
+        Stream<ReplicaKey> remoteKeys = remoteIds
+            .boxed()
+            .map(id -> replicaKey(id, withDirectoryId));
 
-        return VoterSetTest.voterSet(voters);
+        return localWithRemoteVoterSet(remoteKeys, kraftVersion);
+    }
+
+    private VoterSet localWithRemoteVoterSet(Stream<ReplicaKey> remoteKeys, short kraftVersion) {
+        boolean withDirectoryId = kraftVersion > 0;
+
+        ReplicaKey actualLocalVoter = withDirectoryId ?
+            localVoterKey :
+            ReplicaKey.of(localVoterKey.id(), ReplicaKey.NO_DIRECTORY_ID);
+
+        return VoterSetTest.voterSet(
+            Stream.concat(Stream.of(actualLocalVoter), remoteKeys)
+        );
+    }
+
+    private ReplicaKey replicaKey(int id, boolean withDirectoryId) {
+        Uuid directoryId = withDirectoryId ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID;
+        return ReplicaKey.of(id, directoryId);
     }
 
     @ParameterizedTest
@@ -151,8 +164,10 @@ public class QuorumStateTest {
         assertTrue(state.isUnattached());
         UnattachedState unattachedState = state.unattachedStateOrThrow();
         assertEquals(epoch, unattachedState.epoch());
-        assertEquals(electionTimeoutMs + jitterMs,
-            unattachedState.remainingElectionTimeMs(time.milliseconds()));
+        assertEquals(
+            electionTimeoutMs + jitterMs,
+            unattachedState.remainingElectionTimeMs(time.milliseconds())
+        );
     }
 
     @ParameterizedTest
@@ -173,6 +188,25 @@ public class QuorumStateTest {
         assertEquals(epoch, followerState.epoch());
         assertEquals(node1, followerState.leaderId());
         assertEquals(fetchTimeoutMs, followerState.remainingFetchTimeMs(time.milliseconds()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(shorts = {0, 1})
+    public void testInitializeAsUnattachedWhenMissingEndpoints(short kraftVersion) {
+        int node1 = 1;
+        int node2 = 2;
+        int leader = 3;
+        int epoch = 5;
+        VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
+        store.writeElectionState(ElectionState.withElectedLeader(epoch, leader, voters.voterIds()), kraftVersion);
+
+        QuorumState state = buildQuorumState(OptionalInt.of(localId), voters, kraftVersion);
+        state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
+        assertTrue(state.isUnattached());
+        assertEquals(epoch, state.epoch());
+
+        UnattachedState unattachedState = state.unattachedStateOrThrow();
+        assertEquals(epoch, unattachedState.epoch());
     }
 
     @ParameterizedTest
@@ -209,10 +243,11 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testInitializeAsResignedCandidate(short kraftVersion) {
-        int node1 = 1;
-        int node2 = 2;
+        boolean withDirectoryId = kraftVersion > 0;
+        ReplicaKey node1 = replicaKey(1, withDirectoryId);
+        ReplicaKey node2 = replicaKey(2, withDirectoryId);
         int epoch = 5;
-        VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
+        VoterSet voters = localWithRemoteVoterSet(Stream.of(node1, node2), kraftVersion);
         ElectionState election = ElectionState.withVotedCandidate(
             epoch,
             localVoterKey,
@@ -331,8 +366,10 @@ public class QuorumStateTest {
         assertTrue(state.isCandidate());
         assertEquals(1, state.epoch());
 
-        assertThrows(IllegalStateException.class, () ->
-            state.transitionToResigned(Collections.singletonList(localId)));
+        assertThrows(
+            IllegalStateException.class, () ->
+            state.transitionToResigned(Collections.emptyList())
+        );
         assertTrue(state.isCandidate());
     }
 
@@ -508,7 +545,7 @@ public class QuorumStateTest {
         assertTrue(state.isLeader());
         assertEquals(1, state.epoch());
 
-        state.transitionToResigned(Collections.singletonList(localId));
+        state.transitionToResigned(Collections.singletonList(localVoterKey));
         assertTrue(state.isResigned());
         ResignedState resignedState = state.resignedStateOrThrow();
         assertEquals(
