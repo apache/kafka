@@ -58,25 +58,22 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     public Iterable<ConsumerRecord<K, V>> records(String topic) {
         if (topic == null)
             throw new IllegalArgumentException("Topic must be non-null.");
+
         return () -> new AbstractIterator<ConsumerRecord<K, V>>() {
             private final Iterator<Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>>> partitionIterator
                     = records.entrySet().iterator();
-            private Iterator<ConsumerRecord<K, V>> currentRecordIterator = null;
+            private Iterator<ConsumerRecord<K, V>> currentRecordIterator = Collections.emptyIterator();
 
             @Override
             protected ConsumerRecord<K, V> makeNext() {
-                if (currentRecordIterator == null || !currentRecordIterator.hasNext()) {
-                    while (partitionIterator.hasNext()) {
-                        Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> nextPartitionIterator = partitionIterator.next();
-                        List<ConsumerRecord<K, V>> records = nextPartitionIterator.getValue();
-                        if (topic.equals(nextPartitionIterator.getKey().topic()) && !records.isEmpty()) {
-                            currentRecordIterator = records.iterator();
-                            return currentRecordIterator.next();
-                        }
+                while (!currentRecordIterator.hasNext() && partitionIterator.hasNext()) {
+                    Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> nextPartition = partitionIterator.next();
+                    List<ConsumerRecord<K, V>> records = nextPartition.getValue();
+                    if (topic.equals(nextPartition.getKey().topic()) && !records.isEmpty()) {
+                        currentRecordIterator = records.iterator();
                     }
-                    return allDone();
                 }
-                return currentRecordIterator.next();
+                return currentRecordIterator.hasNext() ? currentRecordIterator.next() : allDone();
             }
         };
     }
