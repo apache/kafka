@@ -410,15 +410,15 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
                 if (next.getKey().time() != minTimestamp) {
                     throw new IllegalStateException(
-                            "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
-                                    next.getKey().time() + "]"
+                        "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
+                            next.getKey().time() + "]"
                     );
                 }
                 final K key = keySerde.deserializer().deserialize(changelogTopic, next.getKey().key().get());
                 final BufferValue bufferValue = next.getValue();
                 final Change<V> value = valueSerde.deserializeParts(
-                        changelogTopic,
-                        new Change<>(bufferValue.newValue(), bufferValue.oldValue())
+                    changelogTopic,
+                    new Change<>(bufferValue.newValue(), bufferValue.oldValue())
                 );
                 callback.accept(new Eviction<K, Change<V>>(key, value, bufferValue.context()));
 
