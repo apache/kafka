@@ -402,7 +402,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
         if (predicate.get()) {
             for (Iterator<Map.Entry<BufferKey, BufferValue>> entryIterator = entries.iterator(); entryIterator.hasNext(); ) {
-                Map.Entry<BufferKey, BufferValue> next = entryIterator.next();
+                final Map.Entry<BufferKey, BufferValue> next = entryIterator.next();
 
                 if (!predicate.get()) {
                     break;
