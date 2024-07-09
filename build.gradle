@@ -2519,10 +2519,6 @@ project(':streams:test-utils') {
     testRuntimeOnly libs.slf4jlog4j
   }
 
-  javadoc {
-    include "**/org/apache/kafka/streams/test/**"
-  }
-
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-streams*')
