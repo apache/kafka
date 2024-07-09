@@ -569,10 +569,10 @@ public class KafkaBasedLog<K, V> {
         }
         @Override
         public void run() {
+            log.trace("{} started execution", this);
             while (true) {
                 int numCallbacks = 0;
                 try {
-                    log.trace("{} started execution", this);
                     synchronized (KafkaBasedLog.this) {
                         if (stopRequested)
                             break;

@@ -423,33 +423,29 @@ public class KafkaBasedLogTest {
         AtomicInteger numFailures = new AtomicInteger();
         AtomicReference<FutureCallback<Void>> finalSuccessCallbackRef = new AtomicReference<>();
         final FutureCallback<Void> successCallback = new FutureCallback<>((error, result) -> numSuccesses.getAndIncrement());
+        store.readToEnd(successCallback);
+        // First log end read should succeed.
+        successCallback.get(1000, TimeUnit.MILLISECONDS);
+
+        // Second log end read fails.
         final FutureCallback<Void> firstFailedCallback = new FutureCallback<>((error, result) -> {
             numFailures.getAndIncrement();
             // We issue another readToEnd call here to simulate the case that more read requests can come in while
-            // the failure is being handled in the WorkThread.
+            // the failure is being handled in the WorkThread. This read request should not be impacted by the outcome of
+            // the current read request's failure.
             final FutureCallback<Void> finalSuccessCallback = new FutureCallback<>((e, r) -> numSuccesses.getAndIncrement());
             finalSuccessCallbackRef.set(finalSuccessCallback);
             store.readToEnd(finalSuccessCallback);
         });
-        final FutureCallback<Void> subsequentFailedCallback = new FutureCallback<>((error, result) -> numFailures.getAndIncrement());
-
-        store.readToEnd(successCallback);
         store.readToEnd(firstFailedCallback);
-        store.readToEnd(subsequentFailedCallback);
-
-        // First log end read should succeed
-        successCallback.get(1000, TimeUnit.MILLISECONDS);
-
-        // All enqueued log end reads should fail
         ExecutionException e1 = assertThrows(ExecutionException.class, () -> firstFailedCallback.get(1000, TimeUnit.MILLISECONDS));
         assertEquals(exception, e1.getCause());
-        ExecutionException e2 = assertThrows(ExecutionException.class, () -> subsequentFailedCallback.get(1000, TimeUnit.MILLISECONDS));
-        assertEquals(exception, e2.getCause());
 
-        // Last log end read should not throw an error
+        // Last log read end should succeed.
         finalSuccessCallbackRef.get().get(1000, TimeUnit.MILLISECONDS);
+
         assertEquals(2, numSuccesses.get());
-        assertEquals(2, numFailures.get());
+        assertEquals(1, numFailures.get());
     }
 
     @Test

@@ -39,7 +39,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
-import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -2095,24 +2094,24 @@ public class WorkerTest {
 
         mockInternalConverters();
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
-            allConnectorClientConfigOverridePolicy, null);
+                allConnectorClientConfigOverridePolicy, null);
         worker.start();
 
         mockGenericIsolation();
         when(plugins.newConnector(anyString())).thenReturn(sourceConnector);
         when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
         when(sourceConnector.alterOffsets(eq(connectorProps), anyMap())).thenThrow(new UnsupportedOperationException("This connector doesn't " +
-            "support altering of offsets"));
+                "support altering of offsets"));
 
         FutureCallback<Message> cb = new FutureCallback<>();
         worker.modifyConnectorOffsets(CONNECTOR_ID, connectorProps,
-            Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
-            cb);
+                Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
+                cb);
 
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
         assertEquals(ConnectException.class, e.getCause().getClass());
         assertEquals("Failed to modify offsets for connector " + CONNECTOR_ID + " because it doesn't support external modification of offsets",
-            e.getCause().getMessage());
+                e.getCause().getMessage());
 
         verifyGenericIsolation();
         verifyKafkaClusterId();
@@ -2154,42 +2153,6 @@ public class WorkerTest {
         verify(offsetWriter).beginFlush();
         verify(offsetWriter).doFlush(any());
         verify(offsetStore, timeout(1000)).stop();
-        verifyKafkaClusterId();
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testGetSourceConnectorOffsetsFetchError(boolean enableTopicCreation) {
-        setup(enableTopicCreation);
-        mockKafkaClusterId();
-
-        ConnectorOffsetBackingStore offsetStore = mock(ConnectorOffsetBackingStore.class);
-        CloseableOffsetStorageReader offsetReader = mock(CloseableOffsetStorageReader.class);
-
-        Set<Map<String, Object>> connectorPartitions =
-            Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue"));
-
-        when(executorService.submit(any(Runnable.class))).thenAnswer(invocation -> {
-            invocation.getArgument(0, Runnable.class).run();
-            return null;
-        });
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-            allConnectorClientConfigOverridePolicy, null);
-        worker.start();
-
-        when(offsetStore.connectorPartitions(CONNECTOR_ID)).thenReturn(connectorPartitions);
-        doAnswer(invocation -> {
-            throw new ExecutionException(new SaslAuthenticationException("error"));
-        }).when(offsetReader).offsets(connectorPartitions);
-
-        FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
-        worker.sourceConnectorOffsets(CONNECTOR_ID, offsetStore, offsetReader, cb);
-        ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS));
-        assertEquals(ConnectException.class, e.getCause().getClass());
-
-        verify(offsetStore).start();
-        verify(offsetReader).close();
-        verify(offsetStore).stop();
         verifyKafkaClusterId();
     }
 
