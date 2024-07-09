@@ -48,6 +48,7 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
