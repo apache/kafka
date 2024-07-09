@@ -75,7 +75,7 @@ import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
-import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, ProducerIdAndEpoch, SecurityUtils, Time, Utils}
+import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.raft.QuorumConfig
@@ -85,9 +85,8 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authoriz
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ShareGroupConfigs}
-import org.apache.kafka.server.group.share.NoOpShareStatePersister
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
-import org.apache.kafka.server.share.{CachedSharePartition, ShareSession, ShareSessionCache, ShareSessionKey}
+import org.apache.kafka.server.share.{CachedSharePartition, ShareSession, ShareSessionKey}
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
 import org.junit.jupiter.api.Assertions._
@@ -138,8 +137,7 @@ class KafkaApisTest extends Logging {
   private val quotas = QuotaManagers(clientQuotaManager, clientQuotaManager, clientRequestQuotaManager,
     clientControllerQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, None)
   private val fetchManager: FetchManager = mock(classOf[FetchManager])
-  private val sharePartitionManager : SharePartitionManager =
-    new SharePartitionManager(replicaManager, Time.SYSTEM, new ShareSessionCache(1000, 100), 30000, 5, 200, NoOpShareStatePersister.getInstance())
+  val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
   private val clientMetricsManager: ClientMetricsManager = mock(classOf[ClientMetricsManager])
   private val brokerTopicStats = new BrokerTopicStats
   private val clusterId = "clusterId"
@@ -162,7 +160,6 @@ class KafkaApisTest extends Logging {
                       enableForwarding: Boolean = false,
                       configRepository: ConfigRepository = new MockConfigRepository(),
                       raftSupport: Boolean = false,
-                      sharePartitionManager : SharePartitionManager = sharePartitionManager,
                       overrideProperties: Map[String, String] = Map.empty): KafkaApis = {
     val properties = if (raftSupport) {
       val properties = TestUtils.createBrokerConfig(brokerId, "")
@@ -4440,8 +4437,6 @@ class KafkaApisTest extends Logging {
 
     val records = memoryRecords(10, 0)
 
-    val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
-
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
@@ -4482,7 +4477,6 @@ class KafkaApisTest extends Logging {
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
@@ -4515,8 +4509,6 @@ class KafkaApisTest extends Logging {
     val partitionIndex = 0
 
     val records = memoryRecords(10, 0)
-
-    val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
 
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
@@ -4572,7 +4564,6 @@ class KafkaApisTest extends Logging {
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
@@ -4628,8 +4619,6 @@ class KafkaApisTest extends Logging {
 
     val records = memoryRecords(10, 0)
 
-    val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
-
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
@@ -4679,7 +4668,6 @@ class KafkaApisTest extends Logging {
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
@@ -4738,8 +4726,6 @@ class KafkaApisTest extends Logging {
 
     val records = memoryRecords(0, 0)
 
-    val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
-
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
@@ -4774,7 +4760,6 @@ class KafkaApisTest extends Logging {
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
@@ -4807,8 +4792,6 @@ class KafkaApisTest extends Logging {
 
     val groupId = "group"
     val records = memoryRecords(10, 0)
-
-    val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
 
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
@@ -4852,7 +4835,6 @@ class KafkaApisTest extends Logging {
     var request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
@@ -4929,8 +4911,6 @@ class KafkaApisTest extends Logging {
     val groupId = "group"
     val records = memoryRecords(10, 0)
 
-    val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
-
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
@@ -4972,7 +4952,6 @@ class KafkaApisTest extends Logging {
     var request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
@@ -5028,15 +5007,6 @@ class KafkaApisTest extends Logging {
     assertArrayEquals(expAcquiredRecords.toArray(), partitionData.acquiredRecords.toArray())
   }
 
-  def compareResponsePartitionsFetchError(
-                                           expPartitionIndex : Int,
-                                           expErrorCode : Short,
-                                           partitionData : PartitionData
-                                         ) : Unit = {
-    assertEquals(expPartitionIndex, partitionData.partitionIndex)
-    assertEquals(expErrorCode, partitionData.errorCode)
-  }
-
   @Test
   def testHandleShareFetchRequestShareSessionSuccessfullyEstablished() : Unit = {
     val topicName = "foo"
@@ -5051,8 +5021,6 @@ class KafkaApisTest extends Logging {
     val records1 = memoryRecords(10, 0)
     val records2 = memoryRecords(10, 10)
     val records3 = memoryRecords(10, 20)
-
-    val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
 
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
@@ -5097,6 +5065,22 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
+    when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
+      CompletableFuture.completedFuture(Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
+          new ShareAcknowledgeResponseData.PartitionData()
+            .setPartitionIndex(partitionIndex)
+            .setErrorCode(Errors.NONE.code)
+      ).asJava)
+    ).thenReturn(
+      CompletableFuture.completedFuture(Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
+          new ShareAcknowledgeResponseData.PartitionData()
+            .setPartitionIndex(partitionIndex)
+            .setErrorCode(Errors.NONE.code)
+      ).asJava)
+    )
+
     val cachedSharePartitions = new ImplicitLinkedHashCollection[CachedSharePartition]
     cachedSharePartitions.mustAdd(new CachedSharePartition(
       new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)), new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes), false))
@@ -5123,7 +5107,7 @@ class KafkaApisTest extends Logging {
         setTopicId(topicId).
         setPartitions(List(
           new ShareFetchRequestData.FetchPartition()
-            .setPartitionIndex(0)
+            .setPartitionIndex(partitionIndex)
             .setPartitionMaxBytes(partitionMaxBytes)).asJava)).asJava)
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
@@ -5131,7 +5115,6 @@ class KafkaApisTest extends Logging {
 
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
@@ -5164,7 +5147,7 @@ class KafkaApisTest extends Logging {
         setTopicId(topicId).
         setPartitions(List(
           new ShareFetchRequestData.FetchPartition().
-            setPartitionIndex(0).
+            setPartitionIndex(partitionIndex).
             setPartitionMaxBytes(partitionMaxBytes).
             setAcknowledgementBatches(List(
               new ShareFetchRequestData.AcknowledgementBatch().
@@ -5202,7 +5185,7 @@ class KafkaApisTest extends Logging {
         setTopicId(topicId).
         setPartitions(List(
           new ShareFetchRequestData.FetchPartition().
-            setPartitionIndex(0).
+            setPartitionIndex(partitionIndex).
             setPartitionMaxBytes(partitionMaxBytes).
             setAcknowledgementBatches(List(
               new ShareFetchRequestData.AcknowledgementBatch().
@@ -5266,8 +5249,6 @@ class KafkaApisTest extends Logging {
     val records_t4_p1_1 = memoryRecords(15, 10)
 
     val groupId = "group"
-
-    val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
 
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
@@ -5405,6 +5386,35 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
+    when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
+      CompletableFuture.completedFuture(Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
+        new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)) ->
+          new ShareAcknowledgeResponseData.PartitionData()
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.NONE.code),
+        new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)) ->
+          new ShareAcknowledgeResponseData.PartitionData()
+            .setPartitionIndex(1)
+            .setErrorCode(Errors.NONE.code),
+        new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)) ->
+          new ShareAcknowledgeResponseData.PartitionData()
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.NONE.code),
+        new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1)) ->
+          new ShareAcknowledgeResponseData.PartitionData()
+            .setPartitionIndex(1)
+            .setErrorCode(Errors.NONE.code),
+        new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)) ->
+          new ShareAcknowledgeResponseData.PartitionData()
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.NONE.code),
+        new TopicIdPartition(topicId4, new TopicPartition(topicName4, 0)) ->
+          new ShareAcknowledgeResponseData.PartitionData()
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.NONE.code),
+      ).asJava)
+    )
+
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
 
@@ -5439,7 +5449,6 @@ class KafkaApisTest extends Logging {
     var request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
@@ -5716,9 +5725,6 @@ class KafkaApisTest extends Logging {
     val records_t2_p1 = memoryRecords(15, 0)
     val records_t2_p2 = memoryRecords(20, 0)
 
-
-    val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
-
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)) ->
@@ -5839,7 +5845,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
@@ -5906,6 +5911,15 @@ class KafkaApisTest extends Logging {
     )
   }
 
+  def compareResponsePartitionsFetchError(
+                                           expPartitionIndex : Int,
+                                           expErrorCode : Short,
+                                           partitionData : PartitionData
+                                         ) : Unit = {
+    assertEquals(expPartitionIndex, partitionData.partitionIndex)
+    assertEquals(expErrorCode, partitionData.errorCode)
+  }
+
   @Test
   def testHandleShareFetchFromShareFetchRequestWithErroneousPartitions() : Unit = {
     val shareSessionEpoch = 0
@@ -5922,8 +5936,6 @@ class KafkaApisTest extends Logging {
     val groupId : String = "group"
 
     val records_t1_p1 = memoryRecords(10, 0)
-
-    val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
 
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
@@ -6029,7 +6041,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
@@ -6102,8 +6113,6 @@ class KafkaApisTest extends Logging {
     val memberId: Uuid = Uuid.ZERO_UUID
     val groupId : String = "group"
 
-    val sharePartitionManager = mock(classOf[SharePartitionManager])
-
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenThrow(
       Errors.UNKNOWN_SERVER_ERROR.exception
     )
@@ -6158,7 +6167,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
@@ -6200,8 +6208,6 @@ class KafkaApisTest extends Logging {
     val groupId : String = "group"
 
     val emptyRecords = memoryRecords(0, 0)
-
-    val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
 
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
@@ -6308,7 +6314,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
@@ -6395,8 +6400,6 @@ class KafkaApisTest extends Logging {
 
     val records1 = memoryRecords(10, 0)
     val records2 = memoryRecords(20, 0)
-
-    val sharePartitionManager : SharePartitionManager = mock(classOf[SharePartitionManager])
 
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
@@ -6529,7 +6532,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
-      sharePartitionManager = sharePartitionManager,
       overrideProperties = Map(
         GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
