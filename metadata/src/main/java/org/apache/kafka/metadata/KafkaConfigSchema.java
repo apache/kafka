@@ -167,7 +167,7 @@ public class KafkaConfigSchema {
         HashMap<String, ConfigEntry> effectiveConfigs = new HashMap<>();
         for (ConfigDef.ConfigKey configKey : configDef.configKeys().values()) {
             ConfigEntry entry = resolveEffectiveTopicConfig(configKey, staticNodeConfig,
-                    dynamicClusterConfigs, dynamicNodeConfigs, dynamicTopicConfigs);
+                dynamicClusterConfigs, dynamicNodeConfigs, dynamicTopicConfigs);
             effectiveConfigs.put(entry.name(), entry);
         }
         return effectiveConfigs;
