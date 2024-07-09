@@ -944,6 +944,44 @@ public class ConnectWorkerIntegrationTest {
         }
     }
 
+    @Test
+    public void testDuplicateTaskAssignmentOnWorkerPollTimeoutExpiry() throws Exception {
+        // This is a fabricated test to ensure that a poll timeout expiry happens. The tick thread awaits on
+        // task#stop method which is blocked. The timeouts have been set accordingly
+        workerProps.put(REBALANCE_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(20)));
+        workerProps.put(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(30)));
+        workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(0)));
+        connect = connectBuilder
+            .numBrokers(1)
+            .numWorkers(1)
+            .build();
+
+        connect.start();
+
+        Map<String, String> blockingTaskConnectorConfig = new HashMap<>();
+        blockingTaskConnectorConfig.put(CONNECTOR_CLASS_CONFIG, BlockingConnectorTest.BlockingSourceConnector.class.getName());
+        blockingTaskConnectorConfig.put(TASKS_MAX_CONFIG, "1");
+        blockingTaskConnectorConfig.put(BlockingConnectorTest.Block.BLOCK_CONFIG, Objects.requireNonNull(TASK_STOP));
+
+        connect.configureConnector(CONNECTOR_NAME, blockingTaskConnectorConfig);
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME, 1, "connector and tasks did not start in time"
+        );
+
+        connect.addWorker();
+        connect.assertions().assertExactlyNumWorkersAreUp(2, "Workers didn't start in time");
+
+        connect.configureConnector(CONNECTOR_NAME + "-1", blockingTaskConnectorConfig);
+
+        TaskHandle blockingStartTaskHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME + "-1").taskHandle(CONNECTOR_NAME + "-1-0");
+
+        connect.restartTask(CONNECTOR_NAME + "-1", 0);
+
+        TestUtils.waitForCondition(() -> blockingStartTaskHandle.startAndStopCounter().starts() == 2, 40000, "Duplicate task not created");
+        BlockingConnectorTest.Block.reset();
+    }
+
     private void assertTimeoutException(Runnable operation, String expectedStageDescription, boolean wait) throws InterruptedException {
         connect.requestTimeout(1_000);
         AtomicReference<Throwable> latestError = new AtomicReference<>();
