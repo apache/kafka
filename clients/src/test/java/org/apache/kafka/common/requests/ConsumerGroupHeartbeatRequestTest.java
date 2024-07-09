@@ -19,12 +19,26 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.protocol.Errors;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ConsumerGroupHeartbeatRequestTest {
-    private void testGetError(Errors e) {
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {
+        "UNSUPPORTED_VERSION",
+        "GROUP_AUTHORIZATION_FAILED",
+        "NOT_COORDINATOR",
+        "COORDINATOR_NOT_AVAILABLE",
+        "COORDINATOR_LOAD_IN_PROGRESS",
+        "INVALID_REQUEST",
+        "UNKNOWN_MEMBER_ID",
+        "FENCED_MEMBER_EPOCH",
+        "UNSUPPORTED_ASSIGNOR",
+        "UNRELEASED_INSTANCE_ID",
+        "GROUP_MAX_SIZE_REACHED"})
+    void testGetErrorConsumerGroupHeartbeatResponse(Errors e) {
         ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
         ConsumerGroupHeartbeatRequest request = new ConsumerGroupHeartbeatRequest.Builder(data).build();
         int throttleTimeMs = 1000;
@@ -32,20 +46,5 @@ public class ConsumerGroupHeartbeatRequestTest {
         assertEquals(response.throttleTimeMs(), throttleTimeMs);
         assertEquals(response.data().errorCode(), e.code());
         assertEquals(response.data().errorMessage(), e.message());
-    }
-
-    @Test
-    void testGetErrorConsumerGroupHeartbeatResponse() {
-        testGetError(Errors.UNSUPPORTED_VERSION);
-        testGetError(Errors.GROUP_AUTHORIZATION_FAILED);
-        testGetError(Errors.NOT_COORDINATOR);
-        testGetError(Errors.COORDINATOR_NOT_AVAILABLE);
-        testGetError(Errors.COORDINATOR_LOAD_IN_PROGRESS);
-        testGetError(Errors.INVALID_REQUEST);
-        testGetError(Errors.UNKNOWN_MEMBER_ID);
-        testGetError(Errors.FENCED_MEMBER_EPOCH);
-        testGetError(Errors.UNSUPPORTED_ASSIGNOR);
-        testGetError(Errors.UNRELEASED_INSTANCE_ID);
-        testGetError(Errors.GROUP_MAX_SIZE_REACHED);
     }
 }
