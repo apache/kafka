@@ -59,11 +59,10 @@ public class MirrorCheckpointConnectorTest {
 
         Set<String> knownConsumerGroups = new HashSet<>();
         knownConsumerGroups.add(CONSUMER_GROUP);
+
         // MirrorCheckpointConnector as minimum to run taskConfig()
-        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups,
-                                                                            config);
-        List<Map<String, String>> output = connector.taskConfigs(1);
         // expect no task will be created
+        List<Map<String, String>> output = new MirrorCheckpointConnector(knownConsumerGroups, config).taskConfigs(1);
         assertEquals(0, output.size(), "MirrorCheckpointConnector not disabled");
     }
 
