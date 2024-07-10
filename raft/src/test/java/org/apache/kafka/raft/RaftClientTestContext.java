@@ -314,6 +314,7 @@ public final class RaftClientTestContext {
                 kraftVersion = 1;
 
                 startingVoters = voters;
+                isStartingVotersStatic = false;
 
                 RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
                     .setRawSnapshotWriter(
@@ -471,7 +472,7 @@ public final class RaftClientTestContext {
         return appendLingerMs;
     }
 
-    MemoryRecords buildDataBatch(
+    MemoryRecords buildBatch(
         long baseOffset,
         int epoch,
         List<String> records
@@ -1312,10 +1313,20 @@ public final class RaftClientTestContext {
 
         LeaderChangeMessage leaderChangeMessage = ControlRecordUtils.deserializeLeaderChangeMessage(recordValue);
         assertEquals(leaderId, leaderChangeMessage.leaderId());
-        assertEquals(voters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList()),
-            leaderChangeMessage.voters());
-        assertEquals(grantingVoters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toSet()),
-            new HashSet<>(ControlRecordUtils.deserializeLeaderChangeMessage(recordValue).grantingVoters()));
+        assertEquals(
+            voters
+                .stream()
+                .map(voterId -> new Voter().setVoterId(voterId))
+                .collect(Collectors.toList()),
+            leaderChangeMessage.voters()
+        );
+        assertEquals(
+            grantingVoters
+                .stream()
+                .map(voterId -> new Voter().setVoterId(voterId))
+                .collect(Collectors.toSet()),
+            new HashSet<>(leaderChangeMessage.grantingVoters())
+        );
     }
 
     void assertFetchRequestData(

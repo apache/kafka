@@ -1563,11 +1563,20 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     // snapshot is expected to reference offsets and epochs greater than the log
                     // end offset and high-watermark.
                     state.setFetchingSnapshot(log.createNewSnapshotUnchecked(snapshotId));
-                    logger.info(
-                        "Fetching snapshot {} from Fetch response from leader {}",
-                        snapshotId,
-                        quorum.leaderIdOrSentinel()
-                    );
+                    if (state.fetchingSnapshot().isPresent()) {
+                        logger.info(
+                            "Fetching snapshot {} from Fetch response from leader {}",
+                            snapshotId,
+                            quorum.leaderIdOrSentinel()
+                        );
+                    } else {
+                        logger.info(
+                            "Leader {} returned a snapshot {} in the FETCH response which is " +
+                            "already stored",
+                            quorum.leaderIdOrSentinel(),
+                            snapshotId
+                        );
+                    }
                 }
             } else {
                 Records records = FetchResponse.recordsOrFail(partitionResponse);
@@ -1718,8 +1727,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
 
         Optional<RawSnapshotReader> snapshotOpt = log.readSnapshot(snapshotId);
-        // we do not allow fetching the bootstrap snapshot
         if (!snapshotOpt.isPresent() || snapshotId.equals(BOOTSTRAP_SNAPSHOT_ID)) {
+            // The bootstrap checkpoint should not be replicated. The first leader will
+            // make sure that the content of the bootstrap checkpoint is included in the
+            // partition log
             return RaftUtil.singletonFetchSnapshotResponse(
                 requestMetadata.listenerName(),
                 requestMetadata.apiVersion(),

@@ -219,25 +219,23 @@ public class LeaderState<T> implements EpochState {
 
         accumulator.appendControlMessages((baseOffset, epoch, buffer) -> {
             try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-                buffer,
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                Compression.NONE,
-                TimestampType.CREATE_TIME,
-                baseOffset,
-                currentTimeMs,
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH,
-                RecordBatch.NO_SEQUENCE,
-                false,
-                true,
-                epoch,
-                buffer.capacity()
-            )
-            ) {
-                builder.appendLeaderChangeMessage(
+                    buffer,
+                    RecordBatch.CURRENT_MAGIC_VALUE,
+                    Compression.NONE,
+                    TimestampType.CREATE_TIME,
+                    baseOffset,
                     currentTimeMs,
-                    leaderChangeMessage
-                );
+                    RecordBatch.NO_PRODUCER_ID,
+                    RecordBatch.NO_PRODUCER_EPOCH,
+                    RecordBatch.NO_SEQUENCE,
+                    false,
+                    true,
+                    epoch,
+                    buffer.capacity()
+                )
+            ) {
+                builder.appendLeaderChangeMessage(currentTimeMs, leaderChangeMessage);
+
                 offsetOfVotersAtEpochStart.ifPresent(offset -> {
                     if (offset == -1) {
                         // Latest voter set came from the bootstrap checkpoint (0-0.checkpoint)
@@ -268,9 +266,11 @@ public class LeaderState<T> implements EpochState {
                         }
                     }
                 });
+
                 return builder.build();
             }
         });
+        accumulator.forceDrain();
     }
 
     public boolean isResignRequested() {

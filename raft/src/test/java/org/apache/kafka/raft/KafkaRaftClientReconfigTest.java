@@ -17,8 +17,8 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.KRaftVersionRecord;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.VotersRecord;
@@ -47,8 +47,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.KafkaRaftClientTest.replicaKey;
@@ -63,14 +61,13 @@ public class KafkaRaftClientReconfigTest {
     public void testLeaderWritesBootstrapRecords() throws Exception {
         ReplicaKey local = replicaKey(0, true);
         ReplicaKey follower = replicaKey(1, true);
-        int epoch = 0;
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
-            .withUnknownLeader(epoch)
+            .withUnknownLeader(0)
             .build();
 
         List<List<ControlRecord>> expectedBootstrapRecords = Arrays.asList(
@@ -114,10 +111,9 @@ public class KafkaRaftClientReconfigTest {
             SnapshotWriterReaderTest.assertControlSnapshot(expectedBootstrapRecords, reader);
         }
 
-        // check if leader writes 3 bootstrap records to log
         context.becomeLeader();
 
-        // TODO: Fix this. This doesn't look correct
+        // check if leader writes 3 bootstrap records to the log
         Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
@@ -133,10 +129,26 @@ public class KafkaRaftClientReconfigTest {
         record = recordIterator.next();
         verifyKRaftVersionRecord((short) 1, record.key(), record.value());
         record = recordIterator.next();
-        verifyVotersRecord(voters.voterIds(), record.key(), record.value());
+        verifyVotersRecord(voters, record.key(), record.value());
+    }
+
+    @Test
+    public void testBootstrapCheckpointIsNotReturnedOnFetch() throws Exception {
+        ReplicaKey local = replicaKey(0, true);
+        ReplicaKey follower = replicaKey(1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(0)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
 
         // check that leader does not respond with bootstrap snapshot id when follower fetches offset 0
-        epoch = context.currentEpoch();
         context.deliverRequest(
             context.fetchRequest(
                 epoch,
@@ -148,36 +160,19 @@ public class KafkaRaftClientReconfigTest {
         );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
-
-        // check we receive error if follower requests bootstrap snapshot from the leader
-        context.deliverRequest(
-            KafkaRaftClientSnapshotTest.fetchSnapshotRequest(
-                context.metadataPartition,
-                epoch,
-                BOOTSTRAP_SNAPSHOT_ID,
-                Integer.MAX_VALUE,
-                0
-            )
-        );
-        context.pollUntilResponse();
-        FetchSnapshotResponseData.PartitionSnapshot response = context
-            .assertSentFetchSnapshotResponse(context.metadataPartition)
-            .get();
-        assertEquals(Errors.SNAPSHOT_NOT_FOUND, Errors.forCode(response.errorCode()));
     }
 
     @Test
     public void testLeaderDoesNotBootstrapRecordsWithKraftVersion0() throws Exception {
         ReplicaKey local = replicaKey(0, true);
         ReplicaKey follower = replicaKey(1, true);
-        int epoch = 0;
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withStaticVoters(voters.voterIds())
             .withBootstrapSnapshot(Optional.empty())
-            .withUnknownLeader(epoch)
+            .withUnknownLeader(0)
             .build();
 
         List<List<ControlRecord>> expectedBootstrapRecords = Arrays.asList(
@@ -214,7 +209,6 @@ public class KafkaRaftClientReconfigTest {
         // check leader does not write bootstrap records to log
         context.becomeLeader();
 
-        // TODO: Fix this. This doesn't look correct
         Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
@@ -289,28 +283,33 @@ public class KafkaRaftClientReconfigTest {
         );
         ByteBuffer buffer = ByteBuffer.allocate(128);
         try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-            buffer,
-            RecordBatch.CURRENT_MAGIC_VALUE,
-            Compression.NONE,
-            TimestampType.CREATE_TIME,
-            0,
-            0,
-            RecordBatch.NO_PRODUCER_ID,
-            RecordBatch.NO_PRODUCER_EPOCH,
-            RecordBatch.NO_SEQUENCE,
-            false,
-            true,
-            epoch,
-            buffer.capacity())
+                buffer,
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                Compression.NONE,
+                TimestampType.CREATE_TIME,
+                0, // baseOffset
+                0, // logAppendTime
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE,
+                false, // isTransactional
+                true, // isControlBatch
+                epoch,
+                buffer.capacity()
+            )
         ) {
-            builder.appendKRaftVersionMessage(
+            builder.appendLeaderChangeMessage(
                 0,
+                new LeaderChangeMessage()
+            );
+            builder.appendKRaftVersionMessage(
+                0, // timesteamp
                 new KRaftVersionRecord()
                     .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
                     .setKRaftVersion((short) 1)
             );
             builder.appendVotersMessage(
-                0,
+                0, // timesteamp
                 leadersVoterSet.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
             );
             MemoryRecords leaderRecords = builder.build();
@@ -325,18 +324,19 @@ public class KafkaRaftClientReconfigTest {
         assertTrue(context.client.quorum().isVoter(follower));
     }
 
-    // TODO: Not sure this is really needed
     private static void verifyVotersRecord(
-        Set<Integer> expectedVoterIds,
+        VoterSet expectedVoterSet,
         ByteBuffer recordKey,
         ByteBuffer recordValue
     ) {
         assertEquals(ControlRecordType.KRAFT_VOTERS, ControlRecordType.parse(recordKey));
         VotersRecord votersRecord = ControlRecordUtils.deserializeVotersRecord(recordValue);
-        assertEquals(expectedVoterIds, votersRecord.voters().stream().map(VotersRecord.Voter::voterId).collect(Collectors.toSet()));
+        assertEquals(
+            expectedVoterSet,
+            VoterSet.fromVotersRecord(votersRecord)
+        );
     }
 
-    // TODO: Not sure this is really needed
     private static void verifyKRaftVersionRecord(
         short expectedKRaftVersion,
         ByteBuffer recordKey,

@@ -686,10 +686,8 @@ public final class KafkaRaftClientSnapshotTest {
             Stream.of(localKey, replicaKey(localKey.id() + 1, true))
         );
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
-            localKey.id(),
-            localKey.directoryId().get()
-        )
+        RaftClientTestContext context = new RaftClientTestContext
+            .Builder(localKey.id(), localKey.directoryId().get())
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1971,7 +1969,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         // The response does not advance the high watermark
         List<String> records1 = Arrays.asList("a", "b", "c");
-        MemoryRecords batch1 = context.buildDataBatch(0L, 3, records1);
+        MemoryRecords batch1 = context.buildBatch(0L, 3, records1);
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
@@ -1995,7 +1993,7 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertFetchRequestData(fetchRequest, epoch, 3L, 3);
 
         List<String> records2 = Arrays.asList("d", "e", "f");
-        MemoryRecords batch2 = context.buildDataBatch(3L, 4, records2);
+        MemoryRecords batch2 = context.buildBatch(3L, 4, records2);
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),

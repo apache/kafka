@@ -497,7 +497,7 @@ public class KafkaRaftClientTest {
 
         // append some record, but the fetch in purgatory will still fail
         context.log.appendAsLeader(
-            context.buildDataBatch(context.log.endOffset().offset(), epoch, singletonList("raft")),
+            context.buildBatch(context.log.endOffset().offset(), epoch, singletonList("raft")),
             epoch
         );
 
@@ -1845,7 +1845,7 @@ public class KafkaRaftClientTest {
         context.assertFetchRequestData(retryToBootstrapServerFetchRequest, epoch, 0L, 0);
 
         // Deliver the delayed responses from the leader
-        Records records = context.buildDataBatch(0L, 3, Arrays.asList("a", "b"));
+        Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
         context.deliverResponse(
             toLeaderFetchRequest.correlationId(),
             toLeaderFetchRequest.destination(),
@@ -1855,7 +1855,7 @@ public class KafkaRaftClientTest {
         context.client.poll();
 
         // Deliver the same delayed responses from the bootstrap server and assume that it is the leader
-        records = context.buildDataBatch(0L, 3, Arrays.asList("a", "b"));
+        records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
         context.deliverResponse(
             retryToBootstrapServerFetchRequest.correlationId(),
             retryToBootstrapServerFetchRequest.destination(),
@@ -2425,7 +2425,7 @@ public class KafkaRaftClientTest {
         context.assertVotedCandidate(epoch + 1, localId);
 
         // The fetch response from the old leader returns, but it should be ignored
-        Records records = context.buildDataBatch(0L, 3, Arrays.asList("a", "b"));
+        Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
@@ -2466,7 +2466,7 @@ public class KafkaRaftClientTest {
         context.assertElectedLeader(epoch + 1, voter3);
 
         // The fetch response from the old leader returns, but it should be ignored
-        Records records = context.buildDataBatch(0L, 3, Arrays.asList("a", "b"));
+        Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
         FetchResponseData response = context.fetchResponse(epoch, voter2, records, 0L, Errors.NONE);
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -2947,7 +2947,7 @@ public class KafkaRaftClientTest {
         context.pollUntilRequest();
 
         RaftRequest.Outbound fetchQuorumRequest = context.assertSentFetchRequest(epoch, 0L, 0);
-        Records records = context.buildDataBatch(0L, 3, Arrays.asList("a", "b"));
+        Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
         FetchResponseData response = context.fetchResponse(epoch, otherNodeId, records, 0L, Errors.NONE);
         context.deliverResponse(
             fetchQuorumRequest.correlationId(),
@@ -2995,7 +2995,7 @@ public class KafkaRaftClientTest {
 
         // Receive some records in the next poll, but do not advance high watermark
         context.pollUntilRequest();
-        Records records = context.buildDataBatch(0L, epoch, Arrays.asList("a", "b"));
+        Records records = context.buildBatch(0L, epoch, Arrays.asList("a", "b"));
         fetchQuorumRequest = context.assertSentFetchRequest(epoch, 0L, 0);
         fetchResponse = context.fetchResponse(epoch, otherNodeId, records, 0L, Errors.NONE);
         context.deliverResponse(
@@ -3556,7 +3556,7 @@ public class KafkaRaftClientTest {
 
         // The response does not advance the high watermark
         List<String> records1 = Arrays.asList("a", "b", "c");
-        MemoryRecords batch1 = context.buildDataBatch(0L, 3, records1);
+        MemoryRecords batch1 = context.buildBatch(0L, 3, records1);
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
@@ -3577,7 +3577,7 @@ public class KafkaRaftClientTest {
 
         // The high watermark advances to include the first batch we fetched
         List<String> records2 = Arrays.asList("d", "e", "f");
-        MemoryRecords batch2 = context.buildDataBatch(3L, 3, records2);
+        MemoryRecords batch2 = context.buildBatch(3L, 3, records2);
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
@@ -3806,7 +3806,7 @@ public class KafkaRaftClientTest {
         context.assertFetchRequestData(fetchRequest2, leaderEpoch, 0L, 0);
 
         List<String> records = Arrays.asList("a", "b", "c");
-        MemoryRecords batch1 = context.buildDataBatch(0L, 3, records);
+        MemoryRecords batch1 = context.buildBatch(0L, 3, records);
         context.deliverResponse(
             fetchRequest2.correlationId(),
             fetchRequest2.destination(),
