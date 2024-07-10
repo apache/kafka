@@ -850,10 +850,8 @@ public class KafkaConsumerTest {
         assertEquals(55, consumer.committed(Collections.singleton(tp0), Duration.ZERO).get(tp0).offset());
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(value = GroupProtocol.class)
     public void testFetchProgressWithMissingPartitionPosition(GroupProtocol groupProtocol) {
         // Verifies that we can make progress on one partition while we are awaiting
         // a reset on another partition.
@@ -861,12 +859,16 @@ public class KafkaConsumerTest {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 2));
-        Node node = metadata.fetch().nodes().get(0);
 
         consumer = newConsumerNoAutoCommit(groupProtocol, time, client, subscription, metadata);
         consumer.assign(Arrays.asList(tp0, tp1));
         consumer.seekToEnd(singleton(tp0));
         consumer.seekToBeginning(singleton(tp1));
+
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            Node node = metadata.fetch().nodes().get(0);
+            client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        }
 
         client.prepareResponse(body -> {
             ListOffsetsRequest request = (ListOffsetsRequest) body;
