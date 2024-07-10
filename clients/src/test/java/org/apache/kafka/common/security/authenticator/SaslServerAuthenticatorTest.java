@@ -384,7 +384,7 @@ public class SaslServerAuthenticatorTest {
 
         return new SaslServerAuthenticator(configs, callbackHandlers, "node", subjects, null,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, connectionsMaxReauthMsByMechanism,
-                metadataRegistry, time, () -> apiVersionsResponse);
+                metadataRegistry, time, version -> apiVersionsResponse);
     }
 
 }
