@@ -66,7 +66,7 @@ public class FileQuorumStateStoreTest {
         );
 
         final Optional<ElectionState> expected;
-        if (kraftVersion.featureLevel() > 0) {
+        if (kraftVersion.isReconfigSupported()) {
             expected = Optional.of(
                 ElectionState.withElectedLeader(epoch, voter1, Collections.emptySet())
             );
@@ -97,7 +97,7 @@ public class FileQuorumStateStoreTest {
         );
 
         final Optional<ElectionState> expected;
-        if (kraftVersion.featureLevel() > 0) {
+        if (kraftVersion.isReconfigSupported()) {
             expected = Optional.of(
                 ElectionState.withVotedCandidate(
                     epoch,
@@ -133,7 +133,7 @@ public class FileQuorumStateStoreTest {
         );
 
         final Optional<ElectionState> expected;
-        if (kraftVersion.featureLevel() > 0) {
+        if (kraftVersion.isReconfigSupported()) {
             expected = Optional.of(ElectionState.withUnknownLeader(epoch, Collections.emptySet()));
         } else {
             expected = Optional.of(ElectionState.withUnknownLeader(epoch, voters));

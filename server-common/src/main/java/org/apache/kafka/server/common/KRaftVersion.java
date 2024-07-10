@@ -55,6 +55,10 @@ public enum KRaftVersion implements FeatureVersion {
         }
     }
 
+    public boolean isReconfigSupported() {
+        return this != KRAFT_VERSION_0;
+    }
+
     @Override
     public String featureName() {
         return FEATURE_NAME;

@@ -238,7 +238,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                             .setLastContainedLogTimestamp(lastContainedLogTimestamp)
                     );
 
-                    if (kraftVersion != KRaftVersion.KRAFT_VERSION_0) {
+                    if (kraftVersion.isReconfigSupported()) {
                         builder.appendKRaftVersionMessage(
                             now,
                             new KRaftVersionRecord()

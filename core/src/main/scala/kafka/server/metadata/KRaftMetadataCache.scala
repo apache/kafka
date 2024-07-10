@@ -545,8 +545,7 @@ class KRaftMetadataCache(
 
   override def features(): FinalizedFeatures = {
     val image = _currentImage
-    val finalizedFeatures = new java.util.HashMap[String, java.lang.Short]
-    finalizedFeatures.putAll(image.features().finalizedVersions())
+    val finalizedFeatures = new java.util.HashMap[String, java.lang.Short](image.features().finalizedVersions())
     finalizedFeatures.put(KRaftVersion.FEATURE_NAME, kraftVersionSupplier.get().featureLevel())
 
     new FinalizedFeatures(image.features().metadataVersion(),

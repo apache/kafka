@@ -3030,7 +3030,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public KRaftVersion kraftVersion() {
-        return partitionState.kraftVersionAtOffset(quorum.highWatermark().get().offset());
+        return partitionState.lastKraftVersion();
     }
 
     @Override

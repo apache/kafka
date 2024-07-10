@@ -36,8 +36,6 @@ import org.slf4j.Logger;
 import java.util.Optional;
 import java.util.OptionalLong;
 
-import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_0;
-
 /**
  * The KRaft state machine for tracking control records in the topic partition.
  *
@@ -145,7 +143,8 @@ public final class KRaftControlRecordStateMachine {
      */
     public KRaftVersion lastKraftVersion() {
         synchronized (kraftVersionHistory) {
-            return kraftVersionHistory.lastEntry().map(LogHistory.Entry::value).orElse(KRAFT_VERSION_0);
+            return kraftVersionHistory.lastEntry().map(LogHistory.Entry::value).
+                orElse(KRaftVersion.KRAFT_VERSION_0);
         }
     }
 
@@ -173,7 +172,8 @@ public final class KRaftControlRecordStateMachine {
         checkOffsetIsValid(offset);
 
         synchronized (kraftVersionHistory) {
-            return kraftVersionHistory.valueAtOrBefore(offset).orElse(KRAFT_VERSION_0);
+            return kraftVersionHistory.valueAtOrBefore(offset).
+                orElse(KRaftVersion.KRAFT_VERSION_0);
         }
     }
 
@@ -261,9 +261,12 @@ public final class KRaftControlRecordStateMachine {
 
                 case KRAFT_VERSION:
                     synchronized (kraftVersionHistory) {
-                        kraftVersionHistory.addAt(currentOffset,
+                        kraftVersionHistory.addAt(
+                            currentOffset,
                             KRaftVersion.fromFeatureLevel(
-                                ((KRaftVersionRecord) record.message()).kRaftVersion()));
+                                ((KRaftVersionRecord) record.message()).kRaftVersion()
+                            )
+                        );
                     }
                     break;
 

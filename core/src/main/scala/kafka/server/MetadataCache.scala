@@ -124,7 +124,7 @@ object MetadataCache {
 
   def kRaftMetadataCache(
     brokerId: Int,
-    kraftVersionSupplier: Supplier[KRaftVersion] = () => KRaftVersion.KRAFT_VERSION_0
+    kraftVersionSupplier: Supplier[KRaftVersion]
   ): KRaftMetadataCache = {
     new KRaftMetadataCache(brokerId, kraftVersionSupplier)
   }

@@ -253,7 +253,7 @@ public interface RaftClient<T> extends AutoCloseable {
     long logEndOffset();
 
     /**
-     * Returns the current kraft.version.
+     * Returns the latest kraft.version, even if it hasn't been committed durably to Raft.
      *
      * @return the current kraft.version.
      */
