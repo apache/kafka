@@ -48,7 +48,7 @@ import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
@@ -179,8 +179,8 @@ public class SaslChannelBuilderTest {
         return channelBuilder;
     }
 
-    private Supplier<ApiVersionsResponse> defaultApiVersionsSupplier() {
-        return () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+    private Function<Short, ApiVersionsResponse> defaultApiVersionsSupplier() {
+        return version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
     private SaslChannelBuilder createChannelBuilder(SecurityProtocol securityProtocol, String saslMechanism) {

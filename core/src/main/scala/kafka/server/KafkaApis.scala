@@ -1973,7 +1973,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else if (!apiVersionRequest.isValid) {
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
       } else {
-        apiVersionManager.apiVersionResponse(requestThrottleMs)
+        apiVersionManager.apiVersionResponse(requestThrottleMs, request.header.apiVersion() < 4)
       }
     }
     requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)

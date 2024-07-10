@@ -27,7 +27,9 @@
   //
   // Starting from Apache Kafka 2.4 (KIP-511), ApiKeys field is populated with the supported
   // versions of the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
-  "validVersions": "0-3",
+  //
+  // Version 4 fixes KAFKA-17011, which blocked SupportedFeatures.MinVersion from being 0.
+  "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
@@ -45,7 +47,7 @@
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name":  "SupportedFeatures", "type": "[]SupportedFeatureKey", "ignorable": true,
       "versions":  "3+", "tag": 0, "taggedVersions": "3+",
-      "about": "Features supported by the broker.",
+      "about": "Features supported by the broker. Note: in v0-v3, features with MinSupportedVersion = 0 show up with MinSupportedVersion = 1.",
       "fields":  [
         { "name": "Name", "type": "string", "versions": "3+", "mapKey": true,
           "about": "The name of the feature." },
