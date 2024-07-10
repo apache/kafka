@@ -235,21 +235,9 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     private final JsonDeserializer deserializer;
 
     public JsonConverter() {
-        this(true);
-    }
-
-    /**
-     * Creates a JsonConvert initializing serializer and deserializer.
-     *
-     * @param enableModules permits to enable/disable the registration of additional Jackson modules.
-     * <p>
-     * NOTE: This is visible only for testing
-     */
-    public JsonConverter(boolean enableModules) {
         serializer = new JsonSerializer(
             mkSet(),
-            JSON_NODE_FACTORY,
-            enableModules
+            JSON_NODE_FACTORY
         );
 
         deserializer = new JsonDeserializer(
@@ -258,8 +246,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
                 // floating point numbers that cannot fit into float64
                 DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
             ),
-            JSON_NODE_FACTORY,
-            enableModules
+            JSON_NODE_FACTORY
         );
     }
 
