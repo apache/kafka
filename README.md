@@ -309,13 +309,6 @@ See [tests/README.md](tests/README.md).
 
 See [vagrant/README.md](vagrant/README.md).
 
-### Clean Docker Image ###
-
-After executing the test,to clean up the docker image you can run:
-
-    docker rm -f $(docker ps -aq --filter "name=ducker")
-
-
 ### Contribution ###
 
 Apache Kafka is interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).
