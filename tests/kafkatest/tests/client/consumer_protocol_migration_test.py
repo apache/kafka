@@ -41,7 +41,8 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
 
     def __init__(self, test_context):
         super(ConsumerProtocolMigrationTest, self).__init__(test_context, num_consumers=5, num_producers=1,
-                                                            num_zk=0, num_brokers=1, topics={
+                                                            num_zk=0, num_brokers=1,
+                                                            use_new_coordinator=True, topics={
                 self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 }
             })
 
@@ -80,12 +81,11 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     @matrix(
         enable_autocommit=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         consumer_group_migration_policy=["bidirectional", "upgrade", "downgrade", "disabled"],
         consumer_version=[str(v) for v in all_consumer_versions],
         assignment_strategy=all_assignment_strategies
     )
-    def test_consumer_offline_migration(self, enable_autocommit, metadata_quorum, use_new_coordinator,
+    def test_consumer_offline_migration(self, enable_autocommit, metadata_quorum,
                                   consumer_group_migration_policy, consumer_version, assignment_strategy):
         """
         Verify correct consumer behavior when the consumers in the group are restarted to perform
@@ -131,12 +131,11 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     @matrix(
         enable_autocommit=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         consumer_group_migration_policy=["bidirectional"],
         consumer_version=[str(v) for v in all_consumer_versions],
         assignment_strategy=all_assignment_strategies
     )
-    def test_consumer_rolling_migration(self, enable_autocommit, metadata_quorum, use_new_coordinator,
+    def test_consumer_rolling_migration(self, enable_autocommit, metadata_quorum,
                                         consumer_group_migration_policy, consumer_version, assignment_strategy):
         """
         Verify correct consumer behavior when the consumers in the group are restarted to perform
@@ -182,12 +181,11 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     @matrix(
         enable_autocommit=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         consumer_group_migration_policy=["upgrade"],
         consumer_version=[str(v) for v in all_consumer_versions],
         assignment_strategy=all_assignment_strategies
     )
-    def test_consumer_rolling_upgrade(self, enable_autocommit, metadata_quorum, use_new_coordinator,
+    def test_consumer_rolling_upgrade(self, enable_autocommit, metadata_quorum,
                                         consumer_group_migration_policy, consumer_version, assignment_strategy):
         """
         Verify correct consumer behavior when the consumers in the group are restarted to perform
@@ -227,12 +225,11 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     @matrix(
         enable_autocommit=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         consumer_group_migration_policy=["downgrade"],
         consumer_version=[str(v) for v in all_consumer_versions],
         assignment_strategy=all_assignment_strategies
     )
-    def test_consumer_rolling_downgrade(self, enable_autocommit, metadata_quorum, use_new_coordinator,
+    def test_consumer_rolling_downgrade(self, enable_autocommit, metadata_quorum,
                                         consumer_group_migration_policy, consumer_version, assignment_strategy):
         """
         Verify correct consumer behavior when the consumers in the group are restarted to perform
