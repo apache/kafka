@@ -93,13 +93,13 @@ class BrokerRegistrationRequestTest {
                 setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
                     Arrays.asList(
                         new BrokerRegistrationRequestData.Feature().
-                            setName("group.version").
-                            setMinSupportedVersion((short) 0).
-                            setMaxSupportedVersion((short) 1),
-                        new BrokerRegistrationRequestData.Feature().
                             setName("metadata.version").
                             setMinSupportedVersion((short) 1).
-                            setMaxSupportedVersion((short) 17)
+                            setMaxSupportedVersion((short) 17),
+                        new BrokerRegistrationRequestData.Feature().
+                            setName("kraft.version").
+                            setMinSupportedVersion((short) 0).
+                            setMaxSupportedVersion((short) 1)
                     ).iterator())).
                 setIncarnationId(Uuid.fromString("EfIEKywJSaWl5yWDwlop1Q")).
                 setListeners(new BrokerRegistrationRequestData.ListenerCollection()).
@@ -113,18 +113,22 @@ class BrokerRegistrationRequestTest {
                     new BrokerRegistrationRequestData.Feature().
                         setName("metadata.version").
                         setMinSupportedVersion((short) 1).
-                        setMaxSupportedVersion((short) 17)).iterator()), data.features());
+                        setMaxSupportedVersion((short) 17),
+                    new BrokerRegistrationRequestData.Feature().
+                        setName("kraft.version").
+                        setMinSupportedVersion((short) 1).
+                        setMaxSupportedVersion((short) 1)).iterator()), data.features());
         } else {
             assertEquals(new BrokerRegistrationRequestData.FeatureCollection(
                 Arrays.asList(
                     new BrokerRegistrationRequestData.Feature().
-                        setName("group.version").
-                        setMinSupportedVersion((short) 0).
-                        setMaxSupportedVersion((short) 1),
-                    new BrokerRegistrationRequestData.Feature().
                         setName("metadata.version").
                         setMinSupportedVersion((short) 1).
-                        setMaxSupportedVersion((short) 17)).iterator()), data.features());
+                        setMaxSupportedVersion((short) 17),
+                    new BrokerRegistrationRequestData.Feature().
+                        setName("kraft.version").
+                        setMinSupportedVersion((short) 0).
+                        setMaxSupportedVersion((short) 1)).iterator()), data.features());
         }
     }
 
