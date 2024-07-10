@@ -29,6 +29,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -241,6 +242,40 @@ public class FetchRequestTest {
 
         assertNotEquals(new FetchRequest.PartitionData(Uuid.randomUuid(), 300, 0L, 300, Optional.of(300)),
             new FetchRequest.PartitionData(Uuid.randomUuid(), 300, 0L, 300, Optional.of(300)));
+    }
+
+    @Test
+    public void testFetchRequestNoCacheData() {
+        short version = 13;
+        Uuid topicId = Uuid.randomUuid();
+        TopicIdPartition tp = new TopicIdPartition(topicId, 0, "topic");
+
+        Map<TopicPartition, FetchRequest.PartitionData> partitionData = Collections.singletonMap(tp.topicPartition(),
+                new FetchRequest.PartitionData(topicId, 0, 0, 0, Optional.empty()));
+        List<TopicIdPartition> toReplace = Collections.singletonList(tp);
+
+        FetchRequest fetchRequest = FetchRequest.Builder
+                .forReplica(version, 0, 1, 1, 1, partitionData)
+                .removed(Collections.emptyList())
+                .replaced(toReplace)
+                .metadata(FetchMetadata.newIncremental(123)).build(version);
+        
+        HashMap<Uuid, String> topicNames = new HashMap<>();
+        topicNames.put(topicId, tp.topic());
+        List<TopicIdPartition> requestsWithTopicsName = fetchRequest.forgottenTopics(topicNames);
+        assertEquals(1, requestsWithTopicsName.size());
+        requestsWithTopicsName.forEach(request -> {
+            assertEquals(tp.topic(), request.topic());
+            assertEquals(topicId, request.topicId());
+        });
+
+        List<TopicIdPartition> requestData = fetchRequest.forgottenTopics(Collections.emptyMap());
+        assertEquals(1, requestData.size());
+        requestData.forEach(request -> {
+            assertEquals(tp.topic(), request.topic());
+            assertEquals(topicId, request.topicId());
+        });
+        
     }
 
 }
