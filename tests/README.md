@@ -47,6 +47,10 @@ TC_PATHS="tests/kafkatest/tests/streams/streams_upgrade_test.py::StreamsUpgradeT
 ```
 bash tests/docker/ducker-ak up -j 'openjdk:11'; tests/docker/run_tests.sh
 ```
+* Clean Docker Image
+```
+docker rm -f $(docker ps -aq --filter "name=ducker")
+```
 * Rebuild first and then run tests
 ```
 REBUILD="t" bash tests/docker/run_tests.sh
