@@ -7383,4 +7383,57 @@ class KafkaApisTest extends Logging {
     val expectedResponse = new ListClientMetricsResourcesResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
     assertEquals(expectedResponse, response.data)
   }
+
+  @Test
+  def testUpdateConversionStats(): Unit = {
+    val topic = "topic"
+    addTopicToMetadataCache(topic, numPartitions = 2)
+
+    reset(replicaManager, requestChannel)
+
+    val tp0 = new TopicPartition("topic", 0)
+    val tp1 = new TopicPartition("topic", 1)
+
+    val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+          Collections.singletonList(new ProduceRequestData.TopicProduceData()
+              .setName(tp0.topic).setPartitionData(
+                asList(
+                  new ProduceRequestData.PartitionProduceData()
+                    .setIndex(tp0.partition)
+                    .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))),
+                  new ProduceRequestData.PartitionProduceData()
+                    .setIndex(tp1.partition)
+                    .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes)))
+                )))
+            .iterator))
+        .setAcks(1.toShort)
+        .setTimeoutMs(5000))
+      .build(ApiKeys.PRODUCE.latestVersion)
+
+    val request = buildRequest(produceRequest)
+
+    val recordValidationStatsCallback: ArgumentCaptor[Map[TopicPartition, RecordValidationStats] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, RecordValidationStats] => Unit])
+
+    val recordConversionStats = Map(
+      tp0 -> new RecordValidationStats(256, 1, 1000),
+      tp1 -> new RecordValidationStats(128, 1, 500))
+
+    when(replicaManager.handleProduceAppend(anyLong,
+      anyShort,
+      ArgumentMatchers.eq(false),
+      any(),
+      any(),
+      any(),
+      recordValidationStatsCallback.capture(),
+      any(),
+      any()
+    )).thenAnswer(_ => recordValidationStatsCallback.getValue.apply(recordConversionStats))
+
+    createKafkaApis().handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+
+    assertEquals(1500, request.messageConversionsTimeNanos)
+    assertEquals(384, request.temporaryMemoryBytes)
+  }
 }
