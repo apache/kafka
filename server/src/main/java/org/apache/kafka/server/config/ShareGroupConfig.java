@@ -103,7 +103,7 @@ public class ShareGroupConfig {
             .define(SHARE_GROUP_MAX_GROUPS_CONFIG, SHORT, SHARE_GROUP_MAX_GROUPS_DEFAULT, between(1, 100), MEDIUM, SHARE_GROUP_MAX_GROUPS_DOC)
             .define(SHARE_GROUP_MAX_SIZE_CONFIG, SHORT, SHARE_GROUP_MAX_SIZE_DEFAULT, between(10, 1000), MEDIUM, SHARE_GROUP_MAX_SIZE_DOC);
 
-    private final Boolean isShareGroupEnabled;
+    private final boolean isShareGroupEnabled;
     private final int shareGroupPartitionMaxRecordLocks;
     private final int shareGroupDeliveryCountLimit;
     private final short shareGroupMaxGroups;
@@ -137,7 +137,7 @@ public class ShareGroupConfig {
     }
 
     /** Share group configuration **/
-    Boolean isShareGroupEnabled() {
+    public boolean isShareGroupEnabled() {
         return isShareGroupEnabled;
     }
 
