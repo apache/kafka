@@ -933,8 +933,6 @@ project(':core') {
     implementation project(':raft')
     implementation project(':storage')
     implementation project(':server')
-    // added in order to pass the kafka_log4j_appender.py test
-    implementation project(':log4j-appender')
 
     implementation libs.argparse4j
     implementation libs.commonsValidator
