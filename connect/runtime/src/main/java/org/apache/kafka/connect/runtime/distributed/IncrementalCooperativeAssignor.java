@@ -812,7 +812,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                             List::iterator
                     )
             ));
-            this.keys = new ArrayList<>(grouped.keySet());
+            this.keys = collection.stream()
+                .map(allocationGrouper)
+                .distinct()
+                .collect(Collectors.toList());
         }
 
         @Override
@@ -842,6 +845,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
      * @param tasks the tasks to be assigned
      */
     protected void assignTasks(List<WorkerLoad> workerAssignment, Collection<ConnectorTaskId> tasks) {
+        workerAssignment.sort(WorkerLoad.taskComparator());
         WorkerLoad first = workerAssignment.get(0);
 
         Iterator<ConnectorTaskId> load = new BalancedIterator<>(tasks, ConnectorTaskId::connector);
