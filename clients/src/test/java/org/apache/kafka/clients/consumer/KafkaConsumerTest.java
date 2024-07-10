@@ -23,7 +23,6 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -142,7 +141,6 @@ import javax.management.ObjectName;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
-import static org.apache.kafka.clients.consumer.internals.LegacyKafkaConsumer.DEFAULT_REASON;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.common.utils.Utils.propsToMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -437,7 +435,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testSubscription(GroupProtocol groupProtocol) {
         consumer = newConsumer(groupProtocol, groupId);
 
@@ -494,19 +492,6 @@ public class KafkaConsumerTest {
         consumer = newConsumer(groupProtocol, groupId);
         assertThrows(IllegalArgumentException.class,
             () -> consumer.subscribe(Pattern.compile("")));
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
-    public void testSubscriptionWithEmptyPartitionAssignment(GroupProtocol groupProtocol) {
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "");
-        props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        consumer = newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        assertThrows(IllegalStateException.class,
-            () -> consumer.subscribe(singletonList(topic)));
     }
 
     @ParameterizedTest
@@ -740,7 +725,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void verifyPollTimesOutDuringMetadataUpdate(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -1042,10 +1027,8 @@ public class KafkaConsumerTest {
         assertEquals(offset2, consumer.committed(Collections.singleton(tp1)).get(tp1).offset());
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testFetchStableOffsetThrowInCommitted(GroupProtocol groupProtocol) {
         assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer(groupProtocol).committed(Collections.singleton(tp0)));
     }
@@ -1058,10 +1041,8 @@ public class KafkaConsumerTest {
         assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer(groupProtocol).poll(Duration.ZERO));
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testFetchStableOffsetThrowInPosition(GroupProtocol groupProtocol) {
         assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer(groupProtocol).position(tp0));
     }
@@ -1089,10 +1070,8 @@ public class KafkaConsumerTest {
         return consumer;
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testNoCommittedOffsets(GroupProtocol groupProtocol) {
         long offset1 = 10000;
 
@@ -1259,7 +1238,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testPollThrowsInterruptExceptionIfInterrupted(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -1286,7 +1265,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void fetchResponseWithUnexpectedPartitionIsIgnored(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1555,10 +1534,8 @@ public class KafkaConsumerTest {
         assertEquals(Collections.emptySet(), consumer.assignment());
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     @SuppressWarnings("unchecked")
     public void testManualAssignmentChangeWithAutoCommitEnabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -1613,10 +1590,8 @@ public class KafkaConsumerTest {
         client.requests().clear();
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testManualAssignmentChangeWithAutoCommitDisabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1671,10 +1646,8 @@ public class KafkaConsumerTest {
         client.requests().clear();
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testOffsetOfPausedPartitions(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1814,10 +1787,8 @@ public class KafkaConsumerTest {
         consumerCloseTest(groupProtocol, Long.MAX_VALUE, Collections.emptyList(), 0, true);
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testCloseShouldBeIdempotent(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = spy(new MockClient(time, metadata));
@@ -3081,94 +3052,6 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         assertFalse(consumerMetricPresent(consumer, "last-poll-seconds-ago"));
         assertFalse(consumerMetricPresent(consumer, "time-between-poll-avg"));
         assertFalse(consumerMetricPresent(consumer, "time-between-poll-max"));
-    }
-
-    // NOTE: this test uses the enforceRebalance API which is not implemented in the CONSUMER group protocol.
-    @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
-    public void testEnforceRebalanceWithManualAssignment(GroupProtocol groupProtocol) {
-        consumer = newConsumer(groupProtocol, null);
-        consumer.assign(singleton(new TopicPartition("topic", 0)));
-        assertThrows(IllegalStateException.class, consumer::enforceRebalance);
-    }
-
-    // NOTE: this test uses the enforceRebalance API which is not implemented in the CONSUMER group protocol.
-    @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
-    public void testEnforceRebalanceTriggersRebalanceOnNextPoll(GroupProtocol groupProtocol) {
-        Time time = new MockTime(1L);
-        ConsumerMetadata metadata = createMetadata(subscription);
-        MockClient client = new MockClient(time, metadata);
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
-        MockRebalanceListener countingRebalanceListener = new MockRebalanceListener();
-        initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1), Utils.mkEntry(topic2, 1), Utils.mkEntry(topic3, 1)));
-
-        consumer.subscribe(Arrays.asList(topic, topic2), countingRebalanceListener);
-        Node node = metadata.fetch().nodes().get(0);
-        prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
-
-        // a first rebalance to get the assignment, we need two poll calls since we need two round trips to finish join / sync-group
-        consumer.poll(Duration.ZERO);
-        consumer.poll(Duration.ZERO);
-
-        // onPartitionsRevoked is not invoked when first joining the group
-        assertEquals(countingRebalanceListener.revokedCount, 0);
-        assertEquals(countingRebalanceListener.assignedCount, 1);
-
-        consumer.enforceRebalance();
-
-        // the next poll should trigger a rebalance
-        consumer.poll(Duration.ZERO);
-
-        assertEquals(countingRebalanceListener.revokedCount, 1);
-    }
-
-    // NOTE: this test uses the enforceRebalance API which is not implemented in the CONSUMER group protocol.
-    @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
-    public void testEnforceRebalanceReason(GroupProtocol groupProtocol) {
-        Time time = new MockTime(1L);
-
-        ConsumerMetadata metadata = createMetadata(subscription);
-        MockClient client = new MockClient(time, metadata);
-        initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1)));
-        Node node = metadata.fetch().nodes().get(0);
-
-        consumer = newConsumer(
-            groupProtocol,
-            time,
-            client,
-            subscription,
-            metadata,
-            assignor,
-            true,
-            groupInstanceId
-        );
-        consumer.subscribe(Collections.singletonList(topic));
-
-        // Lookup coordinator.
-        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-        consumer.poll(Duration.ZERO);
-
-        // Initial join sends an empty reason.
-        prepareJoinGroupAndVerifyReason(client, node, "");
-        consumer.poll(Duration.ZERO);
-
-        // A null reason should be replaced by the default reason.
-        consumer.enforceRebalance(null);
-        prepareJoinGroupAndVerifyReason(client, node, DEFAULT_REASON);
-        consumer.poll(Duration.ZERO);
-
-        // An empty reason should be replaced by the default reason.
-        consumer.enforceRebalance("");
-        prepareJoinGroupAndVerifyReason(client, node, DEFAULT_REASON);
-        consumer.poll(Duration.ZERO);
-
-        // A non-null and non-empty reason is sent as-is.
-        String customReason = "user provided reason";
-        consumer.enforceRebalance(customReason);
-        prepareJoinGroupAndVerifyReason(client, node, customReason);
-        consumer.poll(Duration.ZERO);
     }
 
     private void prepareJoinGroupAndVerifyReason(
