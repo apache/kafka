@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -43,6 +44,7 @@ import org.apache.kafka.connect.mirror.Checkpoint;
 import org.apache.kafka.connect.mirror.DefaultConfigPropertyFilter;
 import org.apache.kafka.connect.mirror.MirrorCheckpointConnector;
 import org.apache.kafka.connect.mirror.MirrorClient;
+import org.apache.kafka.connect.mirror.MirrorConnectorConfig;
 import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
 import org.apache.kafka.connect.mirror.MirrorMakerConfig;
 import org.apache.kafka.connect.mirror.MirrorSourceConnector;
@@ -72,6 +74,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -85,6 +88,8 @@ import java.util.function.LongUnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.OFFSET_SYNCS_CLIENT_ROLE_PREFIX;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.OFFSET_SYNCS_TOPIC_CONFIG_PREFIX;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -532,6 +537,49 @@ public class MirrorConnectorsIntegrationBaseTest {
         }
 
         assertMonotonicCheckpoints(backup, PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
+    }
+
+    @Test
+    public void testReplicationWithoutOffsetSyncWillNotCreateOffsetSyncsTopic() throws Exception {
+        produceMessages(primaryProducer, "test-topic-1");
+        String backupTopic1 = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
+        if (replicateBackupToPrimary) {
+            produceMessages(backupProducer, "test-topic-1");
+        }
+        String consumerGroupName = "consumer-group-testReplication";
+        Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
+        // warm up consumers before starting the connectors, so we don't need to wait for discovery
+        warmUpConsumer(consumerProps);
+
+        mm2Props.keySet().removeIf(prop -> prop.startsWith(OFFSET_SYNCS_CLIENT_ROLE_PREFIX) || prop.startsWith(OFFSET_SYNCS_TOPIC_CONFIG_PREFIX));
+        mm2Props.put(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED, "false");
+
+        mm2Config = new MirrorMakerConfig(mm2Props);
+
+        waitUntilMirrorMakerIsRunning(backup, Arrays.asList(MirrorSourceConnector.class, MirrorHeartbeatConnector.class), mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
+
+        MirrorClient primaryClient = new MirrorClient(mm2Config.clientConfig(PRIMARY_CLUSTER_ALIAS));
+        MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS));
+
+        // make sure the topic is auto-created in the other cluster
+        waitForTopicCreated(backup, backupTopic1);
+
+        assertEquals(NUM_RECORDS_PRODUCED, primary.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
+                "Records were not produced to primary cluster.");
+        assertEquals(NUM_RECORDS_PRODUCED, backup.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, backupTopic1).count(),
+                "Records were not replicated to backup cluster.");
+        assertEquals(NUM_RECORDS_PRODUCED, backup.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
+                "Records were not produced to backup cluster.");
+
+        List<TopicDescription> offsetSyncTopic = primary.kafka().describeTopics("mm2-offset-syncs.backup.internal").values()
+                .stream()
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .collect(Collectors.toList());
+        assertTrue(offsetSyncTopic.isEmpty());
+
+        primaryClient.close();
+        backupClient.close();
     }
 
     @Test
