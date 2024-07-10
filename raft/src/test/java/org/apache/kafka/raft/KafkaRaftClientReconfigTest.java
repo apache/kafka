@@ -42,13 +42,13 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.KafkaRaftClientTest.replicaKey;
 import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
@@ -60,26 +60,22 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     public void testLeaderWritesBootstrapRecords() throws Exception {
-        int localId = 0;
-        int followerId = 1;
-        ReplicaKey local = replicaKey(localId, true);
-        ReplicaKey follower = replicaKey(followerId, true);
-
-        Set<Integer> voterIds = new HashSet<>(Arrays.asList(localId, followerId));
-        Set<ReplicaKey> voters = new HashSet<>(Arrays.asList(local, follower));
-        VoterSet voterSet = VoterSetTest.voterSet(voters.stream());
-        short kRaftVersion = 1;
+        ReplicaKey local = replicaKey(0, true);
+        ReplicaKey follower = replicaKey(1, true);
         int epoch = 0;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(OptionalInt.of(localId), voterIds, local.directoryId().get(), kRaftVersion)
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withKip853Rpc(true)
-            .withBootstrapSnapshot(Optional.of(voterSet), kRaftVersion)
+            .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(epoch)
             .build();
 
         // check the bootstrap snapshot exists and contains the expected records
         assertEquals(BOOTSTRAP_SNAPSHOT_ID, context.log.latestSnapshotId().get());
         RawSnapshotReader snapshot = context.log.latestSnapshot().get();
+        // TODO: This should not be a List of String
         List<String> expectedBootstrapRecords = new ArrayList<>();
         expectedBootstrapRecords.add(new SnapshotHeaderRecord()
             .setVersion((short) 0)
@@ -87,23 +83,33 @@ public class KafkaRaftClientReconfigTest {
         expectedBootstrapRecords.add(new KRaftVersionRecord()
             .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
             .setKRaftVersion((short) 1).toString());
-        expectedBootstrapRecords.add(voterSet.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION).toString());
+        expectedBootstrapRecords.add(voters.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION).toString());
         expectedBootstrapRecords.add(new SnapshotFooterRecord().setVersion((short) 0).toString());
-        SnapshotWriterReaderTest.assertControlSnapshot(Collections.singletonList(expectedBootstrapRecords), snapshot);
+        SnapshotWriterReaderTest.assertControlSnapshot(
+            Collections.singletonList(expectedBootstrapRecords),
+            snapshot
+        );
 
         // check if leader writes 3 bootstrap records to log
         context.becomeLeader();
+
+        // TODO: Fix this. This doesn't look correct
         Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         Iterator<Record> recordIterator = batch.iterator();
         Record record = recordIterator.next();
-        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, followerId),
-            Arrays.asList(localId, followerId), record.key(), record.value());
+        RaftClientTestContext.verifyLeaderChangeMessage(
+            local.id(),
+            Arrays.asList(local.id(), follower.id()),
+            Arrays.asList(local.id(), follower.id()),
+            record.key(),
+            record.value()
+        );
         record = recordIterator.next();
-        verifyKRaftVersionRecord(kRaftVersion, record.key(), record.value());
+        verifyKRaftVersionRecord((short) 1, record.key(), record.value());
         record = recordIterator.next();
-        verifyVotersRecord(voterIds, record.key(), record.value());
+        verifyVotersRecord(voters.voterIds(), record.key(), record.value());
 
         // check that leader does not respond with bootstrap snapshot id when follower fetches offset 0
         epoch = context.currentEpoch();
@@ -117,7 +123,7 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
 
         // check we receive error if follower requests bootstrap snapshot from the leader
         context.deliverRequest(
@@ -130,24 +136,23 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        FetchSnapshotResponseData.PartitionSnapshot response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
+        FetchSnapshotResponseData.PartitionSnapshot response = context
+            .assertSentFetchSnapshotResponse(context.metadataPartition)
+            .get();
         assertEquals(Errors.SNAPSHOT_NOT_FOUND, Errors.forCode(response.errorCode()));
     }
 
     @Test
     public void testLeaderDoesNotBootstrapRecordsWithKraftVersion0() throws Exception {
-        int localId = 0;
-        int followerId = 1;
-        ReplicaKey local = replicaKey(localId, false);
-        ReplicaKey follower = replicaKey(followerId, false);
-        Set<Integer> voterIds = new HashSet<>(Arrays.asList(localId, followerId));
-        Set<ReplicaKey> voters = new HashSet<>(Arrays.asList(local, follower));
-        VoterSet voterSet = VoterSetTest.voterSet(voters.stream());
-        short kRaftVersion = 0;
+        ReplicaKey local = replicaKey(0, true);
+        ReplicaKey follower = replicaKey(1, true);
         int epoch = 0;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(OptionalInt.of(localId), voterIds, ReplicaKey.NO_DIRECTORY_ID, kRaftVersion)
-            .withBootstrapSnapshot(Optional.of(voterSet), kRaftVersion)
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withStaticVoters(voters.voterIds())
+            .withBootstrapSnapshot(Optional.empty())
             .withUnknownLeader(epoch)
             .build();
 
@@ -155,7 +160,10 @@ public class KafkaRaftClientReconfigTest {
         assertEquals(BOOTSTRAP_SNAPSHOT_ID, context.log.latestSnapshotId().get());
         RawSnapshotReader snapshot = context.log.latestSnapshot().get();
         List<String> expectedBootstrapRecords = Collections.emptyList();
-        SnapshotWriterReaderTest.assertControlSnapshot(Collections.singletonList(expectedBootstrapRecords), snapshot);
+        SnapshotWriterReaderTest.assertControlSnapshot(
+            Collections.singletonList(expectedBootstrapRecords),
+            snapshot
+        );
 
         // check leader does not write bootstrap records to log
         context.becomeLeader();
@@ -164,27 +172,29 @@ public class KafkaRaftClientReconfigTest {
         assertTrue(batch.isControlBatch());
         Iterator<Record> recordIterator = batch.iterator();
         Record record = recordIterator.next();
-        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, followerId),
-            Arrays.asList(localId, followerId), record.key(), record.value());
+        RaftClientTestContext.verifyLeaderChangeMessage(
+            local.id(),
+            Arrays.asList(local.id(), follower.id()),
+            Arrays.asList(local.id(), follower.id()),
+            record.key(),
+            record.value()
+        );
         assertFalse(recordIterator.hasNext());
     }
 
     @Test
     public void testFollowerDoesNotRequestLeaderBootstrapSnapshot() throws Exception {
-        int localId = 0;
-        int leaderId = 1;
-        ReplicaKey local = replicaKey(localId, true);
-        ReplicaKey leader = replicaKey(leaderId, true);
-        Set<Integer> voterIds = new HashSet<>(Arrays.asList(localId, leaderId));
-        Set<ReplicaKey> voters = new HashSet<>(Arrays.asList(local, leader));
-        VoterSet voterSet = VoterSetTest.voterSet(voters.stream());
-        short kRaftVersion = 1;
-        int epoch = 0;
+        ReplicaKey local = replicaKey(0, true);
+        ReplicaKey leader = replicaKey(1, true);
+        int epoch = 1;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(OptionalInt.of(localId), voterIds, local.directoryId().get(), kRaftVersion)
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, leader));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withKip853Rpc(true)
-            .withElectedLeader(epoch, leaderId)
-            .withBootstrapSnapshot(Optional.of(voterSet), kRaftVersion)
+            .withStaticVoters(voters.voterIds())
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withElectedLeader(epoch, leader.id())
             .build();
 
         // check that follower will send fetch request to leader
@@ -196,7 +206,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            context.snapshotFetchResponse(epoch, leaderId, BOOTSTRAP_SNAPSHOT_ID, 0)
+            context.snapshotFetchResponse(epoch, leader.id(), BOOTSTRAP_SNAPSHOT_ID, 0)
         );
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
@@ -205,22 +215,16 @@ public class KafkaRaftClientReconfigTest {
 
     @Test
     public void testFollowerReadsKRaftBootstrapRecords() throws Exception {
-        int localId = 0;
-        int leaderId = 1;
-        int followerId2 = 2;
-        ReplicaKey local = replicaKey(localId, true);
-        ReplicaKey leader = replicaKey(leaderId, true);
-        ReplicaKey follower2 = replicaKey(followerId2, true);
-        Set<Integer> voterIds = new HashSet<>(Arrays.asList(localId, leaderId));
-        Set<ReplicaKey> voters = new HashSet<>(Arrays.asList(local, leader));
-        VoterSet voterSet = VoterSetTest.voterSet(voters.stream());
-        short kRaftVersion = 1;
+        ReplicaKey local = replicaKey(0, true);
+        ReplicaKey leader = replicaKey(1, true);
+        ReplicaKey follower = replicaKey(2, true);
+        VoterSet voterSet = VoterSetTest.voterSet(Stream.of(local, leader));
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(OptionalInt.of(localId), voterIds, local.directoryId().get(), kRaftVersion)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withKip853Rpc(true)
-            .withElectedLeader(epoch, leaderId)
-            .withBootstrapSnapshot(Optional.of(voterSet), kRaftVersion)
+            .withBootstrapSnapshot(Optional.of(voterSet))
+            .withElectedLeader(epoch, leader.id())
             .build();
 
         // check that follower will send fetch request to leader
@@ -228,13 +232,13 @@ public class KafkaRaftClientReconfigTest {
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
-        // check that before receiving bootstrap records from leader, follower2 is not in the voter set
-        assertFalse(context.client.quorum().isVoter(follower2));
+        // check that before receiving bootstrap records from leader, follower is not in the voter set
+        assertFalse(context.client.quorum().isVoter(follower));
 
         // leader sends batch with bootstrap records
-        Set<ReplicaKey> leadersVoters = new HashSet<>(voters);
-        leadersVoters.add(follower2);
-        VoterSet leadersVoterSet = VoterSetTest.voterSet(leadersVoters.stream());
+        VoterSet leadersVoterSet = VoterSetTest.voterSet(
+            Stream.concat(voterSet.voterKeys().stream(), Stream.of(follower))
+        );
         ByteBuffer buffer = ByteBuffer.allocate(128);
         try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
             buffer,
@@ -255,7 +259,7 @@ public class KafkaRaftClientReconfigTest {
                 0,
                 new KRaftVersionRecord()
                     .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
-                    .setKRaftVersion(kRaftVersion)
+                    .setKRaftVersion((short) 1)
             );
             builder.appendVotersMessage(
                 0,
@@ -265,14 +269,15 @@ public class KafkaRaftClientReconfigTest {
             context.deliverResponse(
                 fetchRequest.correlationId(),
                 fetchRequest.destination(),
-                context.fetchResponse(epoch, leaderId, leaderRecords, 0, Errors.NONE));
+                context.fetchResponse(epoch, leader.id(), leaderRecords, 0, Errors.NONE));
         }
 
         // follower applies the bootstrap records, registering follower2 as a new voter
         context.client.poll();
-        assertTrue(context.client.quorum().isVoter(follower2));
+        assertTrue(context.client.quorum().isVoter(follower));
     }
 
+    // TODO: Not sure this is really needed
     private static void verifyVotersRecord(
         Set<Integer> expectedVoterIds,
         ByteBuffer recordKey,
@@ -283,6 +288,7 @@ public class KafkaRaftClientReconfigTest {
         assertEquals(expectedVoterIds, votersRecord.voters().stream().map(VotersRecord.Voter::voterId).collect(Collectors.toSet()));
     }
 
+    // TODO: Not sure this is really needed
     private static void verifyKRaftVersionRecord(
         short expectedKRaftVersion,
         ByteBuffer recordKey,

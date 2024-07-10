@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import java.util.Optional;
+import java.util.OptionalLong;
 
 /**
  * A type for storing the historical value of the set of voters.
@@ -92,11 +93,20 @@ public final class VoterSetHistory {
     }
 
     /**
-     * Returns the latest voter set and offset in the history. Does not include static voters.
+     * Returns the offset of the last voter set stored in the partition history.
+     *
+     * Returns {@code OptionalLong.empty} is the last voter set if from the static voters
+     * configuration.
+     *
+     * @return the offset storing the last voter set
      */
-    public Optional<VoterSetOffset> lastVoterSetOffset() {
-        Optional<LogHistory.Entry<VoterSet>> result = votersHistory.lastEntry();
-        return result.map(entry -> new VoterSetOffset(entry.value(), entry.offset()));
+    public OptionalLong lastVoterSetOffset() {
+        Optional<LogHistory.Entry<VoterSet>> lastEntry = votersHistory.lastEntry();
+        if (lastEntry.isPresent()) {
+            return OptionalLong.of(lastEntry.get().offset());
+        } else {
+            return OptionalLong.empty();
+        }
     }
 
     /**

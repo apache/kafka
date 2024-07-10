@@ -414,8 +414,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         QuorumStateStore quorumStateStore,
         Metrics metrics
     ) {
+        Optional<VoterSet> staticVoters = voterAddresses.isEmpty() ?
+            Optional.empty() :
+            Optional.of(VoterSet.fromInetSocketAddresses(channel.listenerName(), voterAddresses));
+
         partitionState = new KRaftControlRecordStateMachine(
-            Optional.of(VoterSet.fromInetSocketAddresses(channel.listenerName(), voterAddresses)),
+            staticVoters,
             log,
             serde,
             BufferSupplier.create(),
@@ -454,9 +458,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         quorum = new QuorumState(
             nodeId,
             nodeDirectoryId,
-            partitionState::lastVoterSet,
-            partitionState::lastVoterSetOffset,
-            partitionState::lastKraftVersion,
+            partitionState,
             localListeners,
             quorumConfig.electionTimeoutMs(),
             quorumConfig.fetchTimeoutMs(),

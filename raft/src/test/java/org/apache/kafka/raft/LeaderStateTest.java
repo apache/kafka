@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
-import org.apache.kafka.raft.internals.VoterSetOffset;
 import org.apache.kafka.raft.internals.VoterSetTest;
 
 import org.junit.jupiter.api.Test;
@@ -37,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -71,13 +71,13 @@ public class LeaderStateTest {
             epoch,
             epochStartOffset,
             voters,
+            OptionalLong.of(0L),
+            kraftVersion,
             voters.voterIds(),
             accumulator,
             voters.listeners(localReplicaKey.id()),
             fetchTimeoutMs,
-            logContext,
-            Optional.of(new VoterSetOffset(voters, 0L)),
-            kraftVersion
+            logContext
         );
     }
 
@@ -116,13 +116,13 @@ public class LeaderStateTest {
                 epoch,
                 0,
                 voterSet,
+                OptionalLong.of(0),
+                kraftVersion,
                 Collections.emptySet(),
                 null,
                 Endpoints.empty(),
                 fetchTimeoutMs,
-                logContext,
-                Optional.of(new VoterSetOffset(voterSet, 0L)),
-                kraftVersion
+                logContext
             )
         );
     }

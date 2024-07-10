@@ -23,8 +23,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
-import org.apache.kafka.raft.internals.VoterSetOffset;
 import org.apache.kafka.raft.internals.VoterSetTest;
+import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -62,12 +62,22 @@ public class QuorumStateTest {
         VoterSet voterSet,
         short kraftVersion
     ) {
+        KRaftControlRecordStateMachine mockPartitionState = Mockito.mock(KRaftControlRecordStateMachine.class);
+
+        Mockito
+            .when(mockPartitionState.lastVoterSet())
+            .thenReturn(voterSet);
+        Mockito
+            .when(mockPartitionState.lastVoterSetOffset())
+            .thenReturn(kraftVersion == 0 ? OptionalLong.empty() : OptionalLong.of(0));
+        Mockito
+            .when(mockPartitionState.lastKraftVersion())
+            .thenReturn(kraftVersion);
+
         return new QuorumState(
             localId,
             localDirectoryId,
-            () -> voterSet,
-            kraftVersion == 0 ? Optional::empty : () -> Optional.of(new VoterSetOffset(voterSet, 0L)),
-            () -> kraftVersion,
+            mockPartitionState,
             localId.isPresent() ? voterSet.listeners(localId.getAsInt()) : Endpoints.empty(),
             electionTimeoutMs,
             fetchTimeoutMs,

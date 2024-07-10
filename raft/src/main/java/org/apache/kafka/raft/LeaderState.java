@@ -33,7 +33,6 @@ import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 
-import org.apache.kafka.raft.internals.VoterSetOffset;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -45,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -64,6 +64,10 @@ public class LeaderState<T> implements EpochState {
     private final long epochStartOffset;
     private final Set<Integer> grantingVoters;
     private final Endpoints endpoints;
+    private final VoterSet voterSetAtEpochStart;
+    // This field is non-empty if the voter set at epoch start came from a snapshot or log segment
+    private final OptionalLong offsetOfVotersAtEpochStart;
+    private final short kraftVersionAtEpochStart;
 
     private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
     private Map<Integer, ReplicaState> voterStates = new HashMap<>();
@@ -76,8 +80,6 @@ public class LeaderState<T> implements EpochState {
     private final int checkQuorumTimeoutMs;
     private final Timer beginQuorumEpochTimer;
     private final int beginQuorumEpochTimeoutMs;
-    private final Optional<VoterSetOffset> lastVoterSetOffset;
-    private final short kraftVersion;
 
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
@@ -87,21 +89,21 @@ public class LeaderState<T> implements EpochState {
         ReplicaKey localReplicaKey,
         int epoch,
         long epochStartOffset,
-        VoterSet voters,
+        VoterSet voterSetAtEpochStart,
+        OptionalLong offsetOfVotersAtEpochStart,
+        short kraftVersionAtEpochStart,
         Set<Integer> grantingVoters,
         BatchAccumulator<T> accumulator,
         Endpoints endpoints,
         int fetchTimeoutMs,
-        LogContext logContext,
-        Optional<VoterSetOffset> lastVoterSetOffset,
-        short kraftVersion
+        LogContext logContext
     ) {
         this.localReplicaKey = localReplicaKey;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
         this.endpoints = endpoints;
 
-        for (VoterSet.VoterNode voterNode: voters.voterNodes()) {
+        for (VoterSet.VoterNode voterNode: voterSetAtEpochStart.voterNodes()) {
             boolean hasAcknowledgedLeader = voterNode.isVoter(localReplicaKey);
             this.voterStates.put(
                 voterNode.voterKey().id(),
@@ -116,8 +118,9 @@ public class LeaderState<T> implements EpochState {
         this.checkQuorumTimer = time.timer(checkQuorumTimeoutMs);
         this.beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
         this.beginQuorumEpochTimer = time.timer(0);
-        this.lastVoterSetOffset = lastVoterSetOffset;
-        this.kraftVersion = kraftVersion;
+        this.voterSetAtEpochStart =  voterSetAtEpochStart;
+        this.offsetOfVotersAtEpochStart = offsetOfVotersAtEpochStart;
+        this.kraftVersionAtEpochStart = kraftVersionAtEpochStart;
     }
 
     public long timeUntilBeginQuorumEpochTimerExpires(long currentTimeMs) {
@@ -235,22 +238,32 @@ public class LeaderState<T> implements EpochState {
                     currentTimeMs,
                     leaderChangeMessage
                 );
-                lastVoterSetOffset.ifPresent(voterSetOffset -> {
-                    // if lastVoterOffset is -1 we know the leader hasn't written the bootstrap snapshot records to the log yet
-                    if (voterSetOffset.offset() == -1) {
-                        if (kraftVersion < 1) {
-                            throw new IllegalStateException("The bootstrap snapshot file contains voter set information " +
-                                "when the KRaft version is less than 1.");
+                offsetOfVotersAtEpochStart.ifPresent(offset -> {
+                    if (offset == -1) {
+                        // Latest voter set came from the bootstrap checkpoint (0-0.checkpoint)
+                        // rewrite the voter set to the log so that it is replcated to the replicas.
+                        if (kraftVersionAtEpochStart < 1) {
+                            throw new IllegalStateException(
+                                String.format(
+                                    "The bootstrap checkpoint contains a set of voters %s at %s " +
+                                    "and the KRaft version is %s",
+                                    voterSetAtEpochStart,
+                                    offset,
+                                    kraftVersionAtEpochStart
+                                )
+                            );
                         } else {
                             builder.appendKRaftVersionMessage(
                                 currentTimeMs,
                                 new KRaftVersionRecord()
                                     .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
-                                    .setKRaftVersion(kraftVersion)
+                                    .setKRaftVersion(kraftVersionAtEpochStart)
                             );
                             builder.appendVotersMessage(
                                 currentTimeMs,
-                                voterSetOffset.voterSet().toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
+                                voterSetAtEpochStart.toVotersRecord(
+                                    ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION
+                                )
                             );
                         }
                     }
@@ -258,7 +271,6 @@ public class LeaderState<T> implements EpochState {
                 return builder.build();
             }
         });
-        accumulator.forceDrain();
     }
 
     public boolean isResignRequested() {

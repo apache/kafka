@@ -137,7 +137,8 @@ public final class KRaftControlRecordStateMachine {
         }
     }
 
-    public Optional<VoterSetOffset> lastVoterSetOffset() {
+    // TODO: write java doc
+    public OptionalLong lastVoterSetOffset() {
         synchronized (voterSetHistory) {
             return voterSetHistory.lastVoterSetOffset();
         }

@@ -29,10 +29,11 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockNetworkChannel implements NetworkChannel {
+    public static final ListenerName LISTENER_NAME = VoterSetTest.DEFAULT_LISTENER_NAME;
+
     private final AtomicInteger correlationIdCounter;
     private final List<RaftRequest.Outbound> sendQueue = new ArrayList<>();
     private final Map<Integer, RaftRequest.Outbound> awaitingResponse = new HashMap<>();
-    private final ListenerName listenerName = VoterSetTest.DEFAULT_LISTENER_NAME;
 
     public MockNetworkChannel(AtomicInteger correlationIdCounter) {
         this.correlationIdCounter = correlationIdCounter;
@@ -54,7 +55,7 @@ public class MockNetworkChannel implements NetworkChannel {
 
     @Override
     public ListenerName listenerName() {
-        return listenerName;
+        return LISTENER_NAME;
     }
 
     public List<RaftRequest.Outbound> drainSendQueue() {
