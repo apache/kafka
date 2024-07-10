@@ -95,7 +95,7 @@ public final class VoterSetHistory {
     /**
      * Returns the offset of the last voter set stored in the partition history.
      *
-     * Returns {@code OptionalLong.empty} is the last voter set if from the static voters
+     * Returns {@code OptionalLong.empty} if the last voter set is from the static voters
      * configuration.
      *
      * @return the offset storing the last voter set

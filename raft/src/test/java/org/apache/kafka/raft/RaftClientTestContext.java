@@ -58,7 +58,6 @@ import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.serialization.RecordSerde;
-import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
@@ -236,8 +235,7 @@ public final class RaftClientTestContext {
                 time.milliseconds(),
                 log.endOffset().offset(),
                 epoch,
-                records,
-                false
+                records
             );
             log.appendAsLeader(batch, epoch);
             // Need to flush the log to update the last flushed offset. This is always correct
@@ -252,9 +250,15 @@ public final class RaftClientTestContext {
         }
 
         Builder withEmptySnapshot(OffsetAndEpoch snapshotId) {
-            try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(snapshotId).get()) {
+            try (RecordsSnapshotWriter<?> snapshot = new RecordsSnapshotWriter.Builder()
+                    .setTime(time)
+                    .setKraftVersion((short) 0)
+                    .setRawSnapshotWriter(log.createNewSnapshotUnchecked(snapshotId).get())
+                    .build(SERDE)
+            ) {
                 snapshot.freeze();
             }
+
             return this;
         }
 
@@ -472,23 +476,14 @@ public final class RaftClientTestContext {
         int epoch,
         List<String> records
     ) {
-        return buildBatch(time.milliseconds(), baseOffset, epoch, records, false);
-    }
-
-    MemoryRecords buildControlBatch(
-        long baseOffset,
-        int epoch,
-        List<String> records
-    ) {
-        return buildBatch(time.milliseconds(), baseOffset, epoch, records, true);
+        return buildBatch(time.milliseconds(), baseOffset, epoch, records);
     }
 
     static MemoryRecords buildBatch(
         long timestamp,
         long baseOffset,
         int epoch,
-        List<String> records,
-        boolean isControl
+        List<String> records
     ) {
         ByteBuffer buffer = ByteBuffer.allocate(512);
         BatchBuilder<String> builder = new BatchBuilder<>(
@@ -497,7 +492,6 @@ public final class RaftClientTestContext {
             Compression.NONE,
             baseOffset,
             timestamp,
-            isControl,
             epoch,
             512
         );
@@ -990,27 +984,16 @@ public final class RaftClientTestContext {
         int epoch,
         OptionalInt leaderId
     ) {
-        return assertSentFetchPartitionResponseWithSnapshotId(error, epoch, leaderId, -1, -1);
-    }
-
-    MemoryRecords assertSentFetchPartitionResponseWithSnapshotId(
-        Errors error,
-        int epoch,
-        OptionalInt leaderId,
-        long snapshotIdEndOffset,
-        int snapshotIdEpoch
-    ) {
         FetchResponseData.PartitionData partitionResponse = assertSentFetchPartitionResponse();
         assertEquals(error, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(leaderId.orElse(-1), partitionResponse.currentLeader().leaderId());
         assertEquals(-1, partitionResponse.divergingEpoch().endOffset());
         assertEquals(-1, partitionResponse.divergingEpoch().epoch());
-        assertEquals(snapshotIdEndOffset, partitionResponse.snapshotId().endOffset());
-        assertEquals(snapshotIdEpoch, partitionResponse.snapshotId().epoch());
+        assertEquals(-1, partitionResponse.snapshotId().endOffset());
+        assertEquals(-1, partitionResponse.snapshotId().epoch());
 
         return (MemoryRecords) partitionResponse.records();
-
     }
 
     MemoryRecords assertSentFetchPartitionResponse(

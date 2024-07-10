@@ -36,6 +36,7 @@ import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
+import org.apache.kafka.snapshot.Snapshots;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -666,7 +667,7 @@ public final class KafkaRaftClientSnapshotTest {
             fetchSnapshotRequest(
                 context.metadataPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )
@@ -701,7 +702,7 @@ public final class KafkaRaftClientSnapshotTest {
             fetchSnapshotRequest(
                 context.metadataPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )
@@ -732,7 +733,7 @@ public final class KafkaRaftClientSnapshotTest {
             fetchSnapshotRequest(
                 topicPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )
@@ -978,7 +979,7 @@ public final class KafkaRaftClientSnapshotTest {
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(0, 0);
+        OffsetAndEpoch snapshotId = Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
@@ -1068,7 +1069,7 @@ public final class KafkaRaftClientSnapshotTest {
     public void testFetchSnapshotRequestWithOlderEpoch(boolean withKip853Rpc) throws Exception {
         int localId = 0;
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(0, 0);
+        OffsetAndEpoch snapshotId = Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(1)
@@ -1101,7 +1102,7 @@ public final class KafkaRaftClientSnapshotTest {
     public void testFetchSnapshotRequestWithNewerEpoch(boolean withKip853Rpc) throws Exception {
         int localId = 0;
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(0, 0);
+        OffsetAndEpoch snapshotId = Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(1)
@@ -1839,7 +1840,7 @@ public final class KafkaRaftClientSnapshotTest {
                 otherNode,
                 context.metadataPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )
@@ -1854,7 +1855,7 @@ public final class KafkaRaftClientSnapshotTest {
                 otherNode,
                 context.metadataPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )
@@ -1869,7 +1870,7 @@ public final class KafkaRaftClientSnapshotTest {
                 otherNode,
                 context.metadataPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )
@@ -1884,7 +1885,7 @@ public final class KafkaRaftClientSnapshotTest {
                 otherNode,
                 context.metadataPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )

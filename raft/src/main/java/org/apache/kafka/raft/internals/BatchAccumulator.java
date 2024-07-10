@@ -391,7 +391,6 @@ public class BatchAccumulator<T> implements Closeable {
                 compression,
                 nextOffset,
                 time.milliseconds(),
-                false,
                 epoch,
                 maxBatchSize
             );

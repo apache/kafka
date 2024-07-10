@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClientTestContext;
 import org.apache.kafka.raft.internals.StringSerde;
@@ -254,7 +255,10 @@ public final class SnapshotWriterReaderTest {
         );
     }
 
-    public static void assertDataSnapshot(List<List<String>> batches, SnapshotReader<String> reader) {
+    public static void assertDataSnapshot(
+        List<List<String>> batches,
+        SnapshotReader<String> reader
+    ) {
         List<String> expected = new ArrayList<>();
         batches.forEach(expected::addAll);
 
@@ -269,17 +273,18 @@ public final class SnapshotWriterReaderTest {
         assertEquals(expected, actual);
     }
 
-    public static void assertControlSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
-        SnapshotReader<String> snapshotReader = RecordsSnapshotReader.of(reader, new StringSerde(), BufferSupplier.create(), Integer.MAX_VALUE, true);
-        List<String> expected = new ArrayList<>();
-        batches.forEach(expected::addAll);
-
-        List<String> actual = new ArrayList<>(expected.size());
-        while (snapshotReader.hasNext()) {
-            Batch<String> batch = snapshotReader.next();
-            batch.controlRecords().forEach(controlRecord -> actual.add(controlRecord.message().toString()));
+    public static void assertControlSnapshot(
+        List<List<ControlRecord>> expectedBatches,
+        SnapshotReader<?> reader
+    ) {
+        List<List<ControlRecord>> actualBatches = new ArrayList<>(expectedBatches.size());
+        while (reader.hasNext()) {
+            Batch<?> batch = reader.next();
+            if (!batch.controlRecords().isEmpty()) {
+                actualBatches.add(batch.controlRecords());
+            }
         }
 
-        assertEquals(expected, actual);
+        assertEquals(expectedBatches, actualBatches);
     }
 }

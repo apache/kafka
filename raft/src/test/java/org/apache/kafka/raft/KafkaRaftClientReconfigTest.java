@@ -31,17 +31,18 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.raft.internals.VoterSetTest;
-import org.apache.kafka.snapshot.RawSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -72,23 +73,46 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(epoch)
             .build();
 
+        List<List<ControlRecord>> expectedBootstrapRecords = Arrays.asList(
+            Arrays.asList(
+                new ControlRecord(
+                    ControlRecordType.SNAPSHOT_HEADER,
+                    new SnapshotHeaderRecord()
+                        .setVersion((short) 0)
+                        .setLastContainedLogTimestamp(0)
+                ),
+                new ControlRecord(
+                    ControlRecordType.KRAFT_VERSION,
+                    new KRaftVersionRecord()
+                        .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
+                        .setKRaftVersion((short) 1)
+                ),
+                new ControlRecord(
+                    ControlRecordType.KRAFT_VOTERS,
+                    voters.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
+                )
+            ),
+            Arrays.asList(
+                new ControlRecord(
+                    ControlRecordType.SNAPSHOT_FOOTER,
+                    new SnapshotFooterRecord()
+                        .setVersion((short) 0)
+                )
+            )
+        );
+
         // check the bootstrap snapshot exists and contains the expected records
         assertEquals(BOOTSTRAP_SNAPSHOT_ID, context.log.latestSnapshotId().get());
-        RawSnapshotReader snapshot = context.log.latestSnapshot().get();
-        // TODO: This should not be a List of String
-        List<String> expectedBootstrapRecords = new ArrayList<>();
-        expectedBootstrapRecords.add(new SnapshotHeaderRecord()
-            .setVersion((short) 0)
-            .setLastContainedLogTimestamp(0).toString());
-        expectedBootstrapRecords.add(new KRaftVersionRecord()
-            .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
-            .setKRaftVersion((short) 1).toString());
-        expectedBootstrapRecords.add(voters.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION).toString());
-        expectedBootstrapRecords.add(new SnapshotFooterRecord().setVersion((short) 0).toString());
-        SnapshotWriterReaderTest.assertControlSnapshot(
-            Collections.singletonList(expectedBootstrapRecords),
-            snapshot
-        );
+        try (SnapshotReader<?> reader = RecordsSnapshotReader.of(
+                context.log.latestSnapshot().get(),
+                context.serde,
+                BufferSupplier.NO_CACHING,
+                KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+                false
+            )
+        ) {
+            SnapshotWriterReaderTest.assertControlSnapshot(expectedBootstrapRecords, reader);
+        }
 
         // check if leader writes 3 bootstrap records to log
         context.becomeLeader();
@@ -156,17 +180,41 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(epoch)
             .build();
 
+        List<List<ControlRecord>> expectedBootstrapRecords = Arrays.asList(
+            Arrays.asList(
+                new ControlRecord(
+                    ControlRecordType.SNAPSHOT_HEADER,
+                    new SnapshotHeaderRecord()
+                        .setVersion((short) 0)
+                        .setLastContainedLogTimestamp(0)
+                )
+            ),
+            Arrays.asList(
+                new ControlRecord(
+                    ControlRecordType.SNAPSHOT_FOOTER,
+                    new SnapshotFooterRecord()
+                        .setVersion((short) 0)
+                )
+            )
+        );
+
         // check the bootstrap snapshot exists but is empty
         assertEquals(BOOTSTRAP_SNAPSHOT_ID, context.log.latestSnapshotId().get());
-        RawSnapshotReader snapshot = context.log.latestSnapshot().get();
-        List<String> expectedBootstrapRecords = Collections.emptyList();
-        SnapshotWriterReaderTest.assertControlSnapshot(
-            Collections.singletonList(expectedBootstrapRecords),
-            snapshot
-        );
+        try (SnapshotReader<?> reader = RecordsSnapshotReader.of(
+                context.log.latestSnapshot().get(),
+                context.serde,
+                BufferSupplier.NO_CACHING,
+                KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+                false
+            )
+        ) {
+            SnapshotWriterReaderTest.assertControlSnapshot(expectedBootstrapRecords, reader);
+        }
 
         // check leader does not write bootstrap records to log
         context.becomeLeader();
+
+        // TODO: Fix this. This doesn't look correct
         Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
