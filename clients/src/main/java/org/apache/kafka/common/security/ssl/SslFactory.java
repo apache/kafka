@@ -117,7 +117,7 @@ public class SslFactory implements Reconfigurable, Closeable {
         try {
             createNewSslEngineFactory(newConfigs);
         } catch (IllegalStateException e) {
-            throw new ConfigException("", e);
+            throw new ConfigException("SSL reconfiguration failed due to " + e);
         }
     }
 

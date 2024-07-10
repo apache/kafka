@@ -196,7 +196,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             try {
                 sslFactory.validateReconfiguration(configs);
             } catch (IllegalStateException e) {
-                throw new ConfigException("", e);
+                throw new ConfigException("SASL reconfiguration failed due to " + e);
             }
     }
 
