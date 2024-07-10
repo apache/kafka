@@ -39,6 +39,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class FetchRequestTest {
@@ -248,7 +249,8 @@ public class FetchRequestTest {
     public void testFetchRequestNoCacheData() {
         short version = 13;
         Uuid topicId = Uuid.randomUuid();
-        TopicIdPartition tp = new TopicIdPartition(topicId, 0, "topic");
+        int partition = 0;
+        TopicIdPartition tp = new TopicIdPartition(topicId, partition, "topic");
 
         Map<TopicPartition, FetchRequest.PartitionData> partitionData = Collections.singletonMap(tp.topicPartition(),
                 new FetchRequest.PartitionData(topicId, 0, 0, 0, Optional.empty()));
@@ -262,18 +264,23 @@ public class FetchRequestTest {
         
         HashMap<Uuid, String> topicNames = new HashMap<>();
         topicNames.put(topicId, tp.topic());
+        
         List<TopicIdPartition> requestsWithTopicsName = fetchRequest.forgottenTopics(topicNames);
         assertEquals(1, requestsWithTopicsName.size());
         requestsWithTopicsName.forEach(request -> {
             assertEquals(tp.topic(), request.topic());
             assertEquals(topicId, request.topicId());
+            assertEquals(tp.partition(), request.partition());
+            assertEquals(tp.topicPartition(), request.topicPartition());
         });
 
         List<TopicIdPartition> requestData = fetchRequest.forgottenTopics(Collections.emptyMap());
         assertEquals(1, requestData.size());
         requestData.forEach(request -> {
-            assertEquals(tp.topic(), request.topic());
+            assertNull(request.topic());
             assertEquals(topicId, request.topicId());
+            assertEquals(tp.partition(), request.partition());
+            assertEquals(new TopicPartition(null, partition), request.topicPartition());
         });
         
     }
