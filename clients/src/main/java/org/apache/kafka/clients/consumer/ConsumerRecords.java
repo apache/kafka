@@ -66,14 +66,19 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
             @Override
             protected ConsumerRecord<K, V> makeNext() {
-                while (!currentRecordIterator.hasNext() && partitionIterator.hasNext()) {
+                if (currentRecordIterator.hasNext()) {
+                    return currentRecordIterator.next();
+                }
+
+                while (partitionIterator.hasNext()) {
                     Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> nextPartition = partitionIterator.next();
                     List<ConsumerRecord<K, V>> records = nextPartition.getValue();
                     if (topic.equals(nextPartition.getKey().topic()) && !records.isEmpty()) {
                         currentRecordIterator = records.iterator();
+                        return currentRecordIterator.next();
                     }
                 }
-                return currentRecordIterator.hasNext() ? currentRecordIterator.next() : allDone();
+                return allDone();
             }
         };
     }
