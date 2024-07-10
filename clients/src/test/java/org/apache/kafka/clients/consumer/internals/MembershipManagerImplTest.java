@@ -44,6 +44,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -167,32 +168,12 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testMembershipManagerRegistersForClusterMetadataUpdatesOnFirstJoin() {
-        // First join should register to get metadata updates
-        MembershipManagerImpl manager = new MembershipManagerImpl(
-                GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
-                subscriptionState, commitRequestManager, metadata, LOG_CONTEXT, Optional.empty(),
-                backgroundEventHandler, time, rebalanceMetricsManager);
-        manager.transitionToJoining();
-        clearInvocations(metadata);
-
-        // Following joins should not register again.
-        receiveEmptyAssignment(manager);
-        mockLeaveGroup();
-        manager.leaveGroup();
-        assertEquals(MemberState.LEAVING, manager.state());
-        manager.onHeartbeatRequestSent();
-        assertEquals(MemberState.UNSUBSCRIBED, manager.state());
-        manager.transitionToJoining();
-    }
-
-    @Test
     public void testReconcilingWhenReceivingAssignmentFoundInMetadata() {
         MembershipManager membershipManager = mockJoinAndReceiveAssignment(true);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
 
         // When the ack is sent the member should go back to STABLE
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
     }
 
@@ -317,7 +298,7 @@ public class MembershipManagerImplTest {
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         membershipManager.onHeartbeatSuccess(heartbeatResponse.data());
         membershipManager.poll(time.milliseconds());
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertEquals(MEMBER_ID, membershipManager.memberId());
         assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
@@ -365,6 +346,22 @@ public class MembershipManagerImplTest {
     }
 
     @Test
+    public void testFencingWhenStateIsPrepareLeavingCompletesTheLeaveOperation() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        mockPrepareLeaving(new TopicPartition("topic1", 0));
+        CompletableFuture<Void> leaveOperation = membershipManager.leaveGroup();
+        assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
+        assertFalse(leaveOperation.isDone());
+        clearInvocations(subscriptionState);
+
+        membershipManager.transitionToFenced();
+
+        testFenceIsNoOp(membershipManager);
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        assertTrue(leaveOperation.isDone(), "Fenced member should complete the ongoing leave operation");
+    }
+
+    @Test
     public void testNewAssignmentIgnoredWhenStateIsPrepareLeaving() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
@@ -393,7 +390,7 @@ public class MembershipManagerImplTest {
 
         // Start leaving group.
         mockLeaveGroup();
-        membershipManager.leaveGroup();
+        CompletableFuture<Void> leaveOperation = membershipManager.leaveGroup();
         assertEquals(MemberState.LEAVING, membershipManager.state());
 
         // Get fenced while leaving. Member should not trigger any callback or try to
@@ -401,17 +398,21 @@ public class MembershipManagerImplTest {
         clearInvocations(subscriptionState);
         membershipManager.transitionToFenced();
         testFenceIsNoOp(membershipManager);
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state(), "Member should " +
+            "transition from LEAVING to UNSUBSCRIBED when getting fenced (it does not need to " +
+            "send leave request if fenced");
+        assertTrue(leaveOperation.isDone(), "Fenced member should complete the ongoing leave operation");
+    }
+
+    private void assertTransitionToUnsubscribeOnHBSentAndWaitForResponseToCompleteLeave(MembershipManager membershipManager, CompletableFuture<Void> sendLeave) {
         assertEquals(MemberState.LEAVING, membershipManager.state());
-
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
+        assertFalse(sendLeave.isDone(), "Send leave operation should not complete until a response is received");
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
 
-        // Last heartbeat sent is expected to fail, leading to a call to transitionToFenced. That
-        // should be no-op because the member already left.
-        clearInvocations(subscriptionState);
-        membershipManager.transitionToFenced();
-        testFenceIsNoOp(membershipManager);
-        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(new Assignment()).data());
+
+        assertSendLeaveCompleted(membershipManager, sendLeave);
     }
 
     @Test
@@ -614,7 +615,7 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         membershipManager.poll(time.milliseconds());
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertEquals(toTopicIdPartitionMap(assignment1), membershipManager.currentAssignment().partitions);
     }
@@ -652,7 +653,7 @@ public class MembershipManagerImplTest {
         verifyReconciliationTriggeredAndCompleted(membershipManager,
             Collections.singletonList(new TopicIdPartition(topic1, new TopicPartition("topic1", 0)))
         );
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         clearInvocations(membershipManager);
 
@@ -692,7 +693,7 @@ public class MembershipManagerImplTest {
         String topic1 = "topic1";
         MembershipManagerImpl membershipManager =
                 mockMemberSuccessfullyReceivesAndAcksAssignment(topicId1, topic1, Collections.singletonList(0));
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
         clearInvocations(membershipManager, subscriptionState);
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(new TopicPartition(topic1, 0)));
@@ -731,7 +732,7 @@ public class MembershipManagerImplTest {
 
         // After acknowledging the assignment, we should be back to RECONCILING, because we have not
         // yet reached the target assignment.
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
 
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(topic2Assignment, membershipManager.topicPartitionsAwaitingReconciliation());
@@ -799,7 +800,7 @@ public class MembershipManagerImplTest {
 
         // After acknowledging the assignment, we should be back to RECONCILING, because we have not
         // yet reached the target assignment.
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
 
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         clearInvocations(membershipManager, commitRequestManager);
@@ -827,7 +828,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager =
             mockMemberSuccessfullyReceivesAndAcksAssignment(topicId1, topic1, Collections.singletonList(0));
 
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
 
         assertEquals(MemberState.STABLE, membershipManager.state());
         when(subscriptionState.assignedPartitions()).thenReturn(getTopicPartitions(Collections.singleton(topicId1Partition0)));
@@ -849,7 +850,7 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertTrue(membershipManager.shouldHeartbeatNow());
 
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
 
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -878,20 +879,50 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
     }
     @Test
-    public void testIgnoreHeartbeatWhenLeavingGroup() {
+    public void testHeartbeatSuccessfulResponseWhenLeavingGroupCompletesLeave() {
         MembershipManager membershipManager = createMemberInStableState();
         mockLeaveGroup();
 
         CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertFalse(leaveResult.isDone());
+
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        assertFalse(leaveResult.isDone());
 
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(createAssignment(true)).data());
+        assertSendLeaveCompleted(membershipManager, leaveResult);
+    }
 
+    @ParameterizedTest
+    @ValueSource(booleans =  {true, false})
+    public void testHeartbeatFailedResponseWhenLeavingGroupCompletesLeave(boolean retriableResponseError) {
+        MembershipManager membershipManager = createMemberInStableState();
+        mockLeaveGroup();
+
+        CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
         assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertFalse(leaveResult.isDone());
+
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        assertFalse(leaveResult.isDone());
+
+        membershipManager.onHeartbeatFailure(retriableResponseError);
+        assertSendLeaveCompleted(membershipManager, leaveResult);
+    }
+
+    private void assertSendLeaveCompleted(MembershipManager membershipManager,
+                                          CompletableFuture<Void> sendLeave) {
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state(), "Member should " +
+            "remain UNSUBSCRIBED after receiving the response to the HB to leave");
         assertEquals(-1, membershipManager.memberEpoch());
         assertEquals(MEMBER_ID, membershipManager.memberId());
         assertTrue(membershipManager.currentAssignment().isNone());
-        assertFalse(leaveResult.isDone(), "Leave group result should not complete until the " +
-            "heartbeat request to leave is sent out.");
+        assertTrue(sendLeave.isDone(), "Leave group result should complete when the response to" +
+            " the heartbeat request to leave is received.");
+        assertFalse(sendLeave.isCompletedExceptionally());
     }
 
     @ParameterizedTest
@@ -976,9 +1007,7 @@ public class MembershipManagerImplTest {
         assertFalse(leaveResult2.isDone());
 
         // Complete first leave group operation. Should also complete the second leave group.
-        membershipManager.onHeartbeatRequestSent();
-        assertTrue(leaveResult1.isDone());
-        assertFalse(leaveResult1.isCompletedExceptionally());
+        assertTransitionToUnsubscribeOnHBSentAndWaitForResponseToCompleteLeave(membershipManager, leaveResult1);
         assertTrue(leaveResult2.isDone());
         assertFalse(leaveResult2.isCompletedExceptionally());
 
@@ -994,10 +1023,7 @@ public class MembershipManagerImplTest {
         mockLeaveGroup();
         CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup();
         assertEquals(MemberState.LEAVING, membershipManager.state());
-        membershipManager.onHeartbeatRequestSent();
-        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
-        assertTrue(leaveResult1.isDone());
-        assertFalse(leaveResult1.isCompletedExceptionally());
+        assertTransitionToUnsubscribeOnHBSentAndWaitForResponseToCompleteLeave(membershipManager, leaveResult1);
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
         clearInvocations(subscriptionState);
 
@@ -1020,8 +1046,9 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.FENCED, membershipManager.state());
 
         mockLeaveGroup();
-        membershipManager.leaveGroup();
+        CompletableFuture<Void> leaveOperation = membershipManager.leaveGroup();
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        assertTrue(leaveOperation.isDone());
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
 
         completeCallback(callbackEvent, membershipManager);
@@ -1075,8 +1102,9 @@ public class MembershipManagerImplTest {
 
         // Start leaving group.
         mockLeaveGroup();
-        membershipManager.leaveGroup();
+        CompletableFuture<Void> leaveOperation = membershipManager.leaveGroup();
         assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertFalse(leaveOperation.isDone());
 
         // Get fatal failure while waiting to send the heartbeat to leave. Member should
         // transition to FATAL, so the last heartbeat for leaving won't be sent because the member
@@ -1084,7 +1112,8 @@ public class MembershipManagerImplTest {
         testStateUpdateOnFatalFailure(membershipManager);
 
         assertEquals(MemberState.FATAL, membershipManager.state());
-        membershipManager.onHeartbeatRequestSent();
+        assertTrue(leaveOperation.isDone(), "Member should complete the ongoing leave operation when transitioning to FATAL state");
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.FATAL, membershipManager.state());
     }
 
@@ -1094,21 +1123,26 @@ public class MembershipManagerImplTest {
 
         // Start leaving group.
         mockLeaveGroup();
-        membershipManager.leaveGroup();
+        CompletableFuture<Void> sendLeave = membershipManager.leaveGroup();
         assertEquals(MemberState.LEAVING, membershipManager.state());
 
         // Last heartbeat sent.
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
 
         // Fatal error received in response for the last heartbeat. Member should remain in FATAL
         // state but no callbacks should be triggered because the member already left the group.
         MockRebalanceListener rebalanceListener = new MockRebalanceListener();
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(rebalanceListener));
+        membershipManager.onHeartbeatFailure(false);
         membershipManager.transitionToFatal();
         assertEquals(0, rebalanceListener.lostCount);
 
         assertEquals(MemberState.FATAL, membershipManager.state());
+
+        assertTrue(sendLeave.isDone());
+        assertFalse(sendLeave.isCompletedExceptionally(), "Send leave should complete when a " +
+            "response to the leave group is received, even if it contains errors.");
     }
 
     @Test
@@ -1137,7 +1171,7 @@ public class MembershipManagerImplTest {
 
         // When the ack is sent nothing should change. Member still has nothing to reconcile,
         // only topics waiting for metadata.
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertFalse(membershipManager.topicsAwaitingReconciliation().isEmpty());
 
@@ -1159,7 +1193,7 @@ public class MembershipManagerImplTest {
 
         // When ack for the reconciled assignment is sent, member should go back to STABLE
         // because the first assignment that was not resolved should have been discarded
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
     }
@@ -1178,7 +1212,7 @@ public class MembershipManagerImplTest {
 
         // When the ack is sent nothing should change. Member still has nothing to reconcile,
         // only topics waiting for metadata.
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertFalse(membershipManager.topicsAwaitingReconciliation().isEmpty());
 
@@ -1197,7 +1231,7 @@ public class MembershipManagerImplTest {
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, Collections.emptyList());
 
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
 
         assertEquals(MemberState.STABLE, membershipManager.state());
     }
@@ -1218,7 +1252,7 @@ public class MembershipManagerImplTest {
 
         verifyReconciliationNotTriggered(membershipManager);
         membershipManager.poll(time.milliseconds());
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
 
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertFalse(membershipManager.topicsAwaitingReconciliation().isEmpty());
@@ -1285,7 +1319,7 @@ public class MembershipManagerImplTest {
 
         // When the ack is sent the member should go back to RECONCILING because it still has
         // unresolved assignment to be reconciled.
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         // Target assignment received again with the same unresolved topic. Client should keep it
@@ -1353,7 +1387,7 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         clearInvocations(subscriptionState, membershipManager);
 
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
 
         // Receive same assignment again - should not trigger reconciliation
@@ -1473,7 +1507,7 @@ public class MembershipManagerImplTest {
                                 .setTopicId(topicId)
                                 .setPartitions(Arrays.asList(0, 1))));
         MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(true, targetAssignment);
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         // Should not trigger reconciliation, and request a metadata update.
@@ -1503,7 +1537,7 @@ public class MembershipManagerImplTest {
                                 .setTopicId(topicId)
                                 .setPartitions(Arrays.asList(0, 1))));
         MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(true, targetAssignment);
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         // Should not trigger reconciliation, and request a metadata update.
@@ -1615,7 +1649,7 @@ public class MembershipManagerImplTest {
         assertFalse(membershipManager.reconciliationInProgress());
 
         // Step 4: Send ack and make sure we're done and our listener was called appropriately
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertEquals(topicIdPartitionsMap(topicId, 0, 1), membershipManager.currentAssignment().partitions);
 
@@ -1652,7 +1686,7 @@ public class MembershipManagerImplTest {
         assertFalse(membershipManager.reconciliationInProgress());
 
         // Step 8: Send ack and make sure we're done and our listener was called appropriately
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertFalse(membershipManager.reconciliationInProgress());
 
@@ -1707,7 +1741,7 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         // Step 4: Send ack and make sure we're done and our listener was called appropriately
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         assertEquals(1, listener.revokedCount());
@@ -1771,7 +1805,7 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         // Step 5: Send ack and make sure we're done and our listener was called appropriately
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         assertEquals(1, listener.revokedCount());
@@ -1851,7 +1885,7 @@ public class MembershipManagerImplTest {
     private void assertLeaveGroupDueToExpiredPollAndTransitionToStale(MembershipManagerImpl membershipManager) {
         assertDoesNotThrow(() -> membershipManager.transitionToSendingLeaveGroup(true));
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertStaleMemberLeavesGroupAndClearsAssignment(membershipManager);
     }
 
@@ -1894,7 +1928,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         doNothing().when(subscriptionState).assignFromSubscribed(any());
         membershipManager.transitionToSendingLeaveGroup(true);
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STALE, membershipManager.state());
         assertTrue(membershipManager.shouldSkipHeartbeat(), "Stale member should not send heartbeats");
         // Check that a transition to joining is allowed, which is what is expected to happen
@@ -1925,7 +1959,7 @@ public class MembershipManagerImplTest {
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
 
         membershipManager.transitionToSendingLeaveGroup(true);
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
 
         assertEquals(MemberState.STALE, membershipManager.state());
         assertFalse(backgroundEventQueue.isEmpty());
@@ -1958,7 +1992,7 @@ public class MembershipManagerImplTest {
         doNothing().when(subscriptionState).assignFromSubscribed(any());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         membershipManager.transitionToSendingLeaveGroup(true);
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         return membershipManager;
     }
     private void mockPartitionOwnedAndNewPartitionAdded(String topicName,
@@ -2015,7 +2049,7 @@ public class MembershipManagerImplTest {
         assertTrue(membershipManager.currentAssignment().isNone());
 
         // Step 4: Receive ack and make sure we're done and our listener was called appropriately
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.JOINING, membershipManager.state());
 
         assertEquals(0, listener.revokedCount());
@@ -2133,7 +2167,7 @@ public class MembershipManagerImplTest {
 
         verifyReconciliationNotTriggered(membershipManager);
         membershipManager.poll(time.milliseconds());
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
 
         assertEquals(MemberState.STABLE, membershipManager.state());
     }
@@ -2171,7 +2205,7 @@ public class MembershipManagerImplTest {
     @Test
     public void testMetricsWhenHeartbeatFailed() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
-        membershipManager.onHeartbeatFailure();
+        membershipManager.onHeartbeatFailure(false);
 
         // Not expecting rebalance failures with only the empty assignment being reconciled.
         assertEquals(1.0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
@@ -2238,7 +2272,7 @@ public class MembershipManagerImplTest {
         listener.reset();
 
         // ack
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
 
         // revoke all
         when(subscriptionState.assignedPartitions()).thenReturn(topicPartitions(topicName, 0, 1));
@@ -2262,7 +2296,7 @@ public class MembershipManagerImplTest {
             topicPartitions(topicName, 2),
             true
         );
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
 
         long secondRebalanceMs = listener.sleepMs;
         long total = firstRebalanaceTimesMs + secondRebalanceMs;
@@ -2293,7 +2327,7 @@ public class MembershipManagerImplTest {
         time.sleep(2300);
 
         assertTrue(rebalanceMetricsManager.rebalanceStarted());
-        membershipManager.onHeartbeatFailure();
+        membershipManager.onHeartbeatFailure(false);
 
         assertEquals((double) 0, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyTotal));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
@@ -2441,7 +2475,7 @@ public class MembershipManagerImplTest {
     }
 
     private void mockAckSent(MembershipManagerImpl membershipManager) {
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
     }
 
     private void mockTopicNameInMetadataCache(Map<Uuid, String> topicNames, boolean isPresent) {
@@ -2564,7 +2598,7 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         membershipManager.poll(time.milliseconds());
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
 
         clearInvocations(subscriptionState, membershipManager, commitRequestManager);
@@ -2670,11 +2704,7 @@ public class MembershipManagerImplTest {
         assertFalse(leaveResult.isDone(), "Leave group result should not complete until the " +
                 "heartbeat request to leave is sent out.");
 
-        membershipManager.onHeartbeatRequestSent();
-
-        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
-        assertTrue(leaveResult.isDone());
-        assertFalse(leaveResult.isCompletedExceptionally());
+        assertTransitionToUnsubscribeOnHBSentAndWaitForResponseToCompleteLeave(membershipManager, leaveResult);
         assertEquals(MEMBER_ID, membershipManager.memberId());
         assertEquals(-1, membershipManager.memberEpoch());
         assertTrue(membershipManager.currentAssignment().isNone());
@@ -2691,14 +2721,7 @@ public class MembershipManagerImplTest {
         ConsumerRebalanceListenerInvoker invoker) {
         String topicName = "topic1";
         TopicPartition ownedPartition = new TopicPartition(topicName, 0);
-
-        // Start leaving group, blocked waiting for callback to complete.
-        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
-        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
-        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
-        doNothing().when(subscriptionState).markPendingRevocation(anySet());
-        when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
+        mockPrepareLeaving(ownedPartition);
         membershipManager.leaveGroup();
         return performCallback(
             membershipManager,
@@ -2707,6 +2730,16 @@ public class MembershipManagerImplTest {
             topicPartitions(ownedPartition.topic(), ownedPartition.partition()),
             false
         );
+    }
+
+    private void mockPrepareLeaving(TopicPartition ownedPartition) {
+        // Start leaving group, blocked waiting for callback to complete.
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        doNothing().when(subscriptionState).markPendingRevocation(anySet());
+        when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
     }
 
     private ConsumerRebalanceListenerCallbackCompletedEvent mockFencedMemberStuckOnUserCallback(
@@ -2735,6 +2768,7 @@ public class MembershipManagerImplTest {
         String memberId = membershipManager.memberId();
         int lastEpoch = membershipManager.memberEpoch();
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        membershipManager.onHeartbeatFailure(false);
         membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
         // Should keep its last member id and epoch.
@@ -2795,10 +2829,10 @@ public class MembershipManagerImplTest {
     private MembershipManagerImpl memberJoinWithAssignment() {
         Uuid topicId = Uuid.randomUuid();
         MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(true);
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic"));
         receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertFalse(membershipManager.currentAssignment().isNone());
         return membershipManager;
     }
