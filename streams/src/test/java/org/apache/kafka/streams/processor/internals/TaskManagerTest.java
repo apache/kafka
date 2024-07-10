@@ -715,6 +715,35 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldFirstHandleTasksInStateUpdaterThenSuspendedActiveTasksInTaskRegistry() {
+        final StreamTask reassignedActiveTask1 = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.SUSPENDED)
+            .withInputPartitions(taskId03Partitions).build();
+        final StreamTask reassignedActiveTask2 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId02Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.allTasks()).thenReturn(mkSet(reassignedActiveTask1));
+        when(stateUpdater.getTasks()).thenReturn(mkSet(reassignedActiveTask2));
+        when(stateUpdater.remove(reassignedActiveTask2.id()))
+            .thenReturn(CompletableFuture.completedFuture(new StateUpdater.RemovedTaskResult(reassignedActiveTask2)));
+
+        taskManager.handleAssignment(
+            mkMap(
+                mkEntry(reassignedActiveTask1.id(), reassignedActiveTask1.inputPartitions()),
+                mkEntry(reassignedActiveTask2.id(), taskId00Partitions)
+            ),
+            Collections.emptyMap()
+        );
+
+        final InOrder inOrder = inOrder(stateUpdater, tasks);
+        inOrder.verify(stateUpdater).remove(reassignedActiveTask2.id());
+        inOrder.verify(tasks).removeTask(reassignedActiveTask1);
+        inOrder.verify(stateUpdater).add(reassignedActiveTask1);
+    }
+
+    @Test
     public void shouldNeverUpdateInputPartitionsOfStandbyTaskInStateUpdater() {
         final StandbyTask standbyTaskToUpdateInputPartitions = standbyTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.RUNNING)
