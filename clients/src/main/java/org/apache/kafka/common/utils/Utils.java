@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
@@ -862,15 +863,21 @@ public final class Utils {
         Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
-                // If the root path did not exist, ignore the error; otherwise throw it.
-                if (exc instanceof NoSuchFileException && path.toFile().equals(rootFile))
-                    return FileVisitResult.TERMINATE;
+                if (exc instanceof NoSuchFileException) {
+                    if (path.toFile().equals(rootFile)) {
+                        // If the root path did not exist, ignore the error and terminate;
+                        return FileVisitResult.TERMINATE;
+                    } else {
+                        // Otherwise, just continue walking as the file might already be deleted by other threads.
+                        return FileVisitResult.CONTINUE;
+                    }
+                }
                 throw exc;
             }
 
             @Override
             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-                Files.delete(path);
+                Files.deleteIfExists(path);
                 return FileVisitResult.CONTINUE;
             }
 
@@ -881,7 +888,7 @@ public final class Utils {
                     throw exc;
                 }
 
-                Files.delete(path);
+                Files.deleteIfExists(path);
                 return FileVisitResult.CONTINUE;
             }
         });
@@ -1653,6 +1660,11 @@ public final class Utils {
     public static void require(boolean requirement) {
         if (!requirement)
             throw new IllegalArgumentException("requirement failed");
+    }
+
+    public static void require(boolean requirement, String errorMessage) {
+        if (!requirement)
+            throw new IllegalArgumentException(errorMessage);
     }
 
     /**

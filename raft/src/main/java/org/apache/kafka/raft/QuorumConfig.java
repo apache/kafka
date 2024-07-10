@@ -235,7 +235,7 @@ public class QuorumConfig {
         if (host == null || !Utils.validHostPattern(host)) {
             throw new ConfigException(
                 String.format(
-                    "Failed to parse host name from {} for the configuration {}. Each " +
+                    "Failed to parse host name from %s for the configuration %s. Each " +
                     "entry should be in the form \"{host}:{port}\"",
                     bootstrapServer,
                     QUORUM_BOOTSTRAP_SERVERS_CONFIG
@@ -247,7 +247,7 @@ public class QuorumConfig {
         if (port == null) {
             throw new ConfigException(
                 String.format(
-                    "Failed to parse host port from {} for the configuration {}. Each " +
+                    "Failed to parse host port from %s for the configuration %s. Each " +
                     "entry should be in the form \"{host}:{port}\"",
                     bootstrapServer,
                     QUORUM_BOOTSTRAP_SERVERS_CONFIG

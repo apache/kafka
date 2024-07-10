@@ -420,9 +420,7 @@ class MyRemoteLogMetadataManager extends NoOpRemoteLogMetadataManager {
       val startOffset = idx * recordsPerSegment
       val endOffset = startOffset + recordsPerSegment - 1
       val segmentLeaderEpochs: util.Map[Integer, java.lang.Long] = Collections.singletonMap(0, 0L)
-      segmentMetadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
-        startOffset, endOffset, timestamp, 0, timestamp, segmentSize, Optional.empty(),
-        RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentLeaderEpochs))
+      segmentMetadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()), startOffset, endOffset, timestamp, 0, timestamp, segmentSize, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentLeaderEpochs, 0))
     }
     segmentMetadataList.iterator()
   }

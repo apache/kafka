@@ -18,6 +18,7 @@
 package kafka.server.builders;
 
 import kafka.log.LogManager;
+import kafka.log.remote.RemoteLogManager;
 import kafka.server.AddPartitionsToTxnManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
@@ -31,18 +32,19 @@ import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
-import kafka.log.remote.RemoteLogManager;
 import kafka.zk.KafkaZkClient;
+
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.DirectoryEventHandler;
-import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.server.util.Scheduler;
-import scala.compat.java8.OptionConverters;
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import scala.compat.java8.OptionConverters;
 
 
 public class ReplicaManagerBuilder {

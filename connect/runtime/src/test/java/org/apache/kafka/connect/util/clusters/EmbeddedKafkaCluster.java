@@ -22,16 +22,17 @@ import kafka.server.KafkaServer;
 import kafka.utils.CoreUtils;
 import kafka.utils.TestUtils;
 import kafka.zk.EmbeddedZookeeper;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -59,6 +60,7 @@ import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -206,6 +208,18 @@ public class EmbeddedKafkaCluster {
     }
 
     private void stop(boolean deleteLogDirs, boolean stopZK) {
+        maybeShutDownProducer();
+        triggerBrokerShutdown();
+        awaitBrokerShutdown();
+
+        if (deleteLogDirs)
+            deleteLogDirs();
+
+        if (stopZK)
+            stopZK();
+    }
+
+    private void maybeShutDownProducer() {
         try {
             if (producer != null) {
                 producer.close();
@@ -214,7 +228,9 @@ public class EmbeddedKafkaCluster {
             log.error("Could not shutdown producer ", e);
             throw new RuntimeException("Could not shutdown producer", e);
         }
+    }
 
+    private void triggerBrokerShutdown() {
         for (KafkaServer broker : brokers) {
             try {
                 broker.shutdown();
@@ -224,25 +240,37 @@ public class EmbeddedKafkaCluster {
                 throw new RuntimeException(msg, t);
             }
         }
+    }
 
-        if (deleteLogDirs) {
-            for (KafkaServer broker : brokers) {
-                try {
-                    log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
-                    CoreUtils.delete(broker.config().logDirs());
-                } catch (Throwable t) {
-                    String msg = String.format("Could not clean up log dirs for broker at %s",
-                            address(broker));
-                    log.error(msg, t);
-                    throw new RuntimeException(msg, t);
-                }
+    private void awaitBrokerShutdown() {
+        for (KafkaServer broker : brokers) {
+            try {
+                broker.awaitShutdown();
+            } catch (Throwable t) {
+                String msg = String.format("Failed while awaiting shutdown of broker at %s", address(broker));
+                log.error(msg, t);
+                throw new RuntimeException(msg, t);
             }
         }
+    }
 
-        try {
-            if (stopZK) {
-                zookeeper.shutdown();
+    private void deleteLogDirs() {
+        for (KafkaServer broker : brokers) {
+            try {
+                log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
+                CoreUtils.delete(broker.config().logDirs());
+            } catch (Throwable t) {
+                String msg = String.format("Could not clean up log dirs for broker at %s",
+                        address(broker));
+                log.error(msg, t);
+                throw new RuntimeException(msg, t);
             }
+        }
+    }
+
+    private void stopZK() {
+        try {
+            zookeeper.shutdown();
         } catch (Throwable t) {
             String msg = String.format("Could not shutdown zookeeper at %s", zKConnectString());
             log.error(msg, t);

@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

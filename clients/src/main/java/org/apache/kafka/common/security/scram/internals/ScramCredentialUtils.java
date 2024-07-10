@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
+import org.apache.kafka.common.security.authenticator.CredentialCache;
+import org.apache.kafka.common.security.scram.ScramCredential;
+
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Properties;
-
-import org.apache.kafka.common.security.authenticator.CredentialCache;
-import org.apache.kafka.common.security.scram.ScramCredential;
 
 /**
  * SCRAM Credential persistence utility functions. Implements format conversion used

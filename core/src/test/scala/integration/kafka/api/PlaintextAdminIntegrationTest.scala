@@ -33,15 +33,17 @@ import kafka.utils.{Log4jController, TestUtils}
 import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
+import org.apache.kafka.common.{ConsumerGroupState, ElectionType, IsolationLevel, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
@@ -90,6 +92,71 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   override def tearDown(): Unit = {
     teardownBrokerLoggers()
     super.tearDown()
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testAbortTransaction(quorum: String): Unit = {
+    client = createAdminClient
+    val tp = new TopicPartition("topic1", 0)
+    client.createTopics(Collections.singletonList(new NewTopic(tp.topic(), 1, 1.toShort))).all().get()
+
+    def checkConsumer = (tp: TopicPartition, expectedNumber: Int) => {
+      val configs = new util.HashMap[String, Object]()
+      configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, plaintextBootstrapServers(brokers))
+      configs.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString)
+      if (quorum == "kraft+kip848")
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, ConsumerProtocol.PROTOCOL_TYPE)
+      val consumer = new KafkaConsumer(configs, new ByteArrayDeserializer, new ByteArrayDeserializer)
+      try {
+        consumer.assign(Collections.singleton(tp))
+        consumer.seekToBeginning(Collections.singleton(tp))
+        val records = consumer.poll(time.Duration.ofSeconds(3))
+        assertEquals(expectedNumber, records.count())
+      } finally consumer.close()
+    }
+
+    def appendRecord = (records: Int) => {
+      val producer = new KafkaProducer(Collections.singletonMap(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
+        plaintextBootstrapServers(brokers).asInstanceOf[Object]), new ByteArraySerializer, new ByteArraySerializer)
+      try {
+        (0 until records).foreach(i =>
+          producer.send(new ProducerRecord[Array[Byte], Array[Byte]](
+            tp.topic(), tp.partition(), i.toString.getBytes, i.toString.getBytes())))
+      } finally producer.close()
+    }
+
+    val producer = TestUtils.createTransactionalProducer("foo", brokers)
+    try {
+      producer.initTransactions()
+      producer.beginTransaction()
+
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](
+        tp.topic(), tp.partition(), "k1".getBytes, "v1".getBytes()))
+      producer.flush()
+      producer.commitTransaction()
+
+      checkConsumer(tp, 1)
+
+      producer.beginTransaction()
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](
+        tp.topic(), tp.partition(), "k2".getBytes, "v2".getBytes()))
+      producer.flush()
+
+      appendRecord(1)
+      checkConsumer(tp, 1)
+
+      val transactionalProducer = client.describeProducers(Collections.singletonList(tp))
+        .partitionResult(tp).get().activeProducers().asScala.minBy(_.producerId())
+
+      assertDoesNotThrow(() => client.abortTransaction(
+        new AbortTransactionSpec(tp,
+          transactionalProducer.producerId(),
+          transactionalProducer.producerEpoch().toShort,
+          transactionalProducer.coordinatorEpoch().getAsInt)).all().get())
+
+      checkConsumer(tp, 2)
+    } finally producer.close()
   }
 
   @ParameterizedTest
@@ -999,6 +1066,25 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val describeResult2 = client.describeConfigs(Collections.singletonList(invalidTopic))
 
     assertTrue(assertThrows(classOf[ExecutionException], () => describeResult2.values.get(invalidTopic).get).getCause.isInstanceOf[InvalidTopicException])
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testIncludeDocumentation(quorum: String): Unit = {
+    createTopic(topic)
+    client = createAdminClient
+
+    val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    val resources = Collections.singletonList(resource)
+    val includeDocumentation = new DescribeConfigsOptions().includeDocumentation(true)
+    var describeConfigs = client.describeConfigs(resources, includeDocumentation)
+    var configEntries = describeConfigs.values().get(resource).get().entries()
+    configEntries.forEach(e => assertNotNull(e.documentation()))
+
+    val excludeDocumentation = new DescribeConfigsOptions().includeDocumentation(false)
+    describeConfigs = client.describeConfigs(resources, excludeDocumentation)
+    configEntries = describeConfigs.values().get(resource).get().entries()
+    configEntries.forEach(e => assertNull(e.documentation()))
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {

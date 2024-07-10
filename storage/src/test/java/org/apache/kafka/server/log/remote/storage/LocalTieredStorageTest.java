@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,20 +62,18 @@ import static java.nio.ByteBuffer.wrap;
 import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot.takeSnapshot;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.LEADER_EPOCH_CHECKPOINT;
-
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType.LEADER_EPOCH;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType.OFFSET;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType.TIMESTAMP;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType.TRANSACTION;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class LocalTieredStorageTest {
 
@@ -359,7 +358,7 @@ public final class LocalTieredStorageTest {
 
     private RemoteLogSegmentMetadata newRemoteLogSegmentMetadata(final RemoteLogSegmentId id) {
         return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, 1000L,
-                1024, Collections.singletonMap(0, 0L));
+                1024, Collections.singletonMap(0, 0L), 0);
     }
 
     private RemoteLogSegmentId newRemoteLogSegmentId() {
@@ -540,7 +539,7 @@ public final class LocalTieredStorageTest {
 
         private RemoteLogSegmentMetadata newMetadata(final RemoteLogSegmentId id) {
             return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, 1000,
-                    1024, Collections.singletonMap(0, 0L));
+                    1024, Collections.singletonMap(0, 0L), 0);
         }
 
         private String getStorageRootDirectory() {

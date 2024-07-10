@@ -227,6 +227,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -6943,6 +6944,36 @@ public class KafkaAdminClientTest {
 
             TestUtils.assertFutureThrows(result.descriptions().get(0), ApiException.class);
             assertNotNull(result.descriptions().get(1).get());
+        }
+    }
+    
+    @Test
+    public void testDescribeReplicaLogDirsWithNonExistReplica() throws Exception {
+        int brokerId = 0;
+        TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic1", 12, brokerId);
+        TopicPartitionReplica tpr2 = new TopicPartitionReplica("topic2", 12, brokerId);
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            String logDir = "/var/data/kafka0";
+            int offsetLag = 1;
+            int defaultOffsetLag = -1;
+            env.kafkaClient().prepareResponseFrom(
+                    new DescribeLogDirsResponse(
+                            new DescribeLogDirsResponseData().setResults(singletonList(
+                                    prepareDescribeLogDirsResult(tpr1, logDir, 123456, offsetLag, false)))),
+                    env.cluster().nodeById(brokerId));
+
+            DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(asList(tpr1, tpr2));
+            Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
+            
+            assertEquals(logDir, values.get(tpr1).get().getCurrentReplicaLogDir());
+            assertNull(values.get(tpr1).get().getFutureReplicaLogDir());
+            assertEquals(offsetLag, values.get(tpr1).get().getCurrentReplicaOffsetLag());
+            assertEquals(defaultOffsetLag, values.get(tpr1).get().getFutureReplicaOffsetLag());
+            assertNull(values.get(tpr2).get().getCurrentReplicaLogDir());
+            assertNull(values.get(tpr2).get().getFutureReplicaLogDir());
+            assertEquals(defaultOffsetLag, values.get(tpr2).get().getCurrentReplicaOffsetLag());
+            assertEquals(defaultOffsetLag, values.get(tpr2).get().getFutureReplicaOffsetLag());
         }
     }
 

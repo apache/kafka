@@ -23,6 +23,7 @@ import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.network.ListenerName;
@@ -50,6 +51,11 @@ public interface ClusterInstance {
     }
 
     Map<Integer, KafkaBroker> brokers();
+
+    default Map<Integer, KafkaBroker> aliveBrokers() {
+        return brokers().entrySet().stream().filter(entry -> !entry.getValue().isShutdown())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
 
     Map<Integer, ControllerServer> controllers();
 
@@ -188,7 +194,7 @@ public interface ClusterInstance {
         ), 60000L, topic + " metadata not propagated after 60000 ms");
 
         for (ControllerServer controller : controllers().values()) {
-            long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset - 1;
+            long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
             TestUtils.waitForCondition(
                 () -> brokers().values().stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
                 60000L, "Timeout waiting for controller metadata propagating to brokers");

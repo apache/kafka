@@ -16,8 +16,6 @@
  */
 package kafka.log.remote;
 
-import com.yammer.metrics.core.Gauge;
-import com.yammer.metrics.core.MetricName;
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
@@ -26,12 +24,14 @@ import kafka.log.remote.quota.RLMQuotaManagerConfig;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.StopPartition;
+
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.FileRecords;
@@ -78,6 +78,10 @@ import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import org.apache.kafka.storage.internals.log.TimeIndex;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.test.TestUtils;
+
+import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.MetricName;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -89,15 +93,13 @@ import org.mockito.InOrder;
 import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
 import org.opentest4j.AssertionFailedError;
-import scala.Option;
-import scala.collection.JavaConverters;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.InputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
@@ -128,6 +130,10 @@ import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import scala.Option;
+import scala.collection.JavaConverters;
+
+import static kafka.log.remote.RemoteLogManager.isRemoteSegmentWithinLeaderEpochs;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CONSUMER_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_PRODUCER_PREFIX;
@@ -171,8 +177,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import static kafka.log.remote.RemoteLogManager.isRemoteSegmentWithinLeaderEpochs;
-
 public class RemoteLogManagerTest {
     private final Time time = new MockTime();
     private final int brokerId = 0;
@@ -189,11 +193,13 @@ public class RemoteLogManagerTest {
     private final String remoteLogMetadataConsumerTestProp = REMOTE_LOG_METADATA_CONSUMER_PREFIX + "consumer.test";
     private final String remoteLogMetadataConsumerTestVal = "consumer.test";
     private final String remoteLogMetadataTopicPartitionsNum = "1";
+    private final long quotaExceededThrottleTime = 1000L;
+    private final long quotaAvailableThrottleTime = 0L;
 
     private final RemoteStorageManager remoteStorageManager = mock(RemoteStorageManager.class);
     private final RemoteLogMetadataManager remoteLogMetadataManager = mock(RemoteLogMetadataManager.class);
     private final RLMQuotaManager rlmCopyQuotaManager = mock(RLMQuotaManager.class);
-    private RemoteLogManagerConfig remoteLogManagerConfig = null;
+    private KafkaConfig config;
 
     private BrokerTopicStats brokerTopicStats = null;
     private final Metrics metrics = new Metrics(time);
@@ -223,10 +229,11 @@ public class RemoteLogManagerTest {
         Properties props = kafka.utils.TestUtils.createDummyBrokerConfig();
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "100");
-        remoteLogManagerConfig = createRLMConfig(props);
+        appendRLMConfig(props);
+        config = KafkaConfig.fromProps(props);
         brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig().isRemoteStorageSystemEnabled());
 
-        remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
+        remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics) {
@@ -334,11 +341,14 @@ public class RemoteLogManagerTest {
         String key = "key";
         String configPrefix = "config.prefix";
         Properties props = new Properties();
+        props.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP, configPrefix);
         props.put(configPrefix + key, "world");
         props.put("remote.log.metadata.y", "z");
+        appendRLMConfig(props);
+        KafkaConfig config = KafkaConfig.fromProps(props);
 
-        Map<String, Object> metadataMangerConfig = createRLMConfig(props).remoteLogMetadataManagerProps();
+        Map<String, Object> metadataMangerConfig = config.remoteLogManagerConfig().remoteLogMetadataManagerProps();
         assertEquals(props.get(configPrefix + key), metadataMangerConfig.get(key));
         assertFalse(metadataMangerConfig.containsKey("remote.log.metadata.y"));
     }
@@ -348,11 +358,14 @@ public class RemoteLogManagerTest {
         String key = "key";
         String configPrefix = "config.prefix";
         Properties props = new Properties();
+        props.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP, configPrefix);
         props.put(configPrefix + key, "world");
         props.put("remote.storage.manager.y", "z");
+        appendRLMConfig(props);
+        KafkaConfig config = KafkaConfig.fromProps(props);
 
-        Map<String, Object> remoteStorageManagerConfig = createRLMConfig(props).remoteStorageManagerProps();
+        Map<String, Object> remoteStorageManagerConfig = config.remoteLogManagerConfig().remoteStorageManagerProps();
         assertEquals(props.get(configPrefix + key), remoteStorageManagerConfig.get(key));
         assertFalse(remoteStorageManagerConfig.containsKey("remote.storage.manager.y"));
     }
@@ -378,10 +391,13 @@ public class RemoteLogManagerTest {
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfigOverridden() throws IOException {
         Properties props = new Properties();
+        props.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
         // override common security.protocol by adding "RLMM prefix" and "remote log metadata common client prefix"
         props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol", "SSL");
+        appendRLMConfig(props);
+        KafkaConfig config = KafkaConfig.fromProps(props);
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
-                createRLMConfig(props),
+                config.remoteLogManagerConfig(),
                 brokerId,
                 logDir,
                 clusterId,
@@ -523,6 +539,7 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
         when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class)))
                 .thenReturn(Optional.empty());
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
 
         // Verify the metrics for remote writes and for failures is zero before attempt to copy log segment
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
@@ -639,6 +656,7 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
         when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class)))
                 .thenReturn(Optional.of(customMetadata));
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, customMetadataSizeLimit);
         task.convertToLeader(2);
@@ -866,6 +884,7 @@ public class RemoteLogManagerTest {
             copyLogSegmentLatch.await(5000, TimeUnit.MILLISECONDS);
             return Optional.empty();
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
 
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
         List<RemoteLogSegmentMetadata> metadataList = listRemoteLogSegmentMetadata(leaderTopicIdPartition, segmentCount, 100, 1024, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
@@ -1009,12 +1028,13 @@ public class RemoteLogManagerTest {
             latch.await(5000, TimeUnit.MILLISECONDS);
             return Optional.empty();
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
 
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
 
         when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(175L, 100L);
         when(activeSegment.size()).thenReturn(100);
-        when(mockLog.onlyLocalLogSegmentsCount()).thenReturn(1L);
+        when(mockLog.onlyLocalLogSegmentsCount()).thenReturn(2L).thenReturn(1L);
 
         // before running tasks, the metric should not be registered
         assertThrows(NoSuchElementException.class, () -> yammerMetricValue("RemoteCopyLagBytes,topic=" + leaderTopic));
@@ -1045,6 +1065,17 @@ public class RemoteLogManagerTest {
                         safeLongYammerMetricValue("RemoteLogSizeComputationTime,topic=" + leaderTopic),
                         safeLongYammerMetricValue("RemoteLogSizeComputationTime")));
         remoteLogSizeComputationTimeLatch.countDown();
+        
+        TestUtils.waitForCondition(
+                () -> 0 == safeLongYammerMetricValue("RemoteCopyLagBytes") && 0 == safeLongYammerMetricValue("RemoteCopyLagBytes,topic=" + leaderTopic),
+                String.format("Expected to find 0 for RemoteCopyLagBytes metric value, but found %d for topic 'Leader' and %d for all topics.",
+                        safeLongYammerMetricValue("RemoteCopyLagBytes,topic=" + leaderTopic),
+                        safeLongYammerMetricValue("RemoteCopyLagBytes")));
+        TestUtils.waitForCondition(
+                () -> 0 == safeLongYammerMetricValue("RemoteCopyLagSegments") && 0 == safeLongYammerMetricValue("RemoteCopyLagSegments,topic=" + leaderTopic),
+                String.format("Expected to find 0 for RemoteCopyLagSegments metric value, but found %d for topic 'Leader' and %d for all topics.",
+                        safeLongYammerMetricValue("RemoteCopyLagSegments,topic=" + leaderTopic),
+                        safeLongYammerMetricValue("RemoteCopyLagSegments")));
     }
 
     private Object yammerMetricValue(String name) {
@@ -1115,6 +1146,7 @@ public class RemoteLogManagerTest {
         dummyFuture.complete(null);
         when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
         doThrow(new RuntimeException()).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
 
         // Verify the metrics for remote write requests/failures is zero before attempt to copy log segment
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
@@ -1271,7 +1303,7 @@ public class RemoteLogManagerTest {
     void testGetClassLoaderAwareRemoteStorageManager() throws Exception {
         ClassLoaderAwareRemoteStorageManager rsmManager = mock(ClassLoaderAwareRemoteStorageManager.class);
         try (RemoteLogManager remoteLogManager =
-            new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
+            new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                     t -> Optional.empty(),
                     (topicPartition, offset) -> { },
                     brokerTopicStats, metrics) {
@@ -1533,7 +1565,7 @@ public class RemoteLogManagerTest {
     public void testRemoveMetricsOnClose() throws IOException {
         MockedConstruction<KafkaMetricsGroup> mockMetricsGroupCtor = mockConstruction(KafkaMetricsGroup.class);
         try {
-            RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId,
+            RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId,
                 time, tp -> Optional.of(mockLog), (topicPartition, offset) -> { }, brokerTopicStats, metrics) {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return remoteStorageManager;
@@ -1580,7 +1612,7 @@ public class RemoteLogManagerTest {
                 100000L,
                 1000,
                 Optional.empty(),
-                RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentEpochs);
+                RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentEpochs, 0);
     }
 
     @Test
@@ -1916,9 +1948,9 @@ public class RemoteLogManagerTest {
         int segmentSize = 1024;
         List<RemoteLogSegmentMetadata> segmentMetadataList = Arrays.asList(
                 new RemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
-                        500, 539, timestamp, brokerId, timestamp, segmentSize, truncateAndGetLeaderEpochs(epochEntries, 500L, 539L)),
+                        500, 539, timestamp, brokerId, timestamp, segmentSize, truncateAndGetLeaderEpochs(epochEntries, 500L, 539L), 0),
                 new RemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
-                        540, 700, timestamp, brokerId, timestamp, segmentSize, truncateAndGetLeaderEpochs(epochEntries, 540L, 700L))
+                        540, 700, timestamp, brokerId, timestamp, segmentSize, truncateAndGetLeaderEpochs(epochEntries, 540L, 700L), 0)
                 );
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
                 .thenAnswer(invocation -> {
@@ -1928,7 +1960,7 @@ public class RemoteLogManagerTest {
                     else
                         return Collections.emptyIterator();
                 });
-        try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
                 brokerTopicStats, metrics) {
@@ -1953,7 +1985,7 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
                 .thenReturn(Collections.emptyIterator());
 
-        try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
                 brokerTopicStats, metrics) {
@@ -1987,7 +2019,7 @@ public class RemoteLogManagerTest {
                 });
 
         AtomicLong logStartOffset = new AtomicLong(0);
-        try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) ->  logStartOffset.set(offset),
                 brokerTopicStats, metrics) {
@@ -2081,7 +2113,7 @@ public class RemoteLogManagerTest {
         RemoteLogSegmentMetadata metadata2 = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 metadata1.startOffset(), metadata1.endOffset() + 5, metadata1.maxTimestampMs(),
                 metadata1.brokerId() + 1, metadata1.eventTimestampMs(), metadata1.segmentSizeInBytes() + 128,
-                metadata1.customMetadata(), metadata1.state(), metadata1.segmentLeaderEpochs());
+                metadata1.customMetadata(), metadata1.state(), metadata1.segmentLeaderEpochs(), 0);
 
         // When there are overlapping/duplicate segments, the RemoteLogMetadataManager#listRemoteLogSegments
         // returns the segments in order of (valid ++ unreferenced) segments:
@@ -2419,7 +2451,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testDeleteRetentionMsOnExpiredSegment() throws RemoteStorageException, IOException {
         AtomicLong logStartOffset = new AtomicLong(0);
-        try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> logStartOffset.set(offset),
                 brokerTopicStats, metrics) {
@@ -2514,7 +2546,8 @@ public class RemoteLogManagerTest {
                     segmentSize,
                     Optional.empty(),
                     state,
-                    segmentLeaderEpochs);
+                    segmentLeaderEpochs,
+                0);
             segmentMetadataList.add(metadata);
         }
         return segmentMetadataList;
@@ -2561,7 +2594,7 @@ public class RemoteLogManagerTest {
         );
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
-                remoteLogManagerConfig,
+                config.remoteLogManagerConfig(),
                 brokerId,
                 logDir,
                 clusterId,
@@ -2634,7 +2667,7 @@ public class RemoteLogManagerTest {
         );
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
-                remoteLogManagerConfig,
+                config.remoteLogManagerConfig(),
                 brokerId,
                 logDir,
                 clusterId,
@@ -2719,7 +2752,7 @@ public class RemoteLogManagerTest {
 
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
-                remoteLogManagerConfig,
+                config.remoteLogManagerConfig(),
                 brokerId,
                 logDir,
                 clusterId,
@@ -2764,18 +2797,23 @@ public class RemoteLogManagerTest {
     @Test
     public void testCopyQuotaManagerConfig() {
         Properties defaultProps = new Properties();
-        RemoteLogManagerConfig defaultRlmConfig = createRLMConfig(defaultProps);
-        RLMQuotaManagerConfig defaultConfig = RemoteLogManager.copyQuotaManagerConfig(defaultRlmConfig);
+        defaultProps.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
+        appendRLMConfig(defaultProps);
+        KafkaConfig defaultRlmConfig = KafkaConfig.fromProps(defaultProps);
+        RLMQuotaManagerConfig defaultConfig = RemoteLogManager.copyQuotaManagerConfig(defaultRlmConfig.remoteLogManagerConfig());
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND, defaultConfig.quotaBytesPerSecond());
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM, defaultConfig.numQuotaSamples());
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS, defaultConfig.quotaWindowSizeSeconds());
 
         Properties customProps = new Properties();
+        customProps.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP, 100);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_PROP, 31);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
-        RemoteLogManagerConfig rlmConfig = createRLMConfig(customProps);
-        RLMQuotaManagerConfig rlmCopyQuotaManagerConfig = RemoteLogManager.copyQuotaManagerConfig(rlmConfig);
+        appendRLMConfig(customProps);
+        KafkaConfig config = KafkaConfig.fromProps(customProps);
+
+        RLMQuotaManagerConfig rlmCopyQuotaManagerConfig = RemoteLogManager.copyQuotaManagerConfig(config.remoteLogManagerConfig());
         assertEquals(100L, rlmCopyQuotaManagerConfig.quotaBytesPerSecond());
         assertEquals(31, rlmCopyQuotaManagerConfig.numQuotaSamples());
         assertEquals(1, rlmCopyQuotaManagerConfig.quotaWindowSizeSeconds());
@@ -2784,18 +2822,23 @@ public class RemoteLogManagerTest {
     @Test
     public void testFetchQuotaManagerConfig() {
         Properties defaultProps = new Properties();
-        RemoteLogManagerConfig defaultRlmConfig = createRLMConfig(defaultProps);
-        RLMQuotaManagerConfig defaultConfig = RemoteLogManager.fetchQuotaManagerConfig(defaultRlmConfig);
+        defaultProps.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
+        appendRLMConfig(defaultProps);
+        KafkaConfig defaultRlmConfig = KafkaConfig.fromProps(defaultProps);
+
+        RLMQuotaManagerConfig defaultConfig = RemoteLogManager.fetchQuotaManagerConfig(defaultRlmConfig.remoteLogManagerConfig());
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND, defaultConfig.quotaBytesPerSecond());
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM, defaultConfig.numQuotaSamples());
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS, defaultConfig.quotaWindowSizeSeconds());
 
         Properties customProps = new Properties();
+        customProps.put("zookeeper.connect", kafka.utils.TestUtils.MockZkConnect());
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP, 100);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_PROP, 31);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
-        RemoteLogManagerConfig rlmConfig = createRLMConfig(customProps);
-        RLMQuotaManagerConfig rlmFetchQuotaManagerConfig = RemoteLogManager.fetchQuotaManagerConfig(rlmConfig);
+        appendRLMConfig(customProps);
+        KafkaConfig rlmConfig = KafkaConfig.fromProps(customProps);
+        RLMQuotaManagerConfig rlmFetchQuotaManagerConfig = RemoteLogManager.fetchQuotaManagerConfig(rlmConfig.remoteLogManagerConfig());
         assertEquals(100L, rlmFetchQuotaManagerConfig.quotaBytesPerSecond());
         assertEquals(31, rlmFetchQuotaManagerConfig.numQuotaSamples());
         assertEquals(1, rlmFetchQuotaManagerConfig.quotaWindowSizeSeconds());
@@ -2825,6 +2868,12 @@ public class RemoteLogManagerTest {
             // Verify that the copy operation times out, since no segments can be copied due to quota being exceeded
             assertThrows(AssertionFailedError.class, () -> assertTimeoutPreemptively(Duration.ofMillis(200), () -> task.copyLogSegmentsToRemote(mockLog)));
 
+            Map<org.apache.kafka.common.MetricName, KafkaMetric> allMetrics = metrics.metrics();
+            KafkaMetric avgMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-avg", "RemoteLogManager"));
+            KafkaMetric maxMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-max", "RemoteLogManager"));
+            assertEquals(quotaExceededThrottleTime, ((Double) avgMetric.metricValue()).longValue());
+            assertEquals(quotaExceededThrottleTime, ((Double) maxMetric.metricValue()).longValue());
+
             // Verify the highest offset in remote storage is updated only once
             ArgumentCaptor<Long> capture = ArgumentCaptor.forClass(Long.class);
             verify(mockLog, times(1)).updateHighestOffsetInRemoteStorage(capture.capture());
@@ -2835,9 +2884,15 @@ public class RemoteLogManagerTest {
             assertTimeoutPreemptively(Duration.ofMillis(100), () -> task.copyLogSegmentsToRemote(mockLog));
 
             // Verify quota check was performed
-            verify(rlmCopyQuotaManager, times(1)).isQuotaExceeded();
+            verify(rlmCopyQuotaManager, times(1)).getThrottleTimeMs();
             // Verify bytes to copy was recorded with the quota manager
             verify(rlmCopyQuotaManager, times(1)).record(10);
+
+            Map<org.apache.kafka.common.MetricName, KafkaMetric> allMetrics = metrics.metrics();
+            KafkaMetric avgMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-avg", "RemoteLogManager"));
+            KafkaMetric maxMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-max", "RemoteLogManager"));
+            assertEquals(Double.NaN, avgMetric.metricValue());
+            assertEquals(Double.NaN, maxMetric.metricValue());
 
             // Verify the highest offset in remote storage is updated
             ArgumentCaptor<Long> capture = ArgumentCaptor.forClass(Long.class);
@@ -2858,7 +2913,7 @@ public class RemoteLogManagerTest {
             Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
         // Ensure the copy operation is waiting for quota to be available
         TestUtils.waitForCondition(() -> {
-            verify(rlmCopyQuotaManager, atLeast(1)).isQuotaExceeded();
+            verify(rlmCopyQuotaManager, atLeast(1)).getThrottleTimeMs();
             return true;
         }, "Quota exceeded check did not happen");
         // Verify RLM is able to shut down
@@ -2923,7 +2978,7 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
         when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class))).thenReturn(Optional.empty());
 
-        when(rlmCopyQuotaManager.isQuotaExceeded()).thenReturn(quotaExceeded);
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaExceeded ? 1000L : 0L);
         doNothing().when(rlmCopyQuotaManager).record(anyInt());
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
@@ -2994,8 +3049,8 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
         when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class))).thenReturn(Optional.empty());
 
-        // After the first call, isQuotaExceeded should return true
-        when(rlmCopyQuotaManager.isQuotaExceeded()).thenReturn(false, true);
+        // After the first call, getThrottleTimeMs should return non-zero throttle time
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(0L, 1000L);
         doNothing().when(rlmCopyQuotaManager).record(anyInt());
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
@@ -3047,7 +3102,7 @@ public class RemoteLogManagerTest {
         return partition;
     }
 
-    private RemoteLogManagerConfig createRLMConfig(Properties props) {
+    private void appendRLMConfig(Properties props) {
         props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, NoOpRemoteStorageManager.class.getName());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, NoOpRemoteLogMetadataManager.class.getName());
@@ -3058,8 +3113,6 @@ public class RemoteLogManagerTest {
         props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataCommonClientTestProp, remoteLogMetadataCommonClientTestVal);
         props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataConsumerTestProp, remoteLogMetadataConsumerTestVal);
         props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataProducerTestProp, remoteLogMetadataProducerTestVal);
-
-        return new RemoteLogManagerConfig(props);
     }
 
 }

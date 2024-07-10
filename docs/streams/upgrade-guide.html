@@ -133,12 +133,44 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
-    <h4><a id="streams_api_changes_380" href="#streams_api_changes_380">Streams API changes in 3.8.0</a></h3>
+    <h3><a id="streams_api_changes_380" href="#streams_api_changes_380">Streams API changes in 3.8.0</a></h3>
+
+    <p>
+        Kafka Streams now supports customizable task assignment strategies via the <code>task.assignor.class</code>
+        configuration. The configuration can be set to the fully qualified class name of a custom task assignor
+        implementation that has to extend the new
+        <code>org.apache.kafka.streams.processor.assignment.TaskAssignor</code> interface.
+
+        The new configuration also allows users to bring back the behavior of the old task assignor
+        <code>StickyTaskAssignor</code> that was used before the introduction of the
+        <code>HighAvailabilityTaskAssignor</code>. If no custom task assignor is configured, the default task assignor
+        <code>HighAvailabilityTaskAssignor</code> is used.
+
+        If you were using the <code>internal.task.assignor.class</code> config, you should switch to using the new
+        <code>task.assignor.class</code> config instead, as the internal config will be removed in a future release.
+        If you were previously plugging in the <code>StickyTaskAssignor</code> via the legacy
+        <code>internal.task.assignor.class</code> config, you will need to make sure that you are importing
+        the new <code>org.apache.kafka.streams.processor.assignment.StickTaskAssignor</code> when you switch
+        over to the new <code>task.assignor.class</code> config, which is a version of the <code>StickyTaskAssignor</code>
+        that implements the new public <code>TaskAssignor</code> interface.
+
+        For more details, see the public interface section of
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-924%3A+customizable+task+assignment+for+Streams">KIP-924</a>.
+    </p>
+
     <p>
         The Processor API now support so-called read-only state stores, added via 
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-813%3A+Shareable+State+Stores">KIP-813</a>.
-	These stores don't have a dedicated changelog topic, but use their source topic for fault-tolerance,
-	simlar to <code>KTables</code> with source-topic optimization enabled.
+        These stores don't have a dedicated changelog topic, but use their source topic for fault-tolerance,
+        similar to <code>KTables</code> with source-topic optimization enabled.
+    </p>
+
+    <p>
+        To improve detection of leaked state store iterators, we added new store-level metrics to track the number and
+        age of open iterators. The new metrics are <code>num-open-iterators</code>, <code>iterator-duration-avg</code>,
+        <code>iterator-duration-max</code> and <code>oldest-iterator-open-since-ms</code>. These metrics are available
+        for all state stores, including RocksDB, in-memory, and custom stores. More details can be found in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-989%3A+Improved+StateStore+Iterator+metrics+for+detecting+leaks">KIP-989</a>.
     </p>
 
     <h3><a id="streams_api_changes_370" href="#streams_api_changes_370">Streams API changes in 3.7.0</a></h3>
@@ -301,6 +333,35 @@
     <p>
       <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-884%3A+Add+config+to+configure+KafkaClientSupplier+in+Kafka+Streams">KIP-884</a>
       adds a new config <code>default.client.supplier</code> that allows to use a custom <code>KafkaClientSupplier</code> without any code changes.
+    </p>
+
+    <h3><a id="streams_api_changes_340" href="#streams_api_changes_340">Streams API changes in 3.4.0</a></h3>
+    <p>
+      <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=186878390">KIP-770</a> deprecates
+      config <code>cache.max.bytes.buffering</code> in favor of the newly introduced config <code>statestore.cache.max.bytes</code>.
+      To improve monitoring, two new metrics <code>input-buffer-bytes-total</code> and <code>cache-size-bytes-total</code>
+      were added at the DEBUG level. Note, that the KIP is only partially implemented in the 3.4.0 release, and config
+      <code>input.buffer.max.bytes</code> is not available yet.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=211883356">KIP-873</a> enables you to multicast
+      result records to multiple partition of downstream sink topics and adds functionality for choosing to drop result records without sending.
+      The <code>Integer StreamPartitioner.partition()</code> method is deprecated and replaced by the newly added
+      <code>Optiona&lg;Set&lt;Integer&gt;&gt;StreamPartitioner.partitions()</code> method, which enables returning a set of partitions to send the record to.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-862%3A+Self-join+optimization+for+stream-stream+joins">KIP-862</a>
+      adds a DSL optimization for stream-stream self-joins. The optimization is enabled via a new option <code>single.store.self.join</code>
+      which can be set via existing config <code>topology.optimization</code>. If enabled, the DSL will use a different
+      join processor implementation that uses a single RocksDB store instead of two, to avoid unnecessary data duplication for the self-join case.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-865%3A+Support+--bootstrap-server+in+kafka-streams-application-reset">KIP-865</a>
+      updates the Kafka Streams application reset tool’s server parameter name to conform to the other Kafka tooling by deprecating
+      the <code>--bootstrap-servers</code> parameter and introducing a new <code>--bootstrap-server</code> parameter in its place.
     </p>
 
     <h3><a id="streams_api_changes_330" href="#streams_api_changes_330">Streams API changes in 3.3.0</a></h3>

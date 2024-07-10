@@ -41,11 +41,13 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KeyValueIteratorStub;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.Collections;
 import java.util.List;
@@ -61,10 +63,10 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -72,7 +74,8 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class MeteredKeyValueStoreTest {
 
     private static final String APPLICATION_ID = "test-app";
@@ -100,17 +103,26 @@ public class MeteredKeyValueStoreTest {
     private Map<String, String> tags;
     private MockTime mockTime;
 
-    @Before
-    public void before() {
+    public void setUpWithoutContext() {
         final MockTime mockTime = new MockTime();
         this.mockTime = mockTime;
         metered = new MeteredKeyValueStore<>(
-            inner,
-            STORE_TYPE,
-            mockTime,
-            Serdes.String(),
-            Serdes.String()
+                inner,
+                STORE_TYPE,
+                mockTime,
+                Serdes.String(),
+                Serdes.String()
         );
+        metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
+        tags = mkMap(
+                mkEntry(THREAD_ID_TAG_KEY, threadId),
+                mkEntry("task-id", taskId.toString()),
+                mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
+        );
+    }
+
+    private void setUp() {
+        setUpWithoutContext();
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         when(context.applicationId()).thenReturn(APPLICATION_ID);
         when(context.metrics()).thenReturn(
@@ -119,11 +131,6 @@ public class MeteredKeyValueStoreTest {
         when(context.taskId()).thenReturn(taskId);
         when(context.changelogFor(STORE_NAME)).thenReturn(CHANGELOG_TOPIC);
         when(inner.name()).thenReturn(STORE_NAME);
-        tags = mkMap(
-            mkEntry(THREAD_ID_TAG_KEY, threadId),
-            mkEntry("task-id", taskId.toString()),
-            mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
-        );
     }
 
     private void init() {
@@ -133,6 +140,7 @@ public class MeteredKeyValueStoreTest {
     @SuppressWarnings("deprecation")
     @Test
     public void shouldDelegateDeprecatedInit() {
+        setUp();
         final MeteredKeyValueStore<String, String> outer = new MeteredKeyValueStore<>(
             inner,
             STORE_TYPE,
@@ -146,6 +154,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldDelegateInit() {
+        setUp();
         final MeteredKeyValueStore<String, String> outer = new MeteredKeyValueStore<>(
             inner,
             STORE_TYPE,
@@ -159,11 +168,13 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldPassChangelogTopicNameToStateStoreSerde() {
+        setUp();
         doShouldPassChangelogTopicNameToStateStoreSerde(CHANGELOG_TOPIC);
     }
 
     @Test
     public void shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled() {
+        setUp();
         final String defaultChangelogTopicName = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, STORE_NAME, taskId.topologyName());
         when(context.changelogFor(STORE_NAME)).thenReturn(null);
         doShouldPassChangelogTopicNameToStateStoreSerde(defaultChangelogTopicName);
@@ -198,6 +209,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void testMetrics() {
+        setUp();
         init();
         final JmxReporter reporter = new JmxReporter();
         final MetricsContext metricsContext = new KafkaMetricsContext("kafka.streams");
@@ -217,6 +229,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldRecordRestoreLatencyOnInit() {
+        setUp();
         doNothing().when(inner).init((StateStoreContext) context, metered);
 
         init();
@@ -229,6 +242,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldWriteBytesToInnerStoreAndRecordPutMetric() {
+        setUp();
         doNothing().when(inner).put(KEY_BYTES, VALUE_BYTES);
         init();
 
@@ -240,6 +254,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldGetBytesFromInnerStoreAndReturnGetMetric() {
+        setUp();
         when(inner.get(KEY_BYTES)).thenReturn(VALUE_BYTES);
         init();
 
@@ -251,6 +266,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldPutIfAbsentAndRecordPutIfAbsentMetric() {
+        setUp();
         when(inner.putIfAbsent(KEY_BYTES, VALUE_BYTES)).thenReturn(null);
         init();
 
@@ -263,6 +279,7 @@ public class MeteredKeyValueStoreTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldPutAllToInnerStoreAndRecordPutAllMetric() {
+        setUp();
         doNothing().when(inner).putAll(any(List.class));
         init();
 
@@ -274,6 +291,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldDeleteFromInnerStoreAndRecordDeleteMetric() {
+        setUp();
         when(inner.delete(KEY_BYTES)).thenReturn(VALUE_BYTES);
         init();
 
@@ -285,6 +303,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldGetRangeFromInnerStoreAndRecordRangeMetric() {
+        setUp();
         when(inner.range(KEY_BYTES, KEY_BYTES))
             .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
         init();
@@ -300,6 +319,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldGetAllFromInnerStoreAndRecordAllMetric() {
+        setUp();
         when(inner.all()).thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
         init();
 
@@ -314,6 +334,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldFlushInnerWhenFlushTimeRecords() {
+        setUp();
         doNothing().when(inner).flush();
         init();
 
@@ -328,6 +349,7 @@ public class MeteredKeyValueStoreTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldSetFlushListenerOnWrappedCachingStore() {
+        setUpWithoutContext();
         final CachedKeyValueStore cachedKeyValueStore = mock(CachedKeyValueStore.class);
 
         when(cachedKeyValueStore.setFlushListener(any(CacheFlushListener.class), eq(false))).thenReturn(true);
@@ -344,6 +366,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldNotThrowNullPointerExceptionIfGetReturnsNull() {
+        setUp();
         when(inner.get(Bytes.wrap("a".getBytes()))).thenReturn(null);
 
         init();
@@ -352,11 +375,13 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldNotSetFlushListenerOnWrappedNoneCachingStore() {
+        setUpWithoutContext();
         assertFalse(metered.setFlushListener(null, false));
     }
 
     @Test
     public void shouldRemoveMetricsOnClose() {
+        setUp();
         doNothing().when(inner).close();
         init(); // replays "inner"
 
@@ -368,6 +393,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose() {
+        setUp();
         doThrow(new RuntimeException("Oops!")).when(inner).close();
         init(); // replays "inner"
 
@@ -378,57 +404,68 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldThrowNullPointerOnGetIfKeyIsNull() {
+        setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> metered.get(null));
     }
 
     @Test
     public void shouldThrowNullPointerOnPutIfKeyIsNull() {
+        setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> metered.put(null, VALUE));
     }
 
     @Test
     public void shouldThrowNullPointerOnPutIfAbsentIfKeyIsNull() {
+        setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> metered.putIfAbsent(null, VALUE));
     }
 
     @Test
     public void shouldThrowNullPointerOnDeleteIfKeyIsNull() {
+        setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> metered.delete(null));
     }
 
     @Test
     public void shouldThrowNullPointerOnPutAllIfAnyKeyIsNull() {
+        setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> metered.putAll(Collections.singletonList(KeyValue.pair(null, VALUE))));
     }
 
     @Test
     public void shouldThrowNullPointerOnPrefixScanIfPrefixIsNull() {
+        setUpWithoutContext();
         final StringSerializer stringSerializer = new StringSerializer();
         assertThrows(NullPointerException.class, () -> metered.prefixScan(null, stringSerializer));
     }
 
     @Test
     public void shouldThrowNullPointerOnRangeIfFromIsNull() {
+        setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> metered.range(null, "to"));
     }
 
     @Test
     public void shouldThrowNullPointerOnRangeIfToIsNull() {
+        setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> metered.range("from", null));
     }
 
     @Test
     public void shouldThrowNullPointerOnReverseRangeIfFromIsNull() {
+        setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> metered.reverseRange(null, "to"));
     }
 
     @Test
     public void shouldThrowNullPointerOnReverseRangeIfToIsNull() {
+        setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> metered.reverseRange("from", null));
     }
 
     @Test
     public void shouldGetRecordsWithPrefixKey() {
+        setUp();
         final StringSerializer stringSerializer = new StringSerializer();
         when(inner.prefixScan(KEY, stringSerializer))
             .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
@@ -444,6 +481,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldTrackOpenIteratorsMetric() {
+        setUp();
         final StringSerializer stringSerializer = new StringSerializer();
         when(inner.prefixScan(KEY, stringSerializer)).thenReturn(KeyValueIterators.emptyIterator());
         init();
@@ -462,6 +500,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldTimeIteratorDuration() {
+        setUp();
         when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
         init();
 
@@ -492,6 +531,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldTrackOldestOpenIteratorTimestamp() {
+        setUp();
         when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
         init();
 

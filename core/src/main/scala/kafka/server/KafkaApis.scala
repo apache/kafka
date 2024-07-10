@@ -70,7 +70,7 @@ import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinator}
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.{GroupVersion, MetadataVersion}
+import org.apache.kafka.server.common.{MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData}
@@ -260,6 +260,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.REMOVE_RAFT_VOTER => forwardToControllerOrFail(request)
         case ApiKeys.SHARE_FETCH => handleShareFetchRequest(request)
         case ApiKeys.SHARE_ACKNOWLEDGE => handleShareAcknowledgeRequest(request)
+        case ApiKeys.INITIALIZE_SHARE_GROUP_STATE => handleInitializeShareGroupStateRequest(request)
+        case ApiKeys.READ_SHARE_GROUP_STATE => handleReadShareGroupStateRequest(request)
+        case ApiKeys.WRITE_SHARE_GROUP_STATE => handleWriteShareGroupStateRequest(request)
+        case ApiKeys.DELETE_SHARE_GROUP_STATE => handleDeleteShareGroupStateRequest(request)
+        case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY => handleReadShareGroupStateSummaryRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -525,7 +530,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizedTopicsRequest.foreach { topic =>
       topic.partitions.forEach { partition =>
         val error = try {
-          if (partition.committedMetadata != null && partition.committedMetadata.length > config.offsetMetadataMaxSize) {
+          if (partition.committedMetadata != null && partition.committedMetadata.length > config.groupCoordinatorConfig.offsetMetadataMaxSize) {
             Errors.OFFSET_METADATA_TOO_LARGE
           } else {
             zkSupport.zkClient.setOrCreateConsumerOffset(
@@ -931,9 +936,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
 
-      var unconvertedFetchResponse: FetchResponse = null
-
-      def createResponse(throttleTimeMs: Int): FetchResponse = {
+      def createResponse(throttleTimeMs: Int, unconvertedFetchResponse: FetchResponse): FetchResponse = {
         // Down-convert messages for each partition if required
         val convertedData = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
         unconvertedFetchResponse.data().responses().forEach { topicResponse =>
@@ -977,13 +980,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
-        unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
+        val unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
         val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader)
         quotas.leader.record(responseSize)
         val responsePartitionsSize = unconvertedFetchResponse.data().responses().stream().mapToInt(_.partitions().size()).sum()
         trace(s"Sending Fetch response with partitions.size=$responsePartitionsSize, " +
           s"metadata=${unconvertedFetchResponse.sessionId}")
-        requestHelper.sendResponseExemptThrottle(request, createResponse(0), Some(updateConversionStats))
+        requestHelper.sendResponseExemptThrottle(request, createResponse(0, unconvertedFetchResponse), Some(updateConversionStats))
       } else {
         // Fetch size used to determine throttle time is calculated before any down conversions.
         // This may be slightly different from the actual response size. But since down conversions
@@ -998,7 +1001,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize, timeMs)
 
         val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
-        if (maxThrottleTimeMs > 0) {
+        val unconvertedFetchResponse = if (maxThrottleTimeMs > 0) {
           request.apiThrottleTimeMs = maxThrottleTimeMs
           // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
           // from the fetch quota because we are going to return an empty response.
@@ -1009,17 +1012,18 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestHelper.throttle(quotas.request, request, requestThrottleTimeMs)
           }
           // If throttling is required, return an empty response.
-          unconvertedFetchResponse = fetchContext.getThrottledResponse(maxThrottleTimeMs)
+          fetchContext.getThrottledResponse(maxThrottleTimeMs)
         } else {
           // Get the actual response. This will update the fetch context.
-          unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
+          val unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
           val responsePartitionsSize = unconvertedFetchResponse.data().responses().stream().mapToInt(_.partitions().size()).sum()
           trace(s"Sending Fetch response with partitions.size=$responsePartitionsSize, " +
             s"metadata=${unconvertedFetchResponse.sessionId}")
+          unconvertedFetchResponse
         }
 
         // Send the response immediately.
-        requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs), Some(updateConversionStats))
+        requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs, unconvertedFetchResponse), Some(updateConversionStats))
       }
     }
 
@@ -1676,6 +1680,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     else if (keyType == CoordinatorType.TRANSACTION.id &&
         !authHelper.authorize(request.context, DESCRIBE, TRANSACTIONAL_ID, key))
       (Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, Node.noNode)
+    else if (keyType == CoordinatorType.SHARE.id && request.context.apiVersion < 6)
+      (Errors.INVALID_REQUEST, Node.noNode)
+    else if (keyType == CoordinatorType.SHARE.id &&
+        !authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME))
+      (Errors.CLUSTER_AUTHORIZATION_FAILED, Node.noNode)
     else {
       val (partition, internalTopicName) = CoordinatorType.forId(keyType) match {
         case CoordinatorType.GROUP =>
@@ -1683,6 +1692,10 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         case CoordinatorType.TRANSACTION =>
           (txnCoordinator.partitionFor(key), TRANSACTION_STATE_TOPIC_NAME)
+
+        case CoordinatorType.SHARE =>
+          // When share coordinator support is implemented in KIP-932, a proper check will go here
+          return (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
       }
 
       val topicMetadata = metadataCache.getTopicMetadata(Set(internalTopicName), request.context.listenerName)
@@ -3802,8 +3815,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isConsumerGroupProtocolEnabled(): Boolean = {
-    val version = metadataCache.features().finalizedFeatures().getOrDefault(GroupVersion.FEATURE_NAME, 0.toShort)
-    config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER) && version >= GroupVersion.GV_1.featureLevel
+    config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER)
   }
 
   def handleConsumerGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -3954,6 +3966,41 @@ class KafkaApis(val requestChannel: RequestChannel,
     val shareAcknowledgeRequest = request.body[ShareAcknowledgeRequest]
     // TODO: Implement the ShareAcknowledgeRequest handling
     requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleInitializeShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+    val initializeShareGroupStateRequest = request.body[InitializeShareGroupStateRequest]
+    // TODO: Implement the InitializeShareGroupStateRequest handling
+    requestHelper.sendMaybeThrottle(request, initializeShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleReadShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+    val readShareGroupStateRequest = request.body[ReadShareGroupStateRequest]
+    // TODO: Implement the ReadShareGroupStateRequest handling
+    requestHelper.sendMaybeThrottle(request, readShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleWriteShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+    val writeShareGroupStateRequest = request.body[WriteShareGroupStateRequest]
+    // TODO: Implement the WriteShareGroupStateRequest handling
+    requestHelper.sendMaybeThrottle(request, writeShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleDeleteShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+    val deleteShareGroupStateRequest = request.body[DeleteShareGroupStateRequest]
+    // TODO: Implement the DeleteShareGroupStateRequest handling
+    requestHelper.sendMaybeThrottle(request, deleteShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleReadShareGroupStateSummaryRequest(request: RequestChannel.Request): Unit = {
+    val readShareGroupStateSummaryRequest = request.body[ReadShareGroupStateSummaryRequest]
+    // TODO: Implement the ReadShareGroupStateSummaryRequest handling
+    requestHelper.sendMaybeThrottle(request, readShareGroupStateSummaryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     CompletableFuture.completedFuture[Unit](())
   }
 

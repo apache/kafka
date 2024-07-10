@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -23,10 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
-import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 
 public class RackAwareGraphConstructorFactory {
 

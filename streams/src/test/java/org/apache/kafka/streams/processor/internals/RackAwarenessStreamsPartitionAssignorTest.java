@@ -34,10 +34,12 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,8 +55,6 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CHANGELOG_END_OFFSETS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
@@ -65,11 +65,13 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_7;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_8;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_9;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RackAwarenessStreamsPartitionAssignorTest {
 
     private final List<PartitionInfo> infos = asList(
@@ -162,7 +164,6 @@ public class RackAwarenessStreamsPartitionAssignorTest {
     private void createMockTaskManager() {
         taskManager = mock(TaskManager.class);
         when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
-        when(taskManager.processId()).thenReturn(PID_1);
         topologyMetadata.buildAndRewriteTopology();
     }
 
@@ -176,19 +177,15 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
     }
 
-    @Before
-    public void setUp() {
-        adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS);
-    }
-
     @Test
     public void shouldDistributeWithMaximumNumberOfClientTags() {
         setupTopology(3, 2);
 
         createMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-            Arrays.asList(APPLICATION_ID + "-store2-changelog", APPLICATION_ID + "-store3-changelog", APPLICATION_ID + "-store4-changelog"),
-            Arrays.asList(3, 3, 3)));
+                Arrays.asList(APPLICATION_ID + "-store2-changelog", APPLICATION_ID + "-store3-changelog", APPLICATION_ID + "-store4-changelog"),
+                Arrays.asList(3, 3, 3)),
+            true);
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1));
 
         final Map<String, String> clientTags1 = new HashMap<>();
@@ -230,9 +227,9 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         setupTopology(3, 0);
 
         createMockTaskManager();
-        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-            Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
-            Arrays.asList(3, 3, 3)));
+        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
+                Arrays.asList(3, 3, 3)),
+            true);
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1));
 
         // use the same tag value for key1, and different value for key2
@@ -278,8 +275,9 @@ public class RackAwarenessStreamsPartitionAssignorTest {
 
         createMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-            Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
-            Arrays.asList(3, 3, 3)));
+                Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
+                Arrays.asList(3, 3, 3)),
+            true);
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2));
 
         final Map<String, String> clientTags1 = mkMap(
@@ -343,8 +341,9 @@ public class RackAwarenessStreamsPartitionAssignorTest {
 
         createMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-            Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
-            Arrays.asList(3, 3, 3)));
+                Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
+                Arrays.asList(3, 3, 3)),
+            true);
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2));
 
         final Map<String, String> clientTags1 = mkMap(

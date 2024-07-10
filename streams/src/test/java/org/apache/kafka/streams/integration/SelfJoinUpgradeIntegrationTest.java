@@ -17,17 +17,6 @@
 
 package org.apache.kafka.streams.integration;
 
-import static java.time.Duration.ofMinutes;
-import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
-
-import java.io.IOException;
-import java.time.Duration;
-import java.util.List;
-import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -44,18 +33,29 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
 
-@Category({IntegrationTest.class})
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+
+import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
+import java.util.Properties;
+
+import static java.time.Duration.ofMinutes;
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
+
+@Tag("integration")
 public class SelfJoinUpgradeIntegrationTest {
     public static final String INPUT_TOPIC = "selfjoin-input";
     public static final String OUTPUT_TOPIC = "selfjoin-output";
@@ -66,24 +66,21 @@ public class SelfJoinUpgradeIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-    @Rule
-    public TestName testName = new TestName();
-
     private String safeTestName;
 
-    @Before
-    public void createTopics() throws Exception {
-        safeTestName = safeUniqueTestName(testName);
+    @BeforeEach
+    public void createTopics(final TestInfo testInfo) throws Exception {
+        safeTestName = safeUniqueTestName(testInfo);
         inputTopic = INPUT_TOPIC + safeTestName;
         outputTopic = OUTPUT_TOPIC + safeTestName;
         CLUSTER.createTopic(inputTopic);
@@ -105,7 +102,7 @@ public class SelfJoinUpgradeIntegrationTest {
         return streamsConfiguration;
     }
 
-    @After
+    @AfterEach
     public void shutdown() {
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30L));
@@ -128,7 +125,6 @@ public class SelfJoinUpgradeIntegrationTest {
         );
         joinedOld.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
-        final String safeTestName = safeUniqueTestName(testName);
         final Properties props = props();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
         kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);

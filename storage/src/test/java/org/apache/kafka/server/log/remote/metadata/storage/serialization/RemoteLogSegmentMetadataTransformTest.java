@@ -23,6 +23,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -44,8 +45,7 @@ class RemoteLogSegmentMetadataTransformTest {
                 0L, 100L, -1L, 0, 0, 1234,
                 customMetadata,
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
-                segmentLeaderEpochs
-        );
+                segmentLeaderEpochs,  0);
 
         RemoteLogSegmentMetadataTransform transform = new RemoteLogSegmentMetadataTransform();
         ApiMessageAndVersion message = transform.toApiMessageAndVersion(metadata);

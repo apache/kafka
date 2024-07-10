@@ -35,6 +35,7 @@ public interface Group {
     enum GroupType {
         CONSUMER("consumer"),
         CLASSIC("classic"),
+        SHARE("share"),
         UNKNOWN("unknown");
 
         private final String name;
@@ -169,4 +170,20 @@ public interface Group {
      * @return true if the state includes, false otherwise.
      */
     boolean isInStates(Set<String> statesFilter, long committedOffset);
+
+    /**
+     * Returns true if the member exists.
+     *
+     * @param memberId The member id.
+     *
+     * @return A boolean indicating whether the member exists or not.
+     */
+    boolean hasMember(String memberId);
+
+    /**
+     * Returns number of members in the group.
+     *
+     * @return The number of members.
+     */
+    int numMembers();
 }

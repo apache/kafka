@@ -20,6 +20,7 @@ import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.junit.ClusterTestExtensions;
+
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -32,6 +33,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -44,15 +46,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.COPY_SEGMENT_FINISHED;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.DELETE_SEGMENT_FINISHED;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.DELETE_SEGMENT_STARTED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
-
-import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.COPY_SEGMENT_FINISHED;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.DELETE_SEGMENT_STARTED;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.DELETE_SEGMENT_FINISHED;
 
 @ClusterTestDefaults(brokers = 3)
 @ExtendWith(value = ClusterTestExtensions.class)
@@ -95,7 +96,7 @@ public class RemoteLogSegmentLifecycleTest {
             leaderEpochSegment0.put(2, 80L);
             RemoteLogSegmentId segmentId0 = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
             RemoteLogSegmentMetadata metadataSegment0 = new RemoteLogSegmentMetadata(segmentId0, 0L,
-                    100L, -1L, brokerId0, time.milliseconds(), segSize, leaderEpochSegment0);
+                    100L, -1L, brokerId0, time.milliseconds(), segSize, leaderEpochSegment0, 0);
             metadataManager.addRemoteLogSegmentMetadata(metadataSegment0).get();
             verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(metadataSegment0);
 
@@ -224,7 +225,7 @@ public class RemoteLogSegmentLifecycleTest {
             throws RemoteStorageException, ExecutionException, InterruptedException {
         RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
         RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, startOffset, endOffset,
-                -1L, brokerId0, time.milliseconds(), segSize, segmentLeaderEpochs);
+                -1L, brokerId0, time.milliseconds(), segSize, segmentLeaderEpochs, 0);
         metadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
         verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(segmentMetadata);
 
@@ -259,7 +260,7 @@ public class RemoteLogSegmentLifecycleTest {
             // segments.
             RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
             RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 0L, 50L,
-                    -1L, brokerId0, time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                    -1L, brokerId0, time.milliseconds(), segSize, Collections.singletonMap(0, 0L), 0);
             metadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
             verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(segmentMetadata);
 

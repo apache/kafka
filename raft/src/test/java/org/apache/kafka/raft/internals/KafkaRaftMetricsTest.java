@@ -26,6 +26,7 @@ import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.MockQuorumStateStore;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -33,7 +34,6 @@ import org.mockito.Mockito;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
@@ -67,9 +67,9 @@ public class KafkaRaftMetricsTest {
         return new QuorumState(
             OptionalInt.of(localId),
             localDirectoryId,
-            VoterSetTest.DEFAULT_LISTENER_NAME,
             () -> voterSet,
             () -> kraftVersion,
+            voterSet.listeners(localId),
             electionTimeoutMs,
             fetchTimeoutMs,
             new MockQuorumStateStore(),
@@ -87,7 +87,7 @@ public class KafkaRaftMetricsTest {
                 VoterSetTest.voterNode(
                     ReplicaKey.of(
                         localId,
-                        withDirectoryId ? Optional.of(localDirectoryId) : Optional.empty()
+                        withDirectoryId ? localDirectoryId : ReplicaKey.NO_DIRECTORY_ID
                     )
                 )
             )
@@ -104,7 +104,7 @@ public class KafkaRaftMetricsTest {
             VoterSetTest.voterNode(
                 ReplicaKey.of(
                     localId,
-                    withDirectoryId ? Optional.of(localDirectoryId) : Optional.empty()
+                    withDirectoryId ? localDirectoryId : ReplicaKey.NO_DIRECTORY_ID
                 )
             )
         );
@@ -147,11 +147,15 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 1, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(5L), voters.voters());
-        state.leaderStateOrThrow().updateReplicaState(1, Uuid.randomUuid(), 0, new LogOffsetMetadata(5L));
+        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(5L), voters);
+        state.leaderStateOrThrow().updateReplicaState(
+            voterMap.get(1).voterKey(),
+            0,
+            new LogOffsetMetadata(5L)
+        );
         assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToFollower(2, voters.voterNode(1, VoterSetTest.DEFAULT_LISTENER_NAME).get());
+        state.transitionToFollower(2, 1, voters.listeners(1));
         assertEquals("follower", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) 1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
@@ -165,7 +169,7 @@ public class KafkaRaftMetricsTest {
         state.followerStateOrThrow().updateHighWatermark(OptionalLong.of(10L));
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToVoted(3, ReplicaKey.of(2, Optional.empty()));
+        state.transitionToVoted(3, ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID));
         assertEquals("voted", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) 2, getMetric(metrics, "current-vote").metricValue());
@@ -209,7 +213,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 0, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToFollower(2, voters.voterNode(1, VoterSetTest.DEFAULT_LISTENER_NAME).get());
+        state.transitionToFollower(2, 1, voters.listeners(1));
         assertEquals("observer", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) 1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
