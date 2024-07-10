@@ -3318,15 +3318,13 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
 
         ConsumerPartitionAssignor assignor = new RangeAssignor();
 
-        final KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
-        
-        // the LIST_OFFSET gets response but the response carries error ( it proves RPC is good)
         if (groupProtocol == GroupProtocol.CONSUMER) {
             Node node = metadata.fetch().nodes().get(0);
             client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         }
-        // the incomplete request can get timeout
-
+        
+        final KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
+        
         int maxPreparedResponses = GroupProtocol.CLASSIC.equals(groupProtocol) ? 10 : 1;
         for (int i = 0; i < maxPreparedResponses; i++) {
             client.prepareResponse(
