@@ -1170,7 +1170,7 @@ public class NetworkClient implements KafkaClient {
         }
     }
 
-    private void ensureBootstrapped() {
+    void ensureBootstrapped() {
         if (this.bootstrapState.isDisabled || this.bootstrapState.isBootstrapped) {
             return;
         }
@@ -1189,6 +1189,10 @@ public class NetworkClient implements KafkaClient {
 
     public boolean isBootstrapped() {
         return bootstrapState.isBootstrapped;
+    }
+
+    public boolean isBootstrapDisabled() {
+        return bootstrapState.isDisabled;
     }
 
     class DefaultMetadataUpdater implements MetadataUpdater {

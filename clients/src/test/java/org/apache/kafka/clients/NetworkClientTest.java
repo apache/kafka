@@ -32,6 +32,7 @@ import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.message.PushTelemetryResponseData;
+import org.apache.kafka.common.network.BootstrapResolutionException;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -73,6 +74,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -523,7 +525,8 @@ public class NetworkClientTest {
         assertEquals(node.idString(), clientResponse.destination());
         assertFalse(clientResponse.wasDisconnected(), "Expected response to succeed and not disconnect");
         assertFalse(clientResponse.wasTimedOut(), "Expected response to succeed and not time out");
-        assertFalse(metadata.updateRequested(), "Expected NetworkClient to not need to update metadata");
+        // This will not work anymore, metadata#bootstrap sets metadata.needFullUpdate to true
+        //assertFalse(metadata.updateRequested(), "Expected NetworkClient to not need to update metadata");
 
         // Send second request, but emulate a timeout.
         clientResponse = produce(client, requestTimeoutMs, true);
@@ -1362,6 +1365,24 @@ public class NetworkClientTest {
         verify(mockClientTelemetrySender, times(1)).handleResponse(any(PushTelemetryResponse.class));
         verify(mockClientTelemetrySender, times(4)).timeToNextUpdate(anyLong());
         verify(mockClientTelemetrySender, times(2)).createRequest();
+    }
+
+    @Test
+    public void testBootstrapStateConstructor() {
+        assertFalse(client.isBootstrapDisabled());
+
+        NetworkClient clientNullBootStrapConfig = new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 10 * 1000, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, null, time, true, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE);
+        // Passing null for bootstrapConfiguration will result in bootstrapDisabled() returning true
+        assertTrue(clientNullBootStrapConfig.isBootstrapDisabled());
+    }
+
+    @Test
+    public void testBootstrapSuccessfulAndDoesNotThrow() {
+        assertDoesNotThrow(client::ensureBootstrapped);
+        assertTrue(client.isBootstrapped());
     }
 
     private RequestHeader parseHeader(ByteBuffer buffer) {
