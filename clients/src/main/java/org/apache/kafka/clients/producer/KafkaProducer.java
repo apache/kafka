@@ -1208,7 +1208,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         topic, elapsed, maxWaitMs) :
                     String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms. Retrying until %d ms elapses",
                         partition, topic, partitionsCount, elapsed, maxWaitMs);
-                log.info(expectedMetadataNotFoundMessage);
+                log.debug(expectedMetadataNotFoundMessage);
             }
         } while (!topicPartitionMetadataFound(partitionsCount, partition));
 
