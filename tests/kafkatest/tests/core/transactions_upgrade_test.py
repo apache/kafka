@@ -154,8 +154,6 @@ class TransactionsUpgradeTest(Test):
 
         It returns the concurrently consumed messages.
         """
-        self.perform_upgrade(from_kafka_version)
-
         copiers = create_and_start_copiers(test_context=self.test_context,
                                            kafka=self.kafka,
                                            consumer_group=self.consumer_group,
@@ -168,6 +166,8 @@ class TransactionsUpgradeTest(Test):
         concurrent_consumer = self.start_consumer(output_topic,
                                                   group_id="concurrent_consumer",
                                                   group_protocol=group_protocol)
+
+        self.perform_upgrade(from_kafka_version)
 
         copier_timeout_sec = 120
         for copier in copiers:
