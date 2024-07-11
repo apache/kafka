@@ -1173,6 +1173,13 @@ public class NetworkClient implements KafkaClient {
 
             throw new BootstrapResolutionException("Timeout while attempting to resolve bootstrap servers.");
         }
+
+        void checkTimerExpiration() {
+            if (this.timer.isExpired()) {
+                throw new BootstrapResolutionException("Unable to Resolve Address within the configured period " +
+                        this.dnsResolutionTimeoutMs + "ms.");
+            }
+        }
     }
 
     void ensureBootstrapped() {
@@ -1180,16 +1187,19 @@ public class NetworkClient implements KafkaClient {
             return;
         }
 
+        bootstrapState.checkTimerExpiration();
+
         List<InetSocketAddress> servers = this.bootstrapState.tryResolveAddresses();
         if (!servers.isEmpty()) {
             this.metadataUpdater.bootstrap(servers);
             this.bootstrapState.isBootstrapped = true;
-            return;
         }
-        if (this.bootstrapState.timer.isExpired()) {
-            throw new BootstrapResolutionException("Unable to Resolve Address within the configured period " +
-                    this.bootstrapState.dnsResolutionTimeoutMs + "ms.");
-        }
+    }
+
+    // For testing purposes only
+    void ensureBootstrapped(long timeToSleep) {
+        bootstrapState.timer.sleep(timeToSleep);
+        ensureBootstrapped();
     }
 
     public boolean isBootstrapped() {

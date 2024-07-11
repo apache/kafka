@@ -174,6 +174,13 @@ public class NetworkClientTest {
                 MetadataRecoveryStrategy.NONE);
     }
 
+    private NetworkClient createNetworkClientWithNoVersionDiscoveryNoBootstrap(Metadata metadata) {
+        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, null, time, false, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE);
+    }
+
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
@@ -805,7 +812,7 @@ public class NetworkClientTest {
         Node node1 = cluster.nodes().get(0);
         Node node2 = cluster.nodes().get(1);
 
-        NetworkClient client = createNetworkClientWithNoVersionDiscovery(metadata);
+        NetworkClient client = createNetworkClientWithNoVersionDiscoveryNoBootstrap(metadata);
 
         awaitReady(client, node1);
 
@@ -813,10 +820,7 @@ public class NetworkClientTest {
         time.sleep(refreshBackoffMs);
 
         client.poll(0, time.milliseconds());
-        client.poll(0, time.milliseconds());
 
-        // I think that this must be changed. Bootstrapping completes on nodes
-        // which should automatically update the metadata completely
         Optional<Node> nodeWithPendingMetadataOpt = cluster.nodes().stream()
                 .filter(node -> client.hasInFlightRequests(node.idString()))
                 .findFirst();
@@ -1378,14 +1382,31 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, 10 * 1000, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, null, time, true, new ApiVersions(), new LogContext(),
                 MetadataRecoveryStrategy.NONE);
+
         // Passing null for bootstrapConfiguration will result in bootstrapDisabled() returning true
         assertTrue(clientNullBootStrapConfig.isBootstrapDisabled());
     }
 
     @Test
     public void testBootstrapSuccessfulAndDoesNotThrow() {
-        assertDoesNotThrow(client::ensureBootstrapped);
+        assertDoesNotThrow(() -> client.ensureBootstrapped());
         assertTrue(client.isBootstrapped());
+    }
+
+    @Test
+    public void testBootstrapTimeoutThrowsException() {
+        assertThrows(BootstrapResolutionException.class, () -> client.ensureBootstrapped(10 * 1000));
+    }
+
+    @Test
+    public void testBootstrapTimeoutThrowsExceptionNah() {
+        time.sleep(10 * 1000 - 1);
+        assertDoesNotThrow(() -> client.ensureBootstrapped());
+    }
+
+    @Test
+    public void testClientIsBootStrapped() {
+
     }
 
     private RequestHeader parseHeader(ByteBuffer buffer) {
