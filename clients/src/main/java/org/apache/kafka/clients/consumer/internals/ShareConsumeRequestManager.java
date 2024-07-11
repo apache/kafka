@@ -159,7 +159,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 log.trace("Skipping fetch for partition {} because previous fetch request to {} has not been processed", partition, node.id());
             } else {
                 // if there is a leader and no in-flight requests, issue a new fetch
-                ShareSessionHandler handler = handlerMap.computeIfAbsent(node, k -> sessionHandlers.computeIfAbsent(node.id(), n -> new ShareSessionHandler(logContext, n, memberId)));
+                ShareSessionHandler handler = handlerMap.computeIfAbsent(node,
+                        k -> sessionHandlers.computeIfAbsent(node.id(), n -> new ShareSessionHandler(logContext, n, memberId)));
 
                 TopicIdPartition tip = new TopicIdPartition(topicId, partition);
                 Acknowledgements acknowledgementsToSend = fetchAcknowledgementsMap.get(tip);
@@ -168,7 +169,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 }
                 handler.addPartitionToFetch(tip, acknowledgementsToSend);
 
-                log.debug("Added fetch request for partition {} to node {}", partition, node);
+                log.debug("Added fetch request for partition {} to node {}", partition, node.id());
             }
         }
 
@@ -179,6 +180,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
         List<UnsentRequest> requests = builderMap.entrySet().stream().map(entry -> {
             Node target = entry.getKey();
+            log.trace("Building ShareFetch request to send to node {}", target.id());
             ShareFetchRequest.Builder requestBuilder = entry.getValue();
 
             nodesWithPendingRequests.add(target.id());
@@ -248,6 +250,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             pollResult = PollResult.EMPTY;
         } else if (closing) {
             if (!closeFuture.isDone()) {
+                log.trace("Completing acknowledgement on close");
                 closeFuture.complete(null);
             }
             pollResult = PollResult.EMPTY;
@@ -284,7 +287,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         acknowledgementsMapForNode.put(tip, acknowledgements);
 
                         metricsManager.recordAcknowledgementSent(acknowledgements.size());
-                        log.debug("Added acknowledge request for partition {} to node {}", tip.topicPartition(), node);
+                        log.debug("Added sync acknowledge request for partition {} to node {}", tip.topicPartition(), node.id());
                         resultCount.incrementAndGet();
                     }
                 }
@@ -327,7 +330,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         acknowledgementsMapForNode.put(tip, acknowledgements);
 
                         metricsManager.recordAcknowledgementSent(acknowledgements.size());
-                        log.debug("Added acknowledge request for partition {} to node {}", tip.topicPartition(), node);
+                        log.debug("Added async acknowledge request for partition {} to node {}", tip.topicPartition(), node.id());
                         resultCount.incrementAndGet();
                     }
                 }
@@ -345,8 +348,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 ));
             }
         });
-
-        resultHandler.completeIfEmpty();
     }
 
     /**
@@ -377,7 +378,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         acknowledgementsMapForNode.put(tip, acknowledgements);
 
                         metricsManager.recordAcknowledgementSent(acknowledgements.size());
-                        log.debug("Added closing acknowledge request for partition {} to node {}", tip.topicPartition(), node);
+                        log.debug("Added closing acknowledge request for partition {} to node {}", tip.topicPartition(), node.id());
                         resultCount.incrementAndGet();
                     }
                 }
@@ -397,7 +398,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
         });
 
-        resultHandler.completeIfEmpty();
         return closeFuture;
     }
 
@@ -405,6 +405,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                          @SuppressWarnings("unused") ShareFetchRequestData requestData,
                                          ClientResponse resp) {
         try {
+            log.debug("Completed ShareFetch request from node {} successfully", fetchTarget.id());
             final ShareFetchResponse response = (ShareFetchResponse) resp.responseBody();
             final ShareSessionHandler handler = sessionHandler(fetchTarget.id());
 
@@ -468,7 +469,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             metricsManager.recordLatency(resp.requestLatencyMs());
         } finally {
-            log.debug("Removing pending request for node {} - success", fetchTarget);
+            log.debug("Removing pending request for node {} - success", fetchTarget.id());
             nodesWithPendingRequests.remove(fetchTarget.id());
         }
     }
@@ -477,6 +478,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                          ShareFetchRequestData requestData,
                                          Throwable error) {
         try {
+            log.debug("Completed ShareFetch request from node {} unsuccessfully {}", fetchTarget.id(), Errors.forException(error));
             final ShareSessionHandler handler = sessionHandler(fetchTarget.id());
             if (handler != null) {
                 handler.handleError(error);
@@ -497,7 +499,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 }
             }));
         } finally {
-            log.debug("Removing pending request for node {} - failed", fetchTarget);
+            log.debug("Removing pending request for node {} - failed", fetchTarget.id());
             nodesWithPendingRequests.remove(fetchTarget.id());
         }
     }
@@ -508,6 +510,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                                ClientResponse resp,
                                                long currentTimeMs) {
         try {
+            log.debug("Completed ShareAcknowledge request from node {} successfully", fetchTarget.id());
             final ShareAcknowledgeResponse response = (ShareAcknowledgeResponse) resp.responseBody();
             final ShareSessionHandler handler = acknowledgeRequestState.sessionHandler();
 
@@ -544,7 +547,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             metricsManager.recordLatency(resp.requestLatencyMs());
         } finally {
-            log.debug("Removing pending request for node {} - success", fetchTarget);
+            log.debug("Removing pending request for node {} - success", fetchTarget.id());
             nodesWithPendingRequests.remove(fetchTarget.id());
         }
     }
@@ -555,6 +558,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                                Throwable error,
                                                long currentTimeMs) {
         try {
+            log.debug("Completed ShareAcknowledge request from node {} unsuccessfully {}", fetchTarget.id(), Errors.forException(error));
             acknowledgeRequestState.sessionHandler().handleError(error);
 
             requestData.topics().forEach(topic -> topic.partitions().forEach(partition -> {
@@ -565,7 +569,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 acknowledgeRequestState.handleAcknowledgeErrorCode(tip, Errors.forException(error));
             }));
         } finally {
-            log.debug("Removing pending request for node {} - failed", fetchTarget);
+            log.debug("Removing pending request for node {} - failed", fetchTarget.id());
             nodesWithPendingRequests.remove(fetchTarget.id());
         }
     }
@@ -576,6 +580,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                                     ClientResponse resp,
                                                     long currentTimeMs) {
         try {
+            log.debug("Completed ShareAcknowledge on close request from node {} successfully", fetchTarget.id());
             final ShareAcknowledgeResponse response = (ShareAcknowledgeResponse) resp.responseBody();
 
             response.data().responses().forEach(topic -> topic.partitions().forEach(partition -> {
@@ -591,7 +596,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             metricsManager.recordLatency(resp.requestLatencyMs());
             acknowledgeRequestState.processingComplete();
         } finally {
-            log.debug("Removing pending request for node {} - success", fetchTarget);
+            log.debug("Removing pending request for node {} - success", fetchTarget.id());
             nodesWithPendingRequests.remove(fetchTarget.id());
             sessionHandlers.remove(fetchTarget.id());
         }
@@ -603,6 +608,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                                     Throwable error,
                                                     long currentTimeMs) {
         try {
+            log.debug("Completed ShareAcknowledge on close request from node {} unsuccessfully {}", fetchTarget.id(), Errors.forException(error));
             acknowledgeRequestState.sessionHandler().handleError(error);
 
             requestData.topics().forEach(topic -> topic.partitions().forEach(partition -> {
@@ -613,7 +619,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 acknowledgeRequestState.handleAcknowledgeErrorCode(tip, Errors.forException(error));
             }));
         } finally {
-            log.debug("Removing pending request for node {} - failed", fetchTarget);
+            log.debug("Removing pending request for node {} - failed", fetchTarget.id());
             nodesWithPendingRequests.remove(fetchTarget.id());
             sessionHandlers.remove(fetchTarget.id());
         }
@@ -752,9 +758,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             };
 
             if (requestBuilder == null) {
+                log.trace("Building ShareAcknowledge request to send to node {} failed", nodeToSend.id());
                 handleSessionErrorCode(Errors.SHARE_SESSION_NOT_FOUND);
                 return null;
             } else {
+                log.trace("Building ShareAcknowledge request to send to node {}", nodeToSend.id());
                 return new UnsentRequest(requestBuilder, Optional.of(nodeToSend)).whenComplete(responseHandler);
             }
         }

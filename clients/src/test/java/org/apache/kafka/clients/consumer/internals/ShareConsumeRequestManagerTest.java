@@ -313,6 +313,9 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+        completedAcknowledgements.clear();
     }
 
     @Test
@@ -341,6 +344,9 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+        completedAcknowledgements.clear();
     }
 
     @Test
@@ -370,6 +376,45 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+        completedAcknowledgements.clear();
+    }
+
+    @Test
+    public void testAcknowledgeOnCloseWithPendingCommitAsync() {
+        buildRequestManager();
+
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        // normal fetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements));
+        shareConsumeRequestManager.acknowledgeOnClose(Collections.emptyMap(),
+                calculateDeadlineMs(time.timer(100)));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        client.prepareResponse(emptyAcknowledgeResponse());
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+        completedAcknowledgements.clear();
     }
 
     @Test
@@ -755,6 +800,11 @@ public class ShareConsumeRequestManagerTest {
         return ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
     }
 
+    private ShareAcknowledgeResponse emptyAcknowledgeResponse() {
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Collections.emptyMap();
+        return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
+    }
+
     private ShareAcknowledgeResponse fullAcknowledgeResponse(TopicIdPartition tp, Errors error) {
         Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Collections.singletonMap(tp,
                 partitionDataForAcknowledge(tp, error));
@@ -781,9 +831,9 @@ public class ShareConsumeRequestManagerTest {
     }
 
     /**
-     * Assert that the {@link Fetcher#collectFetch() latest fetch} does not contain any
-     * {@link Fetch#records() user-visible records},
-     * and is {@link Fetch#isEmpty() empty}.
+     * Assert that the {@link ShareFetchCollector#collect(ShareFetchBuffer)} latest fetch} does not contain any
+     * {@link ShareFetch#records() user-visible records}, and is {@link ShareFetch#isEmpty() empty}.
+     *
      * @param reason the reason to include for assertion methods such as {@link org.junit.jupiter.api.Assertions#assertTrue(boolean, String)}
      */
     private void assertEmptyFetch(String reason) {
