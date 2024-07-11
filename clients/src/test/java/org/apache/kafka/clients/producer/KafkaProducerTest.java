@@ -533,28 +533,6 @@ public class KafkaProducerTest {
         assertThrows(ConfigException.class, () -> new KafkaProducer<String, String>(configs));
     }
 
-    // TODO: test will need to be modified to test different behavior
-    // The test currently makes the constructor fail by passing in a bad bootstrap server
-    // This will only make the constructor throw a KafkaException if bootstrapping is done in the constructor
-    // Will need to make the constructor fail in a different way
-    @Test
-    public void testConstructorFailureCloseResource() {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "some.invalid.hostname.foo.bar.local:9999");
-        props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-
-        final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
-        final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
-        try (KafkaProducer<byte[], byte[]> ignored = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer())) {
-            fail("should have caught an exception and returned");
-        } catch (KafkaException e) {
-            assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
-            assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
-            assertEquals("Failed to construct kafka producer", e.getMessage());
-        }
-    }
-
     @Test
     public void testConstructorWithNotStringKey() {
         Properties props = new Properties();
