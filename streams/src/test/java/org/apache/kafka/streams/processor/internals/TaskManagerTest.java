@@ -1506,6 +1506,7 @@ public class TaskManagerTest {
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
         verify(task).maybeInitTaskTimeoutOrThrow(anyLong(), eq(timeoutException));
+        verify(stateUpdater).add(task);
         verify(tasks, never()).addTask(task);
         verify(task, never()).clearTaskTimeout();
         verifyNoInteractions(consumer);
