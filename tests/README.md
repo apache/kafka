@@ -49,7 +49,7 @@ bash tests/docker/ducker-ak up -j 'openjdk:11'; tests/docker/run_tests.sh
 ```
 * Clean Docker Image
 ```
-docker rm -f $(docker ps -aq --filter "name=ducker")
+./tests/docker/ducker-ak down -f
 ```
 * Rebuild first and then run tests
 ```
