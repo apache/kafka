@@ -191,7 +191,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     controllerNode.metadataDirectory());
             }
             props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
-                    "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT");
+                    "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
             props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners(node.id()));
             props.put(INTER_BROKER_LISTENER_NAME_CONFIG,
                     nodes.interBrokerListenerName().value());
@@ -323,12 +323,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
         private String listeners(int node) {
             if (nodes.isCombined(node)) {
-                return "PLAINTEXT://localhost:0,CONTROLLER://localhost:0,EXTERNAL://localhost:0";
+                return "EXTERNAL://localhost:0,CONTROLLER://localhost:0";
             }
             if (nodes.controllerNodes().containsKey(node)) {
                 return "CONTROLLER://localhost:0";
             }
-            return "PLAINTEXT://localhost:0,EXTERNAL://localhost:0";
+            return "EXTERNAL://localhost:0";
         }
 
         private String roles(int node) {
