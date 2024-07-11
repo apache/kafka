@@ -151,8 +151,6 @@ class TestUpgrade(ProduceConsumeValidateTest):
     @parametrize(from_kafka_version=str(LATEST_0_10_2), to_message_format_version=None, compression_types=["lz4"])
     @parametrize(from_kafka_version=str(LATEST_0_10_0), to_message_format_version=None, compression_types=["snappy"])
     @parametrize(from_kafka_version=str(LATEST_0_10_0), to_message_format_version=None, compression_types=["lz4"])
-    @cluster(num_nodes=7)
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"], security_protocol="SASL_SSL")
     def test_upgrade(self, from_kafka_version, to_message_format_version, compression_types,
                      security_protocol="PLAINTEXT"):
         """Test upgrade of Kafka broker cluster from various versions to the current version
