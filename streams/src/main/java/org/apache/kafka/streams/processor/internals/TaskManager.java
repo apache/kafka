@@ -979,9 +979,11 @@ public class TaskManager {
             task.clearTaskTimeout();
         } catch (final TimeoutException timeoutException) {
             task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
+            stateUpdater.add(task);
             log.debug(
                 String.format(
-                    "Could not complete restoration for %s due to the following exception; will retry",
+                    "Could not complete restoration for %s due to the following exception; adding the task " +
+                        "back to the state updater and will retry",
                     task.id()),
                 timeoutException
             );
