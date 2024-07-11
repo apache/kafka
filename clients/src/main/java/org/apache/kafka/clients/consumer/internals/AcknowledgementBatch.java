@@ -24,9 +24,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AcknowledgementBatch {
-    long firstOffset;
-    long lastOffset;
-    List<Byte> acknowledgeTypes;
+    private long firstOffset;
+    private long lastOffset;
+    private List<Byte> acknowledgeTypes;
 
     public AcknowledgementBatch() {
         this.firstOffset = 0L;

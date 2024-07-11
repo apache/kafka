@@ -168,50 +168,14 @@ public class Acknowledgements {
             if (currentBatch == null) {
                 currentBatch = new AcknowledgementBatch();
                 currentBatch.setFirstOffset(entry.getKey());
-                currentBatch.setLastOffset(entry.getKey());
-                if (entry.getValue() != null) {
-                    currentBatch.acknowledgeTypes().add(entry.getValue().id);
-                } else {
-                    currentBatch.acknowledgeTypes().add(ACKNOWLEDGE_TYPE_GAP);
-                }
             } else {
-                if (entry.getValue() != null) {
-                    if (entry.getKey() != currentBatch.lastOffset() + 1) {
-                        List<AcknowledgementBatch> optimalBatches = maybeOptimiseAcknowledgementTypes(currentBatch);
-
-                        optimalBatches.forEach(batch -> {
-                            if (canOptimiseForSingleAcknowledgeType(batch)) {
-                                // If the batch had a single acknowledgement type, we optimise the array independent
-                                // of the number of records.
-                                batch.acknowledgeTypes().subList(1, batch.acknowledgeTypes().size()).clear();
-                            }
-                            batches.add(batch);
-                        });
-
-                        currentBatch = new AcknowledgementBatch();
-                        currentBatch.setFirstOffset(entry.getKey());
-                    }
-                    currentBatch.setLastOffset(entry.getKey());
-                    currentBatch.acknowledgeTypes().add(entry.getValue().id);
-                } else {
-                    if (entry.getKey() != currentBatch.lastOffset() + 1) {
-                        List<AcknowledgementBatch> optimalBatches = maybeOptimiseAcknowledgementTypes(currentBatch);
-
-                        optimalBatches.forEach(batch -> {
-                            if (canOptimiseForSingleAcknowledgeType(batch)) {
-                                // If the batch had a single acknowledgement type, we optimise the array independent
-                                // of the number of records.
-                                batch.acknowledgeTypes().subList(1, batch.acknowledgeTypes().size()).clear();
-                            }
-                            batches.add(batch);
-                        });
-
-                        currentBatch = new AcknowledgementBatch();
-                        currentBatch.setFirstOffset(entry.getKey());
-                    }
-                    currentBatch.setLastOffset(entry.getKey());
-                    currentBatch.acknowledgeTypes().add(ACKNOWLEDGE_TYPE_GAP);
-                }
+                currentBatch = maybeCreateNewBatch(currentBatch, entry.getKey(), batches);
+            }
+            currentBatch.setLastOffset(entry.getKey());
+            if (entry.getValue() != null) {
+                currentBatch.acknowledgeTypes().add(entry.getValue().id);
+            } else {
+                currentBatch.acknowledgeTypes().add(ACKNOWLEDGE_TYPE_GAP);
             }
         }
         List<AcknowledgementBatch> optimalBatches = maybeOptimiseAcknowledgementTypes(currentBatch);
@@ -225,6 +189,30 @@ public class Acknowledgements {
             batches.add(batch);
         });
         return batches;
+    }
+
+    /**
+     * Creates a new current batch if the next offset is not one higher than the current batch's
+     * last offset.
+     */
+    private AcknowledgementBatch maybeCreateNewBatch(AcknowledgementBatch currentBatch, Long nextOffset, List<AcknowledgementBatch> batches) {
+        if (nextOffset != currentBatch.lastOffset() + 1) {
+            List<AcknowledgementBatch> optimalBatches = maybeOptimiseAcknowledgementTypes(currentBatch);
+
+            optimalBatches.forEach(batch -> {
+                if (canOptimiseForSingleAcknowledgeType(batch)) {
+                    // If the batch had a single acknowledgement type, we optimise the array independent
+                    // of the number of records.
+                    batch.acknowledgeTypes().subList(1, batch.acknowledgeTypes().size()).clear();
+                }
+                batches.add(batch);
+            });
+
+            currentBatch = new AcknowledgementBatch();
+            currentBatch.setFirstOffset(nextOffset);
+        }
+
+        return currentBatch;
     }
 
     /**

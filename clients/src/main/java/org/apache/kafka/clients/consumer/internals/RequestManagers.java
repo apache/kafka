@@ -265,7 +265,6 @@ public class RequestManagers implements Closeable {
                                                      final ShareFetchBuffer fetchBuffer,
                                                      final ConsumerConfig config,
                                                      final GroupRebalanceConfig groupRebalanceConfig,
-                                                     final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                                      final ShareFetchMetricsManager shareFetchMetricsManager,
                                                      final Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                                      final Metrics metrics

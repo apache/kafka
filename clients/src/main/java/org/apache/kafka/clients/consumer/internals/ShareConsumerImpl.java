@@ -291,7 +291,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     fetchBuffer,
                     config,
                     groupRebalanceConfig,
-                    networkClientDelegateSupplier,
                     shareFetchMetricsManager,
                     clientTelemetryReporter,
                     metrics
@@ -391,7 +390,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 fetchBuffer,
                 config,
                 groupRebalanceConfig,
-                networkClientDelegateSupplier,
                 shareFetchMetricsManager,
                 clientTelemetryReporter,
                 metrics
@@ -868,9 +866,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      */
     private void sendAcknowledgementsAndLeaveGroup(final Timer timer, final AtomicReference<Throwable> firstException) {
         completeQuietly(
-                () -> {
-                    applicationEventHandler.addAndGet(new ShareAcknowledgeOnCloseEvent(acknowledgementsToSend(), calculateDeadlineMs(timer)));
-                },
+                () -> applicationEventHandler.addAndGet(new ShareAcknowledgeOnCloseEvent(acknowledgementsToSend(), calculateDeadlineMs(timer))),
                 "Failed to send pending acknowledgements with a timeout(ms)=" + timer.timeoutMs(), firstException);
         timer.update();
 
