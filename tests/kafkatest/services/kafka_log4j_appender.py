@@ -49,6 +49,7 @@ class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
         node.account.ssh(cmd)
 
     def start_cmd(self, node):
+        # Since the core module does not contain the log4j-appender, we need to add it manually.
         core_dependant_test_libs_jar = self.path.jar(CORE_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
         cmd = fix_opts_for_new_jvm(node)
         cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done;" % core_dependant_test_libs_jar

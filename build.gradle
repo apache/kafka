@@ -1211,6 +1211,7 @@ project(':core') {
     //By default gradle does not handle test dependencies between the sub-projects
     //This line is to include clients project test jar to dependant-testlibs
     from (project(':clients').testJar ) { "$buildDir/dependant-testlibs" }
+    // added in order to pass the kafka_log4j_appender.py test
     from (project(':log4j-appender').jar ) { "$buildDir/dependant-testlibs" }
     duplicatesStrategy 'exclude'
   }
