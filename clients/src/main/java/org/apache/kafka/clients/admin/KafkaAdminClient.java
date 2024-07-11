@@ -1532,7 +1532,7 @@ public class KafkaAdminClient extends AdminClient {
                 // Wait for network responses.
                 log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);
                 List<ClientResponse> responses = client.poll(Math.max(0L, pollTimeout), now);
-                // check if the client has been bootstrapped, if true, metadataupdater.update()
+                // Check if the client has been bootstrapped, if true, metadataUpdater.update()
                 if(client.isBootstrapped())
                     metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
                 log.trace("KafkaClient#poll retrieved {} response(s)", responses.size());
