@@ -813,7 +813,10 @@ public class NetworkClientTest {
         time.sleep(refreshBackoffMs);
 
         client.poll(0, time.milliseconds());
+        client.poll(0, time.milliseconds());
 
+        // I think that this must be changed. Bootstrapping completes on nodes
+        // which should automatically update the metadata completely
         Optional<Node> nodeWithPendingMetadataOpt = cluster.nodes().stream()
                 .filter(node -> client.hasInFlightRequests(node.idString()))
                 .findFirst();
