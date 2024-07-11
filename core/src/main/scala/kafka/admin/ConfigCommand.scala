@@ -388,7 +388,7 @@ object ConfigCommand extends Logging {
 
   private def alterTopicConfig(adminClient: Admin, entityTypeHead: String, entityNames: List[String], configsToBeAdded: Predef.Map[String, ConfigEntry], configsToBeDeleted: Seq[String]) = {
     entityNames.foreach { entityName =>
-      getOldConfig(adminClient, entityTypeHead, configsToBeDeleted, entityName)
+      validateOldConfig(adminClient, entityTypeHead, configsToBeDeleted, entityName)
     }
     val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
     val alterEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
@@ -399,7 +399,7 @@ object ConfigCommand extends Logging {
       .all().get(60, TimeUnit.SECONDS)
   }
 
-  private def getOldConfig(adminClient: Admin, entityTypeHead: String, configsToBeDeleted: Seq[String], entityName: String): Map[String, ConfigEntry] = {
+  private def validateOldConfig(adminClient: Admin, entityTypeHead: String, configsToBeDeleted: Seq[String], entityName: String): Map[String, ConfigEntry] = {
     val oldConfig = getResourceConfig(adminClient, entityTypeHead, entityName, includeSynonyms = false, describeAll = false)
       .map { entry => (entry.name, entry) }.toMap
 
@@ -413,7 +413,7 @@ object ConfigCommand extends Logging {
   @nowarn("cat=deprecation")
   private def alterBrokerConfig(adminClient: Admin, entityTypeHead: String, entityNames: List[String], configsToBeAdded: Predef.Map[String, ConfigEntry], configsToBeDeleted: Seq[String]): Unit = {
     entityNames.foreach { entityName =>
-      val oldConfig = getOldConfig(adminClient, entityTypeHead, configsToBeDeleted, entityName)
+      val oldConfig = validateOldConfig(adminClient, entityTypeHead, configsToBeDeleted, entityName)
 
       val newEntries = oldConfig ++ configsToBeAdded -- configsToBeDeleted
       val sensitiveEntries = newEntries.filter(_._2.value == null)
@@ -490,7 +490,7 @@ object ConfigCommand extends Logging {
 
   private def alterClientMetricsConfig(adminClient: Admin, entityTypeHead: String, entityNames: List[String], configsToBeAdded: Predef.Map[String, ConfigEntry], configsToBeDeleted: Seq[String]) = {
     entityNames.foreach { entityName =>
-      getOldConfig(adminClient, entityTypeHead, configsToBeDeleted, entityName)
+      validateOldConfig(adminClient, entityTypeHead, configsToBeDeleted, entityName)
     }
     val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
     val alterEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))

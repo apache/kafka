@@ -31,6 +31,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
@@ -406,7 +407,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
-    public void testUpdatingBothClusterAndBrokerLevelDynamicConfigUsingZRaft() throws Exception {
+    public void testUpdatingBothClusterAndBrokerLevelDynamicConfigUsingKRaft() throws Exception {
         alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
         try (Admin client = cluster.createAdminClient()) {
@@ -421,6 +422,18 @@ public class ConfigCommandIntegrationTest {
             assertThrows(ExecutionException.class, 
                     () -> alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId),
                             singletonMap("listener.name.external.ssl.keystore.password", "secret")));
+        }
+    }
+
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    public void testUpdatingDynamicConfigInKRaftThenShouldFail() {
+        alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
+
+        try (Admin client = cluster.createAdminClient()) {
+            assertThrows(InvalidConfigurationException.class,
+                    () -> deleteAndVerifyConfigValue(client, defaultBrokerId, singleton("log.roll.jitter.ms"), false));
+            assertThrows(InvalidConfigurationException.class,
+                    () -> deleteAndVerifyConfigValue(client, defaultBrokerId, singleton("no.exist.config"), false));
         }
     }
 
