@@ -216,6 +216,10 @@ class ControllerContext extends ControllerChannelContext {
 
   // getter
   def liveBrokerIds: Set[Int] = liveBrokerEpochs.keySet.diff(shuttingDownBrokerIds)
+  // To just check if a broker is live, we should use this method instead of liveBrokerIds.contains(brokerId)
+  // which is more expensive because it constructs the set of live broker IDs.
+  // See KAFKA-17061 for the details.
+  def isLiveBroker(brokerId: Int): Boolean = liveBrokerEpochs.contains(brokerId) && !shuttingDownBrokerIds(brokerId)
   def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerEpochs.keySet
   def liveOrShuttingDownBrokers: Set[Broker] = liveBrokers
   def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerEpochs
@@ -238,12 +242,7 @@ class ControllerContext extends ControllerChannelContext {
   def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition, includeShuttingDownBrokers: Boolean): Boolean = {
     val brokerOnline = {
       if (includeShuttingDownBrokers) liveOrShuttingDownBrokerIds.contains(brokerId)
-        // NOTE: this membership test is identical to test against liveBrokerIds, but we don't use it here
-        // because we want to avoid the overhead of constructing the set of live broker IDs,
-        // which is costly.
-        // isReplicaOnline is called in the hot path of the controller, so it's important to keep it efficient.
-        // See KAFKA-17061 for the details.
-      else liveBrokerEpochs.contains(brokerId) && !shuttingDownBrokerIds(brokerId)
+      else isLiveBroker(brokerId)
     }
     brokerOnline && !replicasOnOfflineDirs.getOrElse(brokerId, Set.empty).contains(topicPartition)
   }
