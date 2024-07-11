@@ -170,13 +170,6 @@ public class NetworkClientTest {
     private NetworkClient createNetworkClientWithNoVersionDiscovery(Metadata metadata) {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, bootstrapConfiguration, time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE);
-    }
-
-    private NetworkClient createNetworkClientWithNoVersionDiscoveryNoBootstrap(Metadata metadata) {
-        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, null, time, false, new ApiVersions(), new LogContext(),
                 MetadataRecoveryStrategy.NONE);
     }
@@ -812,7 +805,7 @@ public class NetworkClientTest {
         Node node1 = cluster.nodes().get(0);
         Node node2 = cluster.nodes().get(1);
 
-        NetworkClient client = createNetworkClientWithNoVersionDiscoveryNoBootstrap(metadata);
+        NetworkClient client = createNetworkClientWithNoVersionDiscovery(metadata);
 
         awaitReady(client, node1);
 

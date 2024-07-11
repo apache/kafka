@@ -190,6 +190,7 @@ public class KafkaProducerTest {
         return new KafkaProducer<>(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
             keySerializer, valueSerializer, metadata, kafkaClient, interceptors, time);
     }
+    // mockClient
 
     @BeforeEach
     public void setup(TestInfo testInfo) {
@@ -1076,7 +1077,7 @@ public class KafkaProducerTest {
         metadata.updateWithCurrentRequestVersion(initialUpdateResponse, false, nowMs);
 
         KafkaProducer<String, String> producer = kafkaProducer(configs, keySerializer, valueSerializer, metadata,
-                null, null, Time.SYSTEM);
+                new MockClient(new MockTime(), metadata), null, Time.SYSTEM);
 
         when(keySerializer.serialize(any(), any(), any())).then(invocation ->
                 invocation.<String>getArgument(2).getBytes());
