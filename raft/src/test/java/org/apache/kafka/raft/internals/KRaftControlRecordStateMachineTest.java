@@ -127,14 +127,14 @@ final class KRaftControlRecordStateMachineTest {
         log.truncateToLatestSnapshot();
 
         // Append the kraft.version control record
-        short kraftVersion = 1;
+        KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
         log.appendAsLeader(
             MemoryRecords.withKRaftVersionRecord(
                 log.endOffset().offset(),
                 0,
                 epoch,
                 bufferSupplier.get(300),
-                new KRaftVersionRecord().setKRaftVersion(kraftVersion)
+                new KRaftVersionRecord().setKRaftVersion(kraftVersion.featureLevel())
             ),
             epoch
         );

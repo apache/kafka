@@ -1035,8 +1035,8 @@ class KRaftClusterTest {
           Map(MetadataVersion.FEATURE_NAME ->
             new FeatureUpdate(MetadataVersion.latestTesting().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions
         )
-        assertEquals(new FinalizedVersionRange(0, 1), admin.describeFeatures().featureMetadata().get().
-          finalizedFeatures().get(KRaftVersion.FEATURE_NAME))
+        assertEquals(new SupportedVersionRange(0, 1), admin.describeFeatures().featureMetadata().get().
+          supportedFeatures().get(KRaftVersion.FEATURE_NAME))
       } finally {
         admin.close()
       }
