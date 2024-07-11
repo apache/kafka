@@ -471,6 +471,11 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">Sets window size for the deserializer in order to calculate window end times.</td>
             <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
+          <tr class="row-even"><td>log.summary.interval.ms</td>
+            <td>Low</td>
+            <td colspan="2">Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift.</td>
+            <td>120000milliseconds  (2 minutes)</td>
+          </tr>
           </tbody>
         </table>
         <div class="section" id="acceptable-recovery-lag">
@@ -1071,9 +1076,9 @@ streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksD
       <h4><a class="toc-backref" href="#id40">log.summary.interval.ms</a><a class="headerlink" href="#log-summary-interval-ms" title="Permalink to this headline"></a></h4>
       <blockquote>
         <div>
-          The configure control the output interval of summary information.
-          If the configuration greater or equal to 0, summary log will be output according to the set time interval.
-          If the configuration item value is less than 0, summary output will be disabled.
+          This configuration controls the output interval for summary information.
+          If greater or equal to 0, the summary log will be output according to the set time interval;
+          If less than 0, summary output is disabled.
         </div>
       </blockquote>
     </div>

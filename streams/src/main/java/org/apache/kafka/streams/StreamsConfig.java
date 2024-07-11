@@ -835,9 +835,9 @@ public class StreamsConfig extends AbstractConfig {
                                                           TaskAssignor.class.getName() + "</code> interface. Defaults to the <code>HighAvailabilityTaskAssignor</code> class.";
 
     public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
-    private static final String LOG_SUMMARY_INTERVAL_MS_DOC = "The configure control the output interval of summary information.\n" +
-            "If the configuration greater or equal to 0, summary log will be output according to the set time interval;\n" +
-            "If the configuration item value is less than 0, summary output will be disabled.";
+    private static final String LOG_SUMMARY_INTERVAL_MS_DOC = "This configuration controls the output interval for summary information.\n" +
+            "If greater or equal to 0, the summary log will be output according to the set time interval;\n" +
+            "If less than 0, summary output is disabled.";
     /**
      * {@code topology.optimization}
      * @deprecated since 2.7; use {@link #TOPOLOGY_OPTIMIZATION_CONFIG} instead
