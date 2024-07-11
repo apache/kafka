@@ -29,7 +29,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -261,10 +260,9 @@ public class FetchRequestTest {
                 .removed(Collections.emptyList())
                 .replaced(toReplace)
                 .metadata(FetchMetadata.newIncremental(123)).build(version);
-        
-        HashMap<Uuid, String> topicNames = new HashMap<>();
-        topicNames.put(topicId, tp.topic());
-        
+
+        Map<Uuid, String> topicNames = Collections.singletonMap(topicId, tp.topic());
+
         List<TopicIdPartition> requestsWithTopicsName = fetchRequest.forgottenTopics(topicNames);
         assertEquals(1, requestsWithTopicsName.size());
         requestsWithTopicsName.forEach(request -> {
