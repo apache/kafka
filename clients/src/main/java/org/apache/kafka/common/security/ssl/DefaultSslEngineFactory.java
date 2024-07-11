@@ -26,7 +26,7 @@ import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
-
+import java.net.Socket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +41,7 @@ import org.apache.kafka.common.utils.Base64;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import java.security.PrivateKey;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -54,7 +54,8 @@ import javax.net.ssl.X509ExtendedKeyManager;
 import javax.net.ssl.X509KeyManager;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-
+import javax.net.ssl.X509ExtendedKeyManager;
+import javax.net.ssl.X509KeyManager;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -198,7 +199,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
                 (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)),
                 Boolean.parseBoolean((String) configs.get(SslConfigs.SSL_TRUSTSTORE_AS_STRING)));
 
-        this.sslContext = createSSLContext(keystore, truststore);
+        this.sslContext = createSSLContext(keystore, truststore, configs);
     }
 
     @Override
@@ -261,7 +262,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         }
     }
 
-    private SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore) {
+    private SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore, Map<String, ?> configs) {
         try {
             SSLContext sslContext;
             if (provider != null)
@@ -285,13 +286,70 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             String tmfAlgorithm = this.tmfAlgorithm != null ? this.tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
             TrustManager[] trustManagers = getTrustManagers(truststore, tmfAlgorithm);
 
-            sslContext.init(keyManagers, trustManagers, this.secureRandomImplementation);
+            sslContext.init(applyAliasToKM(keyManagers, (String)configs.get("ssl.keystore.alias")), trustManagers, this.secureRandomImplementation);
             log.debug("Created SSL context with keystore {}, truststore {}, provider {}.",
                     keystore, truststore, sslContext.getProvider().getName());
             return sslContext;
         } catch (Exception e) {
             throw new KafkaException(e);
         }
+    }
+
+    private KeyManager[] applyAliasToKM(KeyManager[] kms, final String alias) {
+        if(alias == null || alias.isEmpty()){
+            return kms;
+        }
+
+        log.debug("Applying the custom KeyManagers for alias: {}", alias);
+
+        KeyManager[] updatedKMs = new KeyManager[kms.length];
+
+        int i=0;
+        for(KeyManager km : kms){
+            final X509KeyManager origKM = (X509KeyManager)km;
+            X509ExtendedKeyManager exKM = new X509ExtendedKeyManager() {
+                /* (non-Javadoc)
+                 * @see javax.net.ssl.X509ExtendedKeyManager#chooseEngineClientAlias(java.lang.String[], java.security.Principal[], javax.net.ssl.SSLEngine)
+                 */
+                @Override
+                public String chooseEngineClientAlias(String[] arg0,
+                                                      Principal[] arg1, SSLEngine arg2) {
+                    return alias;
+                }
+
+                @Override
+                public String[] getServerAliases(String arg0, Principal[] arg1) {
+                    return origKM.getServerAliases(arg0, arg1);
+                }
+
+                @Override
+                public PrivateKey getPrivateKey(String arg0) {
+                    return origKM.getPrivateKey(arg0);
+                }
+
+                @Override
+                public String[] getClientAliases(String arg0, Principal[] arg1) {
+                    return origKM.getClientAliases(arg0, arg1);
+                }
+
+                @Override
+                public X509Certificate[] getCertificateChain(String arg0) {
+                    return origKM.getCertificateChain(arg0);
+                }
+
+                @Override
+                public String chooseServerAlias(String arg0, Principal[] arg1, Socket arg2) {
+                    return origKM.chooseServerAlias(arg0, arg1, arg2);
+                }
+
+                @Override
+                public String chooseClientAlias(String[] arg0, Principal[] arg1, Socket arg2) {
+                    return alias;
+                }
+            };
+            updatedKMs[i++] = exKM;
+        }
+        return updatedKMs;
     }
 
     protected TrustManager[] getTrustManagers(SecurityStore truststore, String tmfAlgorithm) throws NoSuchAlgorithmException, KeyStoreException {
