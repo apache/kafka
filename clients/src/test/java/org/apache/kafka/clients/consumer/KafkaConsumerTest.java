@@ -3318,12 +3318,18 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
 
         ConsumerPartitionAssignor assignor = new RangeAssignor();
 
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            Node node = metadata.fetch().nodes().get(0);
+            client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        }
+        
         final KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
-
-        for (int i = 0; i < 10; i++) {
+        
+        int maxPreparedResponses = GroupProtocol.CLASSIC.equals(groupProtocol) ? 10 : 1;
+        for (int i = 0; i < maxPreparedResponses; i++) {
             client.prepareResponse(
                 request -> {
-                    time.sleep(defaultApiTimeoutMs / 10);
+                    time.sleep(defaultApiTimeoutMs / maxPreparedResponses);
                     return request instanceof ListOffsetsRequest;
                 },
                 listOffsetsResponse(
