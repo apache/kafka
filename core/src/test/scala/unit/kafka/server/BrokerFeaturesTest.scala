@@ -95,6 +95,7 @@ class BrokerFeaturesTest {
 
     val expectedFeatures = Map[String, Short](
       MetadataVersion.FEATURE_NAME -> MetadataVersion.latestTesting().featureLevel(),
+      "kraft.version" -> 0,
       "test_feature_1" -> 4,
       "test_feature_2" -> 3,
       "test_feature_3" -> 7)
