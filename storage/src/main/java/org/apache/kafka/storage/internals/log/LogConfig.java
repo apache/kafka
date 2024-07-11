@@ -113,11 +113,13 @@ public class LogConfig extends AbstractConfig {
     public static class RemoteLogConfig {
 
         public final boolean remoteStorageEnable;
+        public final String remoteLogDisablePolicy;
         public final long localRetentionMs;
         public final long localRetentionBytes;
 
         private RemoteLogConfig(LogConfig config) {
             this.remoteStorageEnable = config.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
+            this.remoteLogDisablePolicy = config.getString(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG);
             this.localRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
             this.localRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
         }
@@ -126,6 +128,7 @@ public class LogConfig extends AbstractConfig {
         public String toString() {
             return "RemoteLogConfig{" +
                     "remoteStorageEnable=" + remoteStorageEnable +
+                    ", remoteLogDisablePolicy=" + remoteLogDisablePolicy +
                     ", localRetentionMs=" + localRetentionMs +
                     ", localRetentionBytes=" + localRetentionBytes +
                     '}';
@@ -201,6 +204,7 @@ public class LogConfig extends AbstractConfig {
     // Visible for testing
     public static final Set<String> CONFIGS_WITH_NO_SERVER_DEFAULTS = Collections.unmodifiableSet(Utils.mkSet(
             TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG,
+            TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG,
             QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
             QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     ));
@@ -320,7 +324,10 @@ public class LogConfig extends AbstractConfig {
                 .define(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_MS, atLeast(-2), MEDIUM,
                         TopicConfig.LOCAL_LOG_RETENTION_MS_DOC)
                 .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
-                        TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC);
+                        TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
+                .define(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG, STRING, TopicConfig.REMOTE_LOG_DISABLE_POLICY_RETAIN,
+                        in(TopicConfig.REMOTE_LOG_DISABLE_POLICY_RETAIN, TopicConfig.REMOTE_LOG_DISABLE_POLICY_DELETE),
+                        MEDIUM, TopicConfig.REMOTE_LOG_DISABLE_POLICY_DOC);
     }
 
     public final Set<String> overriddenConfigs;
@@ -499,6 +506,10 @@ public class LogConfig extends AbstractConfig {
 
     public boolean remoteStorageEnable() {
         return remoteLogConfig.remoteStorageEnable;
+    }
+
+    public String remoteLogDisablePolicy() {
+        return remoteLogConfig.remoteLogDisablePolicy;
     }
 
     public long localRetentionMs() {
