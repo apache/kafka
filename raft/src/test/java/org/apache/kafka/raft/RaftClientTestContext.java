@@ -599,7 +599,7 @@ public final class RaftClientTestContext {
     }
 
     public void assertElectedLeader(int epoch, int leaderId) {
-        Set<Integer> voters = kraftVersion == 0 ? startingVoters.voterIds() : new HashSet<>();
+        Set<Integer> voters = kraftVersion == 0 ? startingVoters.voterIds() : Collections.emptySet();
         assertEquals(
             ElectionState.withElectedLeader(epoch, leaderId, voters),
             quorumStateStore.readElectionState().get()

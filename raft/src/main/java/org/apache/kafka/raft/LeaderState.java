@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -217,19 +216,19 @@ public class LeaderState<T> implements EpochState {
             .setVoters(voters)
             .setGrantingVoters(grantingVoters);
 
-        accumulator.appendControlMessages((baseOffset, epoch, buffer) -> {
+        accumulator.appendControlMessages((baseOffset, epoch, compression, buffer) -> {
             try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                     buffer,
                     RecordBatch.CURRENT_MAGIC_VALUE,
-                    Compression.NONE,
+                    compression,
                     TimestampType.CREATE_TIME,
                     baseOffset,
                     currentTimeMs,
                     RecordBatch.NO_PRODUCER_ID,
                     RecordBatch.NO_PRODUCER_EPOCH,
                     RecordBatch.NO_SEQUENCE,
-                    false,
-                    true,
+                    false, // isTransactional
+                    true,  // isControlBatch
                     epoch,
                     buffer.capacity()
                 )

@@ -234,7 +234,6 @@ public class KafkaRaftClientReconfigTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withKip853Rpc(true)
-            .withStaticVoters(voters.voterIds())
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, leader.id())
             .build();
@@ -316,7 +315,8 @@ public class KafkaRaftClientReconfigTest {
             context.deliverResponse(
                 fetchRequest.correlationId(),
                 fetchRequest.destination(),
-                context.fetchResponse(epoch, leader.id(), leaderRecords, 0, Errors.NONE));
+                context.fetchResponse(epoch, leader.id(), leaderRecords, 0, Errors.NONE)
+            );
         }
 
         // follower applies the bootstrap records, registering follower2 as a new voter
