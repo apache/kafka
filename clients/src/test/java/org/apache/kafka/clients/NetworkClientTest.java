@@ -368,7 +368,7 @@ public class NetworkClientTest {
         ByteBuffer buffer = selector.completedSendBuffers().get(0).buffer();
         RequestHeader header = parseHeader(buffer);
         assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
-        assertEquals(3, header.apiVersion());
+        assertEquals(4, header.apiVersion());
 
         // prepare response
         ApiVersionCollection apiKeys = new ApiVersionCollection();
@@ -440,7 +440,7 @@ public class NetworkClientTest {
         ByteBuffer buffer = selector.completedSendBuffers().get(0).buffer();
         RequestHeader header = parseHeader(buffer);
         assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
-        assertEquals(3, header.apiVersion());
+        assertEquals(4, header.apiVersion());
 
         // prepare response
         delayedApiVersionsResponse(0, (short) 0,

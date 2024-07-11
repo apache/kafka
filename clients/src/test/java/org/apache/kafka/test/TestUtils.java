@@ -698,12 +698,13 @@ public class TestUtils {
             Features<SupportedVersionRange> latestSupportedFeatures,
             boolean zkMigrationEnabled
     ) {
-        return ApiVersionsResponse.createApiVersionsResponse(
-                throttleTimeMs,
-                apiVersions,
-                latestSupportedFeatures,
-                Collections.emptyMap(),
-                ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-                zkMigrationEnabled);
+        return new ApiVersionsResponse.Builder().
+            setThrottleTimeMs(throttleTimeMs).
+            setApiVersions(apiVersions).
+            setSupportedFeatures(latestSupportedFeatures).
+            setFinalizedFeatures(Collections.emptyMap()).
+            setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
+            setZkMigrationEnabled(zkMigrationEnabled).
+            build();
     }
 }

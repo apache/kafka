@@ -91,7 +91,7 @@ class ApiVersionManagerTest {
       enableUnstableLastVersion = true
     )
 
-    val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
+    val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0, false)
     val alterConfigVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.CREATE_TOPICS.id)
     assertNotNull(alterConfigVersion)
     assertEquals(controllerMinVersion, alterConfigVersion.minVersion)
@@ -114,7 +114,7 @@ class ApiVersionManagerTest {
       assertFalse(versionManager.isApiEnabled(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion))
       assertFalse(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
 
-      val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
+      val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0, false)
       val envelopeVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id)
       assertNull(envelopeVersion)
     }
@@ -136,7 +136,7 @@ class ApiVersionManagerTest {
     assertTrue(versionManager.isApiEnabled(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion))
     assertTrue(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
 
-    val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
+    val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0, false)
     val envelopeVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id)
     assertNotNull(envelopeVersion)
     assertEquals(ApiKeys.ENVELOPE.oldestVersion, envelopeVersion.minVersion)
@@ -155,7 +155,7 @@ class ApiVersionManagerTest {
     assertTrue(versionManager.isApiEnabled(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion))
     assertTrue(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
 
-    val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
+    val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0, false)
     assertNotNull(apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id))
   }
 }
