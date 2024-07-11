@@ -42,7 +42,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 public class ChannelBuilders {
     private static final Logger log = LoggerFactory.getLogger(ChannelBuilders.class);
@@ -104,7 +104,7 @@ public class ChannelBuilders {
                                                       DelegationTokenCache tokenCache,
                                                       Time time,
                                                       LogContext logContext,
-                                                      Supplier<ApiVersionsResponse> apiVersionSupplier) {
+                                                      Function<Short, ApiVersionsResponse> apiVersionSupplier) {
         return create(securityProtocol, ConnectionMode.SERVER, JaasContext.Type.SERVER, config, listenerName,
                 isInterBrokerListener, null, true, credentialCache,
                 tokenCache, time, logContext, apiVersionSupplier);
@@ -122,7 +122,7 @@ public class ChannelBuilders {
                                          DelegationTokenCache tokenCache,
                                          Time time,
                                          LogContext logContext,
-                                         Supplier<ApiVersionsResponse> apiVersionSupplier) {
+                                         Function<Short, ApiVersionsResponse> apiVersionSupplier) {
         Map<String, Object> configs = channelBuilderConfigs(config, listenerName);
 
         ChannelBuilder channelBuilder;
