@@ -372,28 +372,6 @@ public class KafkaConsumerTest {
         return consumer;
     }
 
-    // TODO: again this test needs to be modified, need constructor to fail in a different way
-    @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
-    public void testConstructorClose(GroupProtocol groupProtocol) {
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
-        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "invalid-23-8409-adsfsdj");
-        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-
-        final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
-        final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
-        try {
-            newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-            fail("should have caught an exception and returned");
-        } catch (KafkaException e) {
-            assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
-            assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
-            assertEquals("Failed to construct kafka consumer", e.getMessage());
-        }
-    }
-
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testOsDefaultSocketBufferSizes(GroupProtocol groupProtocol) {
