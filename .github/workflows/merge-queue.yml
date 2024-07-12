@@ -48,4 +48,4 @@ jobs:
             jdks
         gradle-home-cache-cleanup: true
     - name: Gradle check 
-      run: ./gradlew --info check -x test
+      run: ./gradlew --build-cache check -x test
