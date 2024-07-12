@@ -21,7 +21,7 @@ on:
       - trunk
 
 jobs:
-  validate-push:
+  validate:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -36,18 +36,9 @@ jobs:
         distribution: temurin
         java-version: ${{ matrix.java }}
     - name: Setup Gradle
-      uses: gradle/gradle-build-action@v2
+      uses: gradle/actions/setup-gradle@v3
       env:
         GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
-      with:
-        # Only write to the cache from trunk
-        cache-read-only: false
-        # Cache downloaded JDKs in addition to the default directories.
-        gradle-home-cache-includes: |
-            caches
-            notifications
-            jdks
-        gradle-home-cache-cleanup: true
     - name: Gradle check 
       run: ./gradlew --build-cache check -x test
     - name: Archive Rat
