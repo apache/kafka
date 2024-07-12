@@ -2015,12 +2015,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           .map(_.name)
           .toSet
 
-          /* The cluster metadata topic is an internal topic with a different implementation. The user should not be
-           * allowed to create it as a regular topic.
-           */
-          if (topicNames.contains(Topic.CLUSTER_METADATA_TOPIC_NAME)) {
-            info(s"Rejecting creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME}")
-          }
           topicNames.diff(Set(Topic.CLUSTER_METADATA_TOPIC_NAME))
       }
 
