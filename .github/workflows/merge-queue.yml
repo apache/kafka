@@ -1,0 +1,36 @@
+name: Compile and validate before merging
+
+on:
+  merge_group:
+  pull_request:
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [8, 11, 17, 21]
+    name: Compile and Check Java ${{ matrix.java }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: ${{ matrix.java }}
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+      env:
+        GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
+      with:
+        # Only write to the cache from trunk
+        cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
+        # Cache downloaded JDKs in addition to the default directories.
+        gradle-home-cache-includes: |
+            caches
+            notifications
+            jdks
+        gradle-home-cache-cleanup: true
+    - name: Gradle check 
+      run: ./gradlew --info check -x test
