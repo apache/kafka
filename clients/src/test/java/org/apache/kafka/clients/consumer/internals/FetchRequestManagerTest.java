@@ -158,11 +158,6 @@ public class FetchRequestManagerTest {
     private static List<String> bootstrapAddresses = new ArrayList<>(Arrays.asList(
             "127.0.0.1:8000",
             "127.0.0.2:8000"));
-    private static NetworkClient.BootstrapConfiguration bootstrapConfiguration =
-            new NetworkClient.BootstrapConfiguration(
-                    bootstrapAddresses,
-                    ClientDnsLookup.USE_ALL_DNS_IPS,
-                    10 * 1000);
 
     private final String topicName = "test";
     private final String groupId = "test-group";
@@ -1923,7 +1918,7 @@ public class FetchRequestManagerTest {
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
-                bootstrapConfiguration, time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext(),
+                null, time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext(),
                 MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(

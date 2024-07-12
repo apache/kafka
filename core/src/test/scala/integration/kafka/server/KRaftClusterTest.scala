@@ -28,7 +28,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
-import org.apache.kafka.common.errors.{InvalidPartitionsException, PolicyViolationException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{InvalidPartitionsException, PolicyViolationException, TimeoutException}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.metadata.{ConfigRecord, FeatureLevelRecord}
 import org.apache.kafka.common.metrics.Metrics
@@ -1367,7 +1367,7 @@ class KRaftClusterTest {
         val exception = assertThrows(classOf[ExecutionException],
           () => admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES))
         assertNotNull(exception.getCause)
-        assertEquals(classOf[UnsupportedVersionException], exception.getCause.getClass)
+        assertEquals(classOf[TimeoutException], exception.getCause.getClass)
       } finally {
         admin.close()
       }

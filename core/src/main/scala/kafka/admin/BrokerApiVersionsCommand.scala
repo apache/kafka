@@ -297,7 +297,7 @@ object BrokerApiVersionsCommand {
 
       val bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
         ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-        config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG))
+        10 * 1000)
 
       val networkClient = new NetworkClient(
         selector,
@@ -317,6 +317,8 @@ object BrokerApiVersionsCommand {
         new ApiVersions,
         logContext,
         MetadataRecoveryStrategy.NONE)
+
+      networkClient.poll(10000, time.milliseconds())
 
       val highLevelClient = new ConsumerNetworkClient(
         logContext,
