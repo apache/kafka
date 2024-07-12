@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RangeAssignor;
@@ -36,11 +37,13 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Properties;
 
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.CommonClientConfigs.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
@@ -55,52 +58,49 @@ import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_
 @Tag("integration")
 public class ConsoleConsumerIntegrationTest {
 
-    private final String defaultBrokerId = "0";
     private final ClusterInstance cluster;
+    private final String topic = "test-topic";
+    private final String groupId = "test-group";
 
     public ConsoleConsumerIntegrationTest(ClusterInstance cluster) {
         this.cluster = cluster;
     }
 
-    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1)
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 3)
     public void testTransactionLogMessageFormatter() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
             // send transaction by producer
-            String topic = "test";
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-            admin.createTopics(Collections.singleton(newTopic));
-            produceMessages(cluster, topic);
+            admin.createTopics(singleton(newTopic));
+            produceMessages(cluster);
 
             // read the data from transaction topic by ConsoleConsumer with new formatter
             String[] transactionLogMessageFormatter = new String[]{
                 "--bootstrap-server", cluster.bootstrapServers(),
-                "--topic", "test",
+                "--topic", topic,
                 "--partition", "0",
                 "--formatter", "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter",
             };
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(transactionLogMessageFormatter);
             Consumer<byte[], byte[]> consumer = createConsumer(cluster);
-            consumer.subscribe(Collections.singletonList(topic));
             ConsoleConsumer.ConsumerWrapper consoleConsumer = new ConsoleConsumer.ConsumerWrapper(options, consumer);
-            consoleConsumer.recordIter.forEachRemaining(record -> {
-                String value = new String(record.value());
-                System.out.println(value);
-            });
+            Iterator<ConsumerRecord<byte[], byte[]>> recordIter = consoleConsumer.recordIter;
+            recordIter.forEachRemaining(System.out::println);
             consoleConsumer.cleanup();
         }
     }
 
-    private void produceMessages(ClusterInstance cluster, String topic) {
+    private void produceMessages(ClusterInstance cluster) {
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topic, new byte[100 * 1000]);
         TopicPartition topicPartition = new TopicPartition(topic, 0);
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(0);
-        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("group-id");
+        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId);
         try (Producer<byte[], byte[]> producer = createProducer(cluster)) {
             producer.initTransactions();
             producer.beginTransaction();
             producer.send(record);
-            producer.sendOffsetsToTransaction(Collections.singletonMap(topicPartition, offsetAndMetadata), groupMetadata);
+            producer.sendOffsetsToTransaction(singletonMap(topicPartition, offsetAndMetadata), groupMetadata);
             producer.commitTransaction();
         }
     }
@@ -115,14 +115,15 @@ public class ConsoleConsumerIntegrationTest {
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         return new KafkaProducer<>(props);
     }
-    
+
     private Consumer<byte[], byte[]> createConsumer(ClusterInstance cluster) {
-        HashMap<String, Object> configs = new HashMap<>();
-        configs.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        configs.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        configs.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
-        configs.put(ISOLATION_LEVEL_CONFIG, "read_committed");
-        return new KafkaConsumer<>(configs);
+        Properties props = new Properties();
+        props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
+        props.put(ISOLATION_LEVEL_CONFIG, "read_committed");
+        props.put(GROUP_ID_CONFIG, groupId);
+        return new KafkaConsumer<>(props);
     }
 }
