@@ -45,7 +45,12 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
    */
   def defaultFinalizedFeatures: Map[String, Short] = {
     supportedFeatures.features.asScala.map {
-      case(name, versionRange) => (name, versionRange.max)
+      case(name, versionRange) =>
+        if (name.equals("kraft.version")) {
+          (name, 0.toShort)
+        } else {
+          (name, versionRange.max)
+        }
     }.toMap
   }
 
@@ -92,6 +97,9 @@ object BrokerFeatures extends Logging {
             } else {
               feature.latestProduction
             }))
+    }
+    if (unstableFeatureVersionsEnabled) {
+      features.put("kraft.version", new SupportedVersionRange(0, 1))
     }
     Features.supportedFeatures(features)
   }

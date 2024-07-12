@@ -71,6 +71,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyList;
 
 public class SharePartitionTest {
 
@@ -2223,7 +2224,7 @@ public class SharePartitionTest {
         MemoryRecords records1 = memoryRecords(5, 10);
         // Second fetch request with 5 records starting from offset 15.
         MemoryRecords records2 = memoryRecords(5, 15);
-        // third fetch request with 5 records starting from offset20.
+        // Third fetch request with 5 records starting from offset 20.
         MemoryRecords records3 = memoryRecords(5, 20);
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
@@ -3552,6 +3553,907 @@ public class SharePartitionTest {
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).batchMemberId());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
         assertNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
+    }
+
+    @Test
+    public void testWriteShareGroupStateWithNullResponse() {
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(null));
+        assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Collections.emptyList()));
+    }
+
+    @Test
+    public void testWriteShareGroupStateWithNullTopicsData() {
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(null);
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
+    }
+
+    @Test
+    public void testWriteShareGroupStateWithInvalidTopicsData() {
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        // TopicsData is empty.
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.emptyList());
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
+
+        // TopicsData contains more results than expected.
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Arrays.asList(
+                new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.emptyList()),
+                new TopicData<>(Uuid.randomUuid(), Collections.emptyList())));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
+
+        // TopicsData contains no partition data.
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+                new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.emptyList())));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
+
+        // TopicsData contains wrong topicId.
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+                new TopicData<>(Uuid.randomUuid(), Collections.singletonList(
+                        PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
+
+        // TopicsData contains more partition data than expected.
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+                new TopicData<>(TOPIC_ID_PARTITION.topicId(), Arrays.asList(
+                        PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message()),
+                        PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
+
+        // TopicsData contains wrong partition.
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+                new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                        PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
+    }
+
+    @Test
+    public void testWriteShareGroupStateWithWriteException() {
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Write exception")));
+        assertThrows(IllegalStateException.class, () -> sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
+    }
+
+    @Test
+    public void testIsWriteShareGroupStateSuccessful() {
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+                new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                        PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        assertTrue(sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
+    }
+
+    @Test
+    public void testIsWriteShareGroupStateFailure() {
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+        // Mock Write state RPC to return error response.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+                new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                        PartitionFactory.newPartitionErrorData(0, Errors.NOT_COORDINATOR.code(), Errors.NOT_COORDINATOR.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        assertFalse(sharePartition.isWriteShareGroupStateSuccessful(Mockito.anyList()));
+    }
+
+    @Test
+    public void testWriteShareGroupStateWithNoOpShareStatePersister() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        List<PersisterStateBatch> stateBatches = Arrays.asList(
+                new PersisterStateBatch(5L, 10L, RecordState.AVAILABLE.id, (short) 2),
+                new PersisterStateBatch(11L, 15L, RecordState.ARCHIVED.id, (short) 3));
+
+        assertTrue(sharePartition.isWriteShareGroupStateSuccessful(stateBatches));
+    }
+
+    @Test
+    public void testMaybeUpdateCachedStateWhenAcknowledgementTypeAccept() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0,  memoryRecords(250, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertFalse(sharePartition.canAcquireRecords());
+
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                        new ShareAcknowledgementBatch(0, 249, Collections.singletonList((byte) 1))));
+
+        assertEquals(250, sharePartition.nextFetchOffset());
+        // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
+        assertEquals(250, sharePartition.startOffset());
+        assertEquals(250, sharePartition.endOffset());
+        assertTrue(sharePartition.canAcquireRecords());
+        // The records have been accepted, thus they are removed from the cached state.
+        assertEquals(0, sharePartition.cachedState().size());
+    }
+
+    @Test
+    public void testMaybeUpdateCachedStateWhenAcknowledgementTypeReject() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertFalse(sharePartition.canAcquireRecords());
+
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 249, Collections.singletonList((byte) 3))));
+
+        assertEquals(250, sharePartition.nextFetchOffset());
+        // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
+        assertEquals(250, sharePartition.startOffset());
+        assertEquals(250, sharePartition.endOffset());
+        assertTrue(sharePartition.canAcquireRecords());
+        // The records have been rejected, thus they are removed from the cached state.
+        assertEquals(0, sharePartition.cachedState().size());
+    }
+
+    @Test
+    public void testMaybeUpdateCachedStateWhenAcknowledgementTypeRelease() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertFalse(sharePartition.canAcquireRecords());
+
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 249, Collections.singletonList((byte) 2))));
+
+        // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(249, sharePartition.endOffset());
+        assertTrue(sharePartition.canAcquireRecords());
+        // The records have been released, thus they are not removed from the cached state.
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
+    }
+
+    @Test
+    public void testMaybeUpdateCachedStateWhenAcknowledgementsFromBeginningForBatchSubset() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertTrue(sharePartition.canAcquireRecords());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertFalse(sharePartition.canAcquireRecords());
+
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 12, Collections.singletonList((byte) 1))));
+
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(0L).offsetState().get(12L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(13L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(15L).batchState());
+
+        assertTrue(sharePartition.canAcquireRecords());
+        assertEquals(13, sharePartition.startOffset());
+        assertEquals(29, sharePartition.endOffset());
+        assertEquals(30, sharePartition.nextFetchOffset());
+    }
+
+    @Test
+    public void testMaybeUpdateCachedStateWhenAcknowledgementsFromBeginningForEntireBatch() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertTrue(sharePartition.canAcquireRecords());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertFalse(sharePartition.canAcquireRecords());
+
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 14, Collections.singletonList((byte) 3))));
+
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(15L).batchState());
+        assertEquals("member-1", sharePartition.cachedState().get(15L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(15L).batchDeliveryCount());
+
+        assertTrue(sharePartition.canAcquireRecords());
+        assertEquals(15, sharePartition.startOffset());
+        assertEquals(29, sharePartition.endOffset());
+        assertEquals(30, sharePartition.nextFetchOffset());
+    }
+
+    @Test
+    public void testMaybeUpdateCachedStateWhenAcknowledgementsInBetween() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertTrue(sharePartition.canAcquireRecords());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertFalse(sharePartition.canAcquireRecords());
+
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(10, 14, Collections.singletonList((byte) 3))));
+
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(9L).state());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(0L).offsetState().get(10L).state());
+
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(15L).batchState());
+        assertEquals("member-1", sharePartition.cachedState().get(15L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(15L).batchDeliveryCount());
+
+        assertFalse(sharePartition.canAcquireRecords());
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(29, sharePartition.endOffset());
+        assertEquals(30, sharePartition.nextFetchOffset());
+    }
+
+    @Test
+    public void testMaybeUpdateCachedStateWhenAllRecordsInCachedStateAreAcknowledged() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertTrue(sharePartition.canAcquireRecords());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertFalse(sharePartition.canAcquireRecords());
+
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 29, Collections.singletonList((byte) 1))));
+
+        assertTrue(sharePartition.canAcquireRecords());
+        assertEquals(30, sharePartition.startOffset());
+        assertEquals(30, sharePartition.endOffset());
+        assertEquals(30, sharePartition.nextFetchOffset());
+    }
+
+    @Test
+    public void testMaybeUpdateCachedStateMultipleAcquisitionsAndAcknowledgements() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(100).build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertTrue(sharePartition.canAcquireRecords());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 20),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertTrue(sharePartition.canAcquireRecords());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 40),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertTrue(sharePartition.canAcquireRecords());
+
+        // First Acknowledgement for the first batch of records 0-19.
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 19, Collections.singletonList((byte) 1))));
+
+        assertTrue(sharePartition.canAcquireRecords());
+        assertEquals(20, sharePartition.startOffset());
+        assertEquals(59, sharePartition.endOffset());
+        assertEquals(60, sharePartition.nextFetchOffset());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 60),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertTrue(sharePartition.canAcquireRecords());
+
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(20, 49, Collections.singletonList((byte) 1))));
+
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(40L).offsetState().get(49L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(40L).offsetState().get(50L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(60L).batchState());
+        assertTrue(sharePartition.canAcquireRecords());
+        assertEquals(50, sharePartition.startOffset());
+        assertEquals(79, sharePartition.endOffset());
+        assertEquals(80, sharePartition.nextFetchOffset());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 80),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertFalse(sharePartition.canAcquireRecords());
+
+        // Final Acknowledgment, all records are acknowledged here.
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(50, 179, Collections.singletonList((byte) 3))));
+
+        assertEquals(0, sharePartition.cachedState().size());
+        assertTrue(sharePartition.canAcquireRecords());
+        assertEquals(180, sharePartition.startOffset());
+        assertEquals(180, sharePartition.endOffset());
+        assertEquals(180, sharePartition.nextFetchOffset());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 180),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(180L).batchState());
+        assertTrue(sharePartition.canAcquireRecords());
+        assertEquals(180, sharePartition.startOffset());
+        assertEquals(199, sharePartition.endOffset());
+        assertEquals(200, sharePartition.nextFetchOffset());
+    }
+
+    @Test
+    public void testCanAcquireRecordsReturnsTrue() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(0, sharePartition.endOffset());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertTrue(sharePartition.canAcquireRecords());
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(149, sharePartition.endOffset());
+    }
+
+    @Test
+    public void testCanAcquireRecordsChangeResponsePostAcknowledgement() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(0, sharePartition.endOffset());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertTrue(sharePartition.canAcquireRecords());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertFalse(sharePartition.canAcquireRecords());
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(249, sharePartition.endOffset());
+
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 249, Collections.singletonList((byte) 1))));
+
+        assertTrue(sharePartition.canAcquireRecords());
+        assertEquals(250, sharePartition.startOffset());
+        assertEquals(250, sharePartition.endOffset());
+    }
+
+    @Test
+    public void testCanAcquireRecordsAfterReleaseAcknowledgement() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertTrue(sharePartition.canAcquireRecords());
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(149, sharePartition.endOffset());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertFalse(sharePartition.canAcquireRecords());
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(249, sharePartition.endOffset());
+
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 89, Collections.singletonList((byte) 2))));
+
+        // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(249, sharePartition.endOffset());
+        // The records have been released, thus they are still available for being acquired.
+        assertTrue(sharePartition.canAcquireRecords());
+    }
+
+    @Test
+    public void testCanAcquireRecordsAfterArchiveAcknowledgement() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertTrue(sharePartition.canAcquireRecords());
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(149, sharePartition.endOffset());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertFalse(sharePartition.canAcquireRecords());
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(249, sharePartition.endOffset());
+
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 89, Collections.singletonList((byte) 3))));
+
+        // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
+        assertEquals(90, sharePartition.startOffset());
+        assertEquals(249, sharePartition.endOffset());
+        assertTrue(sharePartition.canAcquireRecords());
+    }
+
+    @Test
+    public void testCanAcquireRecordsAfterAcceptAcknowledgement() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertTrue(sharePartition.canAcquireRecords());
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(149, sharePartition.endOffset());
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+
+        assertFalse(sharePartition.canAcquireRecords());
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(249, sharePartition.endOffset());
+
+        sharePartition.acknowledge("member-1", Collections.singletonList(
+                        new ShareAcknowledgementBatch(0, 89, Collections.singletonList((byte) 1))));
+
+        // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
+        assertEquals(90, sharePartition.startOffset());
+        assertEquals(249, sharePartition.endOffset());
+        assertTrue(sharePartition.canAcquireRecords());
+    }
+
+    @Test
+    public void testAcknowledgeBatchWithWriteShareGroupStateFailure() {
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+                new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                        PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        CompletableFuture<Optional<Throwable>> ackResult = sharePartition.acknowledge(MEMBER_ID,
+                Collections.singletonList(new ShareAcknowledgementBatch(5, 14, Collections.singletonList((byte) 1))));
+        assertFalse(ackResult.isCompletedExceptionally());
+        assertFalse(ackResult.join().isPresent());
+
+        // Due to failure in writeShareGroupState, the cached state should not be updated.
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).batchMemberId());
+    }
+
+    @Test
+    public void testAcknowledgeOffsetWithWriteShareGroupStateFailure() {
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+                new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                        PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        CompletableFuture<Optional<Throwable>> ackResult = sharePartition.acknowledge(
+                MEMBER_ID,
+                Collections.singletonList(new ShareAcknowledgementBatch(8, 10, Collections.singletonList((byte) 3))));
+        assertFalse(ackResult.isCompletedExceptionally());
+        assertFalse(ackResult.join().isPresent());
+
+        // Due to failure in writeShareGroupState, the cached state should not be updated.
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(5L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(6L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(7L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(8L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(9L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(10L).state());
+
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(5L).memberId());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(6L).memberId());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(7L).memberId());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(8L).memberId());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(9L).memberId());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(10L).memberId());
+    }
+
+    @Test
+    public void testAcknowledgeSubsetWithAnotherMember() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acknowledge("member-1",
+                Collections.singletonList(new ShareAcknowledgementBatch(5, 7, Collections.singletonList((byte) 1))));
+
+        // Acknowledge subset with another member.
+        CompletableFuture<Optional<Throwable>> ackResult = sharePartition.acknowledge("member-2",
+                Collections.singletonList(new ShareAcknowledgementBatch(9, 11, Collections.singletonList((byte) 1))));
+        assertFalse(ackResult.isCompletedExceptionally());
+        assertTrue(ackResult.join().isPresent());
+        assertEquals(InvalidRecordStateException.class, ackResult.join().get().getClass());
+    }
+
+    @Test
+    public void testAcknowledgeWithAnotherMemberRollbackBatchError() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        CompletableFuture<Optional<Throwable>> ackResult = sharePartition.acknowledge("member-1", Arrays.asList(
+                new ShareAcknowledgementBatch(5, 9, Collections.singletonList((byte) 2)),
+                // Acknowledging batch with another member will cause failure and rollback.
+                new ShareAcknowledgementBatch(10, 14, Collections.singletonList((byte) 1)),
+                new ShareAcknowledgementBatch(15, 19, Collections.singletonList((byte) 1))));
+
+        assertFalse(ackResult.isCompletedExceptionally());
+        assertTrue(ackResult.join().isPresent());
+        assertEquals(InvalidRecordStateException.class, ackResult.join().get().getClass());
+
+        // State should be rolled back to the previous state for any changes.
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals("member-1", sharePartition.cachedState().get(5L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(5L).batchDeliveryCount());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals("member-2", sharePartition.cachedState().get(10L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(15L).batchState());
+        assertEquals("member-1", sharePartition.cachedState().get(15L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(15L).batchDeliveryCount());
+    }
+
+    @Test
+    public void testAcknowledgeWithAnotherMemberRollbackSubsetError() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        CompletableFuture<Optional<Throwable>> ackResult = sharePartition.acknowledge("member-1", Arrays.asList(
+                new ShareAcknowledgementBatch(5, 9, Collections.singletonList((byte) 2)),
+                new ShareAcknowledgementBatch(10, 14, Collections.singletonList((byte) 1)),
+                // Acknowledging subset with another member will cause failure and rollback.
+                new ShareAcknowledgementBatch(16, 18, Collections.singletonList((byte) 1))));
+        assertFalse(ackResult.isCompletedExceptionally());
+        assertTrue(ackResult.join().isPresent());
+        assertEquals(InvalidRecordStateException.class, ackResult.join().get().getClass());
+
+        assertEquals(3, sharePartition.cachedState().size());
+        // Check the state of the cache. State should be rolled back to the previous state for any changes.
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals("member-1", sharePartition.cachedState().get(5L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(5L).batchDeliveryCount());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals("member-1", sharePartition.cachedState().get(10L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(15L).batchState());
+        assertEquals("member-2", sharePartition.cachedState().get(15L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(15L).batchDeliveryCount());
+    }
+
+    @Test
+    public void testMaxDeliveryCountLimitExceededForRecordBatch() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
+        MemoryRecords records = memoryRecords(10, 5);
+
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
+                new ShareAcknowledgementBatch(5, 14, Collections.singletonList((byte) 2))));
+
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
+                new ShareAcknowledgementBatch(5, 14, Collections.singletonList((byte) 2))));
+
+        // All the records in the batch reached the max delivery count, hence they got archived and the cached state cleared.
+        assertEquals(15, sharePartition.nextFetchOffset());
+        assertEquals(15, sharePartition.startOffset());
+        assertEquals(15, sharePartition.endOffset());
+        assertEquals(0, sharePartition.cachedState().size());
+    }
+
+    @Test
+    public void testMaxDeliveryCountLimitExceededForRecordsSubset() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
+        // First fetch request with 5 records starting from offset 10.
+        MemoryRecords records1 = memoryRecords(5, 10);
+        // Second fetch request with 5 records starting from offset 15.
+        MemoryRecords records2 = memoryRecords(5, 15);
+
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 3, records2,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(Arrays.asList(
+                new ShareAcknowledgementBatch(10, 12, Collections.singletonList((byte) 1)),
+                new ShareAcknowledgementBatch(13, 16, Collections.singletonList((byte) 2)),
+                new ShareAcknowledgementBatch(17, 19, Collections.singletonList((byte) 1)))));
+
+        // Send next batch from offset 13, only 2 records should be acquired.
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        // Send next batch from offset 15, only 2 records should be acquired.
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records2,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
+                new ShareAcknowledgementBatch(13, 16, Collections.singletonList((byte) 2))));
+
+        assertEquals(20, sharePartition.nextFetchOffset());
+        // Cached state will be empty because after the second release, the acquired records will now have moved to
+        // ARCHIVE state, since their max delivery count exceeded. Also, now since all the records are either in ACKNOWLEDGED or ARCHIVED
+        // state, cached state should be empty.
+        assertEquals(0, sharePartition.cachedState().size());
+    }
+
+    @Test
+    public void testMaxDeliveryCountLimitExceededForRecordsSubsetAndCachedStateNotCleared() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
+        // First fetch request with 5 records starting from offset 0.
+        MemoryRecords records1 = memoryRecords(5, 0);
+
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 1, Collections.singletonList((byte) 2)))));
+
+        // Send next batch from offset 0, only 2 records should be acquired.
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, memoryRecords(2, 0),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 4, Collections.singletonList((byte) 2))));
+
+        assertEquals(2, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+
+        Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
+        expectedOffsetStateMap.put(0L, new InFlightState(RecordState.ARCHIVED, (short) 2, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(1L, new InFlightState(RecordState.ARCHIVED, (short) 2, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(2L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(3L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(4L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(0L).offsetState());
+    }
+
+    @Test
+    public void testNextFetchOffsetPostAcquireAndAcknowledgeFunctionality() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        MemoryRecords records1 = memoryRecords(10, 0);
+        String memberId1 = "memberId-1";
+        String memberId2 = "memberId-2";
+
+        sharePartition.acquire(memberId1, new FetchPartitionData(Errors.NONE, 20, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertFalse(sharePartition.findNextFetchOffset());
+        assertEquals(10, sharePartition.nextFetchOffset());
+
+        sharePartition.acquire(memberId2, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 10),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertFalse(sharePartition.findNextFetchOffset());
+        assertEquals(20, sharePartition.nextFetchOffset());
+
+        sharePartition.acknowledge(memberId1, Collections.singletonList(
+                new ShareAcknowledgementBatch(5, 9, Collections.singletonList((byte) 2))));
+
+        assertTrue(sharePartition.findNextFetchOffset());
+        assertEquals(5, sharePartition.nextFetchOffset());
+
+        sharePartition.acquire(memberId1, new FetchPartitionData(Errors.NONE, 20, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        assertTrue(sharePartition.findNextFetchOffset());
+        assertEquals(20, sharePartition.nextFetchOffset());
+        assertFalse(sharePartition.findNextFetchOffset());
+    }
+
+    @Test
+    public void testNextFetchOffsetWithMultipleConsumers() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(100).build();
+        MemoryRecords records1 = memoryRecords(3, 0);
+        String memberId1 = "member-1";
+        String memberId2 = "member-2";
+
+        sharePartition.acquire(memberId1, new FetchPartitionData(Errors.NONE, 20, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertEquals(3, sharePartition.nextFetchOffset());
+
+        sharePartition.acknowledge(memberId1, Collections.singletonList(
+                new ShareAcknowledgementBatch(0, 2, Collections.singletonList((byte) 2))));
+        assertEquals(0, sharePartition.nextFetchOffset());
+
+        sharePartition.acquire(memberId2, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 3),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertEquals(0, sharePartition.nextFetchOffset());
+
+        sharePartition.acquire(memberId1, new FetchPartitionData(Errors.NONE, 20, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertEquals(5, sharePartition.nextFetchOffset());
+
+        sharePartition.acknowledge(memberId2, Collections.singletonList(
+                new ShareAcknowledgementBatch(3, 4, Collections.singletonList((byte) 2))));
+        assertEquals(3, sharePartition.nextFetchOffset());
+    }
+
+    @Test
+    public void testNumberOfWriteCallsOnUpdates() {
+        SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder().build());
+
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(5, 2),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
+                new ShareAcknowledgementBatch(2, 6, Collections.singletonList((byte) 1))));
+        // Acknowledge records will induce 1 write state RPC call via function isWriteShareGroupStateSuccessful.
+        Mockito.verify(sharePartition, Mockito.times(1)).isWriteShareGroupStateSuccessful(anyList());
+
+        sharePartition.releaseAcquiredRecords(MEMBER_ID);
+        // Release acquired records will induce 0 write state RPC call via function isWriteShareGroupStateSuccessful
+        // because the in-flight batch has been acknowledged. Hence, the total calls remain 1.
+        Mockito.verify(sharePartition, Mockito.times(1)).isWriteShareGroupStateSuccessful(anyList());
+    }
+
+    @Test
+    public void testReacquireSubsetWithAnotherMember() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        MemoryRecords records1 = memoryRecords(5, 5);
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 30, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(12, 10),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        sharePartition.acknowledge("member-1", Arrays.asList(
+                new ShareAcknowledgementBatch(5, 11, Collections.singletonList((byte) 2)),
+                new ShareAcknowledgementBatch(12, 13, Collections.singletonList((byte) 0)),
+                new ShareAcknowledgementBatch(14, 15, Collections.singletonList((byte) 2)),
+                new ShareAcknowledgementBatch(17, 20, Collections.singletonList((byte) 2))));
+
+        // Reacquire with another member.
+        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertEquals(10, sharePartition.nextFetchOffset());
+
+        // Reacquire with another member.
+        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 10),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+        assertEquals(17, sharePartition.nextFetchOffset());
+
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals("member-2", sharePartition.cachedState().get(5L).batchMemberId());
+        assertEquals(2, sharePartition.cachedState().get(5L).batchDeliveryCount());
+
+        // Check cached state.
+        Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
+        // Records 10-11, 14-15 were reacquired by member-2.
+        expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ACQUIRED, (short) 2, "member-2"));
+        expectedOffsetStateMap.put(11L, new InFlightState(RecordState.ACQUIRED, (short) 2, "member-2"));
+        // Records 12-13 were kept as gapOffsets, hence they are not reacquired and are kept in ARCHIVED state.
+        expectedOffsetStateMap.put(12L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(13L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.ACQUIRED, (short) 2, "member-2"));
+        expectedOffsetStateMap.put(15L, new InFlightState(RecordState.ACQUIRED, (short) 2, "member-2"));
+        // Record 16 was not released in the acknowledgements. It was included in the reacquire by member-2,
+        // still its ownership is with member-1 and delivery count is 1.
+        expectedOffsetStateMap.put(16L, new InFlightState(RecordState.ACQUIRED, (short) 1, "member-1"));
+        expectedOffsetStateMap.put(17L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(18L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(21L, new InFlightState(RecordState.ACQUIRED, (short) 1, "member-1"));
+        assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
     }
 
     private MemoryRecords memoryRecords(int numOfRecords) {

@@ -99,6 +99,7 @@ class LogConfigTest {
       case TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-2")
       case TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-1")
       case TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-0.1")
+      case TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG => assertPropertyInvalid(name, "not_a_number", "remove", "0", "true")
 
       case _ => assertPropertyInvalid(name, "not_a_number", "-1")
     })
@@ -401,6 +402,22 @@ class LogConfigTest {
     } else {
       LogConfig.validateBrokerLogConfigValues(kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array(TopicConfig.REMOTE_LOG_DISABLE_POLICY_RETAIN, TopicConfig.REMOTE_LOG_DISABLE_POLICY_DELETE))
+  def testValidRemoteLogDisablePolicy(policy: String): Unit = {
+    val logProps = new Properties
+    logProps.put(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG, policy)
+    LogConfig.validate(logProps)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("keep", "remove"))
+  def testInvalidRemoteLogDisablePolicy(policy: String): Unit = {
+    val logProps = new Properties
+    logProps.put(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG, policy)
+    assertThrows(classOf[ConfigException], () => LogConfig.validate(logProps))
   }
 
   /* Verify that when the deprecated config LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG has non default value the new configs
