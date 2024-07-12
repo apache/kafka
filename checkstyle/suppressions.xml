@@ -365,5 +365,5 @@
               files="(ReplicaFetcherThreadBenchmark).java"/>
 
      <!-- Add the new suppression rule for TempJaasTestUtils.java -->
-    <suppress checks="ImportControl" files="kafka/utils/TempJaasTestUtils.java" />
+    <suppress checks="ImportControl" files="kafka/utils/JaasTestUtils.java" />
 </suppressions>
