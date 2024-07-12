@@ -35,3 +35,8 @@ jobs:
         gradle-home-cache-cleanup: true
     - name: Gradle check 
       run: ./gradlew --info check -x test
+    - name: Archive
+      uses: actions/upload-artifact@v4
+      with:
+        name: rat-report
+        path: build/rat/index.html
