@@ -56,6 +56,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.ArrayList;
@@ -142,8 +143,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreate() throws InterruptedException, ExecutionException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testCreate(TestInfo testInfo) throws InterruptedException, ExecutionException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -161,8 +162,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreateWithDefaults() throws InterruptedException, ExecutionException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testCreateWithDefaults(TestInfo testInfo) throws InterruptedException, ExecutionException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -189,8 +190,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreateWithDefaultReplication() throws InterruptedException, ExecutionException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testCreateWithDefaultReplication(TestInfo testInfo) throws InterruptedException, ExecutionException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -208,8 +209,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreateWithDefaultPartitions() throws InterruptedException, ExecutionException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testCreateWithDefaultPartitions(TestInfo testInfo) throws InterruptedException, ExecutionException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -228,8 +229,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreateWithConfigs() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testCreateWithConfigs(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -248,8 +249,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreateWhenAlreadyExists() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testCreateWhenAlreadyExists(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -267,8 +268,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreateWhenAlreadyExistsWithIfNotExists() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testCreateWhenAlreadyExistsWithIfNotExists(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -286,10 +287,10 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreateWithReplicaAssignment() throws Exception {
+    public void testCreateWithReplicaAssignment(TestInfo testInfo) throws Exception {
         Map<Integer, List<Integer>> replicaAssignmentMap = new HashMap<>();
         try (Admin adminClient = clusterInstance.createAdminClient()) {
-            String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+            String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                     TestUtils.randomString(10);
 
             replicaAssignmentMap.put(0, Arrays.asList(5, 4));
@@ -319,8 +320,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreateWithInvalidReplicationFactor() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testCreateWithInvalidReplicationFactor(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -332,8 +333,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreateWithNegativeReplicationFactor() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testCreateWithNegativeReplicationFactor(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -344,8 +345,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreateWithNegativePartitionCount() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testCreateWithNegativePartitionCount(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -355,8 +356,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testInvalidTopicLevelConfig() {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testInvalidTopicLevelConfig(TestInfo testInfo) {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
@@ -369,8 +370,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testListTopics() throws InterruptedException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testListTopics(TestInfo testInfo) throws InterruptedException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
@@ -382,7 +383,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testListTopicsWithIncludeList() throws InterruptedException {
+    public void testListTopicsWithIncludeList(TestInfo testInfo) throws InterruptedException {
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             String topic1 = "kafka.testTopic1";
             String topic2 = "kafka.testTopic2";
@@ -404,7 +405,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testListTopicsWithExcludeInternal() throws InterruptedException {
+    public void testListTopicsWithExcludeInternal(TestInfo testInfo) throws InterruptedException {
         try (Admin adminClient = clusterInstance.createAdminClient();) {
             String topic1 = "kafka.testTopic1";
             String hiddenConsumerTopic = Topic.GROUP_METADATA_TOPIC_NAME;
@@ -420,8 +421,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testAlterPartitionCount() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testAlterPartitionCount(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -446,8 +447,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testAlterAssignment() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testAlterAssignment(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -479,8 +480,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testAlterAssignmentWithMoreAssignmentThanPartitions() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testAlterAssignmentWithMoreAssignmentThanPartitions(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -499,8 +500,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testAlterAssignmentWithMorePartitionsThanAssignment() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testAlterAssignmentWithMorePartitionsThanAssignment(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -518,8 +519,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testAlterWithInvalidPartitionCount() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testAlterWithInvalidPartitionCount(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient();
@@ -534,8 +535,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testAlterWhenTopicDoesntExist() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testAlterWhenTopicDoesntExist(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient();
@@ -548,8 +549,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testAlterWhenTopicDoesntExistWithIfExists() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testAlterWhenTopicDoesntExistWithIfExists(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         Admin adminClient = clusterInstance.createAdminClient();
 
@@ -560,8 +561,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreateAlterTopicWithRackAware() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testCreateAlterTopicWithRackAware(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -613,8 +614,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testConfigPreservationAcrossPartitionAlteration() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testConfigPreservationAcrossPartitionAlteration(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -648,10 +649,10 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testTopicDeletion() throws Exception {
+    public void testTopicDeletion(TestInfo testInfo) throws Exception {
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
-            String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+            String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                     TestUtils.randomString(10);
 
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
@@ -669,7 +670,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testTopicWithCollidingCharDeletionAndCreateAgain() throws Exception {
+    public void testTopicWithCollidingCharDeletionAndCreateAgain(TestInfo testInfo) throws Exception {
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             // create the topic with colliding chars
@@ -696,7 +697,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDeleteInternalTopic() throws Exception {
+    public void testDeleteInternalTopic(TestInfo testInfo) throws Exception {
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
 
@@ -723,8 +724,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDeleteWhenTopicDoesntExist() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDeleteWhenTopicDoesntExist(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -736,8 +737,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDeleteWhenTopicDoesntExistWithIfExists() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDeleteWhenTopicDoesntExistWithIfExists(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);) {
@@ -746,8 +747,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDescribe() throws InterruptedException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDescribe(TestInfo testInfo) throws InterruptedException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             int partition = 2;
@@ -763,8 +764,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDescribeWithDescribeTopicPartitionsApi() throws InterruptedException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDescribeWithDescribeTopicPartitionsApi(TestInfo testInfo) throws InterruptedException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -795,8 +796,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDescribeWhenTopicDoesntExist() {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDescribeWhenTopicDoesntExist(TestInfo testInfo) {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
@@ -809,8 +810,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDescribeWhenTopicDoesntExistWithIfExists() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDescribeWhenTopicDoesntExistWithIfExists(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
@@ -823,8 +824,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDescribeUnavailablePartitions() throws ExecutionException, InterruptedException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDescribeUnavailablePartitions(TestInfo testInfo) throws ExecutionException, InterruptedException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -888,8 +889,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDescribeUnderReplicatedPartitions() throws InterruptedException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDescribeUnderReplicatedPartitions(TestInfo testInfo) throws InterruptedException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             int partitions = 1;
@@ -917,8 +918,8 @@ public class TopicCommandIntegrationTest {
 
 
     @ClusterTemplate("generate1")
-    public void testDescribeUnderMinIsrPartitions() throws InterruptedException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDescribeUnderMinIsrPartitions(TestInfo testInfo) throws InterruptedException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -945,8 +946,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress() throws ExecutionException, InterruptedException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(TestInfo testInfo) throws ExecutionException, InterruptedException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient();
@@ -1029,8 +1030,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDescribeAtMinIsrPartitions() throws InterruptedException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDescribeAtMinIsrPartitions(TestInfo testInfo) throws InterruptedException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -1071,7 +1072,7 @@ public class TopicCommandIntegrationTest {
      * Output should only display the (1) topic with partition under min ISR count and (3) topic with offline partition
      */
     @ClusterTemplate("generate1")
-    public void testDescribeUnderMinIsrPartitionsMixed() throws InterruptedException {
+    public void testDescribeUnderMinIsrPartitionsMixed(TestInfo testInfo) throws InterruptedException {
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             String underMinIsrTopic = "under-min-isr-topic";
             String notUnderMinIsrTopic = "not-under-min-isr-topic";
@@ -1128,8 +1129,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDescribeReportOverriddenConfigs() throws InterruptedException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDescribeReportOverriddenConfigs(TestInfo testInfo) throws InterruptedException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             String config = "file.delete.delay.ms=1000";
@@ -1148,8 +1149,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDescribeAndListTopicsWithoutInternalTopics() throws InterruptedException {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDescribeAndListTopicsWithoutInternalTopics(TestInfo testInfo) throws InterruptedException {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
@@ -1171,8 +1172,8 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized() throws Exception {
-        String testTopicName = TestUtils.getCurrentFunctionName() + "-" +
+    public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(TestInfo testInfo) throws Exception {
+        String testTopicName = testInfo.getTestMethod().get().getName() + "-" +
                 TestUtils.randomString(10);
         Admin adminClient = clusterInstance.createAdminClient();
 
@@ -1196,7 +1197,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testCreateWithTopicNameCollision() throws Exception {
+    public void testCreateWithTopicNameCollision(TestInfo testInfo) throws Exception {
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
 
