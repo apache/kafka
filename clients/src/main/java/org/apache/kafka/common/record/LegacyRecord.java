@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Checksums;
 import org.apache.kafka.common.utils.Utils;
 
+import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -397,7 +398,7 @@ public final class LegacyRecord {
      * @return the computed CRC for this record.
      * @throws IOException for any IO errors writing to the output stream.
      */
-    public static long write(DataOutputStream out,
+    public static long write(DataOutput out,
                              byte magic,
                              long timestamp,
                              byte[] key,
@@ -407,7 +408,7 @@ public final class LegacyRecord {
         return write(out, magic, timestamp, wrapNullable(key), wrapNullable(value), compressionType, timestampType);
     }
 
-    public static long write(DataOutputStream out,
+    public static long write(DataOutput out,
                              byte magic,
                              long timestamp,
                              ByteBuffer key,
@@ -423,7 +424,7 @@ public final class LegacyRecord {
     /**
      * Write a record using raw fields (without validation). This should only be used in testing.
      */
-    public static void write(DataOutputStream out,
+    public static void write(DataOutput out,
                              byte magic,
                              long crc,
                              byte attributes,
@@ -435,7 +436,7 @@ public final class LegacyRecord {
 
     // Write a record to the buffer, if the record's compression type is none, then
     // its value payload should be already compressed with the specified type
-    private static void write(DataOutputStream out,
+    private static void write(DataOutput out,
                               byte magic,
                               long crc,
                               byte attributes,

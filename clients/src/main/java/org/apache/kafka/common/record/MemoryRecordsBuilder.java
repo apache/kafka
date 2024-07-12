@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.compress.NoCompression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
 
+import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -75,7 +77,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     private float estimatedCompressionRatio = 1.0F;
 
     // Used to append records, may compress data on the fly
-    private DataOutputStream appendStream;
+    private DataOutput appendStream;
     private boolean isTransactional;
     private long producerId;
     private short producerEpoch;
@@ -140,7 +142,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
         bufferStream.position(initialPosition + batchHeaderSizeInBytes);
         this.bufferStream = bufferStream;
-        this.appendStream = new DataOutputStream(compression.wrapForOutput(this.bufferStream, magic));
+        this.appendStream = compression.getClass() == NoCompression.class ? bufferStream : new DataOutputStream(compression.wrapForOutput(this.bufferStream, magic));
 
         if (hasDeleteHorizonMs()) {
             this.baseTimestamp = deleteHorizonMs;
@@ -332,7 +334,9 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     public void closeForRecordAppends() {
         if (appendStream != CLOSED_STREAM) {
             try {
-                appendStream.close();
+                if(appendStream instanceof OutputStream){
+                    ((OutputStream) appendStream).close();
+                }
             } catch (IOException e) {
                 throw new KafkaException(e);
             } finally {

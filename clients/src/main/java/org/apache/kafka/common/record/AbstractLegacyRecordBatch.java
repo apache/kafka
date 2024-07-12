@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.DataOutputStream;
+import java.io.DataOutput;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -272,7 +272,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         buffer.putInt(size);
     }
 
-    static void writeHeader(DataOutputStream out, long offset, int size) throws IOException {
+    static void writeHeader(DataOutput out, long offset, int size) throws IOException {
         out.writeLong(offset);
         out.writeInt(size);
     }

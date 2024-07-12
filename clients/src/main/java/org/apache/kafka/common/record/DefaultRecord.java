@@ -22,6 +22,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
 
+import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -159,7 +160,7 @@ public class DefaultRecord implements Record {
     /**
      * Write the record to `out` and return its size.
      */
-    public static int writeTo(DataOutputStream out,
+    public static int writeTo(DataOutput out,
                               int offsetDelta,
                               long timestampDelta,
                               ByteBuffer key,

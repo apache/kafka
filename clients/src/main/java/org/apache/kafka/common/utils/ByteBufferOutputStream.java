@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.io.DataOutput;
+import java.io.IOException;
 import java.io.OutputStream;
+import java.io.UTFDataFormatException;
 import java.nio.ByteBuffer;
 
 /**
@@ -32,7 +35,7 @@ import java.nio.ByteBuffer;
  * So, it's best to assume that buffer expansion can always happen. An improvement would be to create a separate class
  * that throws an error if buffer expansion is required to avoid the issue altogether.
  */
-public class ByteBufferOutputStream extends OutputStream {
+public class ByteBufferOutputStream extends OutputStream implements DataOutput {
 
     private static final float REALLOCATION_FACTOR = 1.1f;
 
@@ -71,10 +74,137 @@ public class ByteBufferOutputStream extends OutputStream {
         buffer.put(bytes, off, len);
     }
 
+    @Override
+    public void writeBoolean(boolean v) throws IOException {
+        ensureRemaining(1);
+        buffer.put((byte) (v ? 1 : 0));
+    }
+
+    @Override
+    public void writeByte(int v) throws IOException {
+        ensureRemaining(1);
+        buffer.put((byte) v);
+    }
+
+    @Override
+    public void writeShort(int v) throws IOException {
+        ensureRemaining(2);
+        writeByte((v >>> 8) & 0xFF);
+        writeByte((v >>> 0) & 0xFF);
+    }
+
+    @Override
+    public void writeChar(int v) throws IOException {
+        ensureRemaining(2);
+        writeByte((v >>> 8) & 0xFF);
+        writeByte((v >>> 0) & 0xFF);
+    }
+
+    @Override
+    public void writeInt(int v) throws IOException {
+        ensureRemaining(4);
+        buffer.put((byte)((v >>> 24) & 0xFF));
+        buffer.put((byte)((v >>> 16) & 0xFF));
+        buffer.put((byte)((v >>>  8) & 0xFF));
+        buffer.put((byte)((v >>>  0) & 0xFF));    }
+
+    @Override
+    public void writeLong(long v) throws IOException {
+        ensureRemaining(8);
+        buffer.put((byte)(v >>> 56));
+        buffer.put((byte)(v >>> 48));
+        buffer.put((byte)(v >>> 40));
+        buffer.put((byte)(v >>> 32));
+        buffer.put((byte)(v >>> 24));
+        buffer.put((byte)(v >>> 16));
+        buffer.put((byte)(v >>>  8));
+        buffer.put((byte)(v >>>  0));
+
+    }
+
+    @Override
+    public void writeFloat(float v) throws IOException {
+        writeInt(Float.floatToIntBits(v));
+    }
+
+    @Override
+    public void writeDouble(double v) throws IOException {
+        writeLong(Double.doubleToLongBits(v));
+    }
+
+    @Override
+    public void writeBytes(String s) throws IOException {
+        int len = s.length();
+        ensureRemaining(len);
+        for (int i = 0 ; i < len ; i++) {
+            buffer.put((byte)s.charAt(i));
+        }
+    }
+
+    @Override
+    public void writeChars(String s) throws IOException {
+        int len = s.length();
+        ensureRemaining(len*2);
+        for (int i = 0 ; i < len ; i++) {
+            int v = s.charAt(i);
+            buffer.put((byte) ((v >>> 8) & 0xFF));
+            buffer.put((byte)((v >>> 0) & 0xFF));
+        }
+    }
+
+    @Override
+    public void writeUTF(String s) throws IOException {
+        int strlen = s.length();
+        int utflen = 0;
+        int c = 0;
+
+        /* use charAt instead of copying String to char array */
+        for (int i = 0; i < strlen; i++) {
+            c = s.charAt(i);
+            if ((c >= 0x0001) && (c <= 0x007F)) {
+                utflen++;
+            } else if (c > 0x07FF) {
+                utflen += 3;
+            } else {
+                utflen += 2;
+            }
+        }
+
+        if (utflen > 65535)
+            throw new UTFDataFormatException(
+                    "encoded string too long: " + utflen + " bytes");
+        ensureRemaining(utflen + 2);
+        buffer.put((byte) ((utflen >>> 8) & 0xFF));
+        buffer.put((byte) ((utflen >>> 0) & 0xFF));
+
+        int i=0;
+        for (i=0; i<strlen; i++) {
+            c = s.charAt(i);
+            if (!((c >= 0x0001) && (c <= 0x007F))) break;
+            buffer.put((byte) c);
+        }
+
+        for (;i < strlen; i++){
+            c = s.charAt(i);
+            if ((c >= 0x0001) && (c <= 0x007F)) {
+                buffer.put((byte) c);
+
+            } else if (c > 0x07FF) {
+                buffer.put((byte) (0xE0 | ((c >> 12) & 0x0F)));
+                buffer.put((byte) (0x80 | ((c >>  6) & 0x3F)));
+                buffer.put((byte) (0x80 | ((c >>  0) & 0x3F)));
+            } else {
+                buffer.put((byte) (0xC0 | ((c >>  6) & 0x1F)));
+                buffer.put((byte) (0x80 | ((c >>  0) & 0x3F)));
+            }
+        }
+    }
+
     public void write(ByteBuffer sourceBuffer) {
         ensureRemaining(sourceBuffer.remaining());
         buffer.put(sourceBuffer);
     }
+
 
     public ByteBuffer buffer() {
         return buffer;
