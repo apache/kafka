@@ -31,4 +31,3 @@ public class InvalidTxnTimeoutException extends ApiException {
         super(message);
     }
 }
-

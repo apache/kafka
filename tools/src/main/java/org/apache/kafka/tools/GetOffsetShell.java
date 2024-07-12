@@ -17,9 +17,6 @@
 
 package org.apache.kafka.tools;
 
-import joptsimple.OptionException;
-import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -58,7 +55,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import joptsimple.OptionException;
+import joptsimple.OptionSpec;
+import joptsimple.OptionSpecBuilder;
+
 public class GetOffsetShell {
+    static final String USAGE_TEXT = "An interactive shell for getting topic-partition offsets.";
     private static final Pattern TOPIC_PARTITION_PATTERN = Pattern.compile("([^:,]*)(?::(?:([0-9]*)|(?:([0-9]*)-([0-9]*))))?");
 
     public static void main(String... args) {
@@ -94,8 +96,6 @@ public class GetOffsetShell {
     }
 
     private static class GetOffsetShellOptions extends CommandDefaultOptions {
-        private final OptionSpec<String> brokerListOpt;
-        private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpec<String> topicPartitionsOpt;
         private final OptionSpec<String> topicOpt;
         private final OptionSpec<String> partitionsOpt;
@@ -107,11 +107,11 @@ public class GetOffsetShell {
         public GetOffsetShellOptions(String[] args) throws TerseException {
             super(args);
 
-            brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
+            OptionSpec<String> brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
                     .withRequiredArg()
                     .describedAs("HOST1:PORT1,...,HOST3:PORT3")
                     .ofType(String.class);
-            bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
+            OptionSpec<String> bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
                     .requiredUnless("broker-list")
                     .withRequiredArg()
                     .describedAs("HOST1:PORT1,...,HOST3:PORT3")
@@ -142,7 +142,7 @@ public class GetOffsetShell {
             excludeInternalTopicsOpt = parser.accepts("exclude-internal-topics", "By default, internal topics are included. If specified, internal topics are excluded.");
 
             if (args.length == 0) {
-                CommandLineUtils.printUsageAndExit(parser, "An interactive shell for getting topic-partition offsets.");
+                CommandLineUtils.printUsageAndExit(parser, USAGE_TEXT);
             }
 
             try {
@@ -156,6 +156,8 @@ public class GetOffsetShell {
             } else {
                 effectiveBrokerListOpt = brokerListOpt;
             }
+
+            CommandLineUtils.maybePrintHelpOrVersion(this, USAGE_TEXT);
 
             CommandLineUtils.checkRequiredArgs(parser, options, effectiveBrokerListOpt);
 

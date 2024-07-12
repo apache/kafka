@@ -25,7 +25,7 @@ import org.apache.kafka.test.StreamsTestUtils;
  */
 public class TopologyWrapper extends Topology {
 
-    static public InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
+    public static InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
         return topology.internalTopologyBuilder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
     }
 

@@ -16,65 +16,62 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
+
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.SortedSet;
-import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
 
-public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstructor {
+public class BalanceSubtopologyGraphConstructor<T> implements RackAwareGraphConstructor<T> {
 
-    private final Map<Subtopology, Set<TaskId>> tasksForTopicGroup;
+    private final List<Set<TaskId>> taskSetsPerTopicGroup;
 
-    public BalanceSubtopologyGraphConstructor(final Map<Subtopology, Set<TaskId>> tasksForTopicGroup) {
-        this.tasksForTopicGroup = tasksForTopicGroup;
+    public BalanceSubtopologyGraphConstructor(final List<Set<TaskId>> taskSetsPerTopicGroup) {
+        this.taskSetsPerTopicGroup = taskSetsPerTopicGroup;
     }
 
     @Override
     public int getSinkNodeID(
         final List<TaskId> taskIdList,
-        final List<UUID> clientList,
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup
+        final List<ProcessId> clientList,
+        final Collection<Set<TaskId>> taskSetsPerTopicGroup
     ) {
-        return clientList.size() + taskIdList.size() + clientList.size() * tasksForTopicGroup.size();
+        return clientList.size() + taskIdList.size() + clientList.size() * taskSetsPerTopicGroup.size();
     }
 
 
     @Override
-    public int getClientNodeId(final int clientIndex, final List<TaskId> taskIdList, final List<UUID> clientList, final int topicGroupIndex) {
+    public int getClientNodeId(final int clientIndex, final List<TaskId> taskIdList, final List<ProcessId> clientList, final int topicGroupIndex) {
         return taskIdList.size() + clientList.size() * topicGroupIndex + clientIndex;
     }
 
     @Override
-    public int getClientIndex(final int clientNodeId, final List<TaskId> taskIdList, final List<UUID> clientList, final int topicGroupIndex) {
+    public int getClientIndex(final int clientNodeId, final List<TaskId> taskIdList, final List<ProcessId> clientList, final int topicGroupIndex) {
         return clientNodeId - taskIdList.size() - clientList.size() * topicGroupIndex;
     }
 
-    private static int getSecondStageClientNodeId(final List<TaskId> taskIdList, final List<UUID> clientList, final Map<Subtopology, Set<TaskId>> tasksForTopicGroup, final int clientIndex) {
+    private static int getSecondStageClientNodeId(final List<TaskId> taskIdList, final List<ProcessId> clientList, final Collection<Set<TaskId>> tasksForTopicGroup, final int clientIndex) {
         return taskIdList.size() + clientList.size() * tasksForTopicGroup.size() + clientIndex;
     }
 
     @Override
     public Graph<Integer> constructTaskGraph(
-        final List<UUID> clientList,
+        final List<ProcessId> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, ClientState> clientStates,
-        final Map<TaskId, UUID> taskClientMap,
-        final Map<UUID, Integer> originalAssignedTaskNumber,
-        final BiPredicate<ClientState, TaskId> hasAssignedTask,
+        final Map<ProcessId, T> clientStates,
+        final Map<TaskId, ProcessId> taskClientMap,
+        final Map<ProcessId, Integer> originalAssignedTaskNumber,
+        final BiPredicate<T, TaskId> hasAssignedTask,
         final CostFunction costFunction,
         final int trafficCost,
         final int nonOverlapCost,
@@ -86,7 +83,7 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
         final Graph<Integer> graph = new Graph<>();
 
         for (final TaskId taskId : taskIdList) {
-            for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
+            for (final Map.Entry<ProcessId, T> clientState : clientStates.entrySet()) {
                 if (hasAssignedTask.test(clientState.getValue(), taskId)) {
                     originalAssignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
                 }
@@ -120,24 +117,23 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
     @Override
     public boolean assignTaskFromMinCostFlow(
         final Graph<Integer> graph,
-        final List<UUID> clientList,
+        final List<ProcessId> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, ClientState> clientStates,
-        final Map<UUID, Integer> originalAssignedTaskNumber,
-        final Map<TaskId, UUID> taskClientMap,
-        final BiConsumer<ClientState, TaskId> assignTask,
-        final BiConsumer<ClientState, TaskId> unAssignTask,
-        final BiPredicate<ClientState, TaskId> hasAssignedTask
+        final Map<ProcessId, T> clientStates,
+        final Map<ProcessId, Integer> originalAssignedTaskNumber,
+        final Map<TaskId, ProcessId> taskClientMap,
+        final BiConsumer<T, TaskId> assignTask,
+        final BiConsumer<T, TaskId> unAssignTask,
+        final BiPredicate<T, TaskId> hasAssignedTask
     ) {
-        final SortedMap<Subtopology, Set<TaskId>> sortedTasksForTopicGroup = new TreeMap<>(tasksForTopicGroup);
         final Set<TaskId> taskIdSet = new HashSet<>(taskIdList);
 
         int taskNodeId = 0;
         int topicGroupIndex = 0;
         int tasksAssigned = 0;
         boolean taskMoved = false;
-        for (final Entry<Subtopology, Set<TaskId>> kv : sortedTasksForTopicGroup.entrySet()) {
-            final SortedSet<TaskId> taskIds = new TreeSet<>(kv.getValue());
+        for (final Set<TaskId> unorderedTaskIds : taskSetsPerTopicGroup) {
+            final SortedSet<TaskId> taskIds = new TreeSet<>(unorderedTaskIds);
             for (final TaskId taskId : taskIds) {
                 if (!taskIdSet.contains(taskId)) {
                     continue;
@@ -157,7 +153,7 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
     }
 
     private void validateTasks(final List<TaskId> taskIdList) {
-        final Set<TaskId> tasksInSubtopology = tasksForTopicGroup.values().stream().flatMap(
+        final Set<TaskId> tasksInSubtopology = taskSetsPerTopicGroup.stream().flatMap(
             Collection::stream).collect(Collectors.toSet());
         for (final TaskId taskId : taskIdList) {
             if (!tasksInSubtopology.contains(taskId)) {
@@ -169,11 +165,11 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
     private void constructEdges(
         final Graph<Integer> graph,
         final List<TaskId> taskIdList,
-        final List<UUID> clientList,
-        final Map<UUID, ClientState> clientStates,
-        final Map<TaskId, UUID> taskClientMap,
-        final Map<UUID, Integer> originalAssignedTaskNumber,
-        final BiPredicate<ClientState, TaskId> hasAssignedTask,
+        final List<ProcessId> clientList,
+        final Map<ProcessId, T> clientStates,
+        final Map<TaskId, ProcessId> taskClientMap,
+        final Map<ProcessId, Integer> originalAssignedTaskNumber,
+        final BiPredicate<T, TaskId> hasAssignedTask,
         final CostFunction costFunction,
         final int trafficCost,
         final int nonOverlapCost,
@@ -181,15 +177,14 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
         final boolean isStandby
     ) {
         final Set<TaskId> taskIdSet = new HashSet<>(taskIdList);
-        final SortedMap<Subtopology, Set<TaskId>> sortedTasksForTopicGroup = new TreeMap<>(tasksForTopicGroup);
-        final int sinkId = getSinkNodeID(taskIdList, clientList, tasksForTopicGroup);
+        final int sinkId = getSinkNodeID(taskIdList, clientList, taskSetsPerTopicGroup);
 
         int taskNodeId = 0;
         int topicGroupIndex = 0;
-        for (final Entry<Subtopology, Set<TaskId>> kv : sortedTasksForTopicGroup.entrySet()) {
-            final SortedSet<TaskId> taskIds = new TreeSet<>(kv.getValue());
+        for (final Set<TaskId> unorderedTaskIds : taskSetsPerTopicGroup) {
+            final SortedSet<TaskId> taskIds = new TreeSet<>(unorderedTaskIds);
             for (int clientIndex = 0; clientIndex < clientList.size(); clientIndex++) {
-                final UUID processId = clientList.get(clientIndex);
+                final ProcessId processId = clientList.get(clientIndex);
                 final int clientNodeId = getClientNodeId(clientIndex, taskIdList, clientList, topicGroupIndex);
                 int startingTaskNodeId = taskNodeId;
                 int validTaskCount = 0;
@@ -214,7 +209,7 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
 
                 if (validTaskCount > 0) {
                     final int secondStageClientNodeId = getSecondStageClientNodeId(taskIdList,
-                        clientList, tasksForTopicGroup, clientIndex);
+                        clientList, taskSetsPerTopicGroup, clientIndex);
                     final int capacity =
                         originalAssignedTaskNumber.containsKey(processId) ?
                             (int) Math.ceil(originalAssignedTaskNumber.get(processId) * 1.0 / taskIdList.size() * validTaskCount) : 0;
@@ -228,8 +223,8 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
 
         // Add edges from source to all tasks
         taskNodeId = 0;
-        for (final Entry<Subtopology, Set<TaskId>> kv : sortedTasksForTopicGroup.entrySet()) {
-            final SortedSet<TaskId> taskIds = new TreeSet<>(kv.getValue());
+        for (final Set<TaskId> unorderedTaskIds : taskSetsPerTopicGroup) {
+            final SortedSet<TaskId> taskIds = new TreeSet<>(unorderedTaskIds);
             for (final TaskId taskId : taskIds) {
                 if (!taskIdSet.contains(taskId)) {
                     continue;
@@ -241,9 +236,10 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
 
         // Add sink
         for (int clientIndex = 0; clientIndex < clientList.size(); clientIndex++) {
-            final UUID processId = clientList.get(clientIndex);
+            final ProcessId processId = clientList.get(clientIndex);
             final int capacity = originalAssignedTaskNumber.getOrDefault(processId, 0);
-            final int secondStageClientNodeId = getSecondStageClientNodeId(taskIdList, clientList, tasksForTopicGroup, clientIndex);
+            final int secondStageClientNodeId = getSecondStageClientNodeId(taskIdList, clientList,
+                taskSetsPerTopicGroup, clientIndex);
             graph.addEdge(secondStageClientNodeId, sinkId, capacity, 0, 0);
         }
 

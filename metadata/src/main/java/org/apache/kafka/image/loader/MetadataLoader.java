@@ -37,6 +37,7 @@ import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
+
 import org.slf4j.Logger;
 
 import java.util.Iterator;
@@ -451,7 +452,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                         publisher.name(), e);
                 }
             }
-            metrics.setCurrentControllerId(leaderAndEpoch.leaderId().orElseGet(() -> -1));
+            metrics.setCurrentControllerId(leaderAndEpoch.leaderId().orElse(-1));
         });
     }
 

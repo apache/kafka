@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
+import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
 
@@ -42,6 +44,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     private final MetricName currentLeaderIdMetricName;
     private final MetricName currentVotedIdMetricName;
+    private final MetricName currentVotedDirectoryIdMetricName;
     private final MetricName currentEpochMetricName;
     private final MetricName currentStateMetricName;
     private final MetricName highWatermarkMetricName;
@@ -87,22 +90,42 @@ public class KafkaRaftMetrics implements AutoCloseable {
         this.currentLeaderIdMetricName = metrics.metricName("current-leader", metricGroupName, "The current quorum leader's id; -1 indicates unknown");
         metrics.addMetric(this.currentLeaderIdMetricName, (mConfig, currentTimeMs) -> state.leaderId().orElse(-1));
 
-        this.currentVotedIdMetricName = metrics.metricName("current-vote", metricGroupName, "The current voted leader's id; -1 indicates not voted for anyone");
+        this.currentVotedIdMetricName = metrics.metricName("current-vote", metricGroupName, "The current voted id; -1 indicates not voted for anyone");
         metrics.addMetric(this.currentVotedIdMetricName, (mConfig, currentTimeMs) -> {
             if (state.isLeader() || state.isCandidate()) {
                 return state.localIdOrThrow();
-            } else if (state.isVoted()) {
-                return state.votedStateOrThrow().votedId();
             } else {
-                return -1;
+                return (double) state.maybeVotedState()
+                    .map(votedState -> votedState.votedKey().id())
+                    .orElse(-1);
             }
         });
+
+        this.currentVotedDirectoryIdMetricName = metrics.metricName(
+            "current-vote-directory-id",
+            metricGroupName,
+            String.format("The current voted directory id; %s indicates not voted for a directory id", Uuid.ZERO_UUID)
+        );
+        Gauge<String> votedDirectoryIdProvider = (mConfig, currentTimestamp) -> {
+            if (state.isLeader() || state.isCandidate()) {
+                return state.localDirectoryId().toString();
+            } else {
+                return state.maybeVotedState()
+                    .flatMap(votedState -> votedState.votedKey().directoryId())
+                    .orElse(Uuid.ZERO_UUID)
+                    .toString();
+            }
+        };
+        metrics.addMetric(this.currentVotedDirectoryIdMetricName, null, votedDirectoryIdProvider);
 
         this.currentEpochMetricName = metrics.metricName("current-epoch", metricGroupName, "The current quorum epoch.");
         metrics.addMetric(this.currentEpochMetricName, (mConfig, currentTimeMs) -> state.epoch());
 
         this.highWatermarkMetricName = metrics.metricName("high-watermark", metricGroupName, "The high watermark maintained on this member; -1 if it is unknown");
-        metrics.addMetric(this.highWatermarkMetricName, (mConfig, currentTimeMs) -> state.highWatermark().map(hw -> hw.offset).orElse(-1L));
+        metrics.addMetric(
+            this.highWatermarkMetricName,
+            (mConfig, currentTimeMs) -> state.highWatermark().map(LogOffsetMetadata::offset).orElse(-1L)
+        );
 
         this.logEndOffsetMetricName = metrics.metricName("log-end-offset", metricGroupName, "The current raft log end offset.");
         metrics.addMetric(this.logEndOffsetMetricName, (mConfig, currentTimeMs) -> logEndOffset.offset());
@@ -196,6 +219,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
         Arrays.asList(
             currentLeaderIdMetricName,
             currentVotedIdMetricName,
+            currentVotedDirectoryIdMetricName,
             currentEpochMetricName,
             currentStateMetricName,
             highWatermarkMetricName,

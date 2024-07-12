@@ -59,7 +59,7 @@ public interface Records extends TransferableRecords {
      * Get the record batches. Note that the signature allows subclasses
      * to return a more specific batch type. This enables optimizations such as in-place offset
      * assignment (see for example {@link DefaultRecordBatch}), and partial reading of
-     * record data (see {@link FileLogInputStream.FileChannelRecordBatch#magic()}.
+     * record data, see {@link FileLogInputStream.FileChannelRecordBatch#magic()}.
      * @return An iterator over the record batches of the log
      */
     Iterable<? extends RecordBatch> batches();

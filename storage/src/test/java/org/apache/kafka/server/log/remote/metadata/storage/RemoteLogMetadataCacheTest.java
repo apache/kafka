@@ -26,6 +26,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -59,7 +60,7 @@ public class RemoteLogMetadataCacheTest {
             if (state != RemoteLogSegmentState.COPY_SEGMENT_STARTED) {
                 RemoteLogSegmentId segmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
                 RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 0, 100L,
-                        -1L, brokerId0, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
+                        -1L, brokerId0, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L), 0);
                 RemoteLogSegmentMetadata updatedMetadata = segmentMetadata.createWithUpdates(
                         new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(), Optional.empty(),
                                 state, brokerId1));
@@ -101,7 +102,7 @@ public class RemoteLogMetadataCacheTest {
         long offset = 10L;
         RemoteLogSegmentId segmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
         RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, offset, 100L,
-                -1L, brokerId0, time.milliseconds(), segmentSize, Collections.singletonMap(leaderEpoch, offset));
+                -1L, brokerId0, time.milliseconds(), segmentSize, Collections.singletonMap(leaderEpoch, offset), 0);
         cache.addCopyInProgressSegment(segmentMetadata);
 
         // invalid-transition-1. COPY_SEGMENT_STARTED -> DELETE_SEGMENT_FINISHED

@@ -16,7 +16,6 @@
  */
 package kafka.server
 
-import java.util.Properties
 import kafka.test.ClusterInstance
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -47,18 +46,6 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, socket, listenerName)
   }
 
-  // Configure control plane listener to make sure we have separate listeners for testing.
-  def brokerPropertyOverrides(properties: Properties): Unit = {
-    if (!cluster.isKRaftTest) {
-      val controlPlaneListenerName = "CONTROL_PLANE"
-      val securityProtocol = cluster.config().securityProtocol()
-      properties.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListenerName)
-      properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"$controlPlaneListenerName:$securityProtocol,$securityProtocol:$securityProtocol")
-      properties.setProperty("listeners", s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
-      properties.setProperty(KafkaConfig.AdvertisedListenersProp, s"$securityProtocol://localhost:0,${controlPlaneListenerName}://localhost:0")
-    }
-  }
-
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
     val overrideHeader = IntegrationTestUtils.nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
     val socket = IntegrationTestUtils.connect(cluster.brokerSocketServers().asScala.head, cluster.clientListener())
@@ -82,8 +69,13 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       assertEquals(MetadataVersion.latestTesting().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).minVersionLevel())
       assertEquals(MetadataVersion.latestTesting().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).maxVersionLevel())
 
-      assertEquals(1, apiVersionsResponse.data().supportedFeatures().size())
+      assertEquals(2, apiVersionsResponse.data().supportedFeatures().size())
       assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MetadataVersion.FEATURE_NAME).minVersion())
+      if (apiVersion < 4) {
+        assertEquals(1, apiVersionsResponse.data().supportedFeatures().find("kraft.version").minVersion())
+      } else {
+        assertEquals(0, apiVersionsResponse.data().supportedFeatures().find("kraft.version").minVersion())
+      }
       assertEquals(MetadataVersion.latestTesting().featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MetadataVersion.FEATURE_NAME).maxVersion())
     }
     val expectedApis = if (!cluster.isKRaftTest) {

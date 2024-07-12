@@ -16,19 +16,20 @@
  */
 package org.apache.kafka.common.serialization;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 
+import org.junit.jupiter.api.Test;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings("unchecked")
 public class ListDeserializerTest {
@@ -45,7 +46,7 @@ public class ListDeserializerTest {
         listDeserializer.configure(props, true);
         final Deserializer<?> inner = listDeserializer.innerDeserializer();
         assertNotNull(inner, "Inner deserializer should be not null");
-        assertTrue(inner instanceof StringDeserializer, "Inner deserializer type should be StringDeserializer");
+        assertInstanceOf(StringDeserializer.class, inner, "Inner deserializer type should be StringDeserializer");
     }
 
     @Test
@@ -55,7 +56,7 @@ public class ListDeserializerTest {
         listDeserializer.configure(props, false);
         final Deserializer<?> inner = listDeserializer.innerDeserializer();
         assertNotNull(inner, "Inner deserializer should be not null");
-        assertTrue(inner instanceof IntegerDeserializer, "Inner deserializer type should be IntegerDeserializer");
+        assertInstanceOf(IntegerDeserializer.class, inner, "Inner deserializer type should be IntegerDeserializer");
     }
 
     @Test
@@ -65,7 +66,7 @@ public class ListDeserializerTest {
         listDeserializer.configure(props, true);
         final Deserializer<?> inner = listDeserializer.innerDeserializer();
         assertNotNull(inner, "Inner deserializer should be not null");
-        assertTrue(inner instanceof StringDeserializer, "Inner deserializer type should be StringDeserializer");
+        assertInstanceOf(StringDeserializer.class, inner, "Inner deserializer type should be StringDeserializer");
     }
 
     @Test
@@ -75,7 +76,7 @@ public class ListDeserializerTest {
         listDeserializer.configure(props, false);
         final Deserializer<?> inner = listDeserializer.innerDeserializer();
         assertNotNull(inner, "Inner deserializer should be not null");
-        assertTrue(inner instanceof StringDeserializer, "Inner deserializer type should be StringDeserializer");
+        assertInstanceOf(StringDeserializer.class, inner, "Inner deserializer type should be StringDeserializer");
     }
 
     @Test

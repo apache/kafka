@@ -22,10 +22,10 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.PartitionAssignment;
 
 import java.util.ArrayList;
-import java.util.Set;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeSet;
 
 
@@ -90,8 +90,7 @@ class PartitionReassignmentReplicas {
         List<Integer> removingReplicas,
         List<Integer> addingReplicas
     ) {
-        return removingReplicas.size() > 0
-            || addingReplicas.size() > 0;
+        return !removingReplicas.isEmpty() || !addingReplicas.isEmpty();
     }
 
 
@@ -120,9 +119,7 @@ class PartitionReassignmentReplicas {
             }
             if (newTargetReplicas.isEmpty()) return Optional.empty();
         }
-        for (int replica : adding) {
-            if (!newTargetIsr.contains(replica)) return Optional.empty();
-        }
+        if (!newTargetIsr.containsAll(newTargetReplicas)) return Optional.empty();
 
         return Optional.of(
             new CompletedReassignment(

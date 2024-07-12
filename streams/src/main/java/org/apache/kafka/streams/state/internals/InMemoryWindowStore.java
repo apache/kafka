@@ -40,6 +40,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -123,17 +124,19 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             context.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
-                    for (final ConsumerRecord<byte[], byte[]> record : records) {
-                        put(
-                            Bytes.wrap(extractStoreKeyBytes(record.key())),
-                            record.value(),
-                            extractStoreTimestamp(record.key())
-                        );
-                        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                            record,
-                            consistencyEnabled,
-                            position
-                        );
+                    synchronized (position) {
+                        for (final ConsumerRecord<byte[], byte[]> record : records) {
+                            put(
+                                Bytes.wrap(extractStoreKeyBytes(record.key())),
+                                record.value(),
+                                extractStoreTimestamp(record.key())
+                            );
+                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                record,
+                                consistencyEnabled,
+                                position
+                            );
+                        }
                     }
                 }
             );
@@ -158,28 +161,30 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         removeExpiredSegments();
         observedStreamTime = Math.max(observedStreamTime, windowStartTimestamp);
 
-        if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
-            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
-            LOG.warn("Skipping record for expired segment.");
-        } else {
-            if (value != null) {
-                maybeUpdateSeqnumForDups();
-                final Bytes keyBytes = retainDuplicates ? wrapForDups(key, seqnum) : key;
-                segmentMap.computeIfAbsent(windowStartTimestamp, t -> new ConcurrentSkipListMap<>());
-                segmentMap.get(windowStartTimestamp).put(keyBytes, value);
-            } else if (!retainDuplicates) {
-                // Skip if value is null and duplicates are allowed since this delete is a no-op
-                segmentMap.computeIfPresent(windowStartTimestamp, (t, kvMap) -> {
-                    kvMap.remove(key);
-                    if (kvMap.isEmpty()) {
-                        segmentMap.remove(windowStartTimestamp);
-                    }
-                    return kvMap;
-                });
+        synchronized (position) {
+            if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
+                expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+                LOG.warn("Skipping record for expired segment.");
+            } else {
+                if (value != null) {
+                    maybeUpdateSeqnumForDups();
+                    final Bytes keyBytes = retainDuplicates ? wrapForDups(key, seqnum) : key;
+                    segmentMap.computeIfAbsent(windowStartTimestamp, t -> new ConcurrentSkipListMap<>());
+                    segmentMap.get(windowStartTimestamp).put(keyBytes, value);
+                } else if (!retainDuplicates) {
+                    // Skip if value is null and duplicates are allowed since this delete is a no-op
+                    segmentMap.computeIfPresent(windowStartTimestamp, (t, kvMap) -> {
+                        kvMap.remove(key);
+                        if (kvMap.isEmpty()) {
+                            segmentMap.remove(windowStartTimestamp);
+                        }
+                        return kvMap;
+                    });
+                }
             }
-        }
 
-        StoreQueryUtils.updatePosition(position, stateStoreContext);
+            StoreQueryUtils.updatePosition(position, stateStoreContext);
+        }
     }
 
     @Override
@@ -475,7 +480,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         void deregisterIterator(final InMemoryWindowStoreIteratorWrapper iterator);
     }
 
-    private static abstract class InMemoryWindowStoreIteratorWrapper {
+    private abstract static class InMemoryWindowStoreIteratorWrapper {
 
         private Iterator<Map.Entry<Bytes, byte[]>> recordIterator;
         private KeyValue<Bytes, byte[]> next;

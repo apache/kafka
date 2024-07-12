@@ -17,10 +17,11 @@
 
 package org.apache.kafka.trogdor.task;
 
-import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.trogdor.common.Platform;
+
+import com.fasterxml.jackson.databind.node.TextNode;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -42,7 +43,7 @@ public class SampleTaskWorker implements TaskWorker {
 
     @Override
     public synchronized void start(Platform platform, WorkerStatusTracker status,
-                      final KafkaFutureImpl<String> haltFuture) throws Exception {
+                      final KafkaFutureImpl<String> haltFuture) {
         if (this.future != null)
             return;
         this.status = status;

@@ -18,6 +18,7 @@
 package org.apache.kafka.server.util;
 
 import org.apache.kafka.common.utils.Time;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -108,11 +109,11 @@ public class FutureUtilsTest {
         assertFalse(sourceFuture.isCompletedExceptionally());
         assertFalse(destinationFuture.isCompletedExceptionally());
         sourceFuture.complete(123);
-        assertEquals(Integer.valueOf(123), destinationFuture.get());
+        assertEquals(123, destinationFuture.get());
     }
 
     @Test
-    public void testChainFutureExceptionally() throws Throwable {
+    public void testChainFutureExceptionally() {
         CompletableFuture<Integer> sourceFuture = new CompletableFuture<>();
         CompletableFuture<Number> destinationFuture = new CompletableFuture<>();
         FutureUtils.chainFuture(sourceFuture, destinationFuture);

@@ -21,16 +21,17 @@ import java.util.Properties
 import scala.collection.Seq
 
 import kafka.server.KafkaConfig
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 class MinIsrConfigTest extends KafkaServerTestHarness {
   val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.MinInSyncReplicasProp, "5")
+  overridingProps.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "5")
   def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnectOrNull).map(KafkaConfig.fromProps(_, overridingProps))
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDefaultKafkaConfig(quorum: String): Unit = {
     assert(brokers.head.logManager.initialDefaultConfig.minInSyncReplicas == 5)

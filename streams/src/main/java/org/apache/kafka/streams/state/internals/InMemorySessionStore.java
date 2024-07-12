@@ -39,6 +39,7 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,7 +67,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     private final long retentionPeriod;
 
-    private final static String INVALID_RANGE_WARN_MSG =
+    private static final String INVALID_RANGE_WARN_MSG =
         "Returning empty iterator for fetch with invalid key range: from > to. " +
         "This may be due to range arguments set in the wrong order, " +
         "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -124,13 +125,15 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             context.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
-                    for (final ConsumerRecord<byte[], byte[]> record : records) {
-                        put(SessionKeySchema.from(Bytes.wrap(record.key())), record.value());
-                        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                            record,
-                            consistencyEnabled,
-                            position
-                        );
+                    synchronized (position) {
+                        for (final ConsumerRecord<byte[], byte[]> record : records) {
+                            put(SessionKeySchema.from(Bytes.wrap(record.key())), record.value());
+                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                record,
+                                consistencyEnabled,
+                                position
+                            );
+                        }
                     }
                 }
             );
@@ -157,25 +160,27 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         final long windowEndTimestamp = sessionKey.window().end();
         observedStreamTime = Math.max(observedStreamTime, windowEndTimestamp);
 
-        if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
-            // The provided context is not required to implement InternalProcessorContext,
-            // If it doesn't, we can't record this metric (in fact, we wouldn't have even initialized it).
-            if (expiredRecordSensor != null && context != null) {
-                expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
-            }
-            LOG.warn("Skipping record for expired segment.");
-        } else {
-            if (aggregate != null) {
-                endTimeMap.computeIfAbsent(windowEndTimestamp, t -> new ConcurrentSkipListMap<>());
-                final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(windowEndTimestamp);
-                keyMap.computeIfAbsent(sessionKey.key(), t -> new ConcurrentSkipListMap<>());
-                keyMap.get(sessionKey.key()).put(sessionKey.window().start(), aggregate);
+        synchronized (position) {
+            if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
+                // The provided context is not required to implement InternalProcessorContext,
+                // If it doesn't, we can't record this metric (in fact, we wouldn't have even initialized it).
+                if (expiredRecordSensor != null && context != null) {
+                    expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+                }
+                LOG.warn("Skipping record for expired segment.");
             } else {
-                remove(sessionKey);
+                if (aggregate != null) {
+                    endTimeMap.computeIfAbsent(windowEndTimestamp, t -> new ConcurrentSkipListMap<>());
+                    final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(windowEndTimestamp);
+                    keyMap.computeIfAbsent(sessionKey.key(), t -> new ConcurrentSkipListMap<>());
+                    keyMap.get(sessionKey.key()).put(sessionKey.window().start(), aggregate);
+                } else {
+                    remove(sessionKey);
+                }
             }
-        }
 
-        StoreQueryUtils.updatePosition(position, stateStoreContext);
+            StoreQueryUtils.updatePosition(position, stateStoreContext);
+        }
     }
 
     @Override

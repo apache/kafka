@@ -37,8 +37,8 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConvertingFutureCallback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
-import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.apache.kafka.connect.util.TopicAdmin;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,7 +47,6 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -150,7 +149,6 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
     private Converter keyConverter;
     private final Supplier<TopicAdmin> topicAdminSupplier;
     private final Supplier<String> clientIdBase;
-    private SharedTopicAdmin ownTopicAdmin;
     protected boolean exactlyOnce;
 
     /**
@@ -174,7 +172,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
     @Override
     public void configure(final WorkerConfig config) {
         String topic = config.getString(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG);
-        if (topic == null || topic.trim().length() == 0)
+        if (topic == null || topic.trim().isEmpty())
             throw new ConfigException("Offset storage topic must be specified");
 
         this.exactlyOnce = config.exactlyOnceSourceEnabled();
@@ -203,7 +201,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
         if (config.exactlyOnceSourceEnabled()) {
             ConnectUtils.ensureProperty(
-                    consumerProps, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                    consumerProps, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString(),
                     "for the worker offsets topic consumer when exactly-once source support is enabled",
                     false
             );
@@ -212,17 +210,9 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
         Map<String, Object> adminProps = new HashMap<>(originals);
         adminProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
-        Supplier<TopicAdmin> adminSupplier;
-        if (topicAdminSupplier != null) {
-            adminSupplier = topicAdminSupplier;
-        } else {
-            // Create our own topic admin supplier that we'll close when we're stopped
-            this.ownTopicAdmin = new SharedTopicAdmin(adminProps);
-            adminSupplier = ownTopicAdmin;
-        }
         NewTopic topicDescription = newTopicDescription(topic, config);
 
-        this.offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminSupplier, config, Time.SYSTEM);
+        this.offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, topicAdminSupplier, config, Time.SYSTEM);
     }
 
     protected NewTopic newTopicDescription(final String topic, final WorkerConfig config) {
@@ -250,7 +240,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
                         + "support for source connectors, or upgrade to a newer Kafka broker version.";
             } else {
                 message = "When " + ConsumerConfig.ISOLATION_LEVEL_CONFIG + "is set to "
-                        + IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
+                        + IsolationLevel.READ_COMMITTED
                         + ", a Kafka broker version that allows admin clients to read consumer offsets is required. "
                         + "Please either reconfigure the worker or connector, or upgrade to a newer Kafka broker version.";
             }
@@ -269,13 +259,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
     @Override
     public void stop() {
         log.info("Stopping KafkaOffsetBackingStore");
-        try {
-            offsetLog.stop();
-        } finally {
-            if (ownTopicAdmin != null) {
-                ownTopicAdmin.close();
-            }
-        }
+        offsetLog.stop();
         log.info("Stopped KafkaOffsetBackingStore");
     }
 

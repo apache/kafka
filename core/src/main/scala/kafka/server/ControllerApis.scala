@@ -129,6 +129,9 @@ class ControllerApis(
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.CONTROLLER_REGISTRATION => handleControllerRegistration(request)
         case ApiKeys.ASSIGN_REPLICAS_TO_DIRS => handleAssignReplicasToDirs(request)
+        case ApiKeys.ADD_RAFT_VOTER => handleAddRaftVoter(request)
+        case ApiKeys.REMOVE_RAFT_VOTER => handleRemoveRaftVoter(request)
+        case ApiKeys.UPDATE_RAFT_VOTER => handleUpdateRaftVoter(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
 
@@ -459,7 +462,7 @@ class ControllerApis(
         requestThrottleMs => apiVersionRequest.getErrorResponse(requestThrottleMs, INVALID_REQUEST.exception))
     } else {
       requestHelper.sendResponseMaybeThrottle(request,
-        requestThrottleMs => apiVersionManager.apiVersionResponse(requestThrottleMs))
+        requestThrottleMs => apiVersionManager.apiVersionResponse(requestThrottleMs, request.header.apiVersion() < 4))
     }
     CompletableFuture.completedFuture[Unit](())
   }
@@ -530,12 +533,12 @@ class ControllerApis(
         if (exception != null) {
           requestHelper.handleError(request, exception)
         } else {
-          controllerResults.entrySet().forEach(entry => response.responses().add(
+          controllerResults.forEach((key, value) => response.responses().add(
             new OldAlterConfigsResourceResponse().
-              setErrorCode(entry.getValue.error().code()).
-              setErrorMessage(entry.getValue.message()).
-              setResourceName(entry.getKey.name()).
-              setResourceType(entry.getKey.`type`().id())))
+              setErrorCode(value.error().code()).
+              setErrorMessage(value.message()).
+              setResourceName(key.name()).
+              setResourceType(key.`type`().id())))
           requestHelper.sendResponseMaybeThrottle(request, throttleMs =>
             new AlterConfigsResponse(response.setThrottleTimeMs(throttleMs)))
         }
@@ -676,7 +679,7 @@ class ControllerApis(
   private def handleRaftRequest(request: RequestChannel.Request,
                                 buildResponse: ApiMessage => AbstractResponse): CompletableFuture[Unit] = {
     val requestBody = request.body[AbstractRequest]
-    val future = raftManager.handleRequest(request.header, requestBody.data, time.milliseconds())
+    val future = raftManager.handleRequest(request.context, request.header, requestBody.data, time.milliseconds())
     future.handle[Unit] { (responseData, exception) =>
       val response = if (exception != null) {
         requestBody.getErrorResponse(exception)
@@ -771,12 +774,12 @@ class ControllerApis(
         if (exception != null) {
           requestHelper.handleError(request, exception)
         } else {
-          controllerResults.entrySet().forEach(entry => response.responses().add(
+          controllerResults.forEach((key, value) => response.responses().add(
             new AlterConfigsResourceResponse().
-              setErrorCode(entry.getValue.error().code()).
-              setErrorMessage(entry.getValue.message()).
-              setResourceName(entry.getKey.name()).
-              setResourceType(entry.getKey.`type`().id())))
+              setErrorCode(value.error().code()).
+              setErrorMessage(value.message()).
+              setResourceName(key.name()).
+              setResourceType(key.`type`().id())))
           brokerLoggerResponses.forEach(r => response.responses().add(r))
           requestHelper.sendResponseMaybeThrottle(request, throttleMs =>
             new IncrementalAlterConfigsResponse(response.setThrottleTimeMs(throttleMs)))
@@ -923,7 +926,7 @@ class ControllerApis(
         CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
           Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, owner, requester))
       CompletableFuture.completedFuture[Unit](())
-    } else if (!owner.equals(requester) && 
+    } else if (!owner.equals(requester) &&
       !authHelper.authorize(request.context, CREATE_TOKENS, USER, owner.toString)) {
       // Requester is always allowed to create token for self
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -1079,5 +1082,20 @@ class ControllerApis(
       requestHelper.sendResponseMaybeThrottle(request,
         requestThrottleMs => new AssignReplicasToDirsResponse(reply.setThrottleTimeMs(requestThrottleMs)))
     }
+  }
+
+  def handleAddRaftVoter(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    authHelper.authorizeClusterOperation(request, ALTER)
+    throw new UnsupportedVersionException("handleAddRaftVoter is not supported yet.")
+  }
+
+  def handleRemoveRaftVoter(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    authHelper.authorizeClusterOperation(request, ALTER)
+    throw new UnsupportedVersionException("handleRemoveRaftVoter is not supported yet.")
+  }
+
+  def handleUpdateRaftVoter(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    throw new UnsupportedVersionException("handleUpdateRaftVoter is not supported yet.")
   }
 }

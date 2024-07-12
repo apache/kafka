@@ -23,6 +23,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -37,8 +38,8 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CoordinatorStrategyTest {
 
@@ -90,7 +91,7 @@ public class CoordinatorStrategyTest {
         strategy.disableBatch();
 
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(
-                new HashSet<>(Arrays.asList(CoordinatorKey.byTransactionalId("txnid")))));
+                new HashSet<>(Collections.singletonList(CoordinatorKey.byTransactionalId("txnid")))));
     }
 
     @Test
@@ -217,7 +218,7 @@ public class CoordinatorStrategyTest {
         assertFatalOldLookup(group, Errors.UNKNOWN_SERVER_ERROR);
 
         Throwable throwable = assertFatalOldLookup(group, Errors.GROUP_AUTHORIZATION_FAILED);
-        assertTrue(throwable instanceof GroupAuthorizationException);
+        assertInstanceOf(GroupAuthorizationException.class, throwable);
         GroupAuthorizationException exception = (GroupAuthorizationException) throwable;
         assertEquals("foo", exception.groupId());
     }
@@ -233,7 +234,7 @@ public class CoordinatorStrategyTest {
         assertEquals(singleton(key), result.failedKeys.keySet());
 
         Throwable throwable = result.failedKeys.get(key);
-        assertTrue(error.exception().getClass().isInstance(throwable));
+        assertInstanceOf(error.exception().getClass(), throwable);
         return throwable;
     }
 
@@ -244,7 +245,7 @@ public class CoordinatorStrategyTest {
         assertFatalLookup(group, Errors.UNKNOWN_SERVER_ERROR);
 
         Throwable throwable = assertFatalLookup(group, Errors.GROUP_AUTHORIZATION_FAILED);
-        assertTrue(throwable instanceof GroupAuthorizationException);
+        assertInstanceOf(GroupAuthorizationException.class, throwable);
         GroupAuthorizationException exception = (GroupAuthorizationException) throwable;
         assertEquals("foo", exception.groupId());
     }
@@ -264,7 +265,7 @@ public class CoordinatorStrategyTest {
         assertEquals(singleton(key), result.failedKeys.keySet());
 
         Throwable throwable = result.failedKeys.get(key);
-        assertTrue(error.exception().getClass().isInstance(throwable));
+        assertInstanceOf(error.exception().getClass(), throwable);
         return throwable;
     }
 

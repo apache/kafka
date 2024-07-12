@@ -18,14 +18,15 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ProcessorRecordContextTest {
     // timestamp + offset + partition: 8 + 8 + 4
-    private final static long MIN_SIZE = 20L;
+    private static final long MIN_SIZE = 20L;
 
     @Test
     public void shouldNotAllowNullHeaders() {

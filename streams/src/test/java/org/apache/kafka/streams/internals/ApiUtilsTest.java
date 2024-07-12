@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.internals;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -26,9 +26,8 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondInstant;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ApiUtilsTest {
     // This is the maximum limit that Duration accepts but fails when it converts to milliseconds.

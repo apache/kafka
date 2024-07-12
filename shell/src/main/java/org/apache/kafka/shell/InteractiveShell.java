@@ -20,6 +20,7 @@ package org.apache.kafka.shell;
 import org.apache.kafka.shell.command.CommandUtils;
 import org.apache.kafka.shell.command.Commands;
 import org.apache.kafka.shell.state.MetadataShellState;
+
 import org.jline.reader.Candidate;
 import org.jline.reader.Completer;
 import org.jline.reader.EndOfFileException;
@@ -27,7 +28,6 @@ import org.jline.reader.History;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.ParsedLine;
-import org.jline.reader.Parser;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.DefaultParser;
 import org.jline.reader.impl.history.DefaultHistory;
@@ -56,7 +56,7 @@ public final class InteractiveShell implements AutoCloseable {
 
         @Override
         public void complete(LineReader reader, ParsedLine line, List<Candidate> candidates) {
-            if (line.words().size() == 0) {
+            if (line.words().isEmpty()) {
                 CommandUtils.completeCommand("", candidates);
             } else if (line.words().size() == 1) {
                 CommandUtils.completeCommand(line.words().get(0), candidates);
@@ -82,9 +82,7 @@ public final class InteractiveShell implements AutoCloseable {
 
     private final MetadataShellState state;
     private final Terminal terminal;
-    private final Parser parser;
     private final History history;
-    private final MetadataShellCompleter completer;
     private final LineReader reader;
 
     public InteractiveShell(MetadataShellState state) throws IOException {
@@ -93,14 +91,12 @@ public final class InteractiveShell implements AutoCloseable {
             system(true).
             nativeSignals(true);
         this.terminal = builder.build();
-        this.parser = new DefaultParser();
         this.history = new DefaultHistory();
-        this.completer = new MetadataShellCompleter(state);
         this.reader = LineReaderBuilder.builder().
             terminal(terminal).
-            parser(parser).
+            parser(new DefaultParser()).
             history(history).
-            completer(completer).
+            completer(new MetadataShellCompleter(state)).
             option(LineReader.Option.AUTO_FRESH_LINE, false).
             build();
     }

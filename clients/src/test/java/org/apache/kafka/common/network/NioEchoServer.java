@@ -33,6 +33,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -50,8 +53,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -61,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  *
  */
 public class NioEchoServer extends Thread {
-    private final static Logger LOG = LoggerFactory.getLogger(NioEchoServer.class);
+    private static final Logger LOG = LoggerFactory.getLogger(NioEchoServer.class);
 
     public enum MetricType {
         TOTAL, RATE, AVG, MAX;
@@ -88,7 +89,8 @@ public class NioEchoServer extends Thread {
     private volatile boolean closeKafkaChannels;
     private final DelegationTokenCache tokenCache;
     private final Time time;
-    
+    private int nextConnectionIndex = 0;
+
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
                          String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache, Time time) throws Exception {
         this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, 100, time);
@@ -128,7 +130,7 @@ public class NioEchoServer extends Thread {
             if (channelBuilder == null)
                 channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
                         securityProtocol, config, credentialCache, tokenCache, time, logContext,
-                        () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
+                        version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
             this.metrics = new Metrics();
             this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
                     "MetricGroup", channelBuilder, logContext);
@@ -225,8 +227,7 @@ public class NioEchoServer extends Thread {
                 selector.poll(100);
                 synchronized (newChannels) {
                     for (SocketChannel socketChannel : newChannels) {
-                        String id = id(socketChannel);
-                        selector.register(id, socketChannel);
+                        selector.register(id(socketChannel), socketChannel);
                         socketChannels.add(socketChannel);
                     }
                     newChannels.clear();
@@ -277,8 +278,12 @@ public class NioEchoServer extends Thread {
     }
 
     private String id(SocketChannel channel) {
-        return channel.socket().getLocalAddress().getHostAddress() + ":" + channel.socket().getLocalPort() + "-" +
-                channel.socket().getInetAddress().getHostAddress() + ":" + channel.socket().getPort();
+        String connectionId = Selector.generateConnectionId(channel.socket(), nextConnectionIndex);
+        if (nextConnectionIndex == Integer.MAX_VALUE)
+            nextConnectionIndex = 0;
+        else
+            nextConnectionIndex = nextConnectionIndex + 1;
+        return connectionId;
     }
 
     private KafkaChannel channel(String id) {

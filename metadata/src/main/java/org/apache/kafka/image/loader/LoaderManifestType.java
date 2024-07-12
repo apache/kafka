@@ -23,5 +23,5 @@ package org.apache.kafka.image.loader;
  */
 public enum LoaderManifestType {
     LOG_DELTA,
-    SNAPSHOT;
+    SNAPSHOT
 }

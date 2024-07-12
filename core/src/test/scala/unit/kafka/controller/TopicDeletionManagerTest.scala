@@ -241,7 +241,7 @@ class TopicDeletionManagerTest {
     assertEquals(offlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionIneligible))
     assertEquals(onlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionStarted))
 
-    // Broker 2 is restarted. The offline replicas remain ineligable
+    // Broker 2 is restarted. The offline replicas remain ineligible
     // (TODO: this is probably not desired)
     controllerContext.addLiveBrokers(Map(offlineBroker -> (lastEpoch + 1L)))
     deletionManager.resumeDeletionForTopics(Set("foo"))

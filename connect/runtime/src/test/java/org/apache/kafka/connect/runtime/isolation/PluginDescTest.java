@@ -26,16 +26,17 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.net.URL;
 import java.nio.file.Paths;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -48,7 +49,7 @@ public class PluginDescTest {
     private PluginClassLoader pluginLoader;
     private PluginClassLoader otherPluginLoader;
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
         // Fairly simple use case, thus no need to create a random directory here yet.
         URL location = Paths.get("/tmp").toUri().toURL();
@@ -204,7 +205,7 @@ public class PluginDescTest {
         assertNotEquals(transformDescPluginPath, transformDescClasspath);
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings("rawtypes")
     @Test
     public void testPluginDescComparison() {
         PluginDesc<SinkConnector> connectorDescPluginPath = new PluginDesc<>(
@@ -285,8 +286,8 @@ public class PluginDescTest {
                 otherPluginLoader
         );
 
-        assertTrue("Different plugin loaders should have an ordering",
-                configProviderDescPluginPath.compareTo(configProviderDescOtherPluginLoader) != 0);
+        assertTrue(configProviderDescPluginPath.compareTo(configProviderDescOtherPluginLoader) != 0,
+            "Different plugin loaders should have an ordering");
 
 
         PluginDesc<Converter> jsonConverterPlugin = new PluginDesc<>(
@@ -339,6 +340,6 @@ public class PluginDescTest {
     }
 
     private static void assertNewer(PluginDesc<?> older, PluginDesc<?> newer) {
-        assertTrue(newer + " should be newer than " + older, older.compareTo(newer) < 0);
+        assertTrue(older.compareTo(newer) < 0, newer + " should be newer than " + older);
     }
 }

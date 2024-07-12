@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.util.Optional
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.Topic
@@ -41,7 +41,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     doSetup(testInfo, createOffsetsTopic = false)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testClusterIdWithRequestVersion1(quorum: String): Unit = {
     val v1MetadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
@@ -49,7 +49,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertNull(v1ClusterId, s"v1 clusterId should be null")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testClusterIdIsValid(quorum: String): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(2.toShort))
@@ -60,7 +60,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
    * This test only runs in ZK mode because in KRaft mode, the controller ID visible to
    * the client is randomized.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testControllerId(quorum: String): Unit = {
     val controllerServer = servers.find(_.kafkaController.isActive).get
@@ -83,7 +83,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }, "Controller id should match the active controller after failover", 5000)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testRack(quorum: String): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
@@ -93,7 +93,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testIsInternal(quorum: String): Unit = {
     val internalTopic = Topic.GROUP_METADATA_TOPIC_NAME
@@ -115,7 +115,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertEquals(Set(internalTopic).asJava, metadataResponse.buildCluster().internalTopics)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testNoTopicsRequest(quorum: String): Unit = {
     // create some topics
@@ -129,7 +129,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertTrue(metadataResponse.topicMetadata.isEmpty, "Response should have no topics")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAutoTopicCreation(quorum: String): Unit = {
     val topic1 = "t1"
@@ -149,7 +149,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     checkAutoCreatedTopic(topic3, response2)
 
     // V3 doesn't support a configurable allowAutoTopicCreation, so disabling auto-creation is not supported
-    assertThrows(classOf[UnsupportedVersionException], () => sendMetadataRequest(new MetadataRequest(requestData(List(topic4), false), 3.toShort)))
+    assertThrows(classOf[UnsupportedVersionException], () => sendMetadataRequest(new MetadataRequest(requestData(List(topic4), allowAutoTopicCreation = false), 3.toShort)))
 
     // V4 and higher support a configurable allowAutoTopicCreation
     val response3 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic4, topic5).asJava, false, 4.toShort).build)
@@ -160,7 +160,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAutoCreateTopicWithInvalidReplicationFactor(quorum: String): Unit = {
     // Shutdown all but one broker so that the number of brokers is less than the default replication factor
@@ -180,7 +180,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertEquals(0, topicMetadata.partitionMetadata.size)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testAutoCreateOfCollidingTopics(quorum: String): Unit = {
     val topic1 = "testAutoCreate.Topic"
@@ -211,7 +211,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertTrue(partitionMetadata.leaderId.get >= 0)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAllTopicsRequest(quorum: String): Unit = {
     // create some topics
@@ -219,7 +219,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     createTopic("t2", 3, 2)
 
     // v0, Empty list represents all topics
-    val metadataResponseV0 = sendMetadataRequest(new MetadataRequest(requestData(List(), true), 0.toShort))
+    val metadataResponseV0 = sendMetadataRequest(new MetadataRequest(requestData(List(), allowAutoTopicCreation = true), 0.toShort))
     assertTrue(metadataResponseV0.errors.isEmpty, "V0 Response should have no errors")
     assertEquals(2, metadataResponseV0.topicMetadata.size(), "V0 Response should have 2 (all) topics")
 
@@ -229,7 +229,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertEquals(2, metadataResponseV1.topicMetadata.size(), "V1 Response should have 2 (all) topics")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testTopicIdsInResponse(quorum: String): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
@@ -259,7 +259,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   /**
     * Preferred replica should be the first item in the replicas list
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testPreferredReplica(quorum: String): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
@@ -283,7 +283,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testReplicaDownResponse(quorum: String): Unit = {
     val replicaDownTopic = "replicaDown"
@@ -309,7 +309,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }, "Replica was not found down", 50000)
 
     // Validate version 0 still filters unavailable replicas and contains error
-    val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(requestData(List(replicaDownTopic), true), 0.toShort))
+    val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(requestData(List(replicaDownTopic), allowAutoTopicCreation = true), 0.toShort))
     val v0BrokerIds = v0MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue(v0MetadataResponse.errors.isEmpty, "Response should have no errors")
     assertFalse(v0BrokerIds.contains(downNode.config.brokerId), s"The downed broker should not be in the brokers list")
@@ -329,7 +329,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertEquals(replicaCount, v1PartitionMetadata.replicaIds.size, s"Response should have $replicaCount replicas")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testIsrAfterBrokerShutDownAndJoinsBack(quorum: String): Unit = {
     def checkIsr[B <: KafkaBroker](
@@ -367,7 +367,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     checkIsr(brokers, topic)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAliveBrokersWithNoTopics(quorum: String): Unit = {
     def checkMetadata[B <: KafkaBroker](

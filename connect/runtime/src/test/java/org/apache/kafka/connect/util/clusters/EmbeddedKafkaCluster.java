@@ -22,16 +22,17 @@ import kafka.server.KafkaServer;
 import kafka.utils.CoreUtils;
 import kafka.utils.TestUtils;
 import kafka.zk.EmbeddedZookeeper;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -50,11 +51,16 @@ import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.metadata.BrokerState;
+import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.config.ZkConfigs;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,6 +95,10 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
 
 /**
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
@@ -103,7 +113,7 @@ public class EmbeddedKafkaCluster {
     // Kafka Config
     private final KafkaServer[] brokers;
     private final Properties brokerConfig;
-    private final Time time = new MockTime();
+    private final Time time = Time.SYSTEM;
     private final int[] currentBrokerPorts;
     private final String[] currentBrokerLogDirs;
     private final boolean hasListenerConfig;
@@ -129,7 +139,7 @@ public class EmbeddedKafkaCluster {
         // Since we support `stop` followed by `startOnlyKafkaOnSamePorts`, we track whether
         // a listener config is defined during initialization in order to know if it's
         // safe to override it
-        hasListenerConfig = brokerConfig.get(KafkaConfig.ListenersProp()) != null;
+        hasListenerConfig = brokerConfig.get(SocketServerConfigs.LISTENERS_CONFIG) != null;
 
         this.clientConfigs = clientConfigs;
     }
@@ -153,28 +163,28 @@ public class EmbeddedKafkaCluster {
     }
 
     private void doStart() {
-        brokerConfig.put(KafkaConfig.ZkConnectProp(), zKConnectString());
+        brokerConfig.put(ZkConfigs.ZK_CONNECT_CONFIG, zKConnectString());
 
-        putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
-        putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);
-        putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) brokers.length);
-        putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), false);
+        putIfAbsent(brokerConfig, ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, true);
+        putIfAbsent(brokerConfig, GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0);
+        putIfAbsent(brokerConfig, GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, (short) brokers.length);
+        putIfAbsent(brokerConfig, AUTO_CREATE_TOPICS_ENABLE_CONFIG, false);
         // reduce the size of the log cleaner map to reduce test memory usage
-        putIfAbsent(brokerConfig, KafkaConfig.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
+        putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
 
-        Object listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerListenerNameProp());
+        Object listenerConfig = brokerConfig.get(INTER_BROKER_LISTENER_NAME_CONFIG);
         if (listenerConfig == null)
-            listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerSecurityProtocolProp());
+            listenerConfig = brokerConfig.get(INTER_BROKER_SECURITY_PROTOCOL_CONFIG);
         if (listenerConfig == null)
             listenerConfig = "PLAINTEXT";
         listenerName = new ListenerName(listenerConfig.toString());
 
         for (int i = 0; i < brokers.length; i++) {
-            brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
+            brokerConfig.put(ServerConfigs.BROKER_ID_CONFIG, i);
             currentBrokerLogDirs[i] = currentBrokerLogDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
-            brokerConfig.put(KafkaConfig.LogDirProp(), currentBrokerLogDirs[i]);
+            brokerConfig.put(LOG_DIR_CONFIG, currentBrokerLogDirs[i]);
             if (!hasListenerConfig)
-                brokerConfig.put(KafkaConfig.ListenersProp(), listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
+                brokerConfig.put(SocketServerConfigs.LISTENERS_CONFIG, listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
             brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time);
             currentBrokerPorts[i] = brokers[i].boundPort(listenerName);
         }
@@ -198,6 +208,18 @@ public class EmbeddedKafkaCluster {
     }
 
     private void stop(boolean deleteLogDirs, boolean stopZK) {
+        maybeShutDownProducer();
+        triggerBrokerShutdown();
+        awaitBrokerShutdown();
+
+        if (deleteLogDirs)
+            deleteLogDirs();
+
+        if (stopZK)
+            stopZK();
+    }
+
+    private void maybeShutDownProducer() {
         try {
             if (producer != null) {
                 producer.close();
@@ -206,7 +228,9 @@ public class EmbeddedKafkaCluster {
             log.error("Could not shutdown producer ", e);
             throw new RuntimeException("Could not shutdown producer", e);
         }
+    }
 
+    private void triggerBrokerShutdown() {
         for (KafkaServer broker : brokers) {
             try {
                 broker.shutdown();
@@ -216,25 +240,37 @@ public class EmbeddedKafkaCluster {
                 throw new RuntimeException(msg, t);
             }
         }
+    }
 
-        if (deleteLogDirs) {
-            for (KafkaServer broker : brokers) {
-                try {
-                    log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
-                    CoreUtils.delete(broker.config().logDirs());
-                } catch (Throwable t) {
-                    String msg = String.format("Could not clean up log dirs for broker at %s",
-                            address(broker));
-                    log.error(msg, t);
-                    throw new RuntimeException(msg, t);
-                }
+    private void awaitBrokerShutdown() {
+        for (KafkaServer broker : brokers) {
+            try {
+                broker.awaitShutdown();
+            } catch (Throwable t) {
+                String msg = String.format("Failed while awaiting shutdown of broker at %s", address(broker));
+                log.error(msg, t);
+                throw new RuntimeException(msg, t);
             }
         }
+    }
 
-        try {
-            if (stopZK) {
-                zookeeper.shutdown();
+    private void deleteLogDirs() {
+        for (KafkaServer broker : brokers) {
+            try {
+                log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
+                CoreUtils.delete(broker.config().logDirs());
+            } catch (Throwable t) {
+                String msg = String.format("Could not clean up log dirs for broker at %s",
+                        address(broker));
+                log.error(msg, t);
+                throw new RuntimeException(msg, t);
             }
+        }
+    }
+
+    private void stopZK() {
+        try {
+            zookeeper.shutdown();
         } catch (Throwable t) {
             String msg = String.format("Could not shutdown zookeeper at %s", zKConnectString());
             log.error(msg, t);
@@ -304,7 +340,7 @@ public class EmbeddedKafkaCluster {
     }
     
     public boolean sslEnabled() {
-        final String listeners = brokerConfig.getProperty(KafkaConfig.ListenersProp());
+        final String listeners = brokerConfig.getProperty(SocketServerConfigs.LISTENERS_CONFIG);
         return listeners != null && listeners.contains("SSL");
     }
 
@@ -462,7 +498,7 @@ public class EmbeddedKafkaCluster {
         Properties props = Utils.mkProperties(clientConfigs);
         props.putAll(adminClientConfig);
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        final Object listeners = brokerConfig.get(KafkaConfig.ListenersProp());
+        final Object listeners = brokerConfig.get(SocketServerConfigs.LISTENERS_CONFIG);
         if (listeners != null && listeners.toString().contains("SSL")) {
             props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
@@ -600,6 +636,19 @@ public class EmbeddedKafkaCluster {
         }
 
         return new ConsumerRecords<>(records);
+    }
+
+    public long endOffset(TopicPartition topicPartition) throws TimeoutException, InterruptedException, ExecutionException {
+        try (Admin admin = createAdminClient()) {
+            Map<TopicPartition, OffsetSpec> offsets = Collections.singletonMap(
+                    topicPartition, OffsetSpec.latest()
+            );
+            return admin.listOffsets(offsets)
+                    .partitionResult(topicPartition)
+                    // Hardcode duration for now; if necessary, we can add a parameter for it later
+                    .get(10, TimeUnit.SECONDS)
+                    .offset();
+        }
     }
 
     /**

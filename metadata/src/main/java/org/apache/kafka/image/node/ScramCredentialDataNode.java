@@ -34,8 +34,8 @@ public class ScramCredentialDataNode implements MetadataNode {
     }
 
     private static void arrayToHex(byte[] array, StringBuilder bld) {
-        for (int i = 0; i < array.length; i++) {
-            bld.append(String.format("%02x", array[i] & 0xff));
+        for (byte b : array) {
+            bld.append(String.format("%02x", b & 0xff));
         }
     }
 

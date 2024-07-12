@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -37,7 +38,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
 import java.io.Closeable;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.Properties;
@@ -108,7 +108,7 @@ public class ConsumerTestBuilder implements Closeable {
         this.time = enableAutoTick ? new MockTime(1) : new MockTime();
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
+        this.backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue));
         this.offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
             100,
@@ -162,7 +162,9 @@ public class ConsumerTestBuilder implements Closeable {
         this.networkClientDelegate = spy(new NetworkClientDelegate(time,
                 config,
                 logContext,
-                client));
+                client,
+                metadata,
+                backgroundEventHandler));
         this.offsetsRequestManager = spy(new OffsetsRequestManager(subscriptions,
                 metadata,
                 fetchConfig.isolationLevel,
@@ -174,12 +176,11 @@ public class ConsumerTestBuilder implements Closeable {
                 backgroundEventHandler,
                 logContext));
 
-        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, config));
+        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, time, config));
 
         if (groupInfo.isPresent()) {
             GroupInformation gi = groupInfo.get();
             CoordinatorRequestManager coordinator = spy(new CoordinatorRequestManager(
-                    time,
                     logContext,
                     DEFAULT_RETRY_BACKOFF_MS,
                     DEFAULT_RETRY_BACKOFF_MAX_MS,
@@ -196,18 +197,19 @@ public class ConsumerTestBuilder implements Closeable {
                     gi.groupInstanceId,
                     metrics));
             MembershipManager mm = spy(
-                    new MembershipManagerImpl(
-                        gi.groupId,
-                        gi.groupInstanceId,
-                        groupRebalanceConfig.rebalanceTimeoutMs,
-                        gi.serverAssignor,
-                        subscriptions,
-                        commit,
-                        metadata,
-                        logContext,
-                        Optional.empty(),
-                        backgroundEventHandler,
-                        time
+                new MembershipManagerImpl(
+                    gi.groupId,
+                    gi.groupInstanceId,
+                    groupRebalanceConfig.rebalanceTimeoutMs,
+                    gi.serverAssignor,
+                    subscriptions,
+                    commit,
+                    metadata,
+                    logContext,
+                    Optional.empty(),
+                    backgroundEventHandler,
+                    time,
+                    mock(RebalanceMetricsManager.class)
                 )
             );
             HeartbeatRequestManager.HeartbeatState heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(
@@ -263,10 +265,11 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchRequestManager,
                 coordinatorRequestManager,
                 commitRequestManager,
-                heartbeatRequestManager);
+                heartbeatRequestManager,
+                membershipManager
+            );
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 logContext,
-                applicationEventQueue,
                 requestManagers,
                 metadata
             )
@@ -283,32 +286,6 @@ public class ConsumerTestBuilder implements Closeable {
     @Override
     public void close() {
         closeQuietly(requestManagers, RequestManagers.class.getSimpleName());
-        closeQuietly(applicationEventProcessor, ApplicationEventProcessor.class.getSimpleName());
-    }
-
-    public static class ConsumerNetworkThreadTestBuilder extends ConsumerTestBuilder {
-
-        final ConsumerNetworkThread consumerNetworkThread;
-
-        public ConsumerNetworkThreadTestBuilder() {
-            this(createDefaultGroupInformation());
-        }
-
-        public ConsumerNetworkThreadTestBuilder(Optional<GroupInformation> groupInfo) {
-            super(groupInfo);
-            this.consumerNetworkThread = new ConsumerNetworkThread(
-                    logContext,
-                    time,
-                    () -> applicationEventProcessor,
-                    () -> networkClientDelegate,
-                    () -> requestManagers
-            );
-        }
-
-        @Override
-        public void close() {
-            consumerNetworkThread.close(Duration.ZERO);
-        }
     }
 
     public static class GroupInformation {

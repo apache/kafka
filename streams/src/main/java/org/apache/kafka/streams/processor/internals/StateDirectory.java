@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -183,7 +184,9 @@ public class StateDirectory implements AutoCloseable {
 
     public UUID initializeProcessId() {
         if (!hasPersistentStores) {
-            return UUID.randomUUID();
+            final UUID processId = UUID.randomUUID();
+            log.info("Created new process id: {}", processId);
+            return processId;
         }
 
         if (!lockStateDirectory()) {

@@ -20,7 +20,7 @@ package kafka.server.metadata
 import java.util.{OptionalInt, Properties}
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
-import kafka.server.{BrokerLifecycleManager, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
@@ -29,7 +29,6 @@ import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
-import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.fault.FaultHandler
 
 import java.util.concurrent.CompletableFuture
@@ -74,7 +73,6 @@ class BrokerMetadataPublisher(
   aclPublisher: AclPublisher,
   fatalFaultHandler: FaultHandler,
   metadataPublishingFaultHandler: FaultHandler,
-  brokerLifecycleManager: BrokerLifecycleManager,
 ) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${config.nodeId}] "
 
@@ -127,21 +125,6 @@ class BrokerMetadataPublisher(
         initializeManagers(newImage)
       } else if (isDebugEnabled) {
         debug(s"Publishing metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
-      }
-
-      Option(delta.featuresDelta()).foreach { featuresDelta =>
-        featuresDelta.metadataVersionChange().ifPresent{ metadataVersion =>
-          info(s"Updating metadata.version to ${metadataVersion.featureLevel()} at offset $highestOffsetAndEpoch.")
-          val currentMetadataVersion = delta.image().features().metadataVersion()
-          if (currentMetadataVersion.isLessThan(MetadataVersion.IBP_3_7_IV2) && metadataVersion.isAtLeast(MetadataVersion.IBP_3_7_IV2)) {
-            info(
-              s"""Resending BrokerRegistration with existing incarnation-id to inform the
-                 |controller about log directories in the broker following metadata update:
-                 |previousMetadataVersion: ${delta.image().features().metadataVersion()}
-                 |newMetadataVersion: $metadataVersion""".stripMargin.linesIterator.mkString(" ").trim)
-            brokerLifecycleManager.handleKraftJBODMetadataVersionUpdate()
-          }
-        }
       }
 
       // Apply topic deltas.
@@ -289,13 +272,18 @@ class BrokerMetadataPublisher(
     try {
       // Start log manager, which will perform (potentially lengthy)
       // recovery-from-unclean-shutdown if required.
-      logManager.startup(metadataCache.getAllTopics())
+      logManager.startup(
+        metadataCache.getAllTopics(),
+        isStray = log => LogManager.isStrayKraftReplica(brokerId, newImage.topics(), log)
+      )
 
-      // Delete partition directories which we're not supposed to have. We have
-      // to do this before starting ReplicaManager, so that the stray replicas
-      // don't block creation of new ones with different IDs but the same names.
-      // See KAFKA-14616 for details.
-      logManager.deleteStrayKRaftReplicas(brokerId, newImage.topics())
+      // Rename all future replicas which are in the same directory as the
+      // one assigned by the controller. This can only happen due to a disk
+      // failure and broker shutdown after the directory assignment has been
+      // updated in the controller but before the future replica could be
+      // promoted.
+      // See KAFKA-16082 for details.
+      logManager.recoverAbandonedFutureLogs(brokerId, newImage.topics())
 
       // Make the LogCleaner available for reconfiguration. We can't do this prior to this
       // point because LogManager#startup creates the LogCleaner object, if
@@ -313,7 +301,7 @@ class BrokerMetadataPublisher(
     try {
       // Start the group coordinator.
       groupCoordinator.startup(() => metadataCache.numPartitions(Topic.GROUP_METADATA_TOPIC_NAME)
-        .getOrElse(config.offsetsTopicPartitions))
+        .getOrElse(config.groupCoordinatorConfig.offsetsTopicPartitions))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting GroupCoordinator", t)
     }

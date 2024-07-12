@@ -53,12 +53,11 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
-import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.apache.kafka.connect.util.TopicAdmin;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.crypto.spec.SecretKeySpec;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -67,7 +66,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -77,6 +75,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
+
+import javax.crypto.spec.SecretKeySpec;
 
 import static org.apache.kafka.connect.runtime.TargetState.PAUSED;
 import static org.apache.kafka.connect.runtime.TargetState.STOPPED;
@@ -294,14 +294,13 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     private final String topic;
     // Data is passed to the log already serialized. We use a converter to handle translating to/from generic Connect
     // format to serialized form
-    private final KafkaBasedLog<String, byte[]> configLog;
+    private KafkaBasedLog<String, byte[]> configLog;
     // Connector -> # of tasks
     final Map<String, Integer> connectorTaskCounts = new HashMap<>();
     // Connector and task configs: name or id -> config map
     final Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
     final Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
     private final Supplier<TopicAdmin> topicAdminSupplier;
-    private SharedTopicAdmin ownTopicAdmin;
     private final String clientId;
 
     // Set of connectors where we saw a task commit with an incomplete set of task config updates, indicating the data
@@ -321,6 +320,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
     final Map<String, Integer> connectorTaskCountRecords = new HashMap<>();
     final Map<String, Integer> connectorTaskConfigGenerations = new HashMap<>();
+    final Map<String, AppliedConnectorConfig> appliedConnectorConfigs = new HashMap<>();
     final Set<String> connectorsPendingFencing = new HashSet<>();
 
     private final WorkerConfigTransformer configTransformer;
@@ -330,9 +330,9 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     private final Map<String, Object> fencableProducerProps;
     private final Time time;
 
-    @Deprecated
-    public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer) {
-        this(converter, config, configTransformer, null, "connect-distributed-");
+    //VisibleForTesting
+    void setConfigLog(KafkaBasedLog<String, byte[]> configLog) {
+        this.configLog = configLog;
     }
 
     public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier, String clientIdBase) {
@@ -361,7 +361,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
         this.usesFencableWriter = config.transactionalLeaderEnabled();
         this.topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
-        if (this.topic == null || this.topic.trim().length() == 0)
+        if (this.topic == null || this.topic.trim().isEmpty())
             throw new ConfigException("Must specify topic for connector configuration.");
 
         configLog = setupAndCreateKafkaBasedLog(this.topic, config);
@@ -407,7 +407,6 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         log.info("Closing KafkaConfigBackingStore");
 
         relinquishWritePrivileges();
-        Utils.closeQuietly(ownTopicAdmin, "admin for config topic");
         Utils.closeQuietly(configLog::stop, "KafkaBasedLog for config topic");
 
         log.info("Closed KafkaConfigBackingStore");
@@ -482,6 +481,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                     new HashMap<>(taskConfigs),
                     new HashMap<>(connectorTaskCountRecords),
                     new HashMap<>(connectorTaskConfigGenerations),
+                    new HashMap<>(appliedConnectorConfigs),
                     new HashSet<>(connectorsPendingFencing),
                     new HashSet<>(inconsistent),
                     configTransformer
@@ -781,7 +781,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
         if (config.exactlyOnceSourceEnabled()) {
             ConnectUtils.ensureProperty(
-                    consumerProps, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                    consumerProps, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString(),
                     "for the worker's config topic consumer when exactly-once source support is enabled",
                     true
             );
@@ -790,14 +790,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         Map<String, Object> adminProps = new HashMap<>(originals);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
         adminProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
-        Supplier<TopicAdmin> adminSupplier;
-        if (topicAdminSupplier != null) {
-            adminSupplier = topicAdminSupplier;
-        } else {
-            // Create our own topic admin supplier that we'll close when we're stopped
-            ownTopicAdmin = new SharedTopicAdmin(adminProps);
-            adminSupplier = ownTopicAdmin;
-        }
+
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                                             ? ((DistributedConfig) config).configStorageTopicSettings()
                                             : Collections.emptyMap();
@@ -808,7 +801,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                 .replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG))
                 .build();
 
-        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier, config, time);
+        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, topicAdminSupplier, config, time);
     }
 
     /**
@@ -1008,11 +1001,8 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         synchronized (lock) {
             if (value.value() == null) {
                 // Connector deletion will be written as a null value
+                processConnectorRemoval(connectorName);
                 log.info("Successfully processed removal of connector '{}'", connectorName);
-                connectorConfigs.remove(connectorName);
-                connectorTaskCounts.remove(connectorName);
-                taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
-                deferredTaskUpdates.remove(connectorName);
                 removed = true;
             } else {
                 // Connector configs can be applied and callbacks invoked immediately
@@ -1075,6 +1065,22 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     private void processTasksCommitRecord(String connectorName, SchemaAndValue value) {
         List<ConnectorTaskId> updatedTasks = new ArrayList<>();
         synchronized (lock) {
+            // Edge case: connector was deleted before these task configs were published,
+            // but compaction took place and both the original connector config and the
+            // tombstone message for it have been removed from the config topic
+            // We should ignore these task configs
+            Map<String, String> appliedConnectorConfig = connectorConfigs.get(connectorName);
+            if (appliedConnectorConfig == null) {
+                processConnectorRemoval(connectorName);
+                log.debug(
+                        "Ignoring task configs for connector {}; it appears that the connector was deleted previously "
+                            + "and that log compaction has since removed any trace of its previous configurations "
+                            + "from the config topic",
+                        connectorName
+                );
+                return;
+            }
+
             // Apply any outstanding deferred task updates for the given connector. Note that just because we
             // encounter a commit message does not mean it will result in consistent output. In particular due to
             // compaction, there may be cases where . For example if we have the following sequence of writes:
@@ -1122,6 +1128,11 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                     connectorTaskConfigGenerations.compute(connectorName, (ignored, generation) -> generation != null ? generation + 1 : 0);
                 }
                 inconsistent.remove(connectorName);
+
+                appliedConnectorConfigs.put(
+                        connectorName,
+                        new AppliedConnectorConfig(appliedConnectorConfig)
+                );
             }
             // Always clear the deferred entries, even if we didn't apply them. If they represented an inconsistent
             // update, then we need to see a completely fresh set of configs after this commit message, so we don't
@@ -1179,7 +1190,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
         log.debug("Setting task count record for connector '{}' to {}", connectorName, taskCount);
         connectorTaskCountRecords.put(connectorName, taskCount);
-        // If a task count record appears after the latest task configs, the connectors doesn't need a round of zombie
+        // If a task count record appears after the latest task configs, the connector doesn't need a round of zombie
         // fencing before it can start tasks with the latest configs
         connectorsPendingFencing.remove(connectorName);
     }
@@ -1255,13 +1266,21 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         }
     }
 
+    private void processConnectorRemoval(String connectorName) {
+        connectorConfigs.remove(connectorName);
+        connectorTaskCounts.remove(connectorName);
+        taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
+        deferredTaskUpdates.remove(connectorName);
+        appliedConnectorConfigs.remove(connectorName);
+    }
+
     private ConnectorTaskId parseTaskId(String key) {
         String[] parts = key.split("-");
         if (parts.length < 3) return null;
 
         try {
             int taskNum = Integer.parseInt(parts[parts.length - 1]);
-            String connectorName = Utils.join(Arrays.copyOfRange(parts, 1, parts.length - 1), "-");
+            String connectorName = String.join("-", Arrays.copyOfRange(parts, 1, parts.length - 1));
             return new ConnectorTaskId(connectorName, taskNum);
         } catch (NumberFormatException e) {
             return null;
@@ -1325,5 +1344,5 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         else
             throw new ConnectException("Expected integer value to be either Integer or Long");
     }
-}
 
+}

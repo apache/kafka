@@ -16,8 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+@FunctionalInterface
 public interface CloseListener<T extends AutoCloseable> {
-
     void onClose(T closeable);
-
 }

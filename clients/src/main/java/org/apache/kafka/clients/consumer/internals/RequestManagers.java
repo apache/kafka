@@ -25,6 +25,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -48,6 +49,7 @@ public class RequestManagers implements Closeable {
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
     public final Optional<HeartbeatRequestManager> heartbeatRequestManager;
+    public final Optional<MembershipManager> membershipManager;
     public final OffsetsRequestManager offsetsRequestManager;
     public final TopicMetadataRequestManager topicMetadataRequestManager;
     public final FetchRequestManager fetchRequestManager;
@@ -60,7 +62,8 @@ public class RequestManagers implements Closeable {
                            FetchRequestManager fetchRequestManager,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager,
-                           Optional<HeartbeatRequestManager> heartbeatRequestManager) {
+                           Optional<HeartbeatRequestManager> heartbeatRequestManager,
+                           Optional<MembershipManager> membershipManager) {
         this.log = logContext.logger(RequestManagers.class);
         this.offsetsRequestManager = requireNonNull(offsetsRequestManager, "OffsetsRequestManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -68,11 +71,13 @@ public class RequestManagers implements Closeable {
         this.topicMetadataRequestManager = topicMetadataRequestManager;
         this.fetchRequestManager = fetchRequestManager;
         this.heartbeatRequestManager = heartbeatRequestManager;
+        this.membershipManager = membershipManager;
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
         list.add(commitRequestManager);
         list.add(heartbeatRequestManager);
+        list.add(membershipManager);
         list.add(Optional.of(offsetsRequestManager));
         list.add(Optional.of(topicMetadataRequestManager));
         list.add(Optional.of(fetchRequestManager));
@@ -119,7 +124,8 @@ public class RequestManagers implements Closeable {
                                                      final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                                      final Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                                      final Metrics metrics,
-                                                     final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker
+                                                     final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
+                                                     final MemberStateListener applicationThreadMemberStateListener
                                                      ) {
         return new CachedSupplier<RequestManagers>() {
             @Override
@@ -150,6 +156,7 @@ public class RequestManagers implements Closeable {
                         apiVersions);
                 final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(
                         logContext,
+                        time,
                         config);
                 HeartbeatRequestManager heartbeatRequestManager = null;
                 MembershipManager membershipManager = null;
@@ -158,7 +165,7 @@ public class RequestManagers implements Closeable {
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
                     Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
-                    coordinator = new CoordinatorRequestManager(time,
+                    coordinator = new CoordinatorRequestManager(
                             logContext,
                             retryBackoffMs,
                             retryBackoffMaxMs,
@@ -185,8 +192,10 @@ public class RequestManagers implements Closeable {
                             logContext,
                             clientTelemetryReporter,
                             backgroundEventHandler,
-                            time);
+                            time,
+                            metrics);
                     membershipManager.registerStateListener(commit);
+                    membershipManager.registerStateListener(applicationThreadMemberStateListener);
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
                             time,
@@ -205,7 +214,8 @@ public class RequestManagers implements Closeable {
                         fetch,
                         Optional.ofNullable(coordinator),
                         Optional.ofNullable(commit),
-                        Optional.ofNullable(heartbeatRequestManager)
+                        Optional.ofNullable(heartbeatRequestManager),
+                        Optional.ofNullable(membershipManager)
                 );
             }
         };

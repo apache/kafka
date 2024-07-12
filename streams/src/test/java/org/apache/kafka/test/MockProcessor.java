@@ -18,8 +18,9 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -28,9 +29,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-public class MockProcessor<K, V> extends org.apache.kafka.streams.processor.AbstractProcessor<K, V> {
-    private final MockApiProcessor<K, V, Object, Object> delegate;
+public class MockProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
+    private final MockApiProcessor<KIn, VIn, KOut, VOut> delegate;
 
     public MockProcessor(final PunctuationType punctuationType,
                          final long scheduleInterval) {
@@ -41,16 +41,14 @@ public class MockProcessor<K, V> extends org.apache.kafka.streams.processor.Abst
         delegate = new MockApiProcessor<>();
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public void init(final ProcessorContext context) {
-        super.init(context);
-        delegate.init((org.apache.kafka.streams.processor.api.ProcessorContext<Object, Object>) context);
+    public void init(final ProcessorContext<KOut, VOut> context) {
+        delegate.init(context);
     }
 
     @Override
-    public void process(final K key, final V value) {
-        delegate.process(new Record<>(key, value, context.timestamp(), context.headers()));
+    public void process(final Record<KIn, VIn> record) {
+        delegate.process(record);
     }
 
     public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
@@ -69,7 +67,7 @@ public class MockProcessor<K, V> extends org.apache.kafka.streams.processor.Abst
         delegate.checkAndClearPunctuateResult(type, expected);
     }
 
-    public Map<K, ValueAndTimestamp<V>> lastValueAndTimestampPerKey() {
+    public Map<KIn, ValueAndTimestamp<VIn>> lastValueAndTimestampPerKey() {
         return delegate.lastValueAndTimestampPerKey();
     }
 
@@ -81,14 +79,18 @@ public class MockProcessor<K, V> extends org.apache.kafka.streams.processor.Abst
         return delegate.scheduleCancellable();
     }
 
-    public ArrayList<KeyValueTimestamp<K, V>> processed() {
+    public ArrayList<KeyValueTimestamp<KIn, VIn>> processed() {
         return delegate.processed();
     }
 
-    @SuppressWarnings("unchecked")
     public void addProcessorMetadata(final String key, final long value) {
-        if (context instanceof InternalProcessorContext) {
-            ((InternalProcessorContext<K, V>) context).addProcessorMetadataKeyValue(key, value);
+        if (delegate.context() instanceof InternalProcessorContext) {
+            ((InternalProcessorContext<KOut, VOut>) delegate.context()).addProcessorMetadataKeyValue(key, value);
         }
+    }
+
+    @Override
+    public void close() {
+        delegate.close();
     }
 }

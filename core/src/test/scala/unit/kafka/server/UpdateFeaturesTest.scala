@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{UpdateFeaturesRequest, UpdateFeaturesResponse}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0, IBP_3_2_IV0}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertThrows, assertTrue}
 
@@ -43,7 +44,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
   override def brokerCount = 3
 
   override def brokerPropertyOverrides(props: Properties): Unit = {
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_7_IV0.toString)
+    props.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, IBP_2_7_IV0.toString)
   }
 
   private def defaultSupportedFeatures(): Features[SupportedVersionRange] = {

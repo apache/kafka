@@ -21,24 +21,26 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.state.Stores
-import org.easymock.EasyMock
-import org.easymock.EasyMock.{createMock, replay}
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{BeforeEach, Test}
+import org.mockito.Mockito.{mock, when}
+import org.mockito.junit.jupiter.{MockitoExtension, MockitoSettings}
+import org.mockito.quality.Strictness
 
 import java.time.Duration
 
+@ExtendWith(Array(classOf[MockitoExtension]))
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 class StreamJoinedTest {
 
-  val builder: InternalStreamsBuilder = createMock(classOf[InternalStreamsBuilder])
-  val topoBuilder: InternalTopologyBuilder = createMock(classOf[InternalTopologyBuilder])
+  val builder: InternalStreamsBuilder = mock(classOf[InternalStreamsBuilder])
+  val topoBuilder: InternalTopologyBuilder = mock(classOf[InternalTopologyBuilder])
 
   @BeforeEach
   def before(): Unit = {
-    EasyMock.expect(builder.internalTopologyBuilder()).andReturn(topoBuilder);
-    EasyMock.expect(topoBuilder.topologyConfigs()).andReturn(null)
-    replay(topoBuilder)
-    replay(builder)
+    when(builder.internalTopologyBuilder()).thenReturn(topoBuilder)
+    when(topoBuilder.topologyConfigs()).thenReturn(null)
   }
 
   @Test

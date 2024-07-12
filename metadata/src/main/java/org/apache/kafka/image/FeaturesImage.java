@@ -31,7 +31,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 
 /**
@@ -106,8 +105,7 @@ public final class FeaturesImage {
         if (!finalizedVersions.isEmpty()) {
             List<String> features = new ArrayList<>(finalizedVersions.keySet());
             features.sort(String::compareTo);
-            options.handleLoss("feature flag(s): " +
-                    features.stream().collect(Collectors.joining(", ")));
+            options.handleLoss("feature flag(s): " + String.join(", ", features));
         }
     }
 

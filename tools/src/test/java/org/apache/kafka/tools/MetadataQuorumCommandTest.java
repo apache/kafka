@@ -18,18 +18,20 @@ package org.apache.kafka.tools;
 
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
+
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
@@ -37,13 +39,11 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import static java.util.Arrays.stream;
-
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.KRAFT)
 @Tag("integration")
 class MetadataQuorumCommandTest {
 
@@ -58,12 +58,9 @@ class MetadataQuorumCommandTest {
      * 3. Fewer brokers than controllers
      */
     @ClusterTests({
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 2),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 2),
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 1),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 1),
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 2),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 2)
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 2),
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 1),
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1, controllers = 2),
     })
     public void testDescribeQuorumReplicationSuccessful() throws InterruptedException {
         cluster.waitForReadyBrokers();
@@ -71,8 +68,8 @@ class MetadataQuorumCommandTest {
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
         );
 
-        List<String> outputs = stream(describeOutput.split("\n")).skip(1).collect(Collectors.toList());
-        if (cluster.config().clusterType() == Type.CO_KRAFT)
+        List<String> outputs = Arrays.stream(describeOutput.split("\n")).skip(1).collect(Collectors.toList());
+        if (cluster.type() == Type.CO_KRAFT)
           assertEquals(Math.max(cluster.config().numControllers(), cluster.config().numBrokers()), outputs.size());
         else
           assertEquals(cluster.config().numBrokers() + cluster.config().numControllers(), outputs.size());
@@ -85,7 +82,7 @@ class MetadataQuorumCommandTest {
         assertEquals(cluster.config().numControllers() - 1, outputs.stream().filter(o -> followerPattern.matcher(o).find()).count());
 
         Pattern observerPattern = Pattern.compile("\\d+\\s+\\d+\\s+\\d+\\s+[\\dmsago\\s]+-?[\\dmsago\\s]+Observer\\s*");
-        if (cluster.config().clusterType() == Type.CO_KRAFT)
+        if (cluster.type() == Type.CO_KRAFT)
             assertEquals(Math.max(0, cluster.config().numBrokers() - cluster.config().numControllers()),
                 outputs.stream().filter(o -> observerPattern.matcher(o).find()).count());
         else
@@ -99,40 +96,46 @@ class MetadataQuorumCommandTest {
      * 3. Fewer brokers than controllers
      */
     @ClusterTests({
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 2),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 2),
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 1),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 1),
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 2),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 2)
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 2),
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 1),
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1, controllers = 2),
     })
     public void testDescribeQuorumStatusSuccessful() throws InterruptedException {
         cluster.waitForReadyBrokers();
-        String describeOutput = ToolsTestUtils.captureStandardOut(() ->
-            MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
+        String describeOutput = ToolsTestUtils.captureStandardOut(
+            () -> MetadataQuorumCommand.mainNoExit(
+                "--bootstrap-server",
+                cluster.bootstrapServers(),
+                "describe",
+                "--status"
+            )
         );
         String[] outputs = describeOutput.split("\n");
 
-        assertTrue(outputs[0].matches("ClusterId:\\s+\\S{22}"));
-        assertTrue(outputs[1].matches("LeaderId:\\s+\\d+"));
-        assertTrue(outputs[2].matches("LeaderEpoch:\\s+\\d+"));
+        assertTrue(outputs[0].matches("ClusterId:\\s+\\S{22}"), describeOutput);
+        assertTrue(outputs[1].matches("LeaderId:\\s+\\d+"), describeOutput);
+        assertTrue(outputs[2].matches("LeaderEpoch:\\s+\\d+"), describeOutput);
         // HighWatermark may be -1
-        assertTrue(outputs[3].matches("HighWatermark:\\s+-?\\d+"));
-        assertTrue(outputs[4].matches("MaxFollowerLag:\\s+\\d+"));
-        assertTrue(outputs[5].matches("MaxFollowerLagTimeMs:\\s+-?\\d+"));
-        assertTrue(outputs[6].matches("CurrentVoters:\\s+\\[\\d+(,\\d+)*]"));
+        assertTrue(outputs[3].matches("HighWatermark:\\s+-?\\d+"), describeOutput);
+        assertTrue(outputs[4].matches("MaxFollowerLag:\\s+\\d+"), describeOutput);
+        assertTrue(outputs[5].matches("MaxFollowerLagTimeMs:\\s+-?\\d+"), describeOutput);
+        assertTrue(
+            outputs[6].matches("CurrentVoters:\\s+\\[\\d+(,\\d+)*]"),
+            describeOutput
+        );
 
         // There are no observers if we have fewer brokers than controllers
-        if (cluster.config().clusterType() == Type.CO_KRAFT && cluster.config().numBrokers() <= cluster.config().numControllers())
-            assertTrue(outputs[7].matches("CurrentObservers:\\s+\\[]"));
-        else
-            assertTrue(outputs[7].matches("CurrentObservers:\\s+\\[\\d+(,\\d+)*]"));
+        if (cluster.type() == Type.CO_KRAFT && cluster.config().numBrokers() <= cluster.config().numControllers()) {
+            assertTrue(outputs[7].matches("CurrentObservers:\\s+\\[]"), describeOutput);
+        } else {
+            assertTrue(
+                outputs[7].matches("CurrentObservers:\\s+\\[\\d+(,\\d+)*]"),
+                describeOutput
+            );
+        }
     }
 
-    @ClusterTests({
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 1),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 1)
-    })
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
     public void testOnlyOneBrokerAndOneController() {
         String statusOutput = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
@@ -146,9 +149,7 @@ class MetadataQuorumCommandTest {
         assertEquals("0", replicationOutput.split("\n")[1].split("\\s+")[2]);
     }
 
-    @ClusterTests({
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 1)
-    })
+    @ClusterTest(types = {Type.CO_KRAFT})
     public void testCommandConfig() throws IOException {
         // specifying a --command-config containing properties that would prevent login must fail
         File tmpfile = TestUtils.tempFile(AdminClientConfig.SECURITY_PROTOCOL_CONFIG + "=SSL_PLAINTEXT");
@@ -156,25 +157,21 @@ class MetadataQuorumCommandTest {
                         "--command-config", tmpfile.getAbsolutePath(), "describe", "--status"));
     }
 
-    @ClusterTest(clusterType = Type.ZK, brokers = 1)
+    @ClusterTest(types = {Type.ZK})
     public void testDescribeQuorumInZkMode() {
-        assertTrue(
-            assertThrows(
+        assertInstanceOf(UnsupportedVersionException.class, assertThrows(
                 ExecutionException.class,
                 () -> MetadataQuorumCommand.execute("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
-            ).getCause() instanceof UnsupportedVersionException
-        );
+        ).getCause());
 
-        assertTrue(
-            assertThrows(
+        assertInstanceOf(UnsupportedVersionException.class, assertThrows(
                 ExecutionException.class,
                 () -> MetadataQuorumCommand.execute("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
-            ).getCause() instanceof UnsupportedVersionException
-        );
+        ).getCause());
 
     }
 
-    @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 1)
+    @ClusterTest(types = {Type.CO_KRAFT})
     public void testHumanReadableOutput() {
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--human-readable"));
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status", "--human-readable"));

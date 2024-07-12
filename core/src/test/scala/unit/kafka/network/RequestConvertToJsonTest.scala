@@ -121,7 +121,7 @@ class RequestConvertToJsonTest {
 
   @Test
   def testRequestHeaderNodeWithDeprecatedApiVersion(): Unit = {
-    val fetchRequest = FetchRequest.Builder.forConsumer(0, 0, 0, Collections.emptyMap()).build(0);
+    val fetchRequest = FetchRequest.Builder.forConsumer(0, 0, 0, Collections.emptyMap()).build(0)
     val req = request(fetchRequest)
     val header = req.header
 

@@ -19,21 +19,22 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Properties;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class KStreamBranchTest {
 
@@ -59,7 +60,7 @@ public class KStreamBranchTest {
 
         assertEquals(3, branches.length);
 
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, Void, Void> supplier = new MockProcessorSupplier<>();
         for (final KStream<Integer, String> branch : branches) {
             branch.process(supplier);
         }
@@ -71,7 +72,7 @@ public class KStreamBranchTest {
             }
         }
 
-        final List<MockProcessor<Integer, String>> processors = supplier.capturedProcessors(3);
+        final List<MockProcessor<Integer, String, Void, Void>> processors = supplier.capturedProcessors(3);
         assertEquals(3, processors.get(0).processed().size());
         assertEquals(1, processors.get(1).processed().size());
         assertEquals(2, processors.get(2).processed().size());

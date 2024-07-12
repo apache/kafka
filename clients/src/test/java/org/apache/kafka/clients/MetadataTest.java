@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockClusterResourceListener;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -57,11 +58,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.assertOptional;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -75,9 +82,9 @@ import static org.mockito.Mockito.verify;
 
 public class MetadataTest {
 
-    private long refreshBackoffMs = 100;
-    private long refreshBackoffMaxMs = 1000;
-    private long metadataExpireMs = 1000;
+    private final long refreshBackoffMs = 100;
+    private final long refreshBackoffMaxMs = 1000;
+    private final long metadataExpireMs = 1000;
     private Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs,
             metadataExpireMs, new LogContext(), new ClusterResourceListeners());
 
@@ -604,11 +611,11 @@ public class MetadataTest {
 
         // Sentinel instances
         InetSocketAddress address = InetSocketAddress.createUnresolved("localhost", 0);
-        Cluster fromMetadata = MetadataCache.bootstrap(Collections.singletonList(address)).cluster();
+        Cluster fromMetadata = MetadataSnapshot.bootstrap(Collections.singletonList(address)).cluster();
         Cluster fromCluster = Cluster.bootstrap(Collections.singletonList(address));
         assertEquals(fromMetadata, fromCluster);
 
-        Cluster fromMetadataEmpty = MetadataCache.empty().cluster();
+        Cluster fromMetadataEmpty = MetadataSnapshot.empty().cluster();
         Cluster fromClusterEmpty = Cluster.empty();
         assertEquals(fromMetadataEmpty, fromClusterEmpty);
     }
@@ -1134,8 +1141,8 @@ public class MetadataTest {
                 new Metadata.LeaderIdAndEpoch(
                     Optional.of(2),
                     Optional.of(3)
-            )),
-            Arrays.asList(node1)
+                )),
+            Collections.singletonList(node1)
         );
         assertEquals(2, metadata.fetch().partitionsForTopic(topic).size());
         assertEquals(1, metadata.fetch().partition(tp0).leader().id());
@@ -1155,20 +1162,20 @@ public class MetadataTest {
         // topic2 has 1 partition: tp21
         String topic1 = "topic1";
         TopicPartition tp11 = new TopicPartition(topic1, 0);
-        PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp11, Optional.of(1), Optional.of(100), Arrays.asList(1, 2), Arrays.asList(1, 2), Arrays.asList(3));
+        PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp11, Optional.of(1), Optional.of(100), Arrays.asList(1, 2), Arrays.asList(1, 2), Collections.singletonList(3));
         Uuid topic1Id = Uuid.randomUuid();
         TopicPartition tp12 = new TopicPartition(topic1, 1);
-        PartitionMetadata part12Metadata = new PartitionMetadata(Errors.NONE, tp12, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Arrays.asList(1));
+        PartitionMetadata part12Metadata = new PartitionMetadata(Errors.NONE, tp12, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1));
 
         String topic2 = "topic2";
         TopicPartition tp21 = new TopicPartition(topic2, 0);
-        PartitionMetadata part2Metadata = new PartitionMetadata(Errors.NONE, tp21, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Arrays.asList(1));
+        PartitionMetadata part2Metadata = new PartitionMetadata(Errors.NONE, tp21, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1));
         Uuid topic2Id = Uuid.randomUuid();
 
         Set<String> internalTopics = Collections.singleton(Topic.GROUP_METADATA_TOPIC_NAME);
         TopicPartition internalPart = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0);
         Uuid internalTopicId = Uuid.randomUuid();
-        PartitionMetadata internalTopicMetadata = new PartitionMetadata(Errors.NONE, internalPart, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Arrays.asList(1));
+        PartitionMetadata internalTopicMetadata = new PartitionMetadata(Errors.NONE, internalPart, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1));
 
         Map<String, Uuid> topicIds = new HashMap<>();
         topicIds.put(topic1, topic1Id);
@@ -1205,8 +1212,7 @@ public class MetadataTest {
         metadata.update(versionAndBuilder.requestVersion,
             RequestTestUtils.metadataUpdateWith(clusterId, numNodes, errorCounts, topicPartitionCounts, tp -> null, metadataSupplier, ApiKeys.METADATA.latestVersion(), topicIds),
             false, time.milliseconds());
-        List<Node> nodes = new ArrayList<>();
-        nodes.addAll(metadata.fetch().nodes());
+        List<Node> nodes = new ArrayList<>(metadata.fetch().nodes());
         Node controller = metadata.fetch().controller();
         assertEquals(numNodes, nodes.size());
         assertFalse(metadata.updateRequested());
@@ -1261,7 +1267,100 @@ public class MetadataTest {
     }
 
     /**
-     * For testUpdatePartially, validates that updatedMetadata is matching expected part1Metadata, part2Metadata, interalPartMetadata, nodes & more.
+     * Test that concurrently updating Metadata, and fetching the corresponding MetadataSnapshot & Cluster work as expected, i.e.
+     * snapshot & cluster contain the relevant updates.
+     */
+    @Test
+    public void testConcurrentUpdateAndFetchForSnapshotAndCluster() throws InterruptedException {
+        Time time = new MockTime();
+        metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners());
+
+        // Setup metadata with 10 nodes, 2 topics, topic1 & 2, both to be retained in the update. Both will have leader-epoch 100.
+        int oldNodeCount = 10;
+        String topic1 = "test_topic1";
+        String topic2 = "test_topic2";
+        TopicPartition topic1Part0 = new TopicPartition(topic1, 0);
+        Map<String, Integer> topicPartitionCounts = new HashMap<>();
+        int oldPartitionCount = 1;
+        topicPartitionCounts.put(topic1, oldPartitionCount);
+        topicPartitionCounts.put(topic2, oldPartitionCount);
+        Map<String, Uuid> topicIds = new HashMap<>();
+        topicIds.put(topic1, Uuid.randomUuid());
+        topicIds.put(topic2, Uuid.randomUuid());
+        int oldLeaderEpoch = 100;
+        MetadataResponse metadataResponse =
+            RequestTestUtils.metadataUpdateWithIds("cluster", oldNodeCount, Collections.emptyMap(), topicPartitionCounts, _tp -> oldLeaderEpoch, topicIds);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
+        MetadataSnapshot snapshot = metadata.fetchMetadataSnapshot();
+        Cluster cluster = metadata.fetch();
+        // Validate metadata snapshot & cluster are setup as expected.
+        assertEquals(cluster, snapshot.cluster());
+        assertEquals(oldNodeCount, snapshot.cluster().nodes().size());
+        assertEquals(oldPartitionCount, snapshot.cluster().partitionCountForTopic(topic1));
+        assertEquals(oldPartitionCount, snapshot.cluster().partitionCountForTopic(topic2));
+        assertEquals(OptionalInt.of(oldLeaderEpoch), snapshot.leaderEpochFor(topic1Part0));
+
+        // Setup 6 threads, where 3 are updating metadata & 3 are reading snapshot/cluster.
+        // Metadata will be updated with higher # of nodes, partition-counts, leader-epoch.
+        int numThreads = 6;
+        ExecutorService service = Executors.newFixedThreadPool(numThreads);
+        CountDownLatch allThreadsDoneLatch = new CountDownLatch(numThreads);
+        CountDownLatch atleastMetadataUpdatedOnceLatch = new CountDownLatch(1);
+        AtomicReference<MetadataSnapshot> newSnapshot = new AtomicReference<>();
+        AtomicReference<Cluster> newCluster = new AtomicReference<>();
+        for (int i = 0; i < numThreads; i++) {
+            final int id = i + 1;
+            service.execute(() -> {
+                if (id % 2 == 0) { // Thread to update metadata.
+                    String oldClusterId = "clusterId";
+                    int nNodes = oldNodeCount + id;
+                    Map<String, Integer> newTopicPartitionCounts = new HashMap<>();
+                    newTopicPartitionCounts.put(topic1, oldPartitionCount + id);
+                    newTopicPartitionCounts.put(topic2, oldPartitionCount + id);
+                    MetadataResponse newMetadataResponse =
+                        RequestTestUtils.metadataUpdateWithIds(oldClusterId, nNodes, Collections.emptyMap(), newTopicPartitionCounts, _tp -> oldLeaderEpoch + id, topicIds);
+                    metadata.updateWithCurrentRequestVersion(newMetadataResponse, true, time.milliseconds());
+                    atleastMetadataUpdatedOnceLatch.countDown();
+                } else { // Thread to read metadata snapshot, once its updated
+                    assertTrue(assertDoesNotThrow(() -> atleastMetadataUpdatedOnceLatch.await(5, TimeUnit.MINUTES)));
+                    newSnapshot.set(metadata.fetchMetadataSnapshot());
+                    newCluster.set(metadata.fetch());
+                }
+                allThreadsDoneLatch.countDown();
+            });
+        }
+        assertTrue(allThreadsDoneLatch.await(5, TimeUnit.MINUTES));
+
+        // Validate new snapshot is upto-date. And has higher partition counts, nodes & leader epoch than earlier.
+        {
+            int newNodeCount = newSnapshot.get().cluster().nodes().size();
+            assertTrue(oldNodeCount < newNodeCount, "Unexpected value " + newNodeCount);
+            int newPartitionCountTopic1 = newSnapshot.get().cluster().partitionCountForTopic(topic1);
+            assertTrue(oldPartitionCount < newPartitionCountTopic1, "Unexpected value " + newPartitionCountTopic1);
+            int newPartitionCountTopic2 = newSnapshot.get().cluster().partitionCountForTopic(topic2);
+            assertTrue(oldPartitionCount < newPartitionCountTopic2, "Unexpected value " + newPartitionCountTopic2);
+            int newLeaderEpoch = newSnapshot.get().leaderEpochFor(topic1Part0).getAsInt();
+            assertTrue(oldLeaderEpoch < newLeaderEpoch, "Unexpected value " + newLeaderEpoch);
+        }
+
+        // Validate new cluster is upto-date. And has higher partition counts, nodes than earlier.
+        {
+            int newNodeCount = newCluster.get().nodes().size();
+            assertTrue(oldNodeCount < newNodeCount, "Unexpected value " + newNodeCount);
+            int newPartitionCountTopic1 = newCluster.get().partitionCountForTopic(topic1);
+            assertTrue(oldPartitionCount < newPartitionCountTopic1, "Unexpected value " + newPartitionCountTopic1);
+            int newPartitionCountTopic2 = newCluster.get()
+                .partitionCountForTopic(topic2);
+            assertTrue(oldPartitionCount < newPartitionCountTopic2, "Unexpected value " + newPartitionCountTopic2);
+        }
+
+        service.shutdown();
+        // Executor service should down much quickly, as all tasks are finished at this point.
+        assertTrue(service.awaitTermination(60, TimeUnit.SECONDS));
+    }
+
+    /**
+     * For testUpdatePartially, validates that updatedMetadata is matching expected part1Metadata, part2Metadata, internalPartMetadata, nodes & more.
      */
     void validateForUpdatePartitionLeadership(Metadata updatedMetadata,
                                               PartitionMetadata part1Metadata, PartitionMetadata part2Metadata, PartitionMetadata part12Metadata,
@@ -1281,7 +1380,7 @@ public class MetadataTest {
         assertEquals(expectedController, updatedCluster.controller());
         assertEquals(expectedTopicIds, updatedMetadata.topicIds());
 
-        Map<Integer, Node> nodeMap = expectedNodes.stream().collect(Collectors.toMap(e -> e.id(), e -> e));
+        Map<Integer, Node> nodeMap = expectedNodes.stream().collect(Collectors.toMap(Node::id, e -> e));
         for (PartitionMetadata partitionMetadata: Arrays.asList(part1Metadata, part2Metadata, part12Metadata, internalPartMetadata)) {
             TopicPartition tp = new TopicPartition(partitionMetadata.topic(), partitionMetadata.partition());
 

@@ -20,13 +20,16 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.ConnectorUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +46,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.connect.mirror.Checkpoint.CONSUMER_GROUP_ID_KEY;
 import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.adminCall;
 
 /** Replicate consumer group state between clusters. Emits checkpoint records.
  *
@@ -102,6 +106,23 @@ public class MirrorCheckpointConnector extends SourceConnector {
         Utils.closeQuietly(groupFilter, "group filter");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
+    }
+
+    @Override
+    public Config validate(Map<String, String> connectorConfigs) {
+        List<ConfigValue> configValues = super.validate(connectorConfigs).configValues();
+        MirrorCheckpointConfig.validate(connectorConfigs).forEach((config, errorMsg) -> {
+            ConfigValue configValue = configValues.stream()
+                    .filter(conf -> conf.name().equals(config))
+                    .findAny()
+                    .orElseGet(() -> {
+                        ConfigValue result = new ConfigValue(config);
+                        configValues.add(result);
+                        return result;
+                    });
+            configValue.addErrorMessage(errorMsg);
+        });
+        return new Config(configValues);
     }
 
     @Override
@@ -202,10 +223,10 @@ public class MirrorCheckpointConnector extends SourceConnector {
                     .collect(Collectors.toSet());
             // Only perform checkpoints for groups that have offsets for at least one topic that's accepted
             // by the topic filter.
-            if (consumedTopics.size() > 0) {
-                checkpointGroups.add(group);
-            } else {
+            if (consumedTopics.isEmpty()) {
                 irrelevantGroups.add(group);
+            } else {
+                checkpointGroups.add(group);
             }
         }
 
@@ -216,7 +237,10 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     Collection<ConsumerGroupListing> listConsumerGroups()
             throws InterruptedException, ExecutionException {
-        return sourceAdminClient.listConsumerGroups().valid().get();
+        return adminCall(
+                () -> sourceAdminClient.listConsumerGroups().valid().get(),
+                () -> "list consumer groups on " + config.sourceClusterAlias() + " cluster"
+        );
     }
 
     private void createInternalTopics() {
@@ -229,7 +253,11 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     Map<TopicPartition, OffsetAndMetadata> listConsumerGroupOffsets(String group)
             throws InterruptedException, ExecutionException {
-        return sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
+        return adminCall(
+                () -> sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get(),
+                () -> String.format("list offsets for consumer group %s on %s cluster", group,
+                        config.sourceClusterAlias())
+        );
     }
 
     boolean shouldReplicateByGroupFilter(String group) {

@@ -36,27 +36,21 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -64,27 +58,24 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
-
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
-@Category({IntegrationTest.class})
-@RunWith(Parameterized.class)
 @SuppressWarnings("deprecation")
+@Tag("integration")
+@Timeout(600)
 public class RocksDBMetricsIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 3;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -95,7 +86,6 @@ public class RocksDBMetricsIntegrationTest {
     private static final String STREAM_OUTPUT_TWO = "STREAM_OUTPUT_TWO";
     private static final String MY_STORE_PERSISTENT_KEY_VALUE = "myStorePersistentKeyValue";
     private static final Duration WINDOW_SIZE = Duration.ofMillis(50);
-    private static final long TIMEOUT = 60000;
 
     // RocksDB metrics
     private static final String METRICS_GROUP = "stream-state-metrics";
@@ -138,29 +128,13 @@ public class RocksDBMetricsIntegrationTest {
     private static final String ESTIMATED_MEMORY_OF_TABLE_READERS = "estimate-table-readers-mem";
     private static final String NUMBER_OF_BACKGROUND_ERRORS = "background-errors";
 
-    @SuppressWarnings("deprecation")
-    @Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {
-            {StreamsConfig.AT_LEAST_ONCE},
-            {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_V2}
-        });
-    }
-
-    @Parameter
-    public String processingGuarantee;
-
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
+    @BeforeEach
     public void before() throws Exception {
         CLUSTER.createTopic(STREAM_INPUT_ONE, 1, 3);
         CLUSTER.createTopic(STREAM_INPUT_TWO, 1, 3);
     }
 
-    @After
+    @AfterEach
     public void after() throws Exception {
         CLUSTER.deleteTopicsAndWait(STREAM_INPUT_ONE, STREAM_INPUT_TWO, STREAM_OUTPUT_ONE, STREAM_OUTPUT_TWO);
     }
@@ -170,9 +144,10 @@ public class RocksDBMetricsIntegrationTest {
         void verify(final KafkaStreams kafkaStreams, final String metricScope) throws Exception;
     }
 
-    @Test
-    public void shouldExposeRocksDBMetricsBeforeAndAfterFailureWithEmptyStateDir() throws Exception {
-        final Properties streamsConfiguration = streamsConfig();
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    public void shouldExposeRocksDBMetricsBeforeAndAfterFailureWithEmptyStateDir(final String processingGuarantee, final TestInfo testInfo) throws Exception {
+        final Properties streamsConfiguration = streamsConfig(processingGuarantee, testInfo);
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
         final StreamsBuilder builder = builderForStateStores();
 
@@ -191,9 +166,9 @@ public class RocksDBMetricsIntegrationTest {
         );
     }
 
-    private Properties streamsConfig() {
+    private Properties streamsConfig(final String processingGuarantee, final TestInfo testInfo) {
         final Properties streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(testName);
+        final String safeTestName = safeUniqueTestName(testInfo);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());

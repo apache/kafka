@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Exit;
@@ -35,6 +33,10 @@ import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.SinkUtils;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
@@ -42,7 +44,6 @@ import org.eclipse.jetty.client.util.StringContentProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -53,6 +54,8 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import javax.ws.rs.core.Response;
 
 abstract class EmbeddedConnect {
 
@@ -118,19 +121,44 @@ abstract class EmbeddedConnect {
     };
 
     /**
-     * Start the connect cluster and the embedded Kafka and Zookeeper cluster.
+     * Start the Connect cluster and the embedded Kafka and Zookeeper cluster,
+     * and wait for the Kafka and Connect clusters to become healthy.
      */
     public void start() {
         if (maskExitProcedures) {
             Exit.setExitProcedure(exitProcedure);
             Exit.setHaltProcedure(haltProcedure);
         }
+
         kafkaCluster.start();
-        startConnect();
+
         try {
             httpClient.start();
         } catch (Exception e) {
             throw new ConnectException("Failed to start HTTP client", e);
+        }
+
+        startConnect();
+
+        try {
+            if (numBrokers > 0) {
+                assertions().assertExactlyNumBrokersAreUp(
+                        numBrokers,
+                        "Kafka cluster did not start in time"
+                );
+                log.info("Completed startup of {} Kafka brokers", numBrokers);
+            }
+
+            int numWorkers = workers().size();
+            if (numWorkers > 0) {
+                assertions().assertExactlyNumWorkersAreUp(
+                        numWorkers,
+                        "Connect cluster did not start in time"
+                );
+                log.info("Completed startup of {} Connect workers", numWorkers);
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Interrupted while awaiting cluster startup", e);
         }
     }
 
@@ -179,6 +207,39 @@ abstract class EmbeddedConnect {
      */
     public void requestTimeout(long requestTimeoutMs) {
         workers().forEach(worker -> worker.requestTimeout(requestTimeoutMs));
+    }
+
+    /**
+     * Reset the REST request timeout to the default value that's used in non-testing
+     * environments. Useful if it has been previous modified using {@link #requestTimeout(long)}.
+     */
+    public void resetRequestTimeout() {
+        workers().forEach(WorkerHandle::resetRequestTimeout);
+    }
+
+    /**
+     * Check to see if the worker is running, using the health check endpoint introduced in
+     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1017%3A+Health+check+endpoint+for+Kafka+Connect">KIP-1017</a>.
+     * @param workerHandle the worker to check; may not be null
+     * @return whether the worker is ready, based on its health check endpoint
+     */
+    public boolean isHealthy(WorkerHandle workerHandle) {
+        try (Response response = healthCheck(workerHandle)) {
+            return response.getStatus() == Response.Status.OK.getStatusCode();
+        } catch (Exception e) {
+            log.debug("Failed to check for worker readiness", e);
+            return false;
+        }
+    }
+
+    /**
+     * Contact the health check endpoint for the worker
+     * @param workerHandle the worker to contact; may not be null
+     * @return the response from the worker
+     */
+    public Response healthCheck(WorkerHandle workerHandle) {
+        String url = workerHandle.url().resolve("health").toString();
+        return requestGet(url);
     }
 
     /**
@@ -269,6 +330,43 @@ abstract class EmbeddedConnect {
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not execute PUT request. Error response: " + responseToString(response));
+    }
+
+    /**
+     * Patch the config of a connector.
+     *
+     * @param connName   the name of the connector
+     * @param connConfigPatch the configuration patch
+     * @throws ConnectRestException if the REST API returns error status
+     * @throws ConnectException if the configuration fails to be serialized or if the request could not be sent
+     */
+    public String patchConnectorConfig(String connName, Map<String, String> connConfigPatch) {
+        String url = endpointForResource(String.format("connectors/%s/config", connName));
+        return doPatchConnectorConfig(url, connConfigPatch);
+    }
+
+    /**
+     * Execute a PATCH request with the given connector configuration on the given URL endpoint.
+     *
+     * @param url        the full URL of the endpoint that corresponds to the given REST resource
+     * @param connConfigPatch the configuration patch
+     * @throws ConnectRestException if the REST api returns error status
+     * @throws ConnectException if the configuration fails to be serialized or if the request could not be sent
+     */
+    protected String doPatchConnectorConfig(String url, Map<String, String> connConfigPatch) {
+        ObjectMapper mapper = new ObjectMapper();
+        String content;
+        try {
+            content = mapper.writeValueAsString(connConfigPatch);
+        } catch (IOException e) {
+            throw new ConnectException("Could not serialize connector configuration and execute PUT request");
+        }
+        Response response = requestPatch(url, content);
+        if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+            return responseToString(response);
+        }
+        throw new ConnectRestException(response.getStatus(),
+                "Could not execute PATCH request. Error response: " + responseToString(response));
     }
 
     /**
@@ -974,29 +1072,11 @@ abstract class EmbeddedConnect {
      *
      * @return the list of handles of the online workers
      */
-    public Set<WorkerHandle> activeWorkers() {
+    public Set<WorkerHandle> healthyWorkers() {
         return workers().stream()
-                .filter(w -> {
-                    try {
-                        String endpoint = w.url().resolve("/connectors/liveness-check").toString();
-                        Response response = requestGet(endpoint);
-                        boolean live = response.getStatus() == Response.Status.NOT_FOUND.getStatusCode()
-                                || response.getStatus() == Response.Status.OK.getStatusCode();
-                        if (live) {
-                            return true;
-                        } else {
-                            log.warn("Worker failed liveness probe. Response: {}", response);
-                            return false;
-                        }
-                    } catch (Exception e) {
-                        // Worker failed to respond. Consider it's offline
-                        log.warn("Failed to contact worker during liveness check", e);
-                        return false;
-                    }
-                })
+                .filter(this::isHealthy)
                 .collect(Collectors.toSet());
     }
-
 
     /**
      * Return the available assertions for this Connect cluster

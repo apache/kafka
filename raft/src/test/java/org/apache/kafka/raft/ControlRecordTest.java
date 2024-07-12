@@ -16,15 +16,19 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.record.ControlRecordType;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public final class ControlRecordTest {
     @Test
@@ -33,6 +37,8 @@ public final class ControlRecordTest {
         new ControlRecord(ControlRecordType.LEADER_CHANGE, new LeaderChangeMessage());
         new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord());
         new ControlRecord(ControlRecordType.SNAPSHOT_FOOTER, new SnapshotFooterRecord());
+        new ControlRecord(ControlRecordType.KRAFT_VERSION, new KRaftVersionRecord());
+        new ControlRecord(ControlRecordType.KRAFT_VOTERS, new VotersRecord());
 
         // Invalid constructions
         assertThrows(
@@ -54,6 +60,6 @@ public final class ControlRecordTest {
         // If this test fails then it means that ControlRecordType was changed. Please review the
         // implementation for ControlRecord to see if it needs to be updated based on the changes
         // to ControlRecordType.
-        assertEquals(6, ControlRecordType.values().length);
+        assertEquals(8, ControlRecordType.values().length);
     }
 }

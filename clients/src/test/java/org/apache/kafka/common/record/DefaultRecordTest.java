@@ -22,6 +22,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.DataOutputStream;
@@ -39,7 +40,7 @@ public class DefaultRecordTest {
     public void testBasicSerde() throws IOException {
         Header[] headers = new Header[] {
             new RecordHeader("foo", "value".getBytes()),
-            new RecordHeader("bar", (byte[]) null),
+            new RecordHeader("bar", null),
             new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
         };
 

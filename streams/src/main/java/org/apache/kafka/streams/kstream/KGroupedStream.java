@@ -561,7 +561,7 @@ public interface KGroupedStream<K, V> {
     SessionWindowedKStream<K, V> windowedBy(final SessionWindows windows);
 
     /**
-     * Create a new {@link CogroupedKStream} from the this grouped KStream to allow cogrouping other
+     * Create a new {@link CogroupedKStream} from this grouped KStream to allow cogrouping other
      * {@code KGroupedStream} to it.
      * {@link CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link KeyValue} pairs.
      * It is an intermediate representation after a grouping of {@link KStream}s, before the

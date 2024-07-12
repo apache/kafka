@@ -58,7 +58,7 @@ Running in SSL mode
 - Recommended way to run in ssl mode is by mounting secrets on `/etc/kafka/secrets` in docker container and providing configs following through environment variables (`KAFKA_SSL_KEYSTORE_FILENAME`, `KAFKA_SSL_KEYSTORE_CREDENTIALS`, `KAFKA_SSL_KEY_CREDENTIALS`, `KAFKA_SSL_TRUSTSTORE_FILENAME` and `KAFKA_SSL_TRUSTSTORE_CREDENTIALS`) to let the docker image scripts extract passwords and populate correct paths in server.properties.      
 - Please ensure appropriate `KAFKA_ADVERTISED_LISTENERS` are provided through environment variables to enable SSL mode in Kafka server, i.e. it should contain an `SSL` listener.
 - Alternatively property file input can be used to provide ssl properties.
-- Make sure you set location of truststore and keystore correctly when using file input. See example for file input in `jvm/single-node/file-input` for better clarity.
+- Make sure you set location of truststore and keystore correctly when using file input. See example for file input in `docker-compose-files/single-node/file-input` for better clarity.
 - Note that advertised.listeners property needs to be provided along with SSL properties in file input and cannot be provided through environment variable separately.
 - In conclusion, ssl properties with advertised.listeners should be treated as a group and provided in file input or environment variables in it's entirety.
 - In case ssl properties are provided both through file input and environment variables, environment variable properties will override the file input properties, just as mentioned in the beginning of this section.
@@ -66,7 +66,15 @@ Running in SSL mode
 Examples
 --------
 
-- `jvm` directory contains docker compose files for some example configs to run `apache/kafka` docker image.
+- `docker-compose-files` directory contains docker compose files for some example configs to run `apache/kafka` OR `apache/kafka-native` docker image.
+- Pass the `IMAGE` variable with the Docker Compose file to specify which Docker image to use for bringing up the containers.
+```
+# to bring up containers using apache/kafka docker image
+IMAGE=apache/kafka:latest <docker compose command>
+
+# to bring up containers using apache/kafka-native docker image
+IMAGE=apache/kafka-native:latest <docker compose command>
+```
 - Run the commands from root of the repository.
 - Checkout `single-node` examples for quick small examples to play around with.
 - `cluster` contains multi node examples, for `combined` mode as well as `isolated` mode.
@@ -77,7 +85,7 @@ Single Node
 -----------
 
 - These examples are for understanding various ways inputs can be provided and kafka can be configured in docker container.
-- Examples are present inside `jvm/single-node` directory.
+- Examples are present inside `docker-compose-files/single-node` directory.
 - Plaintext:-
     - This is the simplest compose file.
     - We are using environment variables purely for providing configs.
@@ -88,7 +96,12 @@ Single Node
     - To run the example:-
     ```
     # Run from root of the repo
-    $ docker compose -f docker/examples/jvm/single-node/plaintext/docker-compose.yml up
+  
+    # JVM based Apache Kafka Docker Image
+    $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/single-node/plaintext/docker-compose.yml up
+  
+    # GraalVM based Native Apache Kafka Docker Image
+    $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/single-node/plaintext/docker-compose.yml up
     ```
     - To produce messages using client scripts:-
     ```
@@ -102,7 +115,12 @@ Single Node
     - To run the example:-
     ```
     # Run from root of the repo
-    $ docker compose -f docker/examples/jvm/single-node/ssl/docker-compose.yml up
+    
+    # JVM based Apache Kafka Docker Image
+    $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/single-node/ssl/docker-compose.yml up
+
+    # GraalVM based Native Apache Kafka Docker Image
+    $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/single-node/ssl/docker-compose.yml up
     ```
     - To produce messages using client scripts (Ensure that java version >= 17):-
     ```
@@ -117,7 +135,12 @@ Single Node
     - To run the example:-
     ```
     # Run from root of the repo
-    $ docker compose -f docker/examples/jvm/single-node/file-input/docker-compose.yml up
+  
+    # JVM based Apache Kafka Docker Image
+    $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/single-node/file-input/docker-compose.yml up
+  
+    # GraalVM based Native Apache Kafka Docker Image
+    $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/single-node/file-input/docker-compose.yml up
     ```
     - To produce messages using client scripts (Ensure that java version >= 17):-
     ```
@@ -130,7 +153,7 @@ Multi Node Cluster
 
 - These examples are for real world usecases where multiple nodes of kafka are required.
 - Combined:-
-    - Examples are present in `jvm/cluster/combined` directory.
+    - Examples are present in `docker-compose-files/cluster/combined` directory.
     - Plaintext:-
         - Each broker must expose a unique port to host machine.
             - For example broker-1, broker2 and broker3 are listening on port 9092, they're exposing it to the host via ports 29092, 39092 and 49092 respectively.
@@ -143,7 +166,12 @@ Multi Node Cluster
         - To run the example:-
         ```
         # Run from root of the repo
-        $ docker compose -f docker/examples/jvm/cluster/combined/plaintext/docker-compose.yml up
+      
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/plaintext/docker-compose.yml up
+      
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/plaintext/docker-compose.yml up
         ```
         - To access using client script:-
         ```
@@ -157,7 +185,12 @@ Multi Node Cluster
         - To run the example:-
         ```
         # Run from root of the repo
-        $ docker compose -f docker/examples/jvm/cluster/combined/ssl/docker-compose.yml up
+      
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/ssl/docker-compose.yml up
+      
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/ssl/docker-compose.yml up
         ```
         - To produce messages using client scripts (Ensure that java version >= 17):-
         ```
@@ -165,7 +198,7 @@ Multi Node Cluster
         $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
         ```
 - Isolated:-
-    - Examples are present in `jvm/cluster/isolated` directory.
+    - Examples are present in `docker-compose-files/cluster/isolated` directory.
     - Plaintext:-
         - Here controllers and brokers are configured separately.
         - It's a good practice to define that brokers depend on controllers.
@@ -173,7 +206,12 @@ Multi Node Cluster
         - To run the example:-
         ```
         # Run from root of the repo
-        $ docker compose -f docker/examples/jvm/cluster/isolated/plaintext/docker-compose.yml up
+      
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/plaintext/docker-compose.yml up
+      
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/plaintext/docker-compose.yml up
         ```
         - To access using client script:-
         ```
@@ -186,7 +224,12 @@ Multi Node Cluster
         - To run the example:-
         ```
         # Run from root of the repo
-        $ docker compose -f docker/examples/jvm/cluster/isolated/ssl/docker-compose.yml up
+      
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/ssl/docker-compose.yml up
+      
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/ssl/docker-compose.yml up
         ```
         - To produce messages using client scripts (Ensure that java version >= 17):-
         ```

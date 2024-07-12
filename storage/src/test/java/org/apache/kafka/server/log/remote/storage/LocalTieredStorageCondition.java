@@ -123,7 +123,7 @@ public final class LocalTieredStorageCondition {
      * @param conjuct Another condition which truth is required for the resulting new condition to be true.
      * @return A new condition which is true iff this condition and {@code conjuct} are both true.
      */
-    public final LocalTieredStorageCondition and(final LocalTieredStorageCondition conjuct) {
+    public LocalTieredStorageCondition and(final LocalTieredStorageCondition conjuct) {
         //
         // To keep things simple, only authorize to append to the condition chain of elementary (not composed)
         // conditions. It also allows to protect from cycles.
