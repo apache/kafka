@@ -1211,6 +1211,9 @@ project(':core') {
     //By default gradle does not handle test dependencies between the sub-projects
     //This line is to include clients project test jar to dependant-testlibs
     from (project(':clients').testJar ) { "$buildDir/dependant-testlibs" }
+    // log4j-appender is not in core dependencies, 
+    // so we add it to dependant-testlibs to avoid ClassNotFoundException in running kafka_log4j_appender.py
+    from (project(':log4j-appender').jar ) { "$buildDir/dependant-testlibs" }
     duplicatesStrategy 'exclude'
   }
 

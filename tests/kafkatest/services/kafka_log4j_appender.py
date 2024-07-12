@@ -15,20 +15,21 @@
 
 from ducktape.services.background_thread import BackgroundThreadService
 
-from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, CORE_DEPENDANT_TEST_LIBS_JAR_NAME
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm
+from kafkatest.version import DEV_BRANCH
 
 
 class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
-
     logs = {
         "producer_log": {
             "path": "/mnt/kafka_log4j_appender.log",
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, security_protocol="PLAINTEXT", tls_version=None):
+    def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, security_protocol="PLAINTEXT",
+                 tls_version=None):
         super(KafkaLog4jAppender, self).__init__(context, num_nodes)
 
         self.kafka = kafka
@@ -48,7 +49,11 @@ class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
         node.account.ssh(cmd)
 
     def start_cmd(self, node):
+        # Since the core module does not contain the log4j-appender, we need to add it manually.
+        core_dependant_test_libs_jar = self.path.jar(CORE_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
         cmd = fix_opts_for_new_jvm(node)
+        cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done;" % core_dependant_test_libs_jar
+        cmd += " export CLASSPATH;"
         cmd += self.path.script("kafka-run-class.sh", node)
         cmd += " "
         cmd += self.java_class_name()
