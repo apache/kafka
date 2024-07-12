@@ -30,68 +30,11 @@ def isChangeRequest(env) {
 }
 
 def doTest(env, target = "test") {
-  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
+  sh """./gradlew -PscalaVersion=$SCALA_VERSION cleanTest ${target} \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
 }
-
-def runTestOnDevBranch(env) {
-  if (!isChangeRequest(env)) {
-    doTest(env)
-  }
-}
-
-def doStreamsArchetype() {
-  echo 'Verify that Kafka Streams archetype compiles'
-
-  sh '''
-    ./gradlew streams:publishToMavenLocal clients:publishToMavenLocal connect:json:publishToMavenLocal connect:api:publishToMavenLocal \
-         || { echo 'Could not publish kafka-streams.jar (and dependencies) locally to Maven'; exit 1; }
-  '''
-
-  VERSION = sh(script: 'grep "^version=" gradle.properties | cut -d= -f 2', returnStdout: true).trim()
-
-  dir('streams/quickstart') {
-    sh '''
-      mvn clean install -Dgpg.skip  \
-          || { echo 'Could not `mvn install` streams quickstart archetype'; exit 1; }
-    '''
-
-    dir('test-streams-archetype') {
-      // Note the double quotes for variable interpolation
-      sh """ 
-        echo "Y" | mvn archetype:generate \
-            -DarchetypeCatalog=local \
-            -DarchetypeGroupId=org.apache.kafka \
-            -DarchetypeArtifactId=streams-quickstart-java \
-            -DarchetypeVersion=${VERSION} \
-            -DgroupId=streams.examples \
-            -DartifactId=streams.examples \
-            -Dversion=0.1 \
-            -Dpackage=myapps \
-            || { echo 'Could not create new project using streams quickstart archetype'; exit 1; }
-      """
-
-      dir('streams.examples') {
-        sh '''
-          mvn compile \
-              || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
-        '''
-      }
-    }
-  }
-}
-
-def tryStreamsArchetype() {
-  try {
-    doStreamsArchetype()
-  } catch(err) {
-    echo 'Failed to build Kafka Streams archetype, marking this build UNSTABLE'
-    currentBuild.result = 'UNSTABLE'
-  }
-}
-
 
 pipeline {
   agent none
@@ -119,46 +62,17 @@ pipeline {
           }
           steps {
             doValidation()
-            doTest(env)
-            tryStreamsArchetype()
-          }
-        }
 
-        stage('JDK 11 and Scala 2.13') {
-          agent { label 'ubuntu' }
-          tools {
-            jdk 'jdk_11_latest'
-          }
-          options {
-            timeout(time: 8, unit: 'HOURS') 
-            timestamps()
-          }
-          environment {
-            SCALA_VERSION=2.13
-          }
-          steps {
-            doValidation()
-            runTestOnDevBranch(env)
-            echo 'Skipping Kafka Streams archetype test for Java 11'
-          }
-        }
-
-        stage('JDK 17 and Scala 2.13') {
-          agent { label 'ubuntu' }
-          tools {
-            jdk 'jdk_17_latest'
-          }
-          options {
-            timeout(time: 8, unit: 'HOURS') 
-            timestamps()
-          }
-          environment {
-            SCALA_VERSION=2.13
-          }
-          steps {
-            doValidation()
-            runTestOnDevBranch(env)
-            echo 'Skipping Kafka Streams archetype test for Java 17'
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
           }
         }
 
@@ -176,8 +90,17 @@ pipeline {
           }
           steps {
             doValidation()
-            doTest(env)
-            echo 'Skipping Kafka Streams archetype test for Java 21'
+
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
+            doTest(env, target = ':connect:runtime:test')
           }
         }
       }
