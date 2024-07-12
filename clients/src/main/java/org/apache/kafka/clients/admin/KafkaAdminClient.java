@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
@@ -168,6 +169,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.network.ChannelBuilder;
+import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
@@ -259,6 +262,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 
+import java.net.InetSocketAddress;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -522,7 +526,11 @@ public class KafkaAdminClient extends AdminClient {
         HostResolver hostResolver
     ) {
         Metrics metrics = null;
+        NetworkClient.BootstrapConfiguration bootstrapConfig = null;
         NetworkClient networkClient = null;
+        ChannelBuilder channelBuilder = null;
+        Selector selector = null;
+        List<String> bootstrapAddresses = new ArrayList<>();
         Time time = Time.SYSTEM;
         String clientId = generateClientId(config);
         ApiVersions apiVersions = new ApiVersions();
@@ -545,17 +553,53 @@ public class KafkaAdminClient extends AdminClient {
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
-            networkClient = ClientUtils.createNetworkClient(config,
-                clientId,
-                metrics,
-                "admin-client",
-                logContext,
-                apiVersions,
-                time,
-                1,
-                (int) TimeUnit.HOURS.toMillis(1),
-                metadataManager.updater(),
-                (hostResolver == null) ? new DefaultHostResolver() : hostResolver);
+            for (InetSocketAddress address : adminAddresses.addresses()) {
+                String baseAddress = address.toString();
+                int slash = baseAddress.indexOf('/');
+                int length = baseAddress.length();
+                String stringAddress = baseAddress.substring(0, slash) + baseAddress.substring(length - 6, length);
+                bootstrapAddresses.add(stringAddress);
+            }
+            channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
+            selector = new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+                    metrics,
+                    time,
+                    "admin-client",
+                    channelBuilder,
+                    logContext);
+            bootstrapConfig = new NetworkClient.BootstrapConfiguration(bootstrapAddresses, ClientDnsLookup.forConfig(config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG)), 12 * 60 * 1000);
+            networkClient = new NetworkClient(metadataManager.updater(),
+                    null,
+                    selector,
+                    clientId,
+                    1,
+                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
+                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                    config.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
+                    config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
+                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+                    config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
+                    config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
+                    bootstrapConfig,
+                    time,
+                    true,
+                    apiVersions,
+                    null,
+                    logContext,
+                    (hostResolver == null) ? new DefaultHostResolver() : hostResolver,
+                    null,
+                    MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)));
+//            networkClient = ClientUtils.createNetworkClient(config,
+//                clientId,
+//                metrics,
+//                "admin-client",
+//                logContext,
+//                apiVersions,
+//                time,
+//                1,
+//                (int) TimeUnit.HOURS.toMillis(1),
+//                metadataManager.updater(),
+//                (hostResolver == null) ? new DefaultHostResolver() : hostResolver);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,
                 timeoutProcessorFactory, logContext);
         } catch (Throwable exc) {

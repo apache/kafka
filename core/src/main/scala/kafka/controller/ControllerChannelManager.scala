@@ -149,9 +149,6 @@ class ControllerChannelManager(controllerEpoch: () => Int,
         channelBuilder,
         logContext
       )
-      val bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-      ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-      config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG))
       val networkClient = new NetworkClient(
         selector,
         new ManualMetadataUpdater(Seq(brokerNode).asJava),
@@ -164,7 +161,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
         config.requestTimeoutMs,
         config.connectionSetupTimeoutMs,
         config.connectionSetupTimeoutMaxMs,
-        bootstrapConfiguration,
+        null,
         time,
         false,
         new ApiVersions,

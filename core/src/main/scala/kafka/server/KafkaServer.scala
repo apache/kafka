@@ -30,7 +30,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.server.metadata.{OffsetTrackingListener, ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
-import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, CommonClientConfigs, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient, NetworkClientUtils}
+import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -816,9 +816,6 @@ class KafkaServer(
           channelBuilder,
           logContext
         )
-        val bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-          ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-          config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG))
         new NetworkClient(
           selector,
           metadataUpdater,
@@ -831,7 +828,7 @@ class KafkaServer(
           config.requestTimeoutMs,
           config.connectionSetupTimeoutMs,
           config.connectionSetupTimeoutMaxMs,
-          bootstrapConfiguration,
+          null,
           time,
           false,
           new ApiVersions,
