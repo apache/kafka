@@ -38,5 +38,7 @@ jobs:
       uses: gradle/actions/setup-gradle@v3
       env:
         GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
+      with:
+        gradle-version: current
     - name: Gradle check 
-      run: ./gradlew --build-cache check -x test
+      run: ./gradlew check -x test

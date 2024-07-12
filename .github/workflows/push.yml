@@ -39,8 +39,10 @@ jobs:
       uses: gradle/actions/setup-gradle@v3
       env:
         GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
+      with:
+        gradle-version: current
     - name: Gradle check 
-      run: ./gradlew --build-cache check -x test
+      run: ./gradlew check -x test
     - name: Archive Rat
       if: success() || failure()  # Run as long as the build wasn't cancelled
       uses: actions/upload-artifact@v4
