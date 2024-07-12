@@ -47,7 +47,7 @@ TC_PATHS="tests/kafkatest/tests/streams/streams_upgrade_test.py::StreamsUpgradeT
 ```
 bash tests/docker/ducker-ak up -j 'openjdk:11'; tests/docker/run_tests.sh
 ```
-* Clean Docker Image
+* Remove ducker-ak Containers
 ```
 bash tests/docker/ducker-ak down -f
 ```
