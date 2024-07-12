@@ -20,7 +20,8 @@ import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api._
 
-import java.util.Locale
+import java.io.File
+import java.util.{Locale, Properties}
 
 @Timeout(600)
 class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
@@ -28,14 +29,14 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   private val kafkaClientSaslMechanism = "PLAIN"
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   private val kafkaServerJaasEntryName =
-    s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KafkaServerContextName}"
+    s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME}"
   this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "false")
   // disable secure acls of zkClient in QuorumTestHarness
-  override protected def zkAclsEnabled = Some(false)
+  override protected def zkAclsEnabled: Some[Boolean] = Some(false)
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
-  override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
-  override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
-  override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
+  override protected lazy val trustStoreFile: Some[File] = Some(TestUtils.tempFile("truststore", ".jks"))
+  override protected val serverSaslProperties: Some[Properties] = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
+  override protected val clientSaslProperties: Some[Properties] = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {

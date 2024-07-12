@@ -16,22 +16,15 @@
  */
 package kafka.security.authorizer
 
-import java.net.InetAddress
-import java.util
-import java.util.UUID
-import java.util.concurrent.{Executors, TimeUnit}
-
-import javax.security.auth.Subject
-import javax.security.auth.callback.CallbackHandler
 import kafka.api.SaslSetup
 import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.JaasTestUtils.{JaasModule, JaasSection}
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.KafkaZkClient
 import kafka.zookeeper.ZooKeeperClient
-import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.acl.AclOperation.{READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW
+import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
@@ -39,14 +32,20 @@ import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.TOPIC
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.apache.zookeeper.server.auth.DigestLoginModule
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
-import scala.jdk.CollectionConverters._
+import java.net.InetAddress
+import java.util
+import java.util.UUID
+import java.util.concurrent.{Executors, TimeUnit}
+import javax.security.auth.Subject
+import javax.security.auth.callback.CallbackHandler
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
 class AclAuthorizerWithZkSaslTest extends QuorumTestHarness with SaslSetup {
 
@@ -67,9 +66,9 @@ class AclAuthorizerWithZkSaslTest extends QuorumTestHarness with SaslSetup {
     // Configure ZK SASL with TestableDigestLoginModule for clients to inject failures
     TestableDigestLoginModule.reset()
     val jaasSections = JaasTestUtils.zkSections
-    val serverJaas = jaasSections.filter(_.contextName == "Server")
-    val clientJaas = jaasSections.filter(_.contextName == "Client")
-      .map(section => new TestableJaasSection(section.contextName, section.modules))
+    val serverJaas = jaasSections.asScala.filter(section => section.getContextName == "Server")
+    val clientJaas = jaasSections.asScala.filter(section => section.getContextName == "Client")
+      .map(section => new TestableJaasSection(section.getContextName, section.getModules.asScala))
     startSasl(serverJaas ++ clientJaas)
 
     // Increase maxUpdateRetries to avoid transient failures
@@ -180,7 +179,7 @@ class TestableDigestLoginModule extends DigestLoginModule {
   }
 }
 
-class TestableJaasSection(contextName: String, modules: Seq[JaasModule]) extends JaasSection(contextName, modules) {
+class TestableJaasSection(contextName: String, modules: Seq[JaasModule]) extends JaasSection(contextName, modules.asJava) {
   override def toString: String = {
     super.toString.replaceFirst(classOf[DigestLoginModule].getName, classOf[TestableDigestLoginModule].getName)
   }

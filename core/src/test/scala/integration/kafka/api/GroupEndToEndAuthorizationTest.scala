@@ -29,7 +29,7 @@ object GroupEndToEndAuthorizationTest {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       context match {
         case ctx: SaslAuthenticationContext =>
-          if (ctx.server.getAuthorizationID == JaasTestUtils.KafkaScramUser)
+          if (ctx.server.getAuthorizationID == JaasTestUtils.KAFKA_SCRAM_USER)
             new KafkaPrincipal(GroupPrincipalType, ClientGroup)
           else
             new KafkaPrincipal(GroupPrincipalType, ctx.server.getAuthorizationID)
@@ -42,6 +42,6 @@ object GroupEndToEndAuthorizationTest {
 
 class GroupEndToEndAuthorizationTest extends SaslScramSslEndToEndAuthorizationTest {
   override val clientPrincipal = new KafkaPrincipal(GroupPrincipalType, ClientGroup)
-  override val kafkaPrincipal = new KafkaPrincipal(GroupPrincipalType, JaasTestUtils.KafkaScramAdmin)
+  override val kafkaPrincipal = new KafkaPrincipal(GroupPrincipalType, JaasTestUtils.KAFKA_SCRAM_ADMIN)
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[GroupPrincipalBuilder].getName)
 }

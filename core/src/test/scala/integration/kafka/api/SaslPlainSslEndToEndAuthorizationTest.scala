@@ -30,11 +30,12 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.security.AccessController
-import java.util.Properties
+import java.util.{Collections, Properties}
 import javax.security.auth.Subject
 import javax.security.auth.callback._
 import javax.security.auth.login.AppConfigurationEntry
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
 object SaslPlainSslEndToEndAuthorizationTest {
 
@@ -50,9 +51,9 @@ object SaslPlainSslEndToEndAuthorizationTest {
       assertTrue(sslPrincipal.endsWith(s"CN=${TestUtils.SslCertificateCn}"), s"Unexpected SSL principal $sslPrincipal")
 
       saslContext.server.getAuthorizationID match {
-        case KafkaPlainAdmin =>
+        case KAFKA_PLAIN_ADMIN =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, controllerPrincipalName)
-        case KafkaPlainUser =>
+        case KAFKA_PLAIN_USER =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
         case _ =>
           KafkaPrincipal.ANONYMOUS
@@ -61,9 +62,9 @@ object SaslPlainSslEndToEndAuthorizationTest {
   }
 
   object Credentials {
-    val allUsers = Map(KafkaPlainUser -> "user1-password",
-      KafkaPlainUser2 -> KafkaPlainPassword2,
-      KafkaPlainAdmin -> "broker-password")
+    val allUsers: Map[String, String] = Map(KAFKA_PLAIN_USER -> "user1-password",
+      KAFKA_PLAIN_USER_2 -> KAFKA_PLAIN_PASSWORD_2,
+      KAFKA_PLAIN_ADMIN -> "broker-password")
   }
 
   class TestServerCallbackHandler extends AuthenticateCallbackHandler {
@@ -91,7 +92,7 @@ object SaslPlainSslEndToEndAuthorizationTest {
         callback match {
           case nameCallback: NameCallback => nameCallback.setName(username)
           case passwordCallback: PasswordCallback =>
-            if (username == KafkaPlainUser || username == KafkaPlainAdmin)
+            if (username == KAFKA_PLAIN_USER || username == KAFKA_PLAIN_ADMIN)
               passwordCallback.setPassword(Credentials.allUsers(username).toCharArray)
           case _ => throw new UnsupportedCallbackException(callback)
         }
@@ -113,7 +114,7 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   this.serverConfig.setProperty(s"${listenerName.configPrefix}${BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG}", "required")
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
   this.serverConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
-  val mechanismPrefix = listenerName.saslMechanismConfigPrefix("PLAIN")
+  val mechanismPrefix: String = listenerName.saslMechanismConfigPrefix("PLAIN")
   this.serverConfig.put(s"$mechanismPrefix${BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG}", classOf[TestServerCallbackHandler].getName)
   this.producerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.consumerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
@@ -121,7 +122,7 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   this.superuserClientConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
 
   override protected def kafkaClientSaslMechanism = "PLAIN"
-  override protected def kafkaServerSaslMechanisms = List("PLAIN")
+  override protected def kafkaServerSaslMechanisms: List[String] = List("PLAIN")
 
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, controllerPrincipalName)
@@ -130,10 +131,10 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
                             kafkaClientSaslMechanism: Option[String],
                             mode: SaslSetupMode,
                             kafkaServerEntryName: String): Seq[JaasSection] = {
-    val brokerLogin = PlainLoginModule(KafkaPlainAdmin, "") // Password provided by callback handler
-    val clientLogin = PlainLoginModule(KafkaPlainUser2, KafkaPlainPassword2)
-    Seq(JaasSection(kafkaServerEntryName, Seq(brokerLogin)),
-      JaasSection(KafkaClientContextName, Seq(clientLogin))) ++ zkSections
+    val brokerLogin = new PlainLoginModule(KAFKA_PLAIN_ADMIN, "") // Password provided by callback handler
+    val clientLogin = new PlainLoginModule(KAFKA_PLAIN_USER_2, KAFKA_PLAIN_PASSWORD_2)
+    Seq(new JaasSection(kafkaServerEntryName, Collections.singletonList(brokerLogin)),
+      new JaasSection(KAFKA_CLIENT_CONTEXT_NAME, Collections.singletonList(clientLogin))) ++ zkSections.asScala
   }
 
   // Generate SSL certificates for clients since we are enabling TLS mutual authentication

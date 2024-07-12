@@ -37,12 +37,12 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
 
   def AclTokenCreate = new AclBinding(new ResourcePattern(USER, clientPrincipal.toString, LITERAL),
     new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.CREATE_TOKENS, AclPermissionType.ALLOW))
-  def TokenCreateAcl = Set(new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.CREATE_TOKENS, AclPermissionType.ALLOW))
+  def TokenCreateAcl: Set[AccessControlEntry] = Set(new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.CREATE_TOKENS, AclPermissionType.ALLOW))
 
   // tests the naive positive case for token requesting for others
   def AclTokenDescribe = new AclBinding(new ResourcePattern(USER, clientPrincipal.toString, LITERAL),
     new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.DESCRIBE_TOKENS, AclPermissionType.ALLOW))
-  def TokenDescribeAcl = Set(new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.DESCRIBE_TOKENS, AclPermissionType.ALLOW))
+  def TokenDescribeAcl: Set[AccessControlEntry] = Set(new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.DESCRIBE_TOKENS, AclPermissionType.ALLOW))
 
   // This permission is just there so that otherClientPrincipal shows up among the resources
   def AclTokenOtherDescribe = new AclBinding(new ResourcePattern(USER, otherClientPrincipal.toString, LITERAL),
@@ -51,8 +51,8 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
 
   override def createDelegationTokenOptions(): CreateDelegationTokenOptions = new CreateDelegationTokenOptions().owner(clientPrincipal)
 
-  private val tokenRequesterPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramUser2)
-  private val tokenRequesterPassword = JaasTestUtils.KafkaScramPassword2
+  private val tokenRequesterPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SCRAM_USER_2)
+  private val tokenRequesterPassword = JaasTestUtils.KAFKA_SCRAM_PASSWORD_2
 
   private val otherClientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "other-client-principal")
   private val otherClientPassword = "other-client-password"

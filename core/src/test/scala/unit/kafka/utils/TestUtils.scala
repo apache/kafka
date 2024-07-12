@@ -43,7 +43,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ClientInformation, ListenerName, ConnectionMode}
+import org.apache.kafka.common.network.{ClientInformation, ConnectionMode, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests._
@@ -90,6 +90,7 @@ import scala.collection.{Map, Seq, immutable, mutable}
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -361,7 +362,7 @@ object TestUtils extends Logging {
       props ++= sslConfigs(ConnectionMode.SERVER, false, trustStoreFile, s"server$nodeId")
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSaslAuthentication(protocol) })
-      props ++= JaasTestUtils.saslConfigs(saslProperties)
+      props ++= JaasTestUtils.saslConfigs(saslProperties.toJava)
 
     interBrokerSecurityProtocol.foreach { protocol =>
       props.put(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG, protocol.name)
@@ -671,7 +672,7 @@ object TestUtils extends Logging {
     }
 
     if (usesSaslAuthentication(securityProtocol))
-      props ++= JaasTestUtils.saslConfigs(saslProperties)
+      props ++= JaasTestUtils.saslConfigs(saslProperties.toJava)
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }
