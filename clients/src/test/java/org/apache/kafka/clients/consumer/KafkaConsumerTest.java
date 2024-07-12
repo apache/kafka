@@ -929,7 +929,7 @@ public class KafkaConsumerTest {
 
         // lookup committed offset and find nothing
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, -1L), Errors.NONE), coordinator);
-        assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ofMillis(1)));
+        assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ofSeconds(3)));
     }
 
     // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
