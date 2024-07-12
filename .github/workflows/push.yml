@@ -34,7 +34,7 @@ jobs:
             jdks
         gradle-home-cache-cleanup: true
     - name: Gradle check 
-      run: ./gradlew --info check -x test
+      run: ./gradlew check -x test
     - name: Archive
       uses: actions/upload-artifact@v4
       with:
