@@ -212,7 +212,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 serde
             );
 
-            writer.accumulator.appendControlMessages((baseOffset, epoch, buffer) -> {
+            writer.accumulator.appendControlMessages((baseOffset, epoch, compression, buffer) -> {
                 long now = time.milliseconds();
                 try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                         buffer,

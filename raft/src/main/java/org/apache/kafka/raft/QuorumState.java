@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 
@@ -32,7 +33,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Random;
-import java.util.function.Supplier;
 
 /**
  * This class is responsible for managing the current state of this node and ensuring
@@ -82,8 +82,7 @@ public class QuorumState {
     private final Time time;
     private final Logger log;
     private final QuorumStateStore store;
-    private final Supplier<VoterSet> latestVoterSet;
-    private final Supplier<Short> latestKraftVersion;
+    private final KRaftControlRecordStateMachine partitionState;
     private final Endpoints localListeners;
     private final Random random;
     private final int electionTimeoutMs;
@@ -95,8 +94,7 @@ public class QuorumState {
     public QuorumState(
         OptionalInt localId,
         Uuid localDirectoryId,
-        Supplier<VoterSet> latestVoterSet,
-        Supplier<Short> latestKraftVersion,
+        KRaftControlRecordStateMachine partitionState,
         Endpoints localListeners,
         int electionTimeoutMs,
         int fetchTimeoutMs,
@@ -107,8 +105,7 @@ public class QuorumState {
     ) {
         this.localId = localId;
         this.localDirectoryId = localDirectoryId;
-        this.latestVoterSet = latestVoterSet;
-        this.latestKraftVersion = latestKraftVersion;
+        this.partitionState = partitionState;
         this.localListeners = localListeners;
         this.electionTimeoutMs = electionTimeoutMs;
         this.fetchTimeoutMs = fetchTimeoutMs;
@@ -123,7 +120,9 @@ public class QuorumState {
         ElectionState election;
         election = store
             .readElectionState()
-            .orElseGet(() -> ElectionState.withUnknownLeader(0, latestVoterSet.get().voterIds()));
+            .orElseGet(
+                () -> ElectionState.withUnknownLeader(0, partitionState.lastVoterSet().voterIds())
+            );
 
         return election;
     }
@@ -154,7 +153,7 @@ public class QuorumState {
                 time,
                 logEndOffsetAndEpoch.epoch(),
                 OptionalInt.empty(),
-                latestVoterSet.get().voterIds(),
+                partitionState.lastVoterSet().voterIds(),
                 Optional.empty(),
                 randomElectionTimeoutMs(),
                 logContext
@@ -170,7 +169,7 @@ public class QuorumState {
                 time,
                 localId.getAsInt(),
                 election.epoch(),
-                latestVoterSet.get().voterIds(),
+                partitionState.lastVoterSet().voterIds(),
                 randomElectionTimeoutMs(),
                 Collections.emptyList(),
                 localListeners,
@@ -185,7 +184,7 @@ public class QuorumState {
                 localId.getAsInt(),
                 localDirectoryId,
                 election.epoch(),
-                latestVoterSet.get(),
+                partitionState.lastVoterSet(),
                 Optional.empty(),
                 1,
                 randomElectionTimeoutMs(),
@@ -196,13 +195,13 @@ public class QuorumState {
                 time,
                 election.epoch(),
                 election.votedKey(),
-                latestVoterSet.get().voterIds(),
+                partitionState.lastVoterSet().voterIds(),
                 Optional.empty(),
                 randomElectionTimeoutMs(),
                 logContext
             );
         } else if (election.hasLeader()) {
-            VoterSet voters = latestVoterSet.get();
+            VoterSet voters = partitionState.lastVoterSet();
             Endpoints leaderEndpoints = voters.listeners(election.leaderId());
             if (leaderEndpoints.isEmpty()) {
                 // Since the leader's endpoints are not known, it cannot send Fetch or
@@ -223,7 +222,7 @@ public class QuorumState {
                     time,
                     election.epoch(),
                     OptionalInt.of(election.leaderId()),
-                    latestVoterSet.get().voterIds(),
+                    partitionState.lastVoterSet().voterIds(),
                     Optional.empty(),
                     randomElectionTimeoutMs(),
                     logContext
@@ -245,7 +244,7 @@ public class QuorumState {
                 time,
                 election.epoch(),
                 OptionalInt.empty(),
-                latestVoterSet.get().voterIds(),
+                partitionState.lastVoterSet().voterIds(),
                 Optional.empty(),
                 randomElectionTimeoutMs(),
                 logContext
@@ -257,7 +256,9 @@ public class QuorumState {
 
     public boolean isOnlyVoter() {
         return localId.isPresent() &&
-            latestVoterSet.get().isOnlyVoter(ReplicaKey.of(localId.getAsInt(), localDirectoryId));
+            partitionState
+                .lastVoterSet()
+                .isOnlyVoter(ReplicaKey.of(localId.getAsInt(), localDirectoryId));
     }
 
     public int localIdOrSentinel() {
@@ -317,13 +318,13 @@ public class QuorumState {
             return false;
         }
 
-        return latestVoterSet
-            .get()
+        return partitionState
+            .lastVoterSet()
             .isVoter(ReplicaKey.of(localId.getAsInt(), localDirectoryId));
     }
 
     public boolean isVoter(ReplicaKey nodeKey) {
-        return latestVoterSet.get().isVoter(nodeKey);
+        return partitionState.lastVoterSet().isVoter(nodeKey);
     }
 
     public boolean isObserver() {
@@ -343,7 +344,7 @@ public class QuorumState {
                 time,
                 localIdOrThrow(),
                 epoch,
-                latestVoterSet.get().voterIds(),
+                partitionState.lastVoterSet().voterIds(),
                 randomElectionTimeoutMs(),
                 preferredSuccessors,
                 localListeners,
@@ -380,7 +381,7 @@ public class QuorumState {
             time,
             epoch,
             OptionalInt.empty(),
-            latestVoterSet.get().voterIds(),
+            partitionState.lastVoterSet().voterIds(),
             state.highWatermark(),
             electionTimeoutMs,
             logContext
@@ -437,7 +438,7 @@ public class QuorumState {
                 time,
                 epoch,
                 candidateKey,
-                latestVoterSet.get().voterIds(),
+                partitionState.lastVoterSet().voterIds(),
                 state.highWatermark(),
                 randomElectionTimeoutMs(),
                 logContext
@@ -467,7 +468,7 @@ public class QuorumState {
                 epoch,
                 leaderId,
                 endpoints,
-                latestVoterSet.get().voterIds(),
+                partitionState.lastVoterSet().voterIds(),
                 state.highWatermark(),
                 fetchTimeoutMs,
                 logContext
@@ -483,7 +484,7 @@ public class QuorumState {
                     "is not one of the voters %s",
                     localId,
                     localDirectoryId,
-                    latestVoterSet.get()
+                    partitionState.lastVoterSet()
                 )
             );
         } else if (isLeader()) {
@@ -500,7 +501,7 @@ public class QuorumState {
             localIdOrThrow(),
             localDirectoryId,
             newEpoch,
-            latestVoterSet.get(),
+            partitionState.lastVoterSet(),
             state.highWatermark(),
             retries,
             electionTimeoutMs,
@@ -516,7 +517,7 @@ public class QuorumState {
                     "is not one of the voters %s",
                     localId,
                     localDirectoryId,
-                    latestVoterSet.get()
+                    partitionState.lastVoterSet()
                 )
             );
         } else if (!isCandidate()) {
@@ -543,7 +544,9 @@ public class QuorumState {
             ReplicaKey.of(localIdOrThrow(), localDirectoryId),
             epoch(),
             epochStartOffset,
-            latestVoterSet.get(),
+            partitionState.lastVoterSet(),
+            partitionState.lastVoterSetOffset(),
+            partitionState.lastKraftVersion(),
             candidateState.grantingVoters(),
             accumulator,
             localListeners,
@@ -564,7 +567,7 @@ public class QuorumState {
             }
         }
 
-        store.writeElectionState(newState.election(), latestKraftVersion.get());
+        store.writeElectionState(newState.election(), partitionState.lastKraftVersion());
         memoryTransitionTo(newState);
     }
 

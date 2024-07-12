@@ -55,7 +55,7 @@ public final class VoterSetTest {
     void testVoterNode() {
         VoterSet voterSet = new VoterSet(voterMap(IntStream.of(1, 2, 3), true));
         assertEquals(
-            Optional.of(new Node(1, "replica-1", 1234)),
+            Optional.of(new Node(1, "localhost", 9991)),
             voterSet.voterNode(1, DEFAULT_LISTENER_NAME)
         );
         assertEquals(Optional.empty(), voterSet.voterNode(1, ListenerName.normalised("MISSING")));
@@ -67,7 +67,7 @@ public final class VoterSetTest {
         VoterSet voterSet = new VoterSet(voterMap(IntStream.of(1, 2, 3), true));
 
         assertEquals(
-            Utils.mkSet(new Node(1, "replica-1", 1234), new Node(2, "replica-2", 1234)),
+            Utils.mkSet(new Node(1, "localhost", 9991), new Node(2, "localhost", 9992)),
             voterSet.voterNodes(IntStream.of(1, 2).boxed(), DEFAULT_LISTENER_NAME)
         );
 
@@ -324,8 +324,8 @@ public final class VoterSetTest {
                 Collections.singletonMap(
                     DEFAULT_LISTENER_NAME,
                     InetSocketAddress.createUnresolved(
-                        String.format("replica-%d", replicaKey.id()),
-                        1234
+                        "localhost",
+                        9990 + replicaKey.id()
                     )
                 )
             ),

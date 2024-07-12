@@ -34,9 +34,12 @@ public final class TreeMapLogHistoryTest {
     @Test
     void testAddAt() {
         TreeMapLogHistory<String> history = new TreeMapLogHistory<>();
-        assertThrows(IllegalArgumentException.class, () -> history.addAt(-1, ""));
+        assertThrows(IllegalArgumentException.class, () -> history.addAt(-2, ""));
         assertEquals(Optional.empty(), history.lastEntry());
 
+        history.addAt(-1, "-1");
+        assertEquals(Optional.of("-1"), history.valueAtOrBefore(-1));
+        assertEquals(Optional.of("-1"), history.valueAtOrBefore(0));
         history.addAt(100, "100");
         assertThrows(IllegalArgumentException.class, () -> history.addAt(99, ""));
         assertThrows(IllegalArgumentException.class, () -> history.addAt(100, ""));
@@ -44,7 +47,8 @@ public final class TreeMapLogHistoryTest {
         assertEquals(Optional.of("100"), history.valueAtOrBefore(201));
 
         history.addAt(200, "200");
-        assertEquals(Optional.empty(), history.valueAtOrBefore(99));
+        assertEquals(Optional.empty(), history.valueAtOrBefore(-2));
+        assertEquals(Optional.of("-1"), history.valueAtOrBefore(-1));
         assertEquals(Optional.of("100"), history.valueAtOrBefore(100));
         assertEquals(Optional.of("100"), history.valueAtOrBefore(101));
         assertEquals(Optional.of("100"), history.valueAtOrBefore(199));

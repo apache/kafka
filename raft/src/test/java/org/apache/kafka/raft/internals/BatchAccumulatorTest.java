@@ -580,9 +580,16 @@ class BatchAccumulatorTest {
                 maxBatchSize
             )
         ) {
-            acc.appendControlMessages((offset, epoch, buf) -> {
+            acc.appendControlMessages((offset, epoch, compression, buf) -> {
                 long now = 1234;
-                try (MemoryRecordsBuilder builder = controlRecordsBuilder(offset, epoch, now, buf)) {
+                try (MemoryRecordsBuilder builder = controlRecordsBuilder(
+                        offset,
+                        epoch,
+                        compression,
+                        now,
+                        buf
+                    )
+                ) {
                     builder.appendSnapshotHeaderMessage(
                         now,
                         new SnapshotHeaderRecord()
@@ -624,9 +631,16 @@ class BatchAccumulatorTest {
         Mockito.when(memoryPool.tryAllocate(maxBatchSize))
                 .thenReturn(buffer);
 
-        BatchAccumulator.MemoryRecordsCreator creator = (offset, epoch, buf) -> {
+        BatchAccumulator.MemoryRecordsCreator creator = (offset, epoch, compression, buf) -> {
             long now = 1234;
-            try (MemoryRecordsBuilder builder = controlRecordsBuilder(offset + 1, epoch, now, buf)) {
+            try (MemoryRecordsBuilder builder = controlRecordsBuilder(
+                    offset + 1,
+                    epoch,
+                    compression,
+                    now,
+                    buf
+                )
+            ) {
                 builder.appendSnapshotHeaderMessage(
                     now,
                     new SnapshotHeaderRecord()
@@ -660,9 +674,16 @@ class BatchAccumulatorTest {
         Mockito.when(memoryPool.tryAllocate(maxBatchSize))
                 .thenReturn(buffer);
 
-        BatchAccumulator.MemoryRecordsCreator creator = (offset, epoch, buf) -> {
+        BatchAccumulator.MemoryRecordsCreator creator = (offset, epoch, compression, buf) -> {
             long now = 1234;
-            try (MemoryRecordsBuilder builder = controlRecordsBuilder(offset, epoch + 1, now, buf)) {
+            try (MemoryRecordsBuilder builder = controlRecordsBuilder(
+                    offset,
+                    epoch + 1,
+                    compression,
+                    now,
+                    buf
+                )
+            ) {
                 builder.appendSnapshotHeaderMessage(
                     now,
                     new SnapshotHeaderRecord()
@@ -696,9 +717,16 @@ class BatchAccumulatorTest {
         Mockito.when(memoryPool.tryAllocate(maxBatchSize))
                 .thenReturn(buffer);
 
-        BatchAccumulator.MemoryRecordsCreator creator = (offset, epoch, buf) -> {
+        BatchAccumulator.MemoryRecordsCreator creator = (offset, epoch, compression, buf) -> {
             long now = 1234;
-            try (MemoryRecordsBuilder builder = controlRecordsBuilder(offset, epoch, now, buf)) {
+            try (MemoryRecordsBuilder builder = controlRecordsBuilder(
+                    offset,
+                    epoch,
+                    compression,
+                    now,
+                    buf
+                )
+            ) {
                 // Create a control batch without any records
                 return builder.build();
             }
@@ -718,13 +746,14 @@ class BatchAccumulatorTest {
     private static MemoryRecordsBuilder controlRecordsBuilder(
         long baseOffset,
         int epoch,
+        Compression compression,
         long now,
         ByteBuffer buffer
     ) {
         return new MemoryRecordsBuilder(
             buffer,
             RecordBatch.CURRENT_MAGIC_VALUE,
-            Compression.NONE,
+            compression,
             TimestampType.CREATE_TIME,
             baseOffset,
             now,

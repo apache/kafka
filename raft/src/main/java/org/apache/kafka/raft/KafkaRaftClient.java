@@ -105,6 +105,7 @@ import java.util.stream.Collectors;
 
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
+import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 
 /**
  * This class implements a Kafkaesque version of the Raft protocol. Leader election
@@ -413,8 +414,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         QuorumStateStore quorumStateStore,
         Metrics metrics
     ) {
+        Optional<VoterSet> staticVoters = voterAddresses.isEmpty() ?
+            Optional.empty() :
+            Optional.of(VoterSet.fromInetSocketAddresses(channel.listenerName(), voterAddresses));
+
         partitionState = new KRaftControlRecordStateMachine(
-            Optional.of(VoterSet.fromInetSocketAddresses(channel.listenerName(), voterAddresses)),
+            staticVoters,
             log,
             serde,
             BufferSupplier.create(),
@@ -453,8 +458,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         quorum = new QuorumState(
             nodeId,
             nodeDirectoryId,
-            partitionState::lastVoterSet,
-            partitionState::lastKraftVersion,
+            partitionState,
             localListeners,
             quorumConfig.electionTimeoutMs(),
             quorumConfig.fetchTimeoutMs(),
@@ -542,7 +546,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // The high watermark can only be advanced once we have written a record
         // from the new leader's epoch. Hence we write a control message immediately
         // to ensure there is no delay committing pending data.
-        state.appendLeaderChangeMessage(currentTimeMs);
+        state.appendLeaderChangeMessageAndBootstrapRecords(currentTimeMs);
 
         resetConnections();
         kafkaRaftMetrics.maybeUpdateElectionLatency(currentTimeMs);
@@ -1398,8 +1402,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
             Optional<OffsetAndEpoch> latestSnapshotId = log.latestSnapshotId();
             final ValidOffsetAndEpoch validOffsetAndEpoch;
-            if (fetchOffset == 0 && latestSnapshotId.isPresent()) {
-                // If the follower has an empty log and a snapshot exist, it is always more efficient
+            if (fetchOffset == 0 && latestSnapshotId.isPresent() && !latestSnapshotId.get().equals(BOOTSTRAP_SNAPSHOT_ID)) {
+                // If the follower has an empty log and a non-bootstrap snapshot exists, it is always more efficient
                 // to reply with a snapshot id (FETCH_SNAPSHOT) instead of fetching from the log segments.
                 validOffsetAndEpoch = ValidOffsetAndEpoch.snapshot(latestSnapshotId.get());
             } else {
@@ -1559,11 +1563,20 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     // snapshot is expected to reference offsets and epochs greater than the log
                     // end offset and high-watermark.
                     state.setFetchingSnapshot(log.createNewSnapshotUnchecked(snapshotId));
-                    logger.info(
-                        "Fetching snapshot {} from Fetch response from leader {}",
-                        snapshotId,
-                        quorum.leaderIdOrSentinel()
-                    );
+                    if (state.fetchingSnapshot().isPresent()) {
+                        logger.info(
+                            "Fetching snapshot {} from Fetch response from leader {}",
+                            snapshotId,
+                            quorum.leaderIdOrSentinel()
+                        );
+                    } else {
+                        logger.info(
+                            "Leader {} returned a snapshot {} in the FETCH response which is " +
+                            "already stored",
+                            quorum.leaderIdOrSentinel(),
+                            snapshotId
+                        );
+                    }
                 }
             } else {
                 Records records = FetchResponse.recordsOrFail(partitionResponse);
@@ -1712,8 +1725,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             partitionSnapshot.snapshotId().endOffset(),
             partitionSnapshot.snapshotId().epoch()
         );
+
         Optional<RawSnapshotReader> snapshotOpt = log.readSnapshot(snapshotId);
-        if (!snapshotOpt.isPresent()) {
+        if (!snapshotOpt.isPresent() || snapshotId.equals(BOOTSTRAP_SNAPSHOT_ID)) {
+            // The bootstrap checkpoint should not be replicated. The first leader will
+            // make sure that the content of the bootstrap checkpoint is included in the
+            // partition log
             return RaftUtil.singletonFetchSnapshotResponse(
                 requestMetadata.listenerName(),
                 requestMetadata.apiVersion(),

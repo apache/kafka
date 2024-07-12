@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -58,6 +59,7 @@ public class LeaderStateTest {
     private final int fetchTimeoutMs = 2000;
     private final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
     private final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
+    private final short kraftVersion = 1;
 
     private LeaderState<?> newLeaderState(
         VoterSet voters,
@@ -69,6 +71,8 @@ public class LeaderStateTest {
             epoch,
             epochStartOffset,
             voters,
+            OptionalLong.of(0L),
+            kraftVersion,
             voters.voterIds(),
             accumulator,
             voters.listeners(localReplicaKey.id()),
@@ -103,6 +107,7 @@ public class LeaderStateTest {
 
     @Test
     public void testRequireNonNullAccumulator() {
+        VoterSet voterSet = VoterSetTest.voterSet(Stream.of(localReplicaKey));
         assertThrows(
             NullPointerException.class,
             () -> new LeaderState<>(
@@ -110,7 +115,9 @@ public class LeaderStateTest {
                 localReplicaKey,
                 epoch,
                 0,
-                VoterSetTest.voterSet(Stream.of(localReplicaKey)),
+                voterSet,
+                OptionalLong.of(0),
+                kraftVersion,
                 Collections.emptySet(),
                 null,
                 Endpoints.empty(),

@@ -45,6 +45,8 @@ public final class Snapshots {
     private static final int OFFSET_WIDTH = 20;
     private static final int EPOCH_WIDTH = 10;
 
+    public static final OffsetAndEpoch BOOTSTRAP_SNAPSHOT_ID = new OffsetAndEpoch(0, 0);
+
     static {
         OFFSET_FORMATTER.setMinimumIntegerDigits(OFFSET_WIDTH);
         OFFSET_FORMATTER.setGroupingUsed(false);

@@ -49,7 +49,12 @@ import java.util.concurrent.locks.ReentrantLock;
 public class BatchAccumulator<T> implements Closeable {
     @FunctionalInterface
     public interface MemoryRecordsCreator {
-        MemoryRecords create(long baseOffset, int epoch, ByteBuffer byteBuffer);
+        MemoryRecords create(
+            long baseOffset,
+            int epoch,
+            Compression compression,
+            ByteBuffer byteBuffer
+        );
     }
 
     private final int epoch;
@@ -228,7 +233,12 @@ public class BatchAccumulator<T> implements Closeable {
             if (buffer != null) {
                 try {
                     forceDrain();
-                    MemoryRecords memoryRecords = valueCreator.create(nextOffset, epoch, buffer);
+                    MemoryRecords memoryRecords = valueCreator.create(
+                        nextOffset,
+                        epoch,
+                        compression,
+                        buffer
+                    );
 
                     int numberOfRecords = validateMemoryRecordsAndReturnCount(memoryRecords);
 
@@ -304,7 +314,7 @@ public class BatchAccumulator<T> implements Closeable {
         LeaderChangeMessage leaderChangeMessage,
         long currentTimestamp
     ) {
-        appendControlMessages((baseOffset, epoch, buffer) ->
+        appendControlMessages((baseOffset, epoch, compression, buffer) ->
             MemoryRecords.withLeaderChangeMessage(
                 baseOffset,
                 currentTimestamp,
@@ -327,7 +337,7 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotHeaderRecord snapshotHeaderRecord,
         long currentTimestamp
     ) {
-        appendControlMessages((baseOffset, epoch, buffer) ->
+        appendControlMessages((baseOffset, epoch, compression, buffer) ->
             MemoryRecords.withSnapshotHeaderRecord(
                 baseOffset,
                 currentTimestamp,
@@ -349,7 +359,7 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotFooterRecord snapshotFooterRecord,
         long currentTimestamp
     ) {
-        appendControlMessages((baseOffset, epoch, buffer) ->
+        appendControlMessages((baseOffset, epoch, compression, buffer) ->
             MemoryRecords.withSnapshotFooterRecord(
                 baseOffset,
                 currentTimestamp,
@@ -391,7 +401,6 @@ public class BatchAccumulator<T> implements Closeable {
                 compression,
                 nextOffset,
                 time.milliseconds(),
-                false,
                 epoch,
                 maxBatchSize
             );
