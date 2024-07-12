@@ -17,8 +17,8 @@
   */
 package kafka.server
 
-import kafka.utils.JaasTestUtils
-import JaasTestUtils.JaasSection
+import kafka.security.JaasTestUtils
+import kafka.security.JaasTestUtils.JaasSection
 
 import java.util.Properties
 import scala.collection.Seq

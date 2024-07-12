@@ -21,6 +21,7 @@ import kafka.api._
 import kafka.controller.ControllerEventManager
 import kafka.log._
 import kafka.network.RequestChannel
+import kafka.security.JaasTestUtils
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}

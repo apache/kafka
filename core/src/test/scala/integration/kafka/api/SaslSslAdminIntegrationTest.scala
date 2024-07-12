@@ -12,9 +12,10 @@
   */
 package kafka.api
 
+import kafka.security.JaasTestUtils
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils._
-import kafka.utils.{JaasTestUtils, TestInfoUtils, TestUtils}
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl._

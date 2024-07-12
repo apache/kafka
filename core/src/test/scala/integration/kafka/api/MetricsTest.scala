@@ -13,8 +13,9 @@
 package kafka.api
 
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
+import kafka.security.JaasTestUtils
 import kafka.server.KafkaServer
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.{SaslConfigs, TopicConfig}

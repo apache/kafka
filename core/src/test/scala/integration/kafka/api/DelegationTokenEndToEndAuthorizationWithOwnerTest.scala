@@ -16,6 +16,7 @@
  */
 package kafka.api
 
+import kafka.security.JaasTestUtils
 import kafka.utils._
 import org.apache.kafka.clients.admin.{Admin, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
 import org.apache.kafka.common.acl._

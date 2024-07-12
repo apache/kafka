@@ -12,6 +12,7 @@
   */
 package kafka.api
 
+import kafka.security.JaasTestUtils
 import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
@@ -23,7 +24,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs

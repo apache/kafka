@@ -17,7 +17,8 @@
 package kafka.server
 
 import kafka.api.{IntegrationTestHarness, KafkaSasl, SaslSetup}
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.security.JaasTestUtils
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
 import org.apache.kafka.common.errors.{DelegationTokenNotFoundException, InvalidPrincipalTypeException}
 import org.apache.kafka.common.security.auth.SecurityProtocol

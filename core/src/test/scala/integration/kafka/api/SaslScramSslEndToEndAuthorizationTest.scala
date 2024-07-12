@@ -16,6 +16,8 @@
   */
 package kafka.api
 
+import kafka.security.JaasTestUtils
+
 import java.util.Properties
 import kafka.utils._
 import kafka.tools.StorageTool

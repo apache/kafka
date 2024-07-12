@@ -12,7 +12,8 @@
   */
 package kafka.api
 
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.security.JaasTestUtils
+import kafka.utils.TestUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}

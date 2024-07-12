@@ -14,7 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.utils;
+package kafka.security;
+
+import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.config.SaslConfigs;

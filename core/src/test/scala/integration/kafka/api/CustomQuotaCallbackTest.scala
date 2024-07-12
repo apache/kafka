@@ -16,8 +16,9 @@ package kafka.api
 
 import kafka.api.GroupedUserPrincipalBuilder._
 import kafka.api.GroupedUserQuotaCallback._
+import kafka.security.JaasTestUtils
 import kafka.server._
-import kafka.utils.{JaasTestUtils, Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}

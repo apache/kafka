@@ -12,8 +12,9 @@
   */
 package kafka.api
 
+import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils.{isAclUnsecure, secureZkPaths}
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.config.ZkConfigs

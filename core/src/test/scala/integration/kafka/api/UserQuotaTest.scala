@@ -14,8 +14,9 @@
 
 package kafka.api
 
+import kafka.security.JaasTestUtils
 import kafka.server.KafkaBroker
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 

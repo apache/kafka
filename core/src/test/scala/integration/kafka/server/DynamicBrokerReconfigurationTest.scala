@@ -33,6 +33,7 @@ import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
 import kafka.log.UnifiedLog
 import kafka.network.{DataPlaneAcceptor, Processor, RequestChannel}
+import kafka.security.JaasTestUtils
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils.TestControllerRequestCompletionHandler

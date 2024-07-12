@@ -16,7 +16,7 @@
   */
 package kafka.api
 
-import kafka.utils.JaasTestUtils._
+import kafka.security.JaasTestUtils._
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.isAclSecure
 import kafka.zk.ZkData

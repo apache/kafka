@@ -21,9 +21,10 @@ package kafka.server
 import java.util.{Collections, Objects, Properties}
 import java.util.concurrent.TimeUnit
 import kafka.api.SaslSetup
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.security.JaasTestUtils
+import kafka.security.JaasTestUtils.JaasSection
+import kafka.utils.TestUtils
 import kafka.utils.Implicits._
-import JaasTestUtils.JaasSection
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs

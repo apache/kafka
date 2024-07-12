@@ -12,10 +12,11 @@
   */
 package kafka.api
 
+import kafka.security.JaasTestUtils
 import java.util
 import java.util.Properties
 import kafka.security.authorizer.AclAuthorizer
-import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.AclOperation.{ALL, ALTER, CLUSTER_ACTION, DELETE, DESCRIBE}
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW

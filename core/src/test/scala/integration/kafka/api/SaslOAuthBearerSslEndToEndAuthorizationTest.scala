@@ -16,7 +16,7 @@
  */
 package kafka.api
 
-import kafka.utils.JaasTestUtils
+import kafka.security.JaasTestUtils
 import org.apache.kafka.common.security.auth._
 
 class SaslOAuthBearerSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {

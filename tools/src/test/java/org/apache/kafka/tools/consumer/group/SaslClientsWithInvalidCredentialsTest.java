@@ -18,7 +18,7 @@ package org.apache.kafka.tools.consumer.group;
 
 import kafka.api.AbstractSaslTest;
 import kafka.api.Both$;
-import kafka.utils.JaasTestUtils;
+import kafka.security.JaasTestUtils;
 import kafka.zk.ConfigEntityChangeNotificationZNode;
 
 import org.apache.kafka.clients.admin.Admin;

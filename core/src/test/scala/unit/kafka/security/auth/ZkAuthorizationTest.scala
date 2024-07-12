@@ -20,7 +20,7 @@ package kafka.security.auth
 import java.nio.charset.StandardCharsets
 import kafka.admin.ZkSecurityMigrator
 import kafka.server.QuorumTestHarness
-import kafka.utils.{Logging, JaasTestUtils, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import kafka.zk._
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.security.JaasUtils
@@ -32,6 +32,7 @@ import scala.util.{Failure, Success, Try}
 import javax.security.auth.login.Configuration
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.ReplicaAssignment
+import kafka.security.JaasTestUtils
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time

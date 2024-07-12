@@ -17,6 +17,9 @@
 
 package kafka.api
 
+import kafka.security.JaasTestUtils
+import kafka.security.JaasTestUtils.{JaasSection, Krb5LoginModule, ZkDigestModule}
+
 import java.io.File
 import java.util
 import java.util.Properties
@@ -24,8 +27,7 @@ import javax.security.auth.login.Configuration
 import scala.collection.Seq
 import kafka.security.minikdc.MiniKdc
 import kafka.server.KafkaConfig
-import kafka.utils.JaasTestUtils.{JaasSection, Krb5LoginModule, ZkDigestModule}
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ScramCredentialInfo, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.SaslConfigs
