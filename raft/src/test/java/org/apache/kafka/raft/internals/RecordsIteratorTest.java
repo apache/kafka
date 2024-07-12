@@ -411,7 +411,6 @@ public final class RecordsIteratorTest {
                 compression,
                 batch.baseOffset,
                 batch.appendTimestamp,
-                false,
                 batch.epoch,
                 1024
             );
