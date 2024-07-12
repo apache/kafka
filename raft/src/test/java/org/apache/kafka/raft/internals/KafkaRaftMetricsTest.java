@@ -64,11 +64,22 @@ public class KafkaRaftMetricsTest {
     }
 
     private QuorumState buildQuorumState(VoterSet voterSet, short kraftVersion) {
+        KRaftControlRecordStateMachine mockPartitionState = Mockito.mock(KRaftControlRecordStateMachine.class);
+
+        Mockito
+            .when(mockPartitionState.lastVoterSet())
+            .thenReturn(voterSet);
+        Mockito
+            .when(mockPartitionState.lastVoterSetOffset())
+            .thenReturn(kraftVersion == 0 ? OptionalLong.empty() : OptionalLong.of(0));
+        Mockito
+            .when(mockPartitionState.lastKraftVersion())
+            .thenReturn(kraftVersion);
+
         return new QuorumState(
             OptionalInt.of(localId),
             localDirectoryId,
-            () -> voterSet,
-            () -> kraftVersion,
+            mockPartitionState,
             voterSet.listeners(localId),
             electionTimeoutMs,
             fetchTimeoutMs,
