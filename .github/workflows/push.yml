@@ -1,11 +1,12 @@
-name: Compile and validate before merging
+name: Trunk build
 
 on:
-  merge_group:
-  pull_request:
+  push:
+    branches:
+      - trunk
 
 jobs:
-  validate-pr:
+  validate-push:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -25,7 +26,7 @@ jobs:
         GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
       with:
         # Only write to the cache from trunk
-        cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
+        cache-read-only: false
         # Cache downloaded JDKs in addition to the default directories.
         gradle-home-cache-includes: |
             caches
