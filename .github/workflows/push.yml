@@ -39,4 +39,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: rat-report
-        path: **/rat/index.html
+        path: | 
+          **/rat/index.html
