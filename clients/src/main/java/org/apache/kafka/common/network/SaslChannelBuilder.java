@@ -69,6 +69,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import javax.security.auth.Subject;
@@ -88,7 +89,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private final DelegationTokenCache tokenCache;
     private final Map<String, LoginManager> loginManagers;
     private final Map<String, Subject> subjects;
-    private final Supplier<ApiVersionsResponse> apiVersionSupplier;
+    private final Function<Short, ApiVersionsResponse> apiVersionSupplier;
     private final String sslClientAuthOverride;
     private final Map<String, AuthenticateCallbackHandler> saslCallbackHandlers;
     private final Map<String, Long> connectionsMaxReauthMsByMechanism;
@@ -112,7 +113,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                               String sslClientAuthOverride,
                               Time time,
                               LogContext logContext,
-                              Supplier<ApiVersionsResponse> apiVersionSupplier) {
+                              Function<Short, ApiVersionsResponse> apiVersionSupplier) {
         this.connectionMode = connectionMode;
         this.jaasContexts = jaasContexts;
         this.loginManagers = new HashMap<>(jaasContexts.size());

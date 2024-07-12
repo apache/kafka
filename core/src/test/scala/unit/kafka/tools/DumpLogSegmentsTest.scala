@@ -28,10 +28,10 @@ import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.{BrokerTopicStats, KafkaRaftServer}
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, TimeIndexDumpErrors}
-import kafka.utils.{TestUtils, VerifiableProperties}
+import kafka.utils.{Exit, TestUtils, VerifiableProperties}
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, Subscription}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
@@ -46,12 +46,16 @@ import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
 import org.apache.kafka.raft.internals.VoterSetTest
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
+import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, RemotePartitionDeleteMetadata, RemotePartitionDeleteState}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
+import java.nio.file.attribute.PosixFilePermissions
+import java.nio.file.{AccessDeniedException, Files, NoSuchFileException, Paths}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -61,7 +65,6 @@ import scala.util.matching.Regex
 case class BatchInfo(records: Seq[SimpleRecord], hasKeys: Boolean, hasValues: Boolean)
 
 class DumpLogSegmentsTest {
-
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val segmentName = "00000000000000000000"
@@ -243,6 +246,219 @@ class DumpLogSegmentsTest {
     assertEquals(Map.empty, errors.shallowOffsetNotFound)
   }
 
+  def countSubstring(str: String, sub: String): Int =
+    str.sliding(sub.length).count(_ == sub)
+  
+  // the number of batches in the log dump is equal to 
+  // the number of occurrences of the "baseOffset:" substring
+  def batchCount(str: String): Int =
+    countSubstring(str, "baseOffset:")
+
+  // the number of records in the log dump is equal to 
+  // the number of occurrences of the "payload:" substring
+  def recordCount(str: String): Int =
+    countSubstring(str, "payload:")
+
+  @Test
+  def testDumpRemoteLogMetadataEmpty(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
+    assertTrue(batchCount(output) == 0)
+    assertTrue(recordCount(output) == 0)
+    assertTrue(output.contains("Log starting offset: 0"))
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataOneRecordOneBatch(): Unit = {
+    val topicId = Uuid.randomUuid
+    val topicName = "foo"
+    
+    val metadata = Seq(new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)), 
+        RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
+
+    val records: Array[SimpleRecord] = metadata.map(message => {
+      new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
+    }).toArray
+
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
+    log.flush(false)
+
+    val expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
+      "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName)
+
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
+    assertTrue(batchCount(output) == 1)
+    assertTrue(recordCount(output) == 1)
+    assertTrue(output.contains("Log starting offset: 0"))
+    assertTrue(output.contains(expectedDeletePayload))
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataMultipleRecordsOneBatch(): Unit = {
+    val topicId = Uuid.randomUuid
+    val topicName = "foo"
+    val remoteSegmentId = Uuid.randomUuid
+
+    val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, 0))
+    val remoteLogSegmentId = new RemoteLogSegmentId(topicIdPartition, remoteSegmentId)
+
+    val metadata = Seq(new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, time.milliseconds,
+        Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(Array[Byte](0, 1, 2, 3))), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, 0),
+      new RemotePartitionDeleteMetadata(topicIdPartition, RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
+
+    val metadataRecords: Array[SimpleRecord] = metadata.map(message => {
+      new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
+    }).toArray
+
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    log.flush(false)
+
+    val expectedUpdatePayload = String.format("RemoteLogSegmentMetadataUpdate{remoteLogSegmentId=" +
+      "RemoteLogSegmentId{topicIdPartition=%s:%s-0, id=%s}, customMetadata=Optional[" +
+      "CustomMetadata{4 bytes}], state=COPY_SEGMENT_FINISHED, eventTimestampMs=0, brokerId=0}", topicId, topicName, remoteSegmentId)
+    val expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
+      "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName)
+    
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
+    assertTrue(batchCount(output) == 1)
+    assertTrue(recordCount(output) == 2)
+    assertTrue(output.contains("Log starting offset: 0"))
+    assertTrue(output.contains(expectedUpdatePayload))
+    assertTrue(output.contains(expectedDeletePayload))
+  }
+  
+  @Test
+  def testDumpRemoteLogMetadataMultipleRecordsMultipleBatches(): Unit = {
+    val topicId = Uuid.randomUuid
+    val topicName = "foo"
+    val remoteSegmentId = Uuid.randomUuid
+    
+    val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, 0))
+    val remoteLogSegmentId = new RemoteLogSegmentId(topicIdPartition, remoteSegmentId)
+
+    val metadata = Seq(
+      new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, time.milliseconds,
+        Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(Array[Byte](0, 1, 2, 3))), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, 0),
+      new RemotePartitionDeleteMetadata(topicIdPartition, RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0)
+    )
+
+    val records: Array[SimpleRecord] = metadata.map(message => {
+      new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
+    }).toArray
+
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
+    log.flush(false)
+
+    val expectedUpdatePayload = String.format("RemoteLogSegmentMetadataUpdate{remoteLogSegmentId=" +
+      "RemoteLogSegmentId{topicIdPartition=%s:%s-0, id=%s}, customMetadata=Optional[" +
+      "CustomMetadata{4 bytes}], state=COPY_SEGMENT_FINISHED, eventTimestampMs=0, brokerId=0}", topicId, topicName, remoteSegmentId)
+    val expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
+      "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName)
+
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
+    assertTrue(batchCount(output) == 2)
+    assertTrue(recordCount(output) == 4)
+    assertTrue(output.contains("Log starting offset: 0"))
+    assertTrue(countSubstring(output, expectedUpdatePayload) == 2)
+    assertTrue(countSubstring(output, expectedDeletePayload) == 2)
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataNonZeroStartingOffset(): Unit = {
+    val topicId = Uuid.randomUuid
+    val topicName = "foo"
+    
+    val metadata = Seq(new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
+      RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
+
+    val metadataRecords: Array[SimpleRecord] = metadata.map(message => {
+      new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
+    }).toArray
+    
+    val memoryRecordsSizeInBytes = MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*).sizeInBytes()
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = memoryRecordsSizeInBytes)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    log.flush(true)
+
+    val logPaths = logDir.listFiles.filter(_.getName.endsWith(".log")).map(_.getAbsolutePath)
+    val expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
+      "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName)
+
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logPaths(1)))
+    assertTrue(batchCount(output) == 1)
+    assertTrue(recordCount(output) == 1)
+    assertTrue(output.contains("Log starting offset: 1"))
+    assertTrue(output.contains(expectedDeletePayload))
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataWithCorruption(): Unit = {
+    val metadataRecords = Array(new SimpleRecord(null, "corrupted".getBytes()))
+
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    log.flush(false)
+
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
+    assertTrue(batchCount(output) == 1)
+    assertTrue(recordCount(output) == 1)
+    assertTrue(output.contains("Log starting offset: 0"))
+    assertTrue(output.contains("Could not deserialize metadata record"))
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataIoException(): Unit = {
+    val topicId = Uuid.randomUuid
+    val topicName = "foo"
+
+    val metadata = Seq(new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
+      RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
+
+    val metadataRecords: Array[SimpleRecord] = metadata.map(message => {
+      new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
+    }).toArray
+    
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    log.flush(false)
+    
+    Files.setPosixFilePermissions(Paths.get(logFilePath), PosixFilePermissions.fromString("-w-------"))
+    
+    assertThrows(classOf[AccessDeniedException],
+      () => runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath)))
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataNoFilesFlag(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+    try {
+      val thrown = assertThrows(classOf[IllegalArgumentException], () => runDumpLogSegments(Array("--remote-log-metadata-decoder")))
+      assertTrue(thrown.getMessage.equals("Missing required argument \"[files]\""))
+    } finally {
+      Exit.resetExitProcedure()
+    }
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataNoSuchFileException(): Unit = {
+    val noSuchFileLogPath = "/tmp/nosuchfile/00000000000000000000.log"
+    assertThrows(classOf[NoSuchFileException], 
+      () => runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", noSuchFileLogPath)))
+  }
+  
   @Test
   def testDumpMetadataRecords(): Unit = {
     val mockTime = new MockTime
