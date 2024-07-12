@@ -910,10 +910,8 @@ public class KafkaConsumerTest {
         mockClient.updateMetadata(initialMetadata);
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(value = GroupProtocol.class)
     public void testMissingOffsetNoResetPolicy(GroupProtocol groupProtocol) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -931,7 +929,7 @@ public class KafkaConsumerTest {
 
         // lookup committed offset and find nothing
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, -1L), Errors.NONE), coordinator);
-        assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
+        assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ofMillis(1)));
     }
 
     // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
