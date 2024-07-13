@@ -48,4 +48,4 @@ jobs:
         #  jdks
         #gradle-home-cache-cleanup: true
     - name: Gradle build
-      run: ./gradlew --info :metadata:test
+      run: ./gradlew --build-cache --info :metadata:test
