@@ -150,16 +150,15 @@ public class ConsumerRecordsTest {
         int recordSize = 3;
         int partitionSize = 6;
         int emptyPartitionIndex = 2;
+        TopicPartition topicFilter = new TopicPartition(topic, 0);
+        ConsumerRecord<Integer, String> newRecord = new ConsumerRecord<>(topic, 0, 0, 0L, TimestampType.CREATE_TIME,
+            0, 0, 0, "0", new RecordHeaders(), Optional.empty());
 
         ConsumerRecords<Integer, String> records = buildTopicTestRecords(recordSize, partitionSize, emptyPartitionIndex, Collections.singleton(topic));
-        ConsumerRecords<Integer, String> emptyRecords = new ConsumerRecords<>(Collections.emptyMap());
+        ConsumerRecords<Integer, String> emptyRecords = ConsumerRecords.empty();
 
-        assertThrows(UnsupportedOperationException.class, () -> records.records(new TopicPartition(topic, 0))
-            .add(new ConsumerRecord<>(topic, 0, 0, 0L, TimestampType.CREATE_TIME,
-                0, 0, 0, String.valueOf(0), new RecordHeaders(), Optional.empty())));
-        assertThrows(UnsupportedOperationException.class, () -> emptyRecords.records(new TopicPartition(topic, 0))
-            .add(new ConsumerRecord<>(topic, 0, 0, 0L, TimestampType.CREATE_TIME,
-                0, 0, 0, String.valueOf(0), new RecordHeaders(), Optional.empty())));
+        assertThrows(UnsupportedOperationException.class, () -> records.records(topicFilter).add(newRecord));
+        assertThrows(UnsupportedOperationException.class, () -> emptyRecords.records(topicFilter).add(newRecord));
         assertEquals(recordSize * (partitionSize - 1), records.count());
         assertEquals(0, emptyRecords.count());
     }
