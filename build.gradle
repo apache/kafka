@@ -1276,7 +1276,7 @@ project(':metadata') {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.common.metadata",
-             "-o", "../build/src/generated/java/org/apache/kafka/common/metadata",
+             "-o", "./build/src/generated/java/org/apache/kafka/common/metadata",
              "-i", "src/main/resources/common/metadata",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
              "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator"
@@ -1285,7 +1285,7 @@ project(':metadata') {
         .withPropertyName("messages")
         .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.cacheIf { true }
-    outputs.dir("../build/src/generated/java/org/apache/kafka/common/metadata")
+    outputs.dir("./build/src/generated/java/org/apache/kafka/common/metadata")
   }
 
   compileJava.dependsOn 'processMessages'
@@ -1294,7 +1294,7 @@ project(':metadata') {
   sourceSets {
     main {
       java {
-        srcDirs = ["../build/src/generated/java", "src/main/java"]
+        srcDirs = ["./build/src/generated/java", "src/main/java"]
       }
     }
     test {
