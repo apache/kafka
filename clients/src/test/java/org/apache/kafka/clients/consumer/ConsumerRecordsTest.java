@@ -107,7 +107,6 @@ public class ConsumerRecordsTest {
         assertEquals("Topic must be non-null.", exception.getMessage());
     }
 
-
     @Test
     public void testRecordsByTopic() {
         List<String> topics = Arrays.asList("topic1", "topic2", "topic3", "topic4");
@@ -143,6 +142,26 @@ public class ConsumerRecordsTest {
             assertEquals(partitionSize, partitionCount + 1);
             assertEquals(expectedTotalRecordSizeOfEachTopic, recordCount);
         }
+    }
+
+    @Test
+    public void testRecordsAreImmutable() {
+        String topic = "topic";
+        int recordSize = 3;
+        int partitionSize = 6;
+        int emptyPartitionIndex = 2;
+
+        ConsumerRecords<Integer, String> records = buildTopicTestRecords(recordSize, partitionSize, emptyPartitionIndex, Collections.singleton(topic));
+        ConsumerRecords<Integer, String> emptyRecords = new ConsumerRecords<>(Collections.emptyMap());
+
+        assertThrows(UnsupportedOperationException.class, () -> records.records(new TopicPartition(topic, 0))
+            .add(new ConsumerRecord<>(topic, 0, 0, 0L, TimestampType.CREATE_TIME,
+                0, 0, 0, String.valueOf(0), new RecordHeaders(), Optional.empty())));
+        assertThrows(UnsupportedOperationException.class, () -> emptyRecords.records(new TopicPartition(topic, 0))
+            .add(new ConsumerRecord<>(topic, 0, 0, 0L, TimestampType.CREATE_TIME,
+                0, 0, 0, String.valueOf(0), new RecordHeaders(), Optional.empty())));
+        assertEquals(recordSize * (partitionSize - 1), records.count());
+        assertEquals(0, emptyRecords.count());
     }
 
     private ConsumerRecords<Integer, String> buildTopicTestRecords(int recordSize,
