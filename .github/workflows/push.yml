@@ -41,6 +41,7 @@ jobs:
         gradle-version: current
         # Only write to the cache from trunk
         #cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
+        cache-read-only: false
         # Cache downloaded JDKs in addition to the default directories.
         gradle-home-cache-includes: |
           caches
