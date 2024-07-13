@@ -860,15 +860,15 @@ public class KafkaConsumerTest {
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 2));
 
-        consumer = newConsumerNoAutoCommit(groupProtocol, time, client, subscription, metadata);
-        consumer.assign(Arrays.asList(tp0, tp1));
-        consumer.seekToEnd(singleton(tp0));
-        consumer.seekToBeginning(singleton(tp1));
-
         if (groupProtocol == GroupProtocol.CONSUMER) {
             Node node = metadata.fetch().nodes().get(0);
             client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         }
+
+        consumer = newConsumerNoAutoCommit(groupProtocol, time, client, subscription, metadata);
+        consumer.assign(Arrays.asList(tp0, tp1));
+        consumer.seekToEnd(singleton(tp0));
+        consumer.seekToBeginning(singleton(tp1));
 
         client.prepareResponse(body -> {
             ListOffsetsRequest request = (ListOffsetsRequest) body;
