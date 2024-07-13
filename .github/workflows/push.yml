@@ -42,10 +42,10 @@ jobs:
         # Only write to the cache from trunk
         #cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
         # Cache downloaded JDKs in addition to the default directories.
-        gradle-home-cache-includes: |
-          caches
-          notifications
-          jdks
-        gradle-home-cache-cleanup: true
+        #gradle-home-cache-includes: |
+        #  caches
+        #  notifications
+        #  jdks
+        #gradle-home-cache-cleanup: true
     - name: Gradle build
-      run: ./gradlew :metadata:test
+      run: ./gradlew --info :metadata:test
