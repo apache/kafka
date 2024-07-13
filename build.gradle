@@ -761,7 +761,7 @@ subprojects {
     apply plugin: 'com.diffplug.spotless'
     spotless {
       java {
-        targetExclude('src/generated/**/*.java','src/generated-test/**/*.java')
+        targetExclude('build/src/generated/**/*.java', 'src/generated/**/*.java','src/generated-test/**/*.java')
         importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
         removeUnusedImports()
       }
