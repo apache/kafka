@@ -49,4 +49,4 @@ jobs:
         gradle-home-cache-cleanup: true
         cache-overwrite-existing: true
     - name: Compile and validate
-      run: ./gradlew --info check -x test
+      run: ./gradlew --build-cache --info check -x test
