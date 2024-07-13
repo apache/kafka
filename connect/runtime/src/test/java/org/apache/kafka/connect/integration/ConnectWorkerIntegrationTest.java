@@ -260,6 +260,10 @@ public class ConnectWorkerIntegrationTest {
 
         connect.kafka().stopOnlyKafka();
 
+        // Allow for the workers to discover that the coordinator is unavailable, wait is
+        // heartbeat timeout * 2 + 4sec
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
         connect.requestTimeout(1000);
         assertFalse(
                 connect.anyWorkersHealthy(),
@@ -278,10 +282,6 @@ public class ConnectWorkerIntegrationTest {
             }
         });
         connect.resetRequestTimeout();
-
-        // Allow for the workers to discover that the coordinator is unavailable, wait is
-        // heartbeat timeout * 2 + 4sec
-        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
         // Wait for the connector to be stopped
         assertTrue(stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS),
