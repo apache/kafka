@@ -35,14 +35,14 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import javax.ws.rs.core.Response;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Integration test for the creation of internal topics.
@@ -159,14 +159,12 @@ public class InternalTopicsIntegrationTest {
 
         connect.resetRequestTimeout();
 
-        Future<?> future = worker.getDistributedHerderFuture();
-
-        try {
-            future.get(5000, TimeUnit.MILLISECONDS);
-        }  catch (TimeoutException | ExecutionException exception) {
-            log.error("Failed to start a worker:", exception);
-            future.cancel(true);
-        }
+        //Synchronously await and verify that the worker fails during startup
+        Future<?> herderTask = worker.herderTask();
+        assertThrows(
+                ExecutionException.class,
+                () -> herderTask.get(1, TimeUnit.MINUTES)
+        );
 
         // Verify that the offset and config topic don't exist;
         // the status topic may have been created if timing was right, but we don't care

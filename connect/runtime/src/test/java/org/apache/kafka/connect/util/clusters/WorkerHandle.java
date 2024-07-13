@@ -38,9 +38,12 @@ public class WorkerHandle {
         this.worker = worker;
     }
 
-    // public for testing
-    public Future<?> getDistributedHerderFuture() {
-        return worker.getDistributedHerderFuture();
+    /**
+     * Track the worker status during startup.
+     * @return {@link Connect#herderTask} to track or null
+     */
+    public Future<?> herderTask() {
+        return worker.herderTask();
     }
 
     /**

@@ -233,8 +233,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private final DistributedConfig config;
 
-    // visible for testing
-    public Future<?> herderFuture;
+    private Future<?> herderTask;
 
     /**
      * Create a herder that will form a Connect cluster with other {@link DistributedHerder} instances (in this or other JVMs)
@@ -367,7 +366,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     @Override
     public void start() {
-        herderFuture = this.herderExecutor.submit(this);
+        herderTask = this.herderExecutor.submit(this);
     }
 
     @Override
@@ -398,6 +397,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             Utils.closeQuietly(this::stopServices, "herder services");
             Exit.exit(1);
         }
+    }
+
+    // public for testing
+    public Future<?> herderTask() {
+        return herderTask;
     }
 
     // public for testing

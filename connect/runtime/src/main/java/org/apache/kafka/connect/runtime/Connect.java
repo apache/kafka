@@ -36,7 +36,7 @@ public class Connect<H extends Herder> {
     private static final Logger log = LoggerFactory.getLogger(Connect.class);
 
     private final H herder;
-    private Future<?> distributedHerderFuture;
+    private Future<?> herderTask;
     private final ConnectRestServer rest;
     private final CountDownLatch startLatch = new CountDownLatch(1);
     private final CountDownLatch stopLatch = new CountDownLatch(1);
@@ -50,9 +50,12 @@ public class Connect<H extends Herder> {
         shutdownHook = new ShutdownHook();
     }
 
-    // public for testing
-    public Future<?> getDistributedHerderFuture() {
-        return this.distributedHerderFuture;
+    /**
+     * Track task status which have been submitted to work thread.
+     * @return {@link DistributedHerder#herderTask} to track status or null if the herder type doesn't have a separate work thread
+     */
+    public Future<?> herderTask() {
+        return this.herderTask;
     }
 
     public H herder() {
@@ -68,7 +71,7 @@ public class Connect<H extends Herder> {
             rest.initializeResources(herder);
 
             if (herder instanceof DistributedHerder) {
-                distributedHerderFuture = ((DistributedHerder) herder).herderFuture;
+                herderTask = ((DistributedHerder) herder).herderTask();
             }
 
             log.info("Kafka Connect started");
