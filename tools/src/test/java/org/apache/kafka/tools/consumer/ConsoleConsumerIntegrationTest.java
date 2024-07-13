@@ -20,30 +20,37 @@ import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.MessageFormatter;
+import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.util.Iterator;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
-import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
-import static org.apache.kafka.clients.CommonClientConfigs.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
@@ -53,6 +60,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENC
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @ExtendWith(value = ClusterTestExtensions.class)
 @Tag("integration")
@@ -60,7 +68,17 @@ public class ConsoleConsumerIntegrationTest {
 
     private final ClusterInstance cluster;
     private final String topic = "test-topic";
-    private final String groupId = "test-group";
+    private final String transactionId = "transactional-id";
+    private final TransactionLogKey txnLogKey = new TransactionLogKey()
+            .setTransactionalId(transactionId);
+    private final TransactionLogValue txnLogValue = new TransactionLogValue()
+            .setProducerId(100)
+            .setProducerEpoch((short) 50)
+            .setTransactionStatus((byte) 4)
+            .setTransactionStartTimestampMs(750L)
+            .setTransactionLastUpdateTimestampMs(1000L)
+            .setTransactionTimeoutMs(500)
+            .setTransactionPartitions(emptyList());
 
     public ConsoleConsumerIntegrationTest(ClusterInstance cluster) {
         this.cluster = cluster;
@@ -69,38 +87,43 @@ public class ConsoleConsumerIntegrationTest {
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 3)
     public void testTransactionLogMessageFormatter() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            // send transaction by producer
+
+            List<TransactionLogTestcase> testcases = generateTestcases();
+            
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
             admin.createTopics(singleton(newTopic));
-            produceMessages(cluster);
+            produceMessages(cluster, testcases);
 
-            // read the data from transaction topic by ConsoleConsumer with new formatter
             String[] transactionLogMessageFormatter = new String[]{
                 "--bootstrap-server", cluster.bootstrapServers(),
                 "--topic", topic,
                 "--partition", "0",
                 "--formatter", "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter",
+                "--isolation-level", "read_committed",
+                "--from-beginning"
             };
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(transactionLogMessageFormatter);
             Consumer<byte[], byte[]> consumer = createConsumer(cluster);
             ConsoleConsumer.ConsumerWrapper consoleConsumer = new ConsoleConsumer.ConsumerWrapper(options, consumer);
-            Iterator<ConsumerRecord<byte[], byte[]>> recordIter = consoleConsumer.recordIter;
-            recordIter.forEachRemaining(System.out::println);
+            testcases.forEach(testcase -> {
+                ConsumerRecord<byte[], byte[]> record = consoleConsumer.receive();
+                try (MessageFormatter formatter = new TransactionLogMessageFormatter()) {
+                    formatter.configure(emptyMap());
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    formatter.writeTo(record, new PrintStream(out));
+                    assertEquals(testcase.expectedOutput, out.toString());
+                }
+            });
             consoleConsumer.cleanup();
         }
     }
 
-    private void produceMessages(ClusterInstance cluster) {
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topic, new byte[100 * 1000]);
-        TopicPartition topicPartition = new TopicPartition(topic, 0);
-        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(0);
-        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId);
+    private void produceMessages(ClusterInstance cluster, List<TransactionLogTestcase> testcases) {
         try (Producer<byte[], byte[]> producer = createProducer(cluster)) {
             producer.initTransactions();
             producer.beginTransaction();
-            producer.send(record);
-            producer.sendOffsetsToTransaction(singletonMap(topicPartition, offsetAndMetadata), groupMetadata);
+            testcases.forEach(testcase -> producer.send(new ProducerRecord<>(topic, testcase.keyBuffer, testcase.valueBuffer)));
             producer.commitTransaction();
         }
     }
@@ -110,7 +133,7 @@ public class ConsoleConsumerIntegrationTest {
         props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         props.put(ENABLE_IDEMPOTENCE_CONFIG, "true");
         props.put(ACKS_CONFIG, "all");
-        props.put(TRANSACTIONAL_ID_CONFIG, "transactional-id");
+        props.put(TRANSACTIONAL_ID_CONFIG, transactionId);
         props.put(KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         return new KafkaProducer<>(props);
@@ -119,11 +142,71 @@ public class ConsoleConsumerIntegrationTest {
     private Consumer<byte[], byte[]> createConsumer(ClusterInstance cluster) {
         Properties props = new Properties();
         props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
         props.put(ISOLATION_LEVEL_CONFIG, "read_committed");
-        props.put(GROUP_ID_CONFIG, groupId);
+        props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
         return new KafkaConsumer<>(props);
+    }
+
+    private List<TransactionLogTestcase> generateTestcases() {
+        List<TransactionLogTestcase> testcases = new ArrayList<>();
+        testcases.add(new TransactionLogTestcase(
+                MessageUtil.toVersionPrefixedByteBuffer((short) 10, txnLogKey).array(),
+                MessageUtil.toVersionPrefixedByteBuffer((short) 10, txnLogValue).array(),
+                "{\"key\":{\"version\":10,\"data\":\"unknown\"}," +
+                        "\"value\":{\"version\":10,\"data\":\"unknown\"}}"
+        ));
+        testcases.add(new TransactionLogTestcase(
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 0, txnLogKey).array(),
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, txnLogValue).array(),
+                        "{\"key\":{\"version\":0,\"data\":{\"transactionalId\":\"transactional-id\"}}," +
+                                "\"value\":{\"version\":1,\"data\":{\"producerId\":100,\"producerEpoch\":50," +
+                                "\"transactionTimeoutMs\":500,\"transactionStatus\":4,\"transactionPartitions\":[]," +
+                                "\"transactionLastUpdateTimestampMs\":1000,\"transactionStartTimestampMs\":750}}}"
+        ));
+        testcases.add(new TransactionLogTestcase(
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 0, txnLogKey).array(),
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 5, txnLogValue).array(),
+                        "{\"key\":{\"version\":0,\"data\":{\"transactionalId\":\"transactional-id\"}}," +
+                                "\"value\":{\"version\":5,\"data\":\"unknown\"}}"
+        ));
+        testcases.add(new TransactionLogTestcase(
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, txnLogKey).array(),
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, txnLogValue).array(),
+                        "{\"key\":{\"version\":1,\"data\":\"unknown\"}," +
+                                "\"value\":{\"version\":1,\"data\":{\"producerId\":100,\"producerEpoch\":50," +
+                                "\"transactionTimeoutMs\":500,\"transactionStatus\":4,\"transactionPartitions\":[]," +
+                                "\"transactionLastUpdateTimestampMs\":1000,\"transactionStartTimestampMs\":750}}}"
+        ));
+        testcases.add(new TransactionLogTestcase(
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 0, txnLogKey).array(),
+                        null,
+                        "{\"key\":{\"version\":0,\"data\":{\"transactionalId\":\"transactional-id\"}}," +
+                                "\"value\":null}"
+        ));
+        testcases.add(new TransactionLogTestcase(
+                        null,
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 1, txnLogValue).array(),
+                        "{\"key\":null," +
+                                "\"value\":{\"version\":1,\"data\":{\"producerId\":100,\"producerEpoch\":50," +
+                                "\"transactionTimeoutMs\":500,\"transactionStatus\":4,\"transactionPartitions\":[]," +
+                                "\"transactionLastUpdateTimestampMs\":1000,\"transactionStartTimestampMs\":750}}}"
+        ));
+        testcases.add(new TransactionLogTestcase(null, null, "{\"key\":null,\"value\":null}"));
+        return testcases;
+    }
+    
+    private static class TransactionLogTestcase {
+        byte[] keyBuffer;
+        byte[] valueBuffer;
+        String expectedOutput;
+
+        public TransactionLogTestcase(byte[] keyBuffer, byte[] valueBuffer, String expectedOutput) {
+            this.keyBuffer = keyBuffer;
+            this.valueBuffer = valueBuffer;
+            this.expectedOutput = expectedOutput;
+        }
     }
 }

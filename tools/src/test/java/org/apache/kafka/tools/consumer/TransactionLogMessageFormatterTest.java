@@ -30,11 +30,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.util.HashMap;
 import java.util.Optional;
 import java.util.stream.Stream;
 
 import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TransactionLogMessageFormatterTest {
@@ -106,7 +106,7 @@ public class TransactionLogMessageFormatterTest {
                 new RecordHeaders(), Optional.empty());
 
         try (MessageFormatter formatter = new TransactionLogMessageFormatter()) {
-            formatter.configure(new HashMap<>());
+            formatter.configure(emptyMap());
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             formatter.writeTo(record, new PrintStream(out));
             assertEquals(expectedOutput, out.toString());
