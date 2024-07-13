@@ -39,7 +39,7 @@ gradleEnterprise {
 
 buildCache {
     local {
-        enabled = !isCI
+        true 
     }
 
     remote(gradleEnterprise.buildCache) {
