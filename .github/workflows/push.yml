@@ -21,10 +21,10 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    #strategy:
-    #  matrix:
-    #    java: [8, 11, 17, 21]
-    #name: Compile and Check Java ${{ matrix.java }}
+    strategy:
+      matrix:
+        java: [8, 11, 17, 21]
+    name: Compile and Check Java ${{ matrix.java }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -32,7 +32,7 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: temurin
-        java-version: 21
+        java-version: ${{ matrix.java }}
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       env:
@@ -48,5 +48,5 @@ jobs:
           jdks
         gradle-home-cache-cleanup: true
         cache-overwrite-existing: true
-    - name: Gradle build
-      run: ./gradlew --build-cache --info :metadata:compileTestJava
+    - name: Compile and validate
+      run: ./gradlew --info check -x test
