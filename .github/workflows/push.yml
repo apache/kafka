@@ -21,10 +21,10 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        java: [8, 11, 17, 21]
-    name: Compile and Check Java ${{ matrix.java }}
+    #strategy:
+    #  matrix:
+    #    java: [8, 11, 17, 21]
+    #name: Compile and Check Java ${{ matrix.java }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -32,7 +32,7 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: temurin
-        java-version: ${{ matrix.java }}
+        java-version: 21
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       env:
@@ -42,10 +42,11 @@ jobs:
         # Only write to the cache from trunk
         #cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
         # Cache downloaded JDKs in addition to the default directories.
-        #gradle-home-cache-includes: |
-        #  caches
-        #  notifications
-        #  jdks
-        #gradle-home-cache-cleanup: true
+        gradle-home-cache-includes: |
+          caches
+          notifications
+          jdks
+        gradle-home-cache-cleanup: true
+        cache-overwrite-existing: true
     - name: Gradle build
-      run: ./gradlew --build-cache --info :metadata:test
+      run: ./gradlew --build-cache --info :metadata:compileTestJava
