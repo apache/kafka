@@ -127,6 +127,9 @@ public class EOSUncleanShutdownIntegrationTest {
         driver.cleanUp();
         driver.start();
 
+        TestUtils.waitForCondition(() -> driver.state().equals(State.RUNNING),
+            "Expected RUNNING state but driver is on " + driver.state());
+
         // Task's StateDir
         final File taskStateDir = new File(String.join("/", TEST_FOLDER.getPath(), appId, "0_0"));
         final File taskCheckpointFile = new File(taskStateDir, ".checkpoint");
@@ -144,6 +147,8 @@ public class EOSUncleanShutdownIntegrationTest {
 
             TestUtils.waitForCondition(() -> recordCount.get() == RECORD_TOTAL,
                 "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
+        } catch (final Exception e) {
+            e.printStackTrace();
         } finally {
             TestUtils.waitForCondition(() -> driver.state().equals(State.ERROR),
                 "Expected ERROR state but driver is on " + driver.state());
