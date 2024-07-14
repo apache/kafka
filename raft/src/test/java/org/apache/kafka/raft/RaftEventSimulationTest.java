@@ -947,7 +947,7 @@ public class RaftEventSimulationTest {
          * Returns if the message should be sent to the destination.
          *
          * Returns false when outbound request messages contains a destination {@code Node} that
-         * matches the set of unreaable {@code InetSocketAddress}. Note that the {@code Node.id()}
+         * matches the set of unreachable {@code InetSocketAddress}. Note that the {@code Node.id()}
          * and {@code Node.rack()} are not compared.
          *
          * @param message the raft message
@@ -1114,7 +1114,7 @@ public class RaftEventSimulationTest {
                         assertEquals(
                             logStartOffset,
                             earliestSnapshotId.offset(),
-                            () -> String.format("mising snapshot at log start offset: nodeId = %s", nodeId)
+                            () -> String.format("missing snapshot at log start offset: nodeId = %s", nodeId)
                         );
                     }
                 });
