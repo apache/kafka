@@ -48,12 +48,13 @@ import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.log4j.Level;
 import org.apache.log4j.spi.LoggingEvent;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.PrintStream;
-import java.util.AbstractMap;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -64,6 +65,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -71,7 +73,6 @@ import javax.management.InstanceAlreadyExistsException;
 
 import scala.Console;
 import scala.Option;
-import scala.Tuple2;
 import scala.collection.JavaConverters;
 
 import static org.apache.kafka.common.acl.AccessControlEntryFilter.ANY;
@@ -99,20 +100,34 @@ import static org.apache.kafka.common.resource.ResourceType.TRANSACTIONAL_ID;
 import static org.apache.kafka.common.resource.ResourceType.USER;
 import static org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST;
 import static org.apache.kafka.server.config.ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(serverProperties = {
         @ClusterConfigProperty(key = StandardAuthorizer.SUPER_USERS_CONFIG, value = "User:ANONYMOUS"),
-        @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = "kafka.security.authorizer.AclAuthorizer")
+        @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = AclCommandTest.ACL_AUTHORIZER)
 })
 @ExtendWith(ClusterTestExtensions.class)
 @Tag("integration")
 public class AclCommandTest {
-    private static final String ADD = "--add";
+    public static final String ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer";
     private static final String STANDARD_AUTHORIZER = "org.apache.kafka.metadata.authorizer.StandardAuthorizer";
+    private static final String LOCALHOST = "localhost:9092";
+    private static final String AUTHORIZER = "--authorizer";
+    private static final String AUTHORIZER_PROPERTIES = AUTHORIZER + "-properties";
+    private static final String ADD = "--add";
+    private static final String BOOTSTRAP_SERVER = "--bootstrap-server";
+    private static final String COMMAND_CONFIG = "--command-config";
+    private static final String CONSUMER = "--consumer";
+    private static final String LIST = "--list";
+    private static final String REMOVE = "--remove";
+    private static final String PRODUCER = "--producer";
+    private static final String OPERATION = "--operation";
+    private static final String ZOOKEEPER_CONNECT = "zookeeper.connect=localhost:2181";
     private static final KafkaPrincipal PRINCIPAL = SecurityUtils.parseKafkaPrincipal("User:test2");
     private static final Set<KafkaPrincipal> USERS = new HashSet<>(Arrays.asList(
             SecurityUtils.parseKafkaPrincipal("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"),
@@ -154,52 +169,55 @@ public class AclCommandTest {
             put(USER_RESOURCES, Arrays.asList("--user-principal", "User:test-user1", "--user-principal", "User:test-user2"));
         }};
 
-    private static final Map<Set<ResourcePattern>, Tuple2<Set<AclOperation>, List<String>>> RESOURCE_TO_OPERATIONS =
-            new HashMap<Set<ResourcePattern>, Tuple2<Set<AclOperation>, List<String>>>() {{
-                put(TOPIC_RESOURCES, new Tuple2<>(
+    private static final Map<Set<ResourcePattern>, Map.Entry<Set<AclOperation>, List<String>>> RESOURCE_TO_OPERATIONS =
+            new HashMap<Set<ResourcePattern>, Map.Entry<Set<AclOperation>, List<String>>>() {{
+                put(TOPIC_RESOURCES, new SimpleImmutableEntry<>(
                         new HashSet<>(Arrays.asList(READ, WRITE, CREATE, DESCRIBE, DELETE, DESCRIBE_CONFIGS, ALTER_CONFIGS, ALTER)),
-                        Arrays.asList("--operation", "Read", "--operation", "Write", "--operation", "Create", "--operation", "Describe", "--operation", "Delete",
-                                "--operation", "DescribeConfigs", "--operation", "AlterConfigs", "--operation", "Alter"))
+                        Arrays.asList(OPERATION, "Read", OPERATION, "Write", OPERATION, "Create",
+                                OPERATION, "Describe", OPERATION, "Delete", OPERATION, "DescribeConfigs",
+                                OPERATION, "AlterConfigs", OPERATION, "Alter"))
                 );
-                put(Collections.singleton(CLUSTER_RESOURCE), new Tuple2<>(
+                put(Collections.singleton(CLUSTER_RESOURCE), new SimpleImmutableEntry<>(
                         new HashSet<>(Arrays.asList(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE)),
-                        Arrays.asList("--operation", "Create", "--operation", "ClusterAction", "--operation", "DescribeConfigs",
-                                "--operation", "AlterConfigs", "--operation", "IdempotentWrite", "--operation", "Alter", "--operation", "Describe"))
+                        Arrays.asList(OPERATION, "Create", OPERATION, "ClusterAction", OPERATION, "DescribeConfigs",
+                                OPERATION, "AlterConfigs", OPERATION, "IdempotentWrite", OPERATION, "Alter", OPERATION, "Describe"))
                 );
-                put(GROUP_RESOURCES, new Tuple2<>(
+                put(GROUP_RESOURCES, new SimpleImmutableEntry<>(
                         new HashSet<>(Arrays.asList(READ, DESCRIBE, DELETE)),
-                        Arrays.asList("--operation", "Read", "--operation", "Describe", "--operation", "Delete"))
+                        Arrays.asList(OPERATION, "Read", OPERATION, "Describe", OPERATION, "Delete"))
                 );
-                put(TRANSACTIONAL_ID_RESOURCES, new Tuple2<>(
+                put(TRANSACTIONAL_ID_RESOURCES, new SimpleImmutableEntry<>(
                         new HashSet<>(Arrays.asList(DESCRIBE, WRITE)),
-                        Arrays.asList("--operation", "Describe", "--operation", "Write"))
+                        Arrays.asList(OPERATION, "Describe", OPERATION, "Write"))
                 );
-                put(TOKEN_RESOURCES, new Tuple2<>(Collections.singleton(DESCRIBE), Arrays.asList("--operation", "Describe")));
-                put(USER_RESOURCES, new Tuple2<>(
+                put(TOKEN_RESOURCES, new SimpleImmutableEntry<>(Collections.singleton(DESCRIBE), Arrays.asList(OPERATION, "Describe")));
+                put(USER_RESOURCES, new SimpleImmutableEntry<>(
                         new HashSet<>(Arrays.asList(CREATE_TOKENS, DESCRIBE_TOKENS)),
-                        Arrays.asList("--operation", "CreateTokens", "--operation", "DescribeTokens"))
+                        Arrays.asList(OPERATION, "CreateTokens", OPERATION, "DescribeTokens"))
                 );
             }};
 
     private static final Map<Set<ResourcePattern>, Set<AccessControlEntry>> CONSUMER_RESOURCE_TO_ACLS =
             new HashMap<Set<ResourcePattern>, Set<AccessControlEntry>>() {{
-                put(TOPIC_RESOURCES, asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW, asScalaSet(new HashSet<>(Arrays.asList(READ, DESCRIBE))), asScalaSet(HOSTS))));
-                put(GROUP_RESOURCES, asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW, asScalaSet(Collections.singleton(READ)), asScalaSet(HOSTS))));
+                put(TOPIC_RESOURCES, asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW,
+                        asScalaSet(new HashSet<>(Arrays.asList(READ, DESCRIBE))), asScalaSet(HOSTS))));
+                put(GROUP_RESOURCES, asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW,
+                        asScalaSet(Collections.singleton(READ)), asScalaSet(HOSTS))));
             }};
 
     private static final Map<List<String>, Map<Set<ResourcePattern>, Set<AccessControlEntry>>> CMD_TO_RESOURCES_TO_ACL =
             new HashMap<List<String>, Map<Set<ResourcePattern>, Set<AccessControlEntry>>>() {{
-                put(Collections.singletonList("--producer"), producerResourceToAcls(false));
-                put(Arrays.asList("--producer", "--idempotent"), producerResourceToAcls(true));
-                put(Collections.singletonList("--consumer"), CONSUMER_RESOURCE_TO_ACLS);
-                put(Arrays.asList("--producer", "--consumer"),
+                put(Collections.singletonList(PRODUCER), producerResourceToAcls(false));
+                put(Arrays.asList(PRODUCER, "--idempotent"), producerResourceToAcls(true));
+                put(Collections.singletonList(CONSUMER), CONSUMER_RESOURCE_TO_ACLS);
+                put(Arrays.asList(PRODUCER, CONSUMER),
                         CONSUMER_RESOURCE_TO_ACLS.entrySet().stream().map(entry -> {
                             Set<AccessControlEntry> value = new HashSet<>(entry.getValue());
                             value.addAll(producerResourceToAcls(false)
                                     .getOrDefault(entry.getKey(), Collections.emptySet()));
                             return new SimpleEntry<>(entry.getKey(), value);
                         }).collect(Collectors.toMap(Entry::getKey, Entry::getValue)));
-                put(Arrays.asList("--producer", "--idempotent", "--consumer"),
+                put(Arrays.asList(PRODUCER, "--idempotent", CONSUMER),
                         CONSUMER_RESOURCE_TO_ACLS.entrySet().stream().map(entry -> {
                             Set<AccessControlEntry> value = new HashSet<>(entry.getValue());
                             value.addAll(producerResourceToAcls(true)
@@ -208,15 +226,24 @@ public class AclCommandTest {
                         }).collect(Collectors.toMap(Entry::getKey, Entry::getValue)));
             }};
 
-    private final ClusterInstance cluster;
+    @ClusterTest(types = {Type.ZK})
+    public void testAclCliWithAuthorizer(ClusterInstance cluster) {
+        testAclCli(cluster, zkArgs(cluster));
+    }
 
-    AclCommandTest(ClusterInstance cluster) {
-        this.cluster = cluster;
+    @ClusterTests({
+            @ClusterTest(types = {Type.ZK}),
+            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
+                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
+            })
+    })
+    public void testAclCliWithAdminAPI(ClusterInstance cluster) {
+        testAclCli(cluster, adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
     @ClusterTest(types = {Type.ZK})
-    public void testAclCliWithAuthorizer() {
-        testAclCli(zkArgs());
+    public void testProducerConsumerCliWithAuthorizer(ClusterInstance cluster) {
+        testProducerConsumerCli(cluster, zkArgs(cluster));
     }
 
     @ClusterTests({
@@ -225,13 +252,8 @@ public class AclCommandTest {
                     @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
             })
     })
-    public void testAclCliWithAdminAPI() {
-        testAclCli(adminArgs(Optional.empty()));
-    }
-
-    @ClusterTest(types = {Type.ZK})
-    public void testProducerConsumerCliWithAuthorizer() {
-        testProducerConsumerCli(zkArgs());
+    public void testProducerConsumerCliWithAdminAPI(ClusterInstance cluster) {
+        testProducerConsumerCli(cluster, adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
     @ClusterTests({
@@ -240,21 +262,11 @@ public class AclCommandTest {
                     @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
             })
     })
-    public void testProducerConsumerCliWithAdminAPI() {
-        testProducerConsumerCli(adminArgs(Optional.empty()));
-    }
-
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
-    public void testAclCliWithClientId() {
+    public void testAclCliWithClientId(ClusterInstance cluster) {
         LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         Level previousLevel = LogCaptureAppender.setClassLoggerLevel(AppInfoParser.class, Level.WARN);
         try {
-            testAclCli(adminArgs(Optional.of(TestUtils.tempFile("client.id=my-client"))));
+            testAclCli(cluster, adminArgs(cluster.bootstrapServers(), Optional.of(TestUtils.tempFile("client.id=my-client"))));
         } finally {
             LogCaptureAppender.setClassLoggerLevel(AppInfoParser.class, previousLevel);
             LogCaptureAppender.unregister(appender);
@@ -266,8 +278,8 @@ public class AclCommandTest {
     }
 
     @ClusterTest(types = {Type.ZK})
-    public void testAclsOnPrefixedResourcesWithAuthorizer() {
-        testAclsOnPrefixedResources(zkArgs());
+    public void testAclsOnPrefixedResourcesWithAuthorizer(ClusterInstance cluster) {
+        testAclsOnPrefixedResources(cluster, zkArgs(cluster));
     }
 
     @ClusterTests({
@@ -276,22 +288,22 @@ public class AclCommandTest {
                     @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
             })
     })
-    public void testAclsOnPrefixedResourcesWithAdminAPI() {
-        testAclsOnPrefixedResources(adminArgs(Optional.empty()));
+    public void testAclsOnPrefixedResourcesWithAdminAPI(ClusterInstance cluster) {
+        testAclsOnPrefixedResources(cluster, adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
     @ClusterTest(types = {Type.ZK})
-    public void testInvalidAuthorizerProperty() {
+    public void testInvalidAuthorizerProperty(ClusterInstance cluster) {
         AclCommand.AuthorizerService aclCommandService = new AclCommand.AuthorizerService(
                 AclAuthorizer.class.getName(),
-                new AclCommandOptions(new String[]{"--authorizer-properties", "zookeeper.connect " + zkConnect()})
+                new AclCommandOptions(new String[]{AUTHORIZER_PROPERTIES, "zookeeper.connect " + zkConnect(cluster)})
         );
         assertThrows(IllegalArgumentException.class, aclCommandService::listAcls);
     }
 
     @ClusterTest(types = {Type.ZK})
-    public void testPatternTypesWithAuthorizer() {
-        testPatternTypes(zkArgs());
+    public void testPatternTypesWithAuthorizer(ClusterInstance cluster) {
+        testPatternTypes(zkArgs(cluster));
     }
 
     @ClusterTests({
@@ -300,11 +312,100 @@ public class AclCommandTest {
                     @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
             })
     })
-    public void testPatternTypesWithAdminAPI() {
-        testPatternTypes(adminArgs(Optional.empty()));
+    public void testPatternTypesWithAdminAPI(ClusterInstance cluster) {
+        testPatternTypes(adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
-    private void testProducerConsumerCli(List<String> cmdArgs) {
+    @Test
+    public void testUseBootstrapServerOptWithAuthorizerOpt() {
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, AUTHORIZER, ACL_AUTHORIZER),
+                "Only one of --bootstrap-server or --authorizer must be specified"
+        );
+    }
+
+    @Test
+    public void testRequiredArgsForAuthorizerOpt() {
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+                Arrays.asList(AUTHORIZER, ACL_AUTHORIZER),
+                "Missing required argument \"[authorizer-properties]\""
+        );
+        checkNotThrow(Arrays.asList(AUTHORIZER, ACL_AUTHORIZER, AUTHORIZER_PROPERTIES, ZOOKEEPER_CONNECT, LIST));
+    }
+
+    @Test
+    public void testUseCommandConfigOptWithoutBootstrapServerOpt() {
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+                Arrays.asList(COMMAND_CONFIG, "cfg.properties", AUTHORIZER, ACL_AUTHORIZER, AUTHORIZER_PROPERTIES, ZOOKEEPER_CONNECT),
+                "The --command-config option can only be used with --bootstrap-server option"
+        );
+    }
+
+    @Test
+    public void testUseAuthorizerPropertiesOptWithBootstrapServerOpt() {
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, AUTHORIZER_PROPERTIES, ZOOKEEPER_CONNECT),
+                "The --authorizer-properties option can only be used with --authorizer option"
+        );
+    }
+
+    @Test
+    public void testExactlyOneAction() {
+        String errMsg = "Command must include exactly one action: --list, --add, --remove. ";
+        assertInitializeInvalidOptionsExitCodeAndMsg(Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, LIST), errMsg);
+        assertInitializeInvalidOptionsExitCodeAndMsg(Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, LIST, REMOVE), errMsg);
+    }
+
+    @Test
+    public void testUseListPrincipalsOptWithoutListOpt() {
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, "--principal", "User:CN=client"),
+                "The --principal option is only available if --list is set"
+        );
+    }
+
+    @Test
+    public void testUseProducerOptWithoutTopicOpt() {
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, PRODUCER),
+                "With --producer you must specify a --topic"
+        );
+    }
+
+    @Test
+    public void testUseIdempotentOptWithoutProducerOpt() {
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, "--idempotent"),
+                "The --idempotent option is only available if --producer is set"
+        );
+    }
+
+    @Test
+    public void testUseConsumerOptWithoutRequiredOpt() {
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER),
+                "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified."
+        );
+        checkNotThrow(Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, "--topic", "test-topic", "--group", "test-group"));
+    }
+
+    @Test
+    public void testInvalidArgs() {
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, LIST, PRODUCER),
+                "Option \"[list]\" can't be used with option \"[producer]\""
+        );
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, PRODUCER, OPERATION),
+                "Option \"[producer]\" can't be used with option \"[operation]\""
+        );
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, OPERATION, "--topic", "test-topic", "--group", "test-group"),
+                "Option \"[consumer]\" can't be used with option \"[operation]\""
+        );
+    }
+
+    private void testProducerConsumerCli(ClusterInstance cluster, List<String> cmdArgs) {
         for (Map.Entry<List<String>, Map<Set<ResourcePattern>, Set<AccessControlEntry>>> entry : CMD_TO_RESOURCES_TO_ACL.entrySet()) {
             List<String> cmd = entry.getKey();
             Map<Set<ResourcePattern>, Set<AccessControlEntry>> resourcesToAcls = entry.getValue();
@@ -324,24 +425,26 @@ public class AclCommandTest {
 
             for (Map.Entry<Set<ResourcePattern>, Set<AccessControlEntry>> resourcesToAclsEntry : resourcesToAcls.entrySet()) {
                 for (ResourcePattern resource : resourcesToAclsEntry.getKey()) {
-                    withAuthorizer(authorizer -> TestUtils.waitAndVerifyAcls(asScalaSet(resourcesToAclsEntry.getValue()), authorizer, resource, ANY));
+                    withAuthorizer(cluster, authorizer ->
+                            TestUtils.waitAndVerifyAcls(asScalaSet(resourcesToAclsEntry.getValue()), authorizer, resource, ANY));
                 }
             }
             List<String> resourceCmd = new ArrayList<>(resourceCommand);
             resourceCmd.addAll(cmd);
-            testRemove(cmdArgs, resourcesToAcls.keySet().stream().flatMap(Set::stream).collect(Collectors.toSet()), resourceCmd);
+            testRemove(cluster, cmdArgs, resourcesToAcls.keySet().stream().flatMap(Set::stream).collect(Collectors.toSet()), resourceCmd);
         }
     }
 
-    private void testAclsOnPrefixedResources(List<String> cmdArgs) {
-        List<String> cmd = Arrays.asList("--allow-principal", PRINCIPAL.toString(), "--producer", "--topic", "Test-", "--resource-pattern-type", "Prefixed");
+    private void testAclsOnPrefixedResources(ClusterInstance cluster, List<String> cmdArgs) {
+        List<String> cmd = Arrays.asList("--allow-principal", PRINCIPAL.toString(), "--producer", "--topic", "Test-",
+                "--resource-pattern-type", "Prefixed");
 
         List<String> args = new ArrayList<>(cmdArgs);
         args.addAll(cmd);
         args.add(ADD);
         callMain(args);
 
-        withAuthorizer(authorizer -> {
+        withAuthorizer(cluster, authorizer -> {
             AccessControlEntry writeAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, WRITE, ALLOW);
             AccessControlEntry describeAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, DESCRIBE, ALLOW);
             AccessControlEntry createAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, CREATE, ALLOW);
@@ -355,11 +458,11 @@ public class AclCommandTest {
 
         args = new ArrayList<>(cmdArgs);
         args.addAll(cmd);
-        args.add("--remove");
+        args.add(REMOVE);
         args.add("--force");
         callMain(args);
 
-        withAuthorizer(authorizer -> {
+        withAuthorizer(cluster, authorizer -> {
             TestUtils.waitAndVerifyAcls(
                     asScalaSet(Collections.emptySet()),
                     authorizer,
@@ -376,43 +479,41 @@ public class AclCommandTest {
     }
 
     private static Map<Set<ResourcePattern>, Set<AccessControlEntry>> producerResourceToAcls(boolean enableIdempotence) {
-        return new HashMap<Set<ResourcePattern>, Set<AccessControlEntry>>() {{
-                put(TOPIC_RESOURCES, asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW, asScalaSet(
-                    new HashSet<>(Arrays.asList(WRITE, DESCRIBE, CREATE))), asScalaSet(HOSTS)))
-                );
-                put(TRANSACTIONAL_ID_RESOURCES, asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW, asScalaSet(
-                    new HashSet<>(Arrays.asList(WRITE, DESCRIBE))), asScalaSet(HOSTS)))
-                );
-                put(Collections.singleton(CLUSTER_RESOURCE), asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW,
-                    enableIdempotence ? asScalaSet(Collections.singleton(IDEMPOTENT_WRITE)) : asScalaSet(Collections.emptySet()), asScalaSet(HOSTS)))
-                );
-            }};
+        Map<Set<ResourcePattern>, Set<AccessControlEntry>> result = new HashMap<>();
+        result.put(TOPIC_RESOURCES, asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW, asScalaSet(
+                new HashSet<>(Arrays.asList(WRITE, DESCRIBE, CREATE))), asScalaSet(HOSTS))));
+        result.put(TRANSACTIONAL_ID_RESOURCES, asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW, asScalaSet(
+                new HashSet<>(Arrays.asList(WRITE, DESCRIBE))), asScalaSet(HOSTS))));
+        result.put(Collections.singleton(CLUSTER_RESOURCE), asJavaSet(AclCommand.getAcls(asScalaSet(USERS), ALLOW,
+                enableIdempotence
+                        ? asScalaSet(Collections.singleton(IDEMPOTENT_WRITE))
+                        : asScalaSet(Collections.emptySet()), asScalaSet(HOSTS))));
+        return result;
     }
 
-    private List<String> adminArgs(Optional<File> commandConfig) {
-        List<String> adminArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", cluster.bootstrapServers()));
-        commandConfig.ifPresent(file -> adminArgs.addAll(Arrays.asList("--command-config", file.getAbsolutePath())));
+    private List<String> adminArgs(String bootstrapServer, Optional<File> commandConfig) {
+        List<String> adminArgs = new ArrayList<>(Arrays.asList(BOOTSTRAP_SERVER, bootstrapServer));
+        commandConfig.ifPresent(file -> adminArgs.addAll(Arrays.asList(COMMAND_CONFIG, file.getAbsolutePath())));
         return adminArgs;
     }
 
     private Map.Entry<String, String> callMain(List<String> args) {
-        AclCommand.main(args.toArray(new String[0]));
         return grabConsoleOutputAndError(() -> AclCommand.main(args.toArray(new String[0])));
     }
 
-    private void testAclCli(List<String> cmdArgs) {
+    private void testAclCli(ClusterInstance cluster, List<String> cmdArgs) {
         for (Map.Entry<Set<ResourcePattern>, List<String>> entry : RESOURCE_TO_COMMAND.entrySet()) {
             Set<ResourcePattern> resources = entry.getKey();
             List<String> resourceCmd = entry.getValue();
             Set<AclPermissionType> permissionTypes = new HashSet<>(Arrays.asList(ALLOW, DENY));
             for (AclPermissionType permissionType : permissionTypes) {
-                Tuple2<Set<AclOperation>, List<String>> operationToCmd = RESOURCE_TO_OPERATIONS.get(resources);
-                Tuple2<Set<AccessControlEntry>, List<String>> aclToCommand = getAclToCommand(permissionType, operationToCmd._1);
+                Map.Entry<Set<AclOperation>, List<String>> operationToCmd = RESOURCE_TO_OPERATIONS.get(resources);
+                Map.Entry<Set<AccessControlEntry>, List<String>> aclToCommand = getAclToCommand(permissionType, operationToCmd.getKey());
 
                 List<String> resultArgs = new ArrayList<>(cmdArgs);
-                resultArgs.addAll(aclToCommand._2);
+                resultArgs.addAll(aclToCommand.getValue());
                 resultArgs.addAll(resourceCmd);
-                resultArgs.addAll(operationToCmd._2);
+                resultArgs.addAll(operationToCmd.getValue());
                 resultArgs.add(ADD);
 
                 Map.Entry<String, String> out = callMain(resultArgs);
@@ -420,17 +521,18 @@ public class AclCommandTest {
                 assertEquals("", out.getValue());
 
                 for (ResourcePattern resource : resources) {
-                    withAuthorizer(authorizer -> TestUtils.waitAndVerifyAcls(asScalaSet(aclToCommand._1), authorizer, resource, ANY));
+                    withAuthorizer(cluster, authorizer ->
+                            TestUtils.waitAndVerifyAcls(asScalaSet(aclToCommand.getKey()), authorizer, resource, ANY));
                 }
 
                 resultArgs = new ArrayList<>(cmdArgs);
-                resultArgs.add("--list");
+                resultArgs.add(LIST);
 
                 out = callMain(resultArgs);
                 assertOutputContains("Current ACLs", resources, resourceCmd, out.getKey());
                 assertEquals("", out.getValue());
 
-                testRemove(cmdArgs, resources, resourceCmd);
+                testRemove(cluster, cmdArgs, resources, resourceCmd);
             }
         }
     }
@@ -449,7 +551,10 @@ public class AclCommandTest {
                     : resourceCmd.stream().filter(s -> !s.startsWith("--")).collect(Collectors.toList());
 
             cmd.forEach(name -> {
-                String expected = String.format("%s for resource `ResourcePattern(resourceType=%s, name=%s, patternType=LITERAL)`:", prefix, resourceType, name);
+                String expected = String.format(
+                        "%s for resource `ResourcePattern(resourceType=%s, name=%s, patternType=LITERAL)`:",
+                        prefix, resourceType, name
+                );
                 assertTrue(output.contains(expected), "Substring " + expected + " not in output:\n" + output);
             });
         });
@@ -470,11 +575,11 @@ public class AclCommandTest {
                 verifyPatternType(addCmd, patternType.isSpecific());
 
                 List<String> listCmd = new ArrayList<>(cmdArgs);
-                listCmd.addAll(Arrays.asList("--topic", "Test", "--list", "--resource-pattern-type", patternType.toString()));
+                listCmd.addAll(Arrays.asList("--topic", "Test", LIST, "--resource-pattern-type", patternType.toString()));
                 verifyPatternType(listCmd, patternType != PatternType.UNKNOWN);
 
                 List<String> removeCmd = new ArrayList<>(cmdArgs);
-                removeCmd.addAll(Arrays.asList("--topic", "Test", "--force", "--remove", "--resource-pattern-type", patternType.toString()));
+                removeCmd.addAll(Arrays.asList("--topic", "Test", "--force", REMOVE, "--resource-pattern-type", patternType.toString()));
                 verifyPatternType(removeCmd, patternType != PatternType.UNKNOWN);
             });
         } finally {
@@ -489,23 +594,29 @@ public class AclCommandTest {
             assertThrows(RuntimeException.class, () -> callMain(cmd));
     }
 
-    private void testRemove(List<String> cmdArgs, Set<ResourcePattern> resources, List<String> resourceCmd) {
+    private void testRemove(
+            ClusterInstance cluster,
+            List<String> cmdArgs,
+            Set<ResourcePattern> resources,
+            List<String> resourceCmd
+    ) {
         List<String> args = new ArrayList<>(cmdArgs);
         args.addAll(resourceCmd);
-        args.add("--remove");
+        args.add(REMOVE);
         args.add("--force");
         Map.Entry<String, String> out = callMain(args);
         assertEquals("", out.getValue());
         for (ResourcePattern resource : resources) {
-            withAuthorizer(authorizer -> TestUtils.waitAndVerifyAcls(asScalaSet(Collections.emptySet()), authorizer, resource, ANY));
+            withAuthorizer(cluster, authorizer ->
+                    TestUtils.waitAndVerifyAcls(asScalaSet(Collections.emptySet()), authorizer, resource, ANY));
         }
     }
 
-    private Tuple2<Set<AccessControlEntry>, List<String>> getAclToCommand(
+    private Map.Entry<Set<AccessControlEntry>, List<String>> getAclToCommand(
             AclPermissionType permissionType,
             Set<AclOperation> operations
     ) {
-        return new Tuple2<>(
+        return new SimpleImmutableEntry<>(
                 asJavaSet(AclCommand.getAcls(asScalaSet(USERS), permissionType, asScalaSet(operations), asScalaSet(HOSTS))),
                 getCmd(permissionType)
         );
@@ -524,16 +635,18 @@ public class AclCommandTest {
         return fullCmd;
     }
 
-    private void withAuthorizer(Consumer<Authorizer> consumer) {
+    private void withAuthorizer(ClusterInstance cluster, Consumer<Authorizer> consumer) {
         if (cluster.isKRaftTest()) {
             List<Authorizer> allAuthorizers = new ArrayList<>();
-            allAuthorizers.addAll(asKraftCluster().brokers().values().stream().map(server -> server.authorizer().get()).collect(Collectors.toList()));
-            allAuthorizers.addAll(asKraftCluster().controllers().values().stream().map(server -> server.authorizer().get()).collect(Collectors.toList()));
+            allAuthorizers.addAll(asKraftCluster(cluster).brokers().values().stream()
+                    .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+            allAuthorizers.addAll(asKraftCluster(cluster).controllers().values().stream()
+                    .map(server -> server.authorizer().get()).collect(Collectors.toList()));
             allAuthorizers.forEach(consumer);
         } else {
             Properties props = new Properties();
             props.putAll(cluster.config().serverProperties());
-            props.put("zookeeper.connect", zkConnect());
+            props.put("zookeeper.connect", zkConnect(cluster));
             try (AclAuthorizer auth = new AclAuthorizer()) {
                 auth.configure(KafkaConfig.fromProps(props, false).originals());
                 consumer.accept(auth);
@@ -562,7 +675,7 @@ public class AclCommandTest {
             err.flush();
         }
 
-        return new AbstractMap.SimpleImmutableEntry<>(outBuf.toString(), errBuf.toString());
+        return new SimpleImmutableEntry<>(outBuf.toString(), errBuf.toString());
     }
 
     @SuppressWarnings("deprecation")
@@ -575,15 +688,42 @@ public class AclCommandTest {
         return JavaConverters.setAsJavaSet(scalaSet);
     }
 
-    private String zkConnect() {
+    private String zkConnect(ClusterInstance cluster) {
         return ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
     }
 
-    private KafkaClusterTestKit asKraftCluster() {
+    private KafkaClusterTestKit asKraftCluster(ClusterInstance cluster) {
         return ((RaftClusterInvocationContext.RaftClusterInstance) cluster).getUnderlying();
     }
 
-    private List<String> zkArgs() {
-        return Arrays.asList("--authorizer-properties", "zookeeper.connect=" + zkConnect());
+    private List<String> zkArgs(ClusterInstance cluster) {
+        return Arrays.asList("--authorizer-properties", "zookeeper.connect=" + zkConnect(cluster));
+    }
+
+    private void assertInitializeInvalidOptionsExitCodeAndMsg(List<String> args, String expectedMsg) {
+        Exit.setExitProcedure((exitCode, message) -> {
+            assertEquals(1, exitCode);
+            assertTrue(message.contains(expectedMsg));
+            throw new RuntimeException();
+        });
+        try {
+            assertThrows(RuntimeException.class, () -> new AclCommandOptions(args.toArray(new String[0])).checkArgs());
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    private void checkNotThrow(List<String> args) {
+        AtomicReference<Integer> exitStatus = new AtomicReference<>();
+        org.apache.kafka.common.utils.Exit.setExitProcedure((status, __) -> {
+            exitStatus.set(status);
+            throw new RuntimeException();
+        });
+        try {
+            assertDoesNotThrow(() -> new AclCommandOptions(args.toArray(new String[0])).checkArgs());
+            assertNull(exitStatus.get());
+        } finally {
+            org.apache.kafka.common.utils.Exit.resetExitProcedure();
+        }
     }
 }
