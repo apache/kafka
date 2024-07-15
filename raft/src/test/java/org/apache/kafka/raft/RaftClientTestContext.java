@@ -732,7 +732,7 @@ public final class RaftClientTestContext {
         ObjectSerializationCache cache =  new ObjectSerializationCache();
         ByteArrayOutputStream  buffer = new ByteArrayOutputStream(message.size(cache, version));
 
-        // Endode the message to a byte array with the given version
+        // Encode the message to a byte array with the given version
         DataOutputStreamWritable writer = new DataOutputStreamWritable(new DataOutputStream(buffer));
         message.write(writer, cache, version);
 
