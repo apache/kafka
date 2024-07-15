@@ -313,7 +313,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         for (Map.Entry<String, Short> feature : finalizedFeatures.entrySet()) {
             final FinalizedFeatureKey key = new FinalizedFeatureKey();
             final short versionLevel = feature.getValue();
-                if (versionLevel != 0) {
+            if (versionLevel != 0) {
                 key.setName(feature.getKey());
                 key.setMinVersionLevel(versionLevel);
                 key.setMaxVersionLevel(versionLevel);
