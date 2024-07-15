@@ -54,6 +54,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         String INCLUDE = "include";
 
         String RENAME = "renames";
+        String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
     }
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
@@ -76,7 +77,9 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
                 public String toString() {
                     return "list of colon-delimited pairs, e.g. <code>foo:bar,abc:xyz</code>";
                 }
-            }, ConfigDef.Importance.MEDIUM, "Field rename mappings.");
+            }, ConfigDef.Importance.MEDIUM, "Field rename mappings.")
+            .define(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
+                    "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
     private static final String PURPOSE = "field replacement";
 
@@ -84,6 +87,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
     private Set<String> include;
     private Map<String, String> renames;
     private Map<String, String> reverseRenames;
+    private boolean replaceNullWithDefault;
 
     private Cache<Schema, Schema> schemaUpdateCache;
 
@@ -103,6 +107,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         include = new HashSet<>(config.getList(ConfigName.INCLUDE));
         renames = parseRenameMappings(config.getList(ConfigName.RENAME));
         reverseRenames = invert(renames);
+        replaceNullWithDefault = config.getBoolean(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG);
 
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
@@ -180,7 +185,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         final Struct updatedValue = new Struct(updatedSchema);
 
         for (Field field : updatedSchema.fields()) {
-            final Object fieldValue = value.get(reverseRenamed(field.name()));
+            final Object fieldValue = replaceNullWithDefault ? value.get(reverseRenamed(field.name())) : value.getWithoutDefault(reverseRenamed(field.name()));
             updatedValue.put(field.name(), fieldValue);
         }
 
