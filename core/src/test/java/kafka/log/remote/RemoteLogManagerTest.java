@@ -970,6 +970,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldestSegmentStartOffset);
+        when(mockLog.logEndOffset()).thenReturn(500L);
         when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldestSegment, olderSegment, activeSegment)));
 
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
@@ -1004,21 +1005,19 @@ public class RemoteLogManagerTest {
         dummyFuture.complete(null);
         when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
-        Iterator<RemoteLogSegmentMetadata> iterator = listRemoteLogSegmentMetadata(leaderTopicIdPartition, 5, 100, 1024, RemoteLogSegmentState.COPY_SEGMENT_FINISHED).iterator();
-        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition)).thenReturn(iterator);
-        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 2)).thenReturn(iterator);
-        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 1)).thenReturn(iterator);
-
-        CountDownLatch remoteLogSizeComputationTimeLatch = new CountDownLatch(1);
-        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0)).thenAnswer(ans -> {
-            // advance the mock timer 1000ms to add value for RemoteLogSizeComputationTime metric
+        List<RemoteLogSegmentMetadata> segmentMetadata = listRemoteLogSegmentMetadata(leaderTopicIdPartition, 5, 100, 1024, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        RemoteLogSegmentMetadata firstSegment = spy(segmentMetadata.get(0));
+        // advance the mock timer 1000ms to add value for RemoteLogSizeComputationTime metric
+        doAnswer(invocation -> {
             time.sleep(1000);
-            return iterator;
-        }).thenAnswer(ans -> {
-            // wait for verifying RemoteLogSizeComputationTime metric value.
-            remoteLogSizeComputationTimeLatch.await(5000, TimeUnit.MILLISECONDS);
-            return Collections.emptyIterator();
-        });
+            return invocation.callRealMethod();
+        }).when(firstSegment).segmentSizeInBytes();
+        segmentMetadata.set(0, firstSegment);
+
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition)).thenReturn(segmentMetadata.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 2)).thenReturn(segmentMetadata.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 1)).thenReturn(segmentMetadata.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0)).thenReturn(segmentMetadata.iterator());
 
         CountDownLatch latch = new CountDownLatch(1);
         doAnswer(ans -> Optional.empty()).doAnswer(ans -> {
@@ -1064,8 +1063,6 @@ public class RemoteLogManagerTest {
                 String.format("Expected to find 1000 for RemoteLogSizeComputationTime metric value, but found %d for topic 'Leader' and %d for all topics.",
                         safeLongYammerMetricValue("RemoteLogSizeComputationTime,topic=" + leaderTopic),
                         safeLongYammerMetricValue("RemoteLogSizeComputationTime")));
-        remoteLogSizeComputationTimeLatch.countDown();
-        
         TestUtils.waitForCondition(
                 () -> 0 == safeLongYammerMetricValue("RemoteCopyLagBytes") && 0 == safeLongYammerMetricValue("RemoteCopyLagBytes,topic=" + leaderTopic),
                 String.format("Expected to find 0 for RemoteCopyLagBytes metric value, but found %d for topic 'Leader' and %d for all topics.",
