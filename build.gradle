@@ -1934,7 +1934,9 @@ project(':storage') {
     implementation project(':storage:storage-api')
     implementation project(':server-common')
     implementation project(':clients')
-    implementation libs.caffeine
+    implementation(libs.caffeine) {
+      exclude group: 'org.checkerframework', module: 'checker-qual'
+    }
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
     implementation libs.metrics

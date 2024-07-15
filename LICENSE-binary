@@ -319,7 +319,6 @@ activation-1.1.1
 MIT License
 
 argparse4j-0.7.0, see: licenses/argparse-MIT
-checker-qual-3.19.0, see: licenses/checker-qual-MIT
 jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
 slf4j-api-1.7.36, see: licenses/slf4j-MIT
 slf4j-reload4j-1.7.36, see: licenses/slf4j-MIT
