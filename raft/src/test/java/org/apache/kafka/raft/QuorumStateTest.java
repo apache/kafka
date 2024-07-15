@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.raft.internals.VoterSetTest;
@@ -62,11 +63,22 @@ public class QuorumStateTest {
         VoterSet voterSet,
         KRaftVersion kraftVersion
     ) {
+        KRaftControlRecordStateMachine mockPartitionState = Mockito.mock(KRaftControlRecordStateMachine.class);
+
+        Mockito
+            .when(mockPartitionState.lastVoterSet())
+            .thenReturn(voterSet);
+        Mockito
+            .when(mockPartitionState.lastVoterSetOffset())
+            .thenReturn(kraftVersion.isReconfigSupported() ? OptionalLong.of(0) : OptionalLong.empty());
+        Mockito
+            .when(mockPartitionState.lastKraftVersion())
+            .thenReturn(kraftVersion);
+
         return new QuorumState(
             localId,
             localDirectoryId,
-            () -> voterSet,
-            () -> kraftVersion,
+            mockPartitionState,
             localId.isPresent() ? voterSet.listeners(localId.getAsInt()) : Endpoints.empty(),
             electionTimeoutMs,
             fetchTimeoutMs,
