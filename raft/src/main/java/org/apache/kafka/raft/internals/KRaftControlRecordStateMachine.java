@@ -39,7 +39,7 @@ import java.util.OptionalLong;
  * The KRaft state machine for tracking control records in the topic partition.
  *
  * This type keeps track of changes to the finalized kraft.version and the sets of voters between
- * the latest snasphot and the log end offset.
+ * the latest snapshot and the log end offset.
  *
  * There are two type of actors/threads accessing this type. One is the KRaft driver which indirectly call a lot of
  * the public methods. The other actors/threads are the callers of {@code RaftClient.createSnapshot} which
@@ -138,6 +138,15 @@ public final class KRaftControlRecordStateMachine {
     }
 
     /**
+     * Returns the offset of the last voter set.
+     */
+    public OptionalLong lastVoterSetOffset() {
+        synchronized (voterSetHistory) {
+            return voterSetHistory.lastVoterSetOffset();
+        }
+    }
+
+    /**
      * Returns the last kraft version.
      */
     public short lastKraftVersion() {
@@ -189,7 +198,7 @@ public final class KRaftControlRecordStateMachine {
     }
 
     private void maybeLoadLog() {
-        while (log.endOffset().offset > nextOffset) {
+        while (log.endOffset().offset() > nextOffset) {
             LogFetchInfo info = log.read(nextOffset, Isolation.UNCOMMITTED);
             try (RecordsIterator<?> iterator = new RecordsIterator<>(
                     info.records,

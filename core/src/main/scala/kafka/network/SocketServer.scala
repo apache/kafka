@@ -974,7 +974,7 @@ private[kafka] class Processor(
       credentialProvider.tokenCache,
       time,
       logContext,
-      () => apiVersionManager.apiVersionResponse(throttleTimeMs = 0)
+      version => apiVersionManager.apiVersionResponse(throttleTimeMs = 0, version < 4)
     )
   )
 
@@ -1315,11 +1315,7 @@ private[kafka] class Processor(
 
   // 'protected` to allow override for testing
   protected[network] def connectionId(socket: Socket): String = {
-    val localHost = socket.getLocalAddress.getHostAddress
-    val localPort = socket.getLocalPort
-    val remoteHost = socket.getInetAddress.getHostAddress
-    val remotePort = socket.getPort
-    val connId = ConnectionId(localHost, localPort, remoteHost, remotePort, nextConnectionIndex).toString
+    val connId = KSelector.generateConnectionId(socket, nextConnectionIndex)
     nextConnectionIndex = if (nextConnectionIndex == Int.MaxValue) 0 else nextConnectionIndex + 1
     connId
   }
