@@ -17,6 +17,7 @@
 package kafka.zk
 
 import kafka.utils.{Logging, TestUtils}
+import kafka.zk.migration.{ZkAclMigrationClient, ZkConfigMigrationClient, ZkDelegationTokenMigrationClient, ZkTopicMigrationClient}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, TopicRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -25,14 +26,14 @@ import org.apache.kafka.controller.metrics.QuorumControllerMetrics
 import org.apache.kafka.image.loader.LogDeltaManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.KafkaConfigSchema
+import org.apache.kafka.metadata.{KafkaConfigSchema, PartitionRegistration}
 import org.apache.kafka.metadata.migration._
 import org.apache.kafka.raft.{LeaderAndEpoch, OffsetAndEpoch}
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.zookeeper.client.ZKClientConfig
-import org.junit.jupiter.api.Assertions.{assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertTrue, assertEquals, fail}
 import org.junit.jupiter.api.Test
 
 import java.util
@@ -69,6 +70,19 @@ class ZkMigrationFailoverTest extends Logging {
       future = new CompletableFuture[Throwable]()
       waitingForMsg = message
       future
+    }
+  }
+
+  class CapturingZkTopicMigrationClient(zkClient: KafkaZkClient) extends ZkTopicMigrationClient(zkClient) {
+    val createdTopics = mutable.Set[String]()
+    override def createTopic(
+      topicName: String,
+      topicId: Uuid,
+      partitions: util.Map[Integer, PartitionRegistration],
+      state: ZkMigrationLeadershipState
+    ): ZkMigrationLeadershipState = {
+      createdTopics.add(topicName)
+      super.createTopic(topicName, topicId, partitions, state)
     }
   }
 
@@ -269,7 +283,135 @@ class ZkMigrationFailoverTest extends Logging {
     } finally {
       driver1.close()
       driver2.close()
-      Utils.closeQuietly(zookeeper, "EmbeddedZookeeper")
+      zookeeper.shutdown()
+      if (zkClient != null) Utils.closeQuietly(zkClient, "KafkaZkClient")
+    }
+  }
+
+  @Test
+  def testDriverSkipsEventsFromOlderEpoch(): Unit = {
+    val zookeeper = new EmbeddedZookeeper()
+    var zkClient: KafkaZkClient = null
+    val zkConnect = s"127.0.0.1:${zookeeper.port}"
+    try {
+      zkClient = KafkaZkClient(
+        zkConnect,
+        isSecure = false,
+        30000,
+        60000,
+        1,
+        Time.SYSTEM,
+        name = "ZkMigrationFailoverTest",
+        new ZKClientConfig)
+    } catch {
+      case t: Throwable =>
+        zookeeper.shutdown()
+        if (zkClient != null) Utils.closeQuietly(zkClient, "KafkaZkClient")
+        throw t
+    }
+
+    val topicClient1 = new CapturingZkTopicMigrationClient(zkClient)
+    val topicClient2 = new CapturingZkTopicMigrationClient(zkClient)
+
+    def buildZkMigrationClient(topicClient: TopicMigrationClient): ZkMigrationClient = {
+      val configClient = new ZkConfigMigrationClient(zkClient, PasswordEncoder.NOOP)
+      val aclClient = new ZkAclMigrationClient(zkClient)
+      val delegationTokenClient = new ZkDelegationTokenMigrationClient(zkClient)
+      new ZkMigrationClient(zkClient, topicClient, configClient, aclClient, delegationTokenClient)
+    }
+
+    val zkMigrationClient1 = buildZkMigrationClient(topicClient1)
+    val zkMigrationClient2 = buildZkMigrationClient(topicClient2)
+
+    val (driver1, faultHandler1) = buildMigrationDriver(3000, zkMigrationClient1)
+    val (driver2, faultHandler2) = buildMigrationDriver(3001, zkMigrationClient2)
+
+    // Initialize data into /controller and /controller_epoch
+    zkClient.registerControllerAndIncrementControllerEpoch(0)
+    var zkState = zkMigrationClient1.claimControllerLeadership(
+      ZkMigrationLeadershipState.EMPTY.withNewKRaftController(3000, 1)
+    )
+
+    // Fake a complete migration
+    zkState = zkState.withKRaftMetadataOffsetAndEpoch(100, 10)
+    zkState = zkMigrationClient1.getOrCreateMigrationRecoveryState(zkState)
+
+    try {
+      driver1.start()
+      driver2.start()
+
+      val leader1 = new LeaderAndEpoch(OptionalInt.of(3000), 2)
+      var image = MetadataImage.EMPTY
+      val delta = new MetadataDelta(image)
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.latestProduction().featureLevel))
+      delta.replay(ZkMigrationState.MIGRATION.toRecord.message)
+
+      val provenance = new MetadataProvenance(210, 11, 1)
+      image = delta.apply(provenance)
+
+      val manifest = LogDeltaManifest.newBuilder()
+        .provenance(provenance)
+        .leaderAndEpoch(leader1)
+        .numBatches(1)
+        .elapsedNs(100)
+        .numBytes(42)
+        .build()
+
+      // Load an image into 3000 image and a leader event, this lets it become active and sync to ZK
+      driver1.onMetadataUpdate(delta, image, manifest)
+      driver1.onControllerChange(leader1)
+      driver2.onControllerChange(leader1)
+
+      // Wait until new leader has sync'd to ZK
+      TestUtils.waitUntilTrue(
+        () => safeGet(driver1.migrationState()).equals(MigrationDriverState.DUAL_WRITE),
+        "waiting for driver to enter DUAL_WRITE"
+      )
+
+      // Enqueue several metadata deltas and then process a leader change.
+      for (i <- 1 to 1000) {
+        val delta = new MetadataDelta(image)
+        delta.replay(new TopicRecord().setTopicId(Uuid.randomUuid()).setName(s"topic-$i"))
+        val provenance = new MetadataProvenance(210 + i, 11, 1)
+        image = delta.apply(provenance)
+        val manifest = LogDeltaManifest.newBuilder()
+          .provenance(provenance)
+          .leaderAndEpoch(leader1)
+          .numBatches(1)
+          .elapsedNs(100)
+          .numBytes(42)
+          .build()
+        driver1.onMetadataUpdate(delta, image, manifest)
+        driver2.onMetadataUpdate(delta, image, manifest)
+      }
+      Thread.sleep(50) // Give some events a chance to run
+
+      val leader2 = new LeaderAndEpoch(OptionalInt.of(3001), 3)
+      driver1.onControllerChange(leader2)
+
+      Thread.sleep(50) // Artificial delay for 3001 to see the leader change.
+      driver2.onControllerChange(leader2)
+
+      // Wait for driver 2 to become leader in ZK
+      TestUtils.waitUntilTrue(() => zkClient.getControllerId match {
+        case Some(nodeId) => nodeId == 3001
+        case None => false
+      }, "waiting for 3001 to claim ZK leadership")
+
+      TestUtils.waitUntilTrue(() => {
+        val topics = zkClient.getAllTopicsInCluster(false)
+        topics.size == 1000
+      }, "waiting for topics to be created in ZK.")
+
+      assertTrue(topicClient1.createdTopics.nonEmpty, "Expect first leader to write some topics")
+      assertTrue(topicClient2.createdTopics.nonEmpty, "Expect second leader to write some topics")
+      assertEquals(1000, topicClient1.createdTopics.size + topicClient2.createdTopics.size,
+        "Expect drivers to only write to ZK if they are the leader")
+    } finally {
+      driver1.close()
+      driver2.close()
       zookeeper.shutdown()
       if (zkClient != null) Utils.closeQuietly(zkClient, "KafkaZkClient")
     }
