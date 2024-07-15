@@ -17,8 +17,8 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.provider.FileConfigProvider;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.provider.FileConfigProvider;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.data.Struct;
@@ -30,8 +30,8 @@ import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -42,6 +42,7 @@ import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -68,6 +69,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import javax.ws.rs.core.Response;
+
 import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CONFIG;
@@ -90,18 +93,17 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERV
 import static org.apache.kafka.connect.runtime.WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_STORAGE_PREFIX;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
-import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG;
-import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.connect.util.clusters.ConnectAssertions.CONNECTOR_SETUP_DURATION_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
  * Test simple operations on the workers of a Connect cluster.
@@ -181,7 +183,7 @@ public class ConnectWorkerIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
                 "Connector tasks are not all in running state.");
 
-        Set<WorkerHandle> workers = connect.activeWorkers();
+        Set<WorkerHandle> workers = connect.healthyWorkers();
         assertTrue(workers.contains(extraWorker));
 
         connect.removeWorker(extraWorker);
@@ -189,7 +191,7 @@ public class ConnectWorkerIntegrationTest {
         connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
                 "Group of workers did not shrink in time.");
 
-        workers = connect.activeWorkers();
+        workers = connect.healthyWorkers();
         assertFalse(workers.contains(extraWorker));
     }
 
@@ -261,6 +263,25 @@ public class ConnectWorkerIntegrationTest {
         // Allow for the workers to discover that the coordinator is unavailable, wait is
         // heartbeat timeout * 2 + 4sec
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.requestTimeout(1000);
+        assertFalse(
+                connect.anyWorkersHealthy(),
+                "No workers should be healthy when underlying Kafka cluster is down"
+        );
+        connect.workers().forEach(worker -> {
+            try (Response response = connect.healthCheck(worker)) {
+                assertEquals(INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+                assertNotNull(response.getEntity());
+                String body = response.getEntity().toString();
+                String expectedSubstring = "Worker was unable to handle this request and may be unable to handle other requests";
+                assertTrue(
+                        body.contains(expectedSubstring),
+                        "Response body '" + body + "' did not contain expected message '" + expectedSubstring + "'"
+                );
+            }
+        });
+        connect.resetRequestTimeout();
 
         // Wait for the connector to be stopped
         assertTrue(stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS),
@@ -908,6 +929,8 @@ public class ConnectWorkerIntegrationTest {
     private void assertTimeoutException(Runnable operation, String expectedStageDescription) throws InterruptedException {
         connect.requestTimeout(1_000);
         AtomicReference<Throwable> latestError = new AtomicReference<>();
+
+        // Wait for the specific operation against the Connect cluster to time out
         waitForCondition(
                 () -> {
                     try {
@@ -940,7 +963,25 @@ public class ConnectWorkerIntegrationTest {
                     }
                 }
         );
-        connect.requestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
+
+        // Ensure that the health check endpoints of all workers also report the same timeout message
+        connect.workers().forEach(worker -> {
+            try (Response response = connect.healthCheck(worker)) {
+                assertEquals(INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+                assertNotNull(response.getEntity());
+                String body = response.getEntity().toString();
+                String expectedSubstring = "Worker was unable to handle this request and may be unable to handle other requests";
+                assertTrue(
+                        body.contains(expectedSubstring),
+                        "Response body '" + body + "' did not contain expected message '" + expectedSubstring + "'"
+                );
+                assertTrue(
+                        body.contains(expectedStageDescription),
+                        "Response body '" + body + "' did not contain expected message '" + expectedStageDescription + "'"
+                );
+            }
+        });
+        connect.resetRequestTimeout();
     }
 
     /**
@@ -1141,7 +1182,7 @@ public class ConnectWorkerIntegrationTest {
         connect.deleteConnector(CONNECTOR_NAME);
 
         // Roll the entire cluster
-        connect.activeWorkers().forEach(connect::removeWorker);
+        connect.healthyWorkers().forEach(connect::removeWorker);
 
         // Miserable hack: produce directly to the config topic and then wait a little bit
         // in order to trigger segment rollover and allow compaction to take place

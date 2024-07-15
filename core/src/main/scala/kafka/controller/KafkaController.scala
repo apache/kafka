@@ -2241,7 +2241,7 @@ class KafkaController(val config: KafkaConfig,
 
             case ElectionType.UNCLEAN =>
               val currentLeader = controllerContext.partitionLeadershipInfo(partition).get.leaderAndIsr.leader
-              currentLeader == LeaderAndIsr.NoLeader || !controllerContext.liveBrokerIds.contains(currentLeader)
+              currentLeader == LeaderAndIsr.NoLeader || !controllerContext.isLiveBroker(currentLeader)
           }
         }
 

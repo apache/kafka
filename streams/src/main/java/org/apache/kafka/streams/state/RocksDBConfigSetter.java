@@ -17,11 +17,10 @@
 package org.apache.kafka.streams.state;
 
 import org.rocksdb.Options;
-
-import java.util.Map;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Map;
 
 /**
  * An interface to that allows developers to customize the RocksDB settings for a given Store.

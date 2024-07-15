@@ -50,6 +50,36 @@ public class CoordinatorResult<T, U> {
     private final boolean replayRecords;
 
     /**
+     * The boolean indicating whether the records must be persisted
+     * atomically.
+     */
+    private final boolean isAtomic;
+
+    /**
+     * Constructs a Result with records.
+     *
+     * @param records   A non-null list of records.
+     */
+    public CoordinatorResult(
+        List<U> records
+    ) {
+        this(records, null, null, true, true);
+    }
+
+    /**
+     * Constructs a Result with records.
+     *
+     * @param records   A non-null list of records.
+     * @param isAtomic  A boolean indicating whether the result is atomic or not.
+     */
+    public CoordinatorResult(
+        List<U> records,
+        boolean isAtomic
+    ) {
+        this(records, null, null, true, isAtomic);
+    }
+
+    /**
      * Constructs a Result with records and a response.
      *
      * @param records   A non-null list of records.
@@ -59,7 +89,7 @@ public class CoordinatorResult<T, U> {
         List<U> records,
         T response
     ) {
-        this(records, response, null, true);
+        this(records, response, null, true, true);
     }
 
     /**
@@ -67,14 +97,14 @@ public class CoordinatorResult<T, U> {
      *
      * @param records       A non-null list of records.
      * @param appendFuture  The future to complete once the records are committed.
-     * @param replayRecords The replayRecords.
+     * @param replayRecords The records to replay.
      */
     public CoordinatorResult(
         List<U> records,
         CompletableFuture<Void> appendFuture,
         boolean replayRecords
     ) {
-        this(records, null, appendFuture, replayRecords);
+        this(records, null, appendFuture, replayRecords, true);
     }
 
     /**
@@ -83,7 +113,7 @@ public class CoordinatorResult<T, U> {
      * @param records       A non-null list of records.
      * @param response      A response.
      * @param appendFuture  The future to complete once the records are committed.
-     * @param replayRecords The replayRecords.
+     * @param replayRecords The records to replay.
      */
     public CoordinatorResult(
         List<U> records,
@@ -91,21 +121,30 @@ public class CoordinatorResult<T, U> {
         CompletableFuture<Void> appendFuture,
         boolean replayRecords
     ) {
+        this(records, response, appendFuture, replayRecords, true);
+    }
+
+    /**
+     * Constructs a Result with records, a response, an append-future, and replayRecords.
+     *
+     * @param records       A non-null list of records.
+     * @param response      A response.
+     * @param appendFuture  The future to complete once the records are committed.
+     * @param replayRecords The records to replay.
+     * @param isAtomic      A boolean indicating whether the result is atomic or not.
+     */
+    public CoordinatorResult(
+        List<U> records,
+        T response,
+        CompletableFuture<Void> appendFuture,
+        boolean replayRecords,
+        boolean isAtomic
+    ) {
         this.records = Objects.requireNonNull(records);
         this.response = response;
         this.appendFuture = appendFuture;
         this.replayRecords = replayRecords;
-    }
-
-    /**
-     * Constructs a Result with records and a response.
-     *
-     * @param records   A non-null list of records.
-     */
-    public CoordinatorResult(
-        List<U> records
-    ) {
-        this(records, null, null, true);
+        this.isAtomic = isAtomic;
     }
 
     /**
@@ -136,6 +175,13 @@ public class CoordinatorResult<T, U> {
         return replayRecords;
     }
 
+    /**
+     * @return Whether the result is atomic is not.
+     */
+    public boolean isAtomic() {
+        return isAtomic;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -146,6 +192,7 @@ public class CoordinatorResult<T, U> {
         if (!Objects.equals(records, that.records)) return false;
         if (!Objects.equals(response, that.response)) return false;
         if (!Objects.equals(replayRecords, that.replayRecords)) return false;
+        if (!Objects.equals(isAtomic, that.isAtomic)) return false;
         return Objects.equals(appendFuture, that.appendFuture);
     }
 
@@ -155,6 +202,7 @@ public class CoordinatorResult<T, U> {
         result = 31 * result + (response != null ? response.hashCode() : 0);
         result = 31 * result + (appendFuture != null ? appendFuture.hashCode() : 0);
         result = 31 * result + (replayRecords ? 1 : 0);
+        result = 31 * result + (isAtomic ? 1 : 0);
         return result;
     }
     @Override
@@ -163,6 +211,7 @@ public class CoordinatorResult<T, U> {
             ", response=" + response +
             ", appendFuture=" + appendFuture +
             ", replayRecords=" + replayRecords +
+            ", isAtomic=" + isAtomic +
             ")";
     }
 }

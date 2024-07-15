@@ -27,6 +27,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Task implementation for {@link MockSourceConnector}.
+ */
 public class MockSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(MockSourceTask.class);
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

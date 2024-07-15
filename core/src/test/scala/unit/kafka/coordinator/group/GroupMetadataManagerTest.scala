@@ -83,16 +83,16 @@ class GroupMetadataManagerTest {
   @nowarn("cat=deprecation")
   private val offsetConfig = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))
-    new OffsetConfig(config.offsetMetadataMaxSize,
-      config.offsetsLoadBufferSize,
-      config.offsetsRetentionMinutes * 60 * 1000L,
-      config.offsetsRetentionCheckIntervalMs,
-      config.offsetsTopicPartitions,
-      config.offsetsTopicSegmentBytes,
-      config.offsetsTopicReplicationFactor,
-      config.offsetsTopicCompressionType,
-      config.offsetCommitTimeoutMs,
-      config.offsetCommitRequiredAcks)
+    new OffsetConfig(config.groupCoordinatorConfig.offsetMetadataMaxSize,
+      config.groupCoordinatorConfig.offsetsLoadBufferSize,
+      config.groupCoordinatorConfig.offsetsRetentionMs,
+      config.groupCoordinatorConfig.offsetsRetentionCheckIntervalMs,
+      config.groupCoordinatorConfig.offsetsTopicPartitions,
+      config.groupCoordinatorConfig.offsetsTopicSegmentBytes,
+      config.groupCoordinatorConfig.offsetsTopicReplicationFactor,
+      config.groupCoordinatorConfig.offsetTopicCompressionType,
+      config.groupCoordinatorConfig.offsetCommitTimeoutMs,
+      config.groupCoordinatorConfig.offsetCommitRequiredAcks)
   }
 
   @BeforeEach

@@ -20,12 +20,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.State;
+
 import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -104,6 +106,20 @@ class Tasks implements TasksRegistry {
     public Set<Task> drainPendingTasksToInit() {
         final Set<Task> result = new HashSet<>(pendingTasksToInit);
         pendingTasksToInit.clear();
+        return result;
+    }
+
+    @Override
+    public Set<Task> drainPendingActiveTasksToInit() {
+        final Set<Task> result = new HashSet<>();
+        final Iterator<Task> iterator = pendingTasksToInit.iterator();
+        while (iterator.hasNext()) {
+            final Task task = iterator.next();
+            if (task.isActive()) {
+                result.add(task);
+                iterator.remove();
+            }
+        }
         return result;
     }
 

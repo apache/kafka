@@ -79,6 +79,7 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
+
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -1513,7 +1514,13 @@ public class KafkaStreams implements AutoCloseable {
             }
 
             stateDirectory.close();
-            adminClient.close();
+            // passing in `timeoutMs` here is a quick fix to avoid blocking forever
+            // cf https://issues.apache.org/jira/browse/KAFKA-7996
+            if (timeoutMs >= 0) {
+                adminClient.close(Duration.ofMillis(timeoutMs));
+            } else {
+                adminClient.close();
+            }
 
             streamsMetrics.removeAllClientLevelSensorsAndMetrics();
             metrics.close();
