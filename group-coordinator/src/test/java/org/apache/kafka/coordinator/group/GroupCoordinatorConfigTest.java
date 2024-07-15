@@ -42,7 +42,8 @@ public class GroupCoordinatorConfigTest {
             GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
             GroupCoordinatorConfig.NEW_GROUP_CONFIG_DEF,
             GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
-            GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF);
+            GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
+            GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF);
 
     @Test
     public void testConfigs() {
@@ -199,6 +200,11 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, 5000);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.DISABLED.name());
         configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, (int) CompressionType.NONE.id);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, 45);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 45);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, (short) 1000);
 
         return createConfig(configs);
     }

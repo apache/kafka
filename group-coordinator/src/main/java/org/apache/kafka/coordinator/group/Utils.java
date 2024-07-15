@@ -20,9 +20,11 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -190,5 +192,16 @@ public class Utils {
         return topicPartitionsList.stream().collect(Collectors.toMap(
             ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
             topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
+    }
+
+    /**
+     * @return The ApiMessage or null.
+     */
+    public static ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
+        if (apiMessageAndVersion == null) {
+            return null;
+        } else {
+            return apiMessageAndVersion.message();
+        }
     }
 }
