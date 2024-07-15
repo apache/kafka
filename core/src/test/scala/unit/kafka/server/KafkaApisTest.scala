@@ -51,6 +51,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
+import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
 import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
@@ -63,7 +64,6 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
-import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
@@ -4114,13 +4114,25 @@ class KafkaApisTest extends Logging {
     val isolationLevel = IsolationLevel.READ_UNCOMMITTED
     val currentLeaderEpoch = Optional.of[Integer](15)
 
-    when(replicaManager.fetchOffsetForTimestamp(
-      ArgumentMatchers.eq(tp),
-      ArgumentMatchers.eq(ListOffsetsRequest.EARLIEST_TIMESTAMP),
-      ArgumentMatchers.eq(Some(isolationLevel)),
-      ArgumentMatchers.eq(currentLeaderEpoch),
-      fetchOnlyFromLeader = ArgumentMatchers.eq(true))
-    ).thenThrow(error.exception)
+    when(replicaManager.fetchOffset(
+      ArgumentMatchers.any[Seq[ListOffsetsTopic]](),
+      ArgumentMatchers.eq(Set.empty[TopicPartition]),
+      ArgumentMatchers.eq(isolationLevel),
+      ArgumentMatchers.eq(ListOffsetsRequest.CONSUMER_REPLICA_ID),
+      ArgumentMatchers.eq[String](clientId),
+      ArgumentMatchers.anyInt(), // correlationId
+      ArgumentMatchers.anyShort(), // version
+      ArgumentMatchers.any[(Errors, ListOffsetsPartition) => ListOffsetsPartitionResponse](),
+      ArgumentMatchers.any[List[ListOffsetsTopicResponse] => Unit]()
+    )).thenAnswer(ans => {
+      val callback = ans.getArgument[List[ListOffsetsTopicResponse] => Unit](8)
+      val partitionResponse = new ListOffsetsPartitionResponse()
+        .setErrorCode(error.code())
+        .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
+        .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP)
+        .setPartitionIndex(tp.partition())
+      callback(List(new ListOffsetsTopicResponse().setName(tp.topic()).setPartitions(List(partitionResponse).asJava)))
+    })
 
     val targetTimes = List(new ListOffsetsTopic()
       .setName(tp.topic)
@@ -10116,6 +10128,31 @@ class KafkaApisTest extends Logging {
         .setPartitionIndex(tp.partition)
         .setTimestamp(timestamp)).asJava)).asJava
 
+    when(replicaManager.fetchOffset(
+      ArgumentMatchers.any[Seq[ListOffsetsTopic]](),
+      ArgumentMatchers.eq(Set.empty[TopicPartition]),
+      ArgumentMatchers.eq(IsolationLevel.READ_UNCOMMITTED),
+      ArgumentMatchers.eq(ListOffsetsRequest.CONSUMER_REPLICA_ID),
+      ArgumentMatchers.eq[String](clientId),
+      ArgumentMatchers.anyInt(), // correlationId
+      ArgumentMatchers.anyShort(), // version
+      ArgumentMatchers.any[(Errors, ListOffsetsPartition) => ListOffsetsPartitionResponse](),
+      ArgumentMatchers.any[List[ListOffsetsTopicResponse] => Unit]()
+    )).thenAnswer(ans => {
+      val version = ans.getArgument[Short](6)
+      val callback = ans.getArgument[List[ListOffsetsTopicResponse] => Unit](8)
+      val errorCode = if (ReplicaManager.isListOffsetsTimestampUnsupported(timestamp, version))
+        Errors.UNSUPPORTED_VERSION.code()
+      else
+        Errors.INVALID_REQUEST.code()
+      val partitionResponse = new ListOffsetsPartitionResponse()
+        .setErrorCode(errorCode)
+        .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
+        .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP)
+        .setPartitionIndex(tp.partition())
+      callback(List(new ListOffsetsTopicResponse().setName(tp.topic()).setPartitions(List(partitionResponse).asJava)))
+    })
+
     val data = new ListOffsetsRequestData().setTopics(targetTimes).setReplicaId(ListOffsetsRequest.CONSUMER_REPLICA_ID)
     val listOffsetRequest = ListOffsetsRequest.parse(MessageUtil.toByteBuffer(data, version), version)
     val request = buildRequest(listOffsetRequest)
@@ -10135,21 +10172,33 @@ class KafkaApisTest extends Logging {
   private def testConsumerListOffsetLatest(isolationLevel: IsolationLevel): Unit = {
     val tp = new TopicPartition("foo", 0)
     val latestOffset = 15L
-    val currentLeaderEpoch = Optional.empty[Integer]()
-
-    when(replicaManager.fetchOffsetForTimestamp(
-      ArgumentMatchers.eq(tp),
-      ArgumentMatchers.eq(ListOffsetsRequest.LATEST_TIMESTAMP),
-      ArgumentMatchers.eq(Some(isolationLevel)),
-      ArgumentMatchers.eq(currentLeaderEpoch),
-      fetchOnlyFromLeader = ArgumentMatchers.eq(true))
-    ).thenReturn(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, latestOffset, currentLeaderEpoch)))
 
     val targetTimes = List(new ListOffsetsTopic()
       .setName(tp.topic)
       .setPartitions(List(new ListOffsetsPartition()
         .setPartitionIndex(tp.partition)
         .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP)).asJava)).asJava
+
+    when(replicaManager.fetchOffset(
+      ArgumentMatchers.eq(targetTimes.asScala.toSeq),
+      ArgumentMatchers.eq(Set.empty[TopicPartition]),
+      ArgumentMatchers.eq(isolationLevel),
+      ArgumentMatchers.eq(ListOffsetsRequest.CONSUMER_REPLICA_ID),
+      ArgumentMatchers.eq[String](clientId),
+      ArgumentMatchers.anyInt(), // correlationId
+      ArgumentMatchers.anyShort(), // version
+      ArgumentMatchers.any[(Errors, ListOffsetsPartition) => ListOffsetsPartitionResponse](),
+      ArgumentMatchers.any[List[ListOffsetsTopicResponse] => Unit]()
+    )).thenAnswer(ans => {
+      val callback = ans.getArgument[List[ListOffsetsTopicResponse] => Unit](8)
+      val partitionResponse = new ListOffsetsPartitionResponse()
+        .setErrorCode(Errors.NONE.code())
+        .setOffset(latestOffset)
+        .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP)
+        .setPartitionIndex(tp.partition())
+      callback(List(new ListOffsetsTopicResponse().setName(tp.topic()).setPartitions(List(partitionResponse).asJava)))
+    })
+
     val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel)
       .setTargetTimes(targetTimes).build()
     val request = buildRequest(listOffsetRequest)
