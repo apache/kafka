@@ -223,7 +223,7 @@ public class HeartbeatRequestManagerTest {
         subscriptions.subscribe(set, Optional.empty());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
-        mockJoiningMemberData();
+        mockJoiningMemberData(true);
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
@@ -398,7 +398,7 @@ public class HeartbeatRequestManagerTest {
         membershipManager.onHeartbeatSuccess(result.data());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
-        mockDefaultMemberData();
+        mockDefaultMemberData(true);
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
@@ -542,7 +542,7 @@ public class HeartbeatRequestManagerTest {
     @Test
     public void testHeartbeatState() {
         CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
-        mockJoiningMemberData();
+        mockJoiningMemberData(false);
 
         heartbeatState = new HeartbeatState(
                 subscriptions,
@@ -574,6 +574,7 @@ public class HeartbeatRequestManagerTest {
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment())
         );
         when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+        mockDefaultMemberData(false);
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
         assertEquals(DEFAULT_MEMBER_ID, data.memberId());
@@ -862,11 +863,14 @@ public class HeartbeatRequestManagerTest {
                 new Metrics());
     }
 
-    private void mockJoiningMemberData() {
+    private void mockJoiningMemberData(boolean instanceId) {
         when(membershipManager.memberId()).thenReturn("");
         when(membershipManager.memberEpoch()).thenReturn(0);
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
-        when(membershipManager.groupInstanceId()).thenReturn(Optional.of(DEFAULT_GROUP_INSTANCE_ID));
+        if (instanceId)
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(DEFAULT_GROUP_INSTANCE_ID));
+        else
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
         when(membershipManager.currentAssignment()).thenReturn(LocalAssignment.NONE);
         when(membershipManager.serverAssignor()).thenReturn(Optional.of("uniform"));
         when(membershipManager.state()).thenReturn(MemberState.UNSUBSCRIBED);
@@ -876,16 +880,19 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.state()).thenReturn(MemberState.JOINING);
         when(membershipManager.memberEpoch()).thenReturn(0);
         when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
-        when(membershipManager.state()).thenReturn(MemberState.UNSUBSCRIBED);
     }
 
-    private void mockDefaultMemberData() {
+    private void mockDefaultMemberData(boolean instanceId) {
         when(membershipManager.currentAssignment()).thenReturn(new LocalAssignment(0, Collections.emptyMap()));
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
         when(membershipManager.memberId()).thenReturn(DEFAULT_MEMBER_ID);
         when(membershipManager.memberEpoch()).thenReturn(DEFAULT_MEMBER_EPOCH);
-        when(membershipManager.groupInstanceId()).thenReturn(Optional.of(DEFAULT_GROUP_INSTANCE_ID));
+        if (instanceId)
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(DEFAULT_GROUP_INSTANCE_ID));
+        else
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
         when(membershipManager.serverAssignor()).thenReturn(Optional.of("uniform"));
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
     }
 
     private void mockReconcilingState() {
