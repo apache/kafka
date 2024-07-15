@@ -461,7 +461,6 @@ public class HeartbeatRequestManagerTest {
     }
 
     private ConsumerGroupHeartbeatRequest getHeartbeatRequest(HeartbeatRequestManager heartbeatRequestManager, final short version) {
-        // Create a ConsumerHeartbeatRequest and verify the payload -- no assignment should be sent
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
@@ -472,9 +471,6 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @MethodSource("errorProvider")
     public void testHeartbeatResponseOnErrorHandling(final Errors error, final boolean isFatal) {
-        if (isFatal)
-            when(membershipManager.state()).thenReturn(MemberState.FATAL);
-
         // Handling errors on the second heartbeat
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
@@ -782,7 +778,6 @@ public class HeartbeatRequestManagerTest {
 
     private void ensureHeartbeatStopped() {
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
-        assertEquals(MemberState.FATAL, membershipManager.state());
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size());
     }
