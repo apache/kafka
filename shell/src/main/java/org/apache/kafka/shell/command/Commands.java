@@ -130,7 +130,9 @@ public final class Commands {
      * @return              The command handler.
      */
     public Handler parseCommand(List<String> arguments) {
+        //Copy of arguments list (to trim it latter)
         List<String> trimmedArguments = new ArrayList<>(arguments);
+        //Remove empty strings from the end of argument list
         while (true) {
             if (trimmedArguments.isEmpty()) {
                 return new NoOpCommandHandler();
@@ -141,6 +143,7 @@ public final class Commands {
             }
             trimmedArguments.remove(trimmedArguments.size() - 1);
         }
+        //attempt to parse the arguments
         Namespace namespace;
         try {
             namespace = parser.parseArgs(trimmedArguments.toArray(new String[0]));
@@ -154,6 +157,7 @@ public final class Commands {
             return new ErroneousCommandHandler("invalid choice: '" +
                 trimmedArguments.get(0) + "': did you mean '" + command + "'?");
         }
+        //Get the command type and if null return error
         Type type = TYPES.get(command);
         if (type == null) {
             return new ErroneousCommandHandler("Unknown command specified: " + command);

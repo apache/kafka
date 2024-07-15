@@ -94,9 +94,9 @@ public final class GlobVisitor implements Consumer<MetadataShellState> {
     @Override
     public void accept(MetadataShellState state) {
         String fullGlob = glob.startsWith("/") ? glob :
-            state.workingDirectory() + "/" + glob;
+                state.workingDirectory() + "/" + glob;
         List<String> globComponents =
-            CommandUtils.stripDotPathComponents(CommandUtils.splitPath(fullGlob));
+                CommandUtils.stripDotPathComponents(CommandUtils.splitPath(fullGlob));
         MetadataNode root = state.root();
         if (root == null) {
             throw new RuntimeException("Invalid null root");
@@ -107,46 +107,56 @@ public final class GlobVisitor implements Consumer<MetadataShellState> {
     }
 
     private boolean accept(
-        List<String> globComponents,
-        int componentIndex,
-        MetadataNode node,
-        String[] path
+            List<String> globComponents,
+            int componentIndex,
+            MetadataNode node,
+            String[] path
     ) {
+        //Base case, if we have processed all commands
         if (componentIndex >= globComponents.size()) {
             handler.accept(Optional.of(new MetadataNodeInfo(path, node)));
             return true;
         }
+        //Get the current glob component string and create a GlobComponent object
         String globComponentString = globComponents.get(componentIndex);
         GlobComponent globComponent = new GlobComponent(globComponentString);
+        //Case for literal components
         if (globComponent.literal()) {
             if (!node.isDirectory()) {
                 return false;
             }
+            //Get the child node which corresponds to literal component
             MetadataNode child = node.child(globComponent.component());
             if (child == null) {
                 return false;
             }
+            //Create a new path with added component
             String[] newPath = new String[path.length + 1];
             System.arraycopy(path, 0, newPath, 0, path.length);
             newPath[path.length] = globComponent.component();
+            //Recurse with next component and child node
             return accept(globComponents, componentIndex + 1, child, newPath);
         }
         if (!node.isDirectory()) {
             return false;
         }
         boolean matchedAny = false;
+        //Get and sort the child node names
         ArrayList<String> nodeChildNames = new ArrayList<>(node.childNames());
         nodeChildNames.sort(String::compareTo);
         for (String nodeName : nodeChildNames) {
             if (globComponent.matches(nodeName)) {
+                //Create new path with matched node name
                 String[] newPath = new String[path.length + 1];
                 System.arraycopy(path, 0, newPath, 0, path.length);
                 newPath[path.length] = nodeName;
+                //Get child node corresponding to matched name
                 MetadataNode child = node.child(nodeName);
                 if (child == null) {
                     throw new RuntimeException("Expected " + nodeName + " to be a valid child of " +
                             node.getClass() + ", but it was not.");
                 }
+                //recurse with the next component and matched child node
                 if (accept(globComponents, componentIndex + 1, child, newPath)) {
                     matchedAny = true;
                 }
