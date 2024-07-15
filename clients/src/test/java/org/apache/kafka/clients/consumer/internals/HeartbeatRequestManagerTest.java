@@ -202,22 +202,6 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments(short version) {
-        membershipManager = new MembershipManagerImpl(
-                DEFAULT_GROUP_ID,
-                Optional.of(DEFAULT_GROUP_INSTANCE_ID),
-                0,
-                Optional.empty(),
-                subscriptions,
-                mock(CommitRequestManager.class),
-                (ConsumerMetadata) metadata,
-                logContext,
-                Optional.of(mock(ClientTelemetryReporter.class)),
-                backgroundEventHandler,
-                time,
-                new Metrics()
-        );
-        membershipManager.transitionToJoining();
-
         heartbeatState = new HeartbeatState(
                 subscriptions,
                 membershipManager,
@@ -239,6 +223,7 @@ public class HeartbeatRequestManagerTest {
         subscriptions.subscribe(set, Optional.empty());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
+        mockJoiningMemberData();
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
@@ -897,6 +882,7 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.memberId()).thenReturn("");
         when(membershipManager.memberEpoch()).thenReturn(0);
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
+        when(membershipManager.groupInstanceId()).thenReturn(Optional.of(DEFAULT_GROUP_INSTANCE_ID));
         when(membershipManager.currentAssignment()).thenReturn(LocalAssignment.NONE);
         when(membershipManager.serverAssignor()).thenReturn(Optional.of("uniform"));
         when(membershipManager.state()).thenReturn(MemberState.UNSUBSCRIBED);
