@@ -370,22 +370,6 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testValidateConsumerGroupHeartbeatRequest(final short version) {
-        membershipManager = new MembershipManagerImpl(
-                DEFAULT_GROUP_ID,
-                Optional.of(DEFAULT_GROUP_INSTANCE_ID),
-                0,
-                Optional.of("uniform"),
-                subscriptions,
-                mock(CommitRequestManager.class),
-                (ConsumerMetadata) metadata,
-                logContext,
-                Optional.of(mock(ClientTelemetryReporter.class)),
-                backgroundEventHandler,
-                time,
-                new Metrics()
-        );
-        membershipManager.transitionToJoining();
-
         heartbeatState = new HeartbeatState(
                 subscriptions,
                 membershipManager,
@@ -414,6 +398,7 @@ public class HeartbeatRequestManagerTest {
         membershipManager.onHeartbeatSuccess(result.data());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
+        mockDefaultMemberData();
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
@@ -589,7 +574,6 @@ public class HeartbeatRequestManagerTest {
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment())
         );
         when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-        mockUnsubscribedMemberData();
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
         assertEquals(DEFAULT_MEMBER_ID, data.memberId());
@@ -888,21 +872,20 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.state()).thenReturn(MemberState.UNSUBSCRIBED);
     }
 
-    private void mockUnsubscribedMemberData() {
-        when(membershipManager.memberId()).thenReturn(DEFAULT_MEMBER_ID);
-        when(membershipManager.memberEpoch()).thenReturn(1);
-        when(membershipManager.currentAssignment()).thenReturn(new LocalAssignment(0, Collections.emptyMap()));
-        when(membershipManager.state()).thenReturn(MemberState.STABLE);
-    }
-
     private void mockFencedToJoiningMemberData() {
         when(membershipManager.state()).thenReturn(MemberState.JOINING);
         when(membershipManager.memberEpoch()).thenReturn(0);
+        when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
+        when(membershipManager.state()).thenReturn(MemberState.UNSUBSCRIBED);
     }
 
-    private void mockReconcilingMemberData() {
-        membershipManager.poll(time.milliseconds());
+    private void mockDefaultMemberData() {
+        when(membershipManager.currentAssignment()).thenReturn(new LocalAssignment(0, Collections.emptyMap()));
+        when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
         when(membershipManager.memberId()).thenReturn(DEFAULT_MEMBER_ID);
+        when(membershipManager.memberEpoch()).thenReturn(DEFAULT_MEMBER_EPOCH);
+        when(membershipManager.groupInstanceId()).thenReturn(Optional.of(DEFAULT_GROUP_INSTANCE_ID));
+        when(membershipManager.serverAssignor()).thenReturn(Optional.of("uniform"));
     }
 
     private void mockReconcilingState() {
