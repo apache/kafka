@@ -57,6 +57,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
@@ -446,6 +447,65 @@ public class UtilsTest {
         assertEquals(1, Utils.min(1, 2, 3));
         assertEquals(1, Utils.min(2, 1, 3));
         assertEquals(1, Utils.min(2, 3, 1));
+    }
+
+    @Test
+    public void testMax() {
+        assertEquals(1, Utils.max(1));
+        assertEquals(3, Utils.max(1, 2, 3));
+        assertEquals(3, Utils.max(2, 1, 3, 3));
+        assertEquals(100, Utils.max(0, 2, 2, 100));
+        assertEquals(-1, Utils.max(-1, -2, -2, -10, -100, -1000));
+        assertEquals(0, Utils.max(-1, -2, -2, -10, -150, -1800, 0));
+    }
+
+    @Test
+    public void mkStringTest() {
+        Map<String, String> map = new LinkedHashMap<>();
+        map.put("key1", "val1");
+        map.put("key2", "val2");
+        map.put("key3", "val3");
+        String result = Utils.mkString(map, "__begin__", "__end__", "=", ",");
+        assertEquals("__begin__key1=val1,key2=val2,key3=val3__end__", result);
+
+        String result2 = Utils.mkString(Collections.emptyMap(), "__begin__", "__end__", "=", ",");
+        assertEquals("__begin____end__", result2);
+    }
+
+    @Test
+    public void parseMapTest() {
+        Map<String, String> map1 = Utils.parseMap("k1=v1,k2=v2,k3=v3", "=", ",");
+        assertEquals(3, map1.size());
+        assertEquals("v1", map1.get("k1"));
+        assertEquals("v2", map1.get("k2"));
+        assertEquals("v3", map1.get("k3"));
+
+        Map<String, String> map3 = Utils.parseMap("k4=v4,k5=v5=vv5=vvv5", "=", ",");
+        assertEquals(2, map3.size());
+        assertEquals("v4", map3.get("k4"));
+        assertEquals("v5=vv5=vvv5", map3.get("k5"));
+    }
+
+    @Test
+    public void ensureCapacityTest() {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(10);
+        ByteBuffer newByteBuffer = Utils.ensureCapacity(byteBuffer, 5);
+        assertEquals(10, newByteBuffer.capacity());
+
+        ByteBuffer byteBuffer2 = ByteBuffer.allocate(10);
+        ByteBuffer newByteBuffer2 = Utils.ensureCapacity(byteBuffer2, 15);
+        assertEquals(15, newByteBuffer2.capacity());
+
+        ByteBuffer byteBuffer3 = ByteBuffer.allocate(10);
+        for (int i = 1; i <= 10; i++) {
+            byteBuffer3.put((byte) i);
+        }
+        ByteBuffer newByteBuffer3 = Utils.ensureCapacity(byteBuffer3, 15);
+        newByteBuffer3.flip();
+        assertEquals(15, newByteBuffer3.capacity());
+        assertEquals(1, newByteBuffer3.get());
+        assertEquals(2, newByteBuffer3.get());
+        assertEquals(3, newByteBuffer3.get());
     }
 
     @Test
