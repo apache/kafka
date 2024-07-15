@@ -286,7 +286,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             String tmfAlgorithm = this.tmfAlgorithm != null ? this.tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
             TrustManager[] trustManagers = getTrustManagers(truststore, tmfAlgorithm);
 
-            sslContext.init(applyAliasToKM(keyManagers, (String)configs.get("ssl.keystore.alias")), trustManagers, this.secureRandomImplementation);
+            sslContext.init(applyAliasToKM(keyManagers, (String)configs.get(SslConfigs.SSL_KEYSTORE_ALIAS_CONFIG)), trustManagers, this.secureRandomImplementation);
             log.debug("Created SSL context with keystore {}, truststore {}, provider {}.",
                     keystore, truststore, sslContext.getProvider().getName());
             return sslContext;

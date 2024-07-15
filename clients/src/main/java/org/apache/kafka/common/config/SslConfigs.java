@@ -90,8 +90,8 @@ public class SslConfigs {
         + "This is optional for client and can be used for two-way authentication for client.";
 
     public static final String SSL_KEYSTORE_ALIAS_CONFIG = "ssl.keystore.alias";
-    public static final String SSL_KEYSTORE_ALIAS_DOC = "The Alias of key in the key store file. "
-            + "This is optional for client and can be used for two-way authentication for client.";
+    public static final String SSL_KEYSTORE_ALIAS_DOC = "This is config is used to pick named alias from the keystore to build the SSL engine and authenticate the client with broker. " +
+            "This is an optional config and used only when you have multiple keys in the keystore and you need to control which key needs to be presented to server.";
 
 
     public static final String SSL_KEYSTORE_PASSWORD_CONFIG = "ssl.keystore.password";
