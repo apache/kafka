@@ -38,7 +38,7 @@ import java.util.Set;
  */
 public class ShareGroup extends ModernGroup<ShareGroupMember> {
 
-    private static final String PROTOCOL_TYPE = "share";
+    public static final String PROTOCOL_TYPE = "share";
 
     public enum ShareGroupState {
         EMPTY("Empty"),
@@ -144,7 +144,9 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
                 String.format("Member %s is not a member of group %s.", memberId, groupId));
         }
 
-        return new ShareGroupMember.Builder(memberId).build();
+        member = new ShareGroupMember.Builder(memberId).build();
+        updateMember(member);
+        return member;
     }
 
     /**

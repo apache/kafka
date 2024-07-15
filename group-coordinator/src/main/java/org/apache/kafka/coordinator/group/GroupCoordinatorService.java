@@ -319,8 +319,25 @@ public class GroupCoordinatorService implements GroupCoordinator {
         RequestContext context,
         ShareGroupHeartbeatRequestData request
     ) {
-        // TODO: Implement this method as part of KIP-932.
-        throw new UnsupportedOperationException();
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+        }
+
+        return runtime.scheduleWriteOperation(
+            "share-group-heartbeat",
+            topicPartitionFor(request.groupId()),
+            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+            coordinator -> coordinator.shareGroupHeartbeat(context, request)
+        ).exceptionally(exception -> handleOperationException(
+            "share-group-heartbeat",
+            request,
+            exception,
+            (error, message) -> new ShareGroupHeartbeatResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(message)
+        ));
     }
 
     /**

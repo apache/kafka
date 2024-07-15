@@ -53,6 +53,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             GroupCoordinatorConfig.NEW_GROUP_CONFIG_DEF,
             GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
             GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
+            GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF,
             CleanerConfig.CONFIG_DEF,
             LogConfig.SERVER_CONFIG_DEF,
             ShareGroupConfig.CONFIG_DEF,

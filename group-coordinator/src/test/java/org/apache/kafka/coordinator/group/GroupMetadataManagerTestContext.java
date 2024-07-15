@@ -33,6 +33,8 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.network.ClientInformation;
@@ -46,7 +48,9 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
@@ -62,10 +66,15 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -91,8 +100,8 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESU
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
-import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSyncKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupSessionTimeoutKey;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
@@ -388,6 +397,9 @@ public class GroupMetadataManagerTestContext {
         private int classicGroupMaxSessionTimeoutMs = 10 * 60 * 1000;
         private final GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
         private ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy = ConsumerGroupMigrationPolicy.DISABLED;
+        // Share group configs
+        private ShareGroupPartitionAssignor shareGroupAssignor = new MockPartitionAssignor("share");
+        private int shareGroupMaxSize = Integer.MAX_VALUE;
 
         public Builder withMetadataImage(MetadataImage metadataImage) {
             this.metadataImage = metadataImage;
@@ -439,6 +451,16 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
+        public Builder withShareGroupAssignor(ShareGroupPartitionAssignor shareGroupAssignor) {
+            this.shareGroupAssignor = shareGroupAssignor;
+            return this;
+        }
+
+        public Builder withShareGroupMaxSize(int shareGroupMaxSize) {
+            this.shareGroupMaxSize = shareGroupMaxSize;
+            return this;
+        }
+
         public GroupMetadataManagerTestContext build() {
             if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
             if (consumerGroupAssignors == null) consumerGroupAssignors = Collections.emptyList();
@@ -466,11 +488,14 @@ public class GroupMetadataManagerTestContext {
                     .withClassicGroupNewMemberJoinTimeoutMs(classicGroupNewMemberJoinTimeoutMs)
                     .withGroupCoordinatorMetricsShard(metrics)
                     .withConsumerGroupMigrationPolicy(consumerGroupMigrationPolicy)
+                    .withShareGroupAssignor(shareGroupAssignor)
+                    .withShareGroupMaxSize(shareGroupMaxSize)
                     .build(),
                 classicGroupInitialRebalanceDelayMs,
                 classicGroupNewMemberJoinTimeoutMs
             );
 
+            consumerGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
             consumerGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
 
             context.commit();
@@ -528,6 +553,14 @@ public class GroupMetadataManagerTestContext {
             .state();
     }
 
+    public ShareGroup.ShareGroupState shareGroupState(
+        String groupId
+    ) {
+        return groupMetadataManager
+            .shareGroup(groupId)
+            .state();
+    }
+
     public MemberState consumerGroupMemberState(
         String groupId,
         String memberId
@@ -568,6 +601,34 @@ public class GroupMetadataManagerTestContext {
         return result;
     }
 
+    public CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> shareGroupHeartbeat(
+        ShareGroupHeartbeatRequestData request
+    ) {
+        RequestContext context = new RequestContext(
+            new RequestHeader(
+                ApiKeys.SHARE_GROUP_HEARTBEAT,
+                ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion(),
+                "client",
+                0
+            ),
+            "1",
+            InetAddress.getLoopbackAddress(),
+            KafkaPrincipal.ANONYMOUS,
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT,
+            ClientInformation.EMPTY,
+            false
+        );
+
+        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = groupMetadataManager.shareGroupHeartbeat(
+            context,
+            request
+        );
+
+        result.records().forEach(this::replay);
+        return result;
+    }
+
     public List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> sleep(long ms) {
         time.sleep(ms);
         List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts = timer.poll();
@@ -585,7 +646,7 @@ public class GroupMetadataManagerTestContext {
         long delayMs
     ) {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
-            timer.timeout(consumerGroupSessionTimeoutKey(groupId, memberId));
+            timer.timeout(groupSessionTimeoutKey(groupId, memberId));
         assertNotNull(timeout);
         assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
     }
@@ -595,7 +656,7 @@ public class GroupMetadataManagerTestContext {
         String memberId
     ) {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
-            timer.timeout(consumerGroupSessionTimeoutKey(groupId, memberId));
+            timer.timeout(groupSessionTimeoutKey(groupId, memberId));
         assertNull(timeout);
     }
 
@@ -1358,6 +1419,13 @@ public class GroupMetadataManagerTestContext {
     public void replay(
         CoordinatorRecord record
     ) {
+        replay(record, null);
+    }
+
+    public void replay(
+        CoordinatorRecord record,
+        GroupType groupType
+    ) {
         ApiMessageAndVersion key = record.key();
         ApiMessageAndVersion value = record.value();
 
@@ -1390,28 +1458,46 @@ public class GroupMetadataManagerTestContext {
             case ConsumerGroupPartitionMetadataKey.HIGHEST_SUPPORTED_VERSION:
                 groupMetadataManager.replay(
                     (ConsumerGroupPartitionMetadataKey) key.message(),
-                    (ConsumerGroupPartitionMetadataValue) messageOrNull(value)
+                    (ConsumerGroupPartitionMetadataValue) messageOrNull(value),
+                    groupType != null ? groupType : GroupType.CONSUMER
                 );
                 break;
 
             case ConsumerGroupTargetAssignmentMemberKey.HIGHEST_SUPPORTED_VERSION:
                 groupMetadataManager.replay(
                     (ConsumerGroupTargetAssignmentMemberKey) key.message(),
-                    (ConsumerGroupTargetAssignmentMemberValue) messageOrNull(value)
+                    (ConsumerGroupTargetAssignmentMemberValue) messageOrNull(value),
+                    groupType != null ? groupType : GroupType.CONSUMER
                 );
                 break;
 
             case ConsumerGroupTargetAssignmentMetadataKey.HIGHEST_SUPPORTED_VERSION:
                 groupMetadataManager.replay(
                     (ConsumerGroupTargetAssignmentMetadataKey) key.message(),
-                    (ConsumerGroupTargetAssignmentMetadataValue) messageOrNull(value)
+                    (ConsumerGroupTargetAssignmentMetadataValue) messageOrNull(value),
+                    groupType != null ? groupType : GroupType.CONSUMER
                 );
                 break;
 
             case ConsumerGroupCurrentMemberAssignmentKey.HIGHEST_SUPPORTED_VERSION:
                 groupMetadataManager.replay(
                     (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
-                    (ConsumerGroupCurrentMemberAssignmentValue) messageOrNull(value)
+                    (ConsumerGroupCurrentMemberAssignmentValue) messageOrNull(value),
+                    groupType != null ? groupType : GroupType.CONSUMER
+                );
+                break;
+
+            case ShareGroupMetadataKey.HIGHEST_SUPPORTED_VERSION:
+                groupMetadataManager.replay(
+                    (ShareGroupMetadataKey) key.message(),
+                    (ShareGroupMetadataValue) messageOrNull(value)
+                );
+                break;
+
+            case ShareGroupMemberMetadataKey.HIGHEST_SUPPORTED_VERSION:
+                groupMetadataManager.replay(
+                    (ShareGroupMemberMetadataKey) key.message(),
+                    (ShareGroupMemberMetadataValue) messageOrNull(value)
                 );
                 break;
 

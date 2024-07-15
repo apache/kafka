@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
@@ -129,6 +130,35 @@ public class GroupCoordinatorConfig {
             ConsumerGroupMigrationPolicy.DOWNGRADE + ": only downgrade from consumer group to classic group is enabled, " +
             ConsumerGroupMigrationPolicy.DISABLED + ": neither upgrade nor downgrade is enabled.";
 
+    /** Share group configs */
+    public static final String SHARE_GROUP_MAX_SIZE_CONFIG = "group.share.max.size";
+    public static final short SHARE_GROUP_MAX_SIZE_DEFAULT = 200;
+    public static final String SHARE_GROUP_MAX_SIZE_DOC = "The maximum number of members that a single share group can accommodate.";
+
+    public static final String SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG = "group.share.session.timeout.ms";
+    public static final int SHARE_GROUP_SESSION_TIMEOUT_MS_DEFAULT = 45000;
+    public static final String SHARE_GROUP_SESSION_TIMEOUT_MS_DOC = "The timeout to detect client failures when using the share group protocol.";
+
+    public static final String SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG = "group.share.min.session.timeout.ms";
+    public static final int SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT = 45000;
+    public static final String SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_DOC = "The minimum allowed session timeout for share group members.";
+
+    public static final String SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG = "group.share.max.session.timeout.ms";
+    public static final int SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT = 60000;
+    public static final String SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_DOC = "The maximum allowed session timeout for share group members.";
+
+    public static final String SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG = "group.share.heartbeat.interval.ms";
+    public static final int SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT = 5000;
+    public static final String SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DOC = "The heartbeat interval given to the members of a share group.";
+
+    public static final String SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG = "group.share.min.heartbeat.interval.ms";
+    public static final int SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT = 5000;
+    public static final String SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DOC = "The minimum heartbeat interval for share group members.";
+
+    public static final String SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG = "group.share.max.heartbeat.interval.ms";
+    public static final int SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT = 15000;
+    public static final String SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC = "The maximum heartbeat interval for share group members.";
+
     public static final String OFFSET_METADATA_MAX_SIZE_CONFIG = "offset.metadata.max.bytes";
     public static final int OFFSET_METADATA_MAX_SIZE_DEFAULT = 4096;
     public static final String OFFSET_METADATA_MAX_SIZE_DOC = "The maximum size for a metadata entry associated with an offset commit.";
@@ -211,6 +241,14 @@ public class GroupCoordinatorConfig {
             .define(CONSUMER_GROUP_MAX_SIZE_CONFIG, INT, CONSUMER_GROUP_MAX_SIZE_DEFAULT, atLeast(1), MEDIUM, CONSUMER_GROUP_MAX_SIZE_DOC)
             .define(CONSUMER_GROUP_ASSIGNORS_CONFIG, LIST, CONSUMER_GROUP_ASSIGNORS_DEFAULT, null, MEDIUM, CONSUMER_GROUP_ASSIGNORS_DOC)
             .defineInternal(CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, STRING, CONSUMER_GROUP_MIGRATION_POLICY_DEFAULT, ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(ConsumerGroupMigrationPolicy.class)), MEDIUM, CONSUMER_GROUP_MIGRATION_POLICY_DOC);
+    public static final ConfigDef SHARE_GROUP_CONFIG_DEF =  new ConfigDef()
+            .define(SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, INT, SHARE_GROUP_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_SESSION_TIMEOUT_MS_DOC)
+            .define(SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, INT, SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_DOC)
+            .define(SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, INT, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_DOC)
+            .define(SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
+            .define(SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DOC)
+            .define(SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC)
+            .define(SHARE_GROUP_MAX_SIZE_CONFIG, SHORT, SHARE_GROUP_MAX_SIZE_DEFAULT, between(10, 1000), MEDIUM, SHARE_GROUP_MAX_SIZE_DOC);
 
     /**
      * The timeout used to wait for a new member in milliseconds.
@@ -242,6 +280,14 @@ public class GroupCoordinatorConfig {
     private final int consumerGroupMaxSessionTimeoutMs;
     private final int consumerGroupMinHeartbeatIntervalMs;
     private final int consumerGroupMaxHeartbeatIntervalMs;
+    // Share group configurations
+    private final short shareGroupMaxSize;
+    private final int shareGroupSessionTimeoutMs;
+    private final int shareGroupMinSessionTimeoutMs;
+    private final int shareGroupMaxSessionTimeoutMs;
+    private final int shareGroupHeartbeatIntervalMs;
+    private final int shareGroupMinHeartbeatIntervalMs;
+    private final int shareGroupMaxHeartbeatIntervalMs;
 
     public GroupCoordinatorConfig(AbstractConfig config) {
         this.numThreads = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG);
@@ -273,6 +319,14 @@ public class GroupCoordinatorConfig {
         this.consumerGroupMaxSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
         this.consumerGroupMinHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.consumerGroupMaxHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
+        // Share group configurations
+        this.shareGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG);
+        this.shareGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+        this.shareGroupMaxSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+        this.shareGroupHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.shareGroupMinHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.shareGroupMaxHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.shareGroupMaxSize = config.getShort(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG);
 
         require(offsetCommitRequiredAcks >= -1 && offsetCommitRequiredAcks <= offsetsTopicReplicationFactor,
                 String.format("%s must be greater or equal to -1 and less or equal to %s", OFFSET_COMMIT_REQUIRED_ACKS_CONFIG, OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG));
@@ -291,6 +345,26 @@ public class GroupCoordinatorConfig {
                 String.format("%s must be greater than or equals to %s", CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
         require(consumerGroupSessionTimeoutMs <= consumerGroupMaxSessionTimeoutMs,
                 String.format("%s must be less than or equals to %s", CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
+        // Share group configs validation.
+        require(shareGroupMaxHeartbeatIntervalMs >= shareGroupMinHeartbeatIntervalMs,
+            String.format("%s must be greater than or equals to %s",
+                SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
+        require(shareGroupHeartbeatIntervalMs >= shareGroupMinHeartbeatIntervalMs,
+            String.format("%s must be greater than or equals to %s",
+                SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
+        require(shareGroupHeartbeatIntervalMs <= shareGroupMaxHeartbeatIntervalMs,
+            String.format("%s must be less than or equals to %s",
+                SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG));
+
+        require(shareGroupMaxSessionTimeoutMs >= shareGroupMinSessionTimeoutMs,
+            String.format("%s must be greater than or equals to %s",
+                SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
+        require(shareGroupSessionTimeoutMs >= shareGroupMinSessionTimeoutMs,
+            String.format("%s must be greater than or equals to %s",
+                SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
+        require(shareGroupSessionTimeoutMs <= shareGroupMaxSessionTimeoutMs,
+            String.format("%s must be less than or equals to %s",
+                SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
     }
 
     /**
@@ -491,5 +565,54 @@ public class GroupCoordinatorConfig {
      */
     public int consumerGroupMaxHeartbeatIntervalMs() {
         return consumerGroupMaxHeartbeatIntervalMs;
+    }
+
+    /**
+     * The share group session timeout in milliseconds.
+     */
+    public int shareGroupSessionTimeoutMs() {
+        return shareGroupSessionTimeoutMs;
+    }
+
+    /**
+     * The consumer group heartbeat interval in milliseconds.
+     */
+    public int shareGroupHeartbeatIntervalMs() {
+        return shareGroupHeartbeatIntervalMs;
+    }
+
+    /**
+     * The share group maximum size.
+     */
+    public int shareGroupMaxSize() {
+        return shareGroupMaxSize;
+    }
+
+    /**
+     * The minimum allowed session timeout for registered share consumers.
+     */
+    public int shareGroupMinSessionTimeoutMs() {
+        return shareGroupMinSessionTimeoutMs;
+    }
+
+    /**
+     * The maximum allowed session timeout for registered share consumers.
+     */
+    public int shareGroupMaxSessionTimeoutMs() {
+        return shareGroupMaxSessionTimeoutMs;
+    }
+
+    /**
+     * The minimum heartbeat interval for registered share consumers.
+     */
+    public int shareGroupMinHeartbeatIntervalMs() {
+        return shareGroupMinHeartbeatIntervalMs;
+    }
+
+    /**
+     * The maximum heartbeat interval for registered share consumers.
+     */
+    public int shareGroupMaxHeartbeatIntervalMs() {
+        return shareGroupMaxHeartbeatIntervalMs;
     }
 }

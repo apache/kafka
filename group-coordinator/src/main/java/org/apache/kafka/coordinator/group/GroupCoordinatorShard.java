@@ -36,11 +36,12 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -62,6 +63,10 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
@@ -191,6 +196,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withClassicGroupMinSessionTimeoutMs(config.classicGroupMinSessionTimeoutMs())
                 .withClassicGroupMaxSessionTimeoutMs(config.classicGroupMaxSessionTimeoutMs())
                 .withConsumerGroupMigrationPolicy(config.consumerGroupMigrationPolicy())
+                .withShareGroupMaxSize(config.shareGroupMaxSize())
+                .withShareGroupSessionTimeout(config.shareGroupSessionTimeoutMs())
+                .withShareGroupHeartbeatInterval(config.shareGroupHeartbeatIntervalMs())
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .build();
 
@@ -306,6 +314,22 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         ConsumerGroupHeartbeatRequestData request
     ) {
         return groupMetadataManager.consumerGroupHeartbeat(context, request);
+    }
+
+    /**
+     * Handles a ShareGroupHeartbeat request.
+     *
+     * @param context The request context.
+     * @param request The actual ShareGroupHeartbeat request.
+     *
+     * @return A Result containing the ShareGroupHeartbeat response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> shareGroupHeartbeat(
+        RequestContext context,
+        ShareGroupHeartbeatRequestData request
+    ) {
+        return groupMetadataManager.shareGroupHeartbeat(context, request);
     }
 
     /**
@@ -658,17 +682,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * @return The ApiMessage or null.
-     */
-    private ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
-        if (apiMessageAndVersion == null) {
-            return null;
-        } else {
-            return apiMessageAndVersion.message();
-        }
-    }
-
-    /**
      * Replays the Record to update the hard state of the group coordinator.
      *
      * @param offset        The offset of the record in the log.
@@ -694,56 +707,70 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     offset,
                     producerId,
                     (OffsetCommitKey) key.message(),
-                    (OffsetCommitValue) messageOrNull(value)
+                    (OffsetCommitValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case 2:
                 groupMetadataManager.replay(
                     (GroupMetadataKey) key.message(),
-                    (GroupMetadataValue) messageOrNull(value)
+                    (GroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case 3:
                 groupMetadataManager.replay(
                     (ConsumerGroupMetadataKey) key.message(),
-                    (ConsumerGroupMetadataValue) messageOrNull(value)
+                    (ConsumerGroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case 4:
                 groupMetadataManager.replay(
                     (ConsumerGroupPartitionMetadataKey) key.message(),
-                    (ConsumerGroupPartitionMetadataValue) messageOrNull(value)
+                    (ConsumerGroupPartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case 5:
                 groupMetadataManager.replay(
                     (ConsumerGroupMemberMetadataKey) key.message(),
-                    (ConsumerGroupMemberMetadataValue) messageOrNull(value)
+                    (ConsumerGroupMemberMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case 6:
                 groupMetadataManager.replay(
                     (ConsumerGroupTargetAssignmentMetadataKey) key.message(),
-                    (ConsumerGroupTargetAssignmentMetadataValue) messageOrNull(value)
+                    (ConsumerGroupTargetAssignmentMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case 7:
                 groupMetadataManager.replay(
                     (ConsumerGroupTargetAssignmentMemberKey) key.message(),
-                    (ConsumerGroupTargetAssignmentMemberValue) messageOrNull(value)
+                    (ConsumerGroupTargetAssignmentMemberValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case 8:
                 groupMetadataManager.replay(
                     (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
-                    (ConsumerGroupCurrentMemberAssignmentValue) messageOrNull(value)
+                    (ConsumerGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
+                );
+                break;
+
+            case 10:
+                groupMetadataManager.replay(
+                    (ShareGroupMemberMetadataKey) key.message(),
+                    (ShareGroupMemberMetadataValue) Utils.messageOrNull(value)
+                );
+                break;
+
+            case 11:
+                groupMetadataManager.replay(
+                    (ShareGroupMetadataKey) key.message(),
+                    (ShareGroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
