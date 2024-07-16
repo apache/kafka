@@ -439,7 +439,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testSubscription(GroupProtocol groupProtocol) {
         consumer = newConsumer(groupProtocol, groupId);
 
