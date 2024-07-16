@@ -123,7 +123,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
         }
     }
 
-    public static <K, V> TopicPartition extractTopicPartition(ProducerRecord<K, V> record) {
+    private <K, V> TopicPartition extractTopicPartition(ProducerRecord<K, V> record) {
         return new TopicPartition(record.topic(), record.partition() == null ? RecordMetadata.UNKNOWN_PARTITION : record.partition());
     }
 
