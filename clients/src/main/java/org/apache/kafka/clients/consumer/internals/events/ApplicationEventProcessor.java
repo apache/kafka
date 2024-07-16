@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
 import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicIdPartition;
@@ -49,14 +50,17 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private final Logger log;
     private final ConsumerMetadata metadata;
+    private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
-                                     final ConsumerMetadata metadata) {
+                                     final ConsumerMetadata metadata,
+                                     final SubscriptionState subscriptions) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
+        this.subscriptions = subscriptions;
     }
 
     @SuppressWarnings({"CyclomaticComplexity"})
@@ -241,14 +245,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      *              the group is sent out.
      */
     private void process(final UnsubscribeEvent event) {
-        if (!requestManagers.heartbeatRequestManager.isPresent()) {
-            KafkaException error = new KafkaException("Group membership manager not present when processing an unsubscribe event");
-            event.future().completeExceptionally(error);
-            return;
+        if (requestManagers.heartbeatRequestManager.isPresent()) {
+            MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
+            CompletableFuture<Void> future = membershipManager.leaveGroup();
+            future.whenComplete(complete(event.future()));
+        } else {
+            // If the consumer is not using the group management capabilities, we still need to clear all assignments it may have.
+            subscriptions.unsubscribe();
+            event.future().complete(null);
         }
-        MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
-        CompletableFuture<Void> future = membershipManager.leaveGroup();
-        future.whenComplete(complete(event.future()));
     }
 
     private void process(final ResetPositionsEvent event) {
@@ -393,6 +398,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
                                                                final ConsumerMetadata metadata,
+                                                               final SubscriptionState subscriptions,
                                                                final Supplier<RequestManagers> requestManagersSupplier) {
         return new CachedSupplier<ApplicationEventProcessor>() {
             @Override
@@ -401,7 +407,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 return new ApplicationEventProcessor(
                         logContext,
                         requestManagers,
-                        metadata
+                        metadata,
+                        subscriptions
                 );
             }
         };

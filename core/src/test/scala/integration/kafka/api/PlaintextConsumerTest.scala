@@ -693,6 +693,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer2.unsubscribe()
     consumer3.unsubscribe()
 
+    assertTrue(consumer1.assignment().isEmpty)
+    assertTrue(consumer2.assignment().isEmpty)
+    assertTrue(consumer3.assignment().isEmpty)
+
     consumer1.close()
     consumer2.close()
     consumer3.close()

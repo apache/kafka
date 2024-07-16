@@ -354,6 +354,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
+                    subscriptions,
                     requestManagersSupplier);
             this.applicationEventHandler = applicationEventHandlerFactory.build(
                     logContext,
@@ -531,6 +532,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
                 metadata,
+                subscriptions,
                 requestManagersSupplier
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
@@ -1476,21 +1478,19 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             fetchBuffer.retainAll(Collections.emptySet());
-            if (groupMetadata.get().isPresent()) {
-                Timer timer = time.timer(Long.MAX_VALUE);
-                UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(calculateDeadlineMs(timer));
-                applicationEventHandler.add(unsubscribeEvent);
-                log.info("Unsubscribing all topics or patterns and assigned partitions {}",
+            Timer timer = time.timer(Long.MAX_VALUE);
+            UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(calculateDeadlineMs(timer));
+            applicationEventHandler.add(unsubscribeEvent);
+            log.info("Unsubscribing all topics or patterns and assigned partitions {}",
                     subscriptions.assignedPartitions());
 
-                try {
-                    processBackgroundEvents(unsubscribeEvent.future(), timer);
-                    log.info("Unsubscribed all topics or patterns and assigned partitions");
-                } catch (TimeoutException e) {
-                    log.error("Failed while waiting for the unsubscribe event to complete");
-                }
-                resetGroupMetadata();
+            try {
+                processBackgroundEvents(unsubscribeEvent.future(), timer);
+                log.info("Unsubscribed all topics or patterns and assigned partitions");
+            } catch (TimeoutException e) {
+                log.error("Failed while waiting for the unsubscribe event to complete");
             }
+            resetGroupMetadata();
         } catch (Exception e) {
             log.error("Unsubscribe failed", e);
             throw e;
