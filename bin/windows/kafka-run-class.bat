@@ -94,6 +94,11 @@ for %%i in ("%BASE_DIR%\libs\*") do (
 	call :concat "%%i"
 )
 
+rem classpath addition for LSB style path
+if exist %BASE_DIR%\share\java\kafka\* (
+	call:concat %BASE_DIR%\share\java\kafka\*
+)
+
 rem Classpath addition for core
 for %%i in ("%BASE_DIR%\core\build\libs\kafka_%SCALA_BINARY_VERSION%*.jar") do (
 	call :concat "%%i"
@@ -170,6 +175,8 @@ rem JVM performance options
 IF ["%KAFKA_JVM_PERFORMANCE_OPTS%"] EQU [""] (
 	set KAFKA_JVM_PERFORMANCE_OPTS=-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true
 )
+
+
 
 IF not defined CLASSPATH (
 	echo Classpath is empty. Please build the project first e.g. by running 'gradlew jarAll'
