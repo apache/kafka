@@ -43,7 +43,7 @@ class TestDowngrade(EndToEndTest):
             node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = str(kafka_version)
             node.config[config_property.MESSAGE_FORMAT_VERSION] = str(kafka_version)
             self.kafka.start_node(node)
-            self.wait_until_rejoin()
+            self.kafka.wait_until_rejoin_isr(self.topic, range(0, self.PARTITIONS), self.REPLICATION_FACTOR)
 
     def downgrade_to(self, kafka_version):
         for node in self.kafka.nodes:
@@ -52,7 +52,7 @@ class TestDowngrade(EndToEndTest):
             del node.config[config_property.INTER_BROKER_PROTOCOL_VERSION]
             del node.config[config_property.MESSAGE_FORMAT_VERSION]
             self.kafka.start_node(node)
-            self.wait_until_rejoin()
+            self.kafka.wait_until_rejoin_isr(self.topic, range(0, self.PARTITIONS), self.REPLICATION_FACTOR)
 
     def setup_services(self, kafka_version, compression_types, security_protocol, static_membership):
         self.create_zookeeper_if_necessary()
@@ -74,11 +74,6 @@ class TestDowngrade(EndToEndTest):
                              static_membership=static_membership)
 
         self.consumer.start()
-
-    def wait_until_rejoin(self):
-        for partition in range(0, self.PARTITIONS):
-            wait_until(lambda: len(self.kafka.isr_idx_list(self.topic, partition)) == self.REPLICATION_FACTOR, 
-                    timeout_sec=60, backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
 
     @cluster(num_nodes=7)
     @parametrize(version=str(LATEST_3_7), compression_types=["snappy"])
@@ -172,3 +167,7 @@ class TestDowngrade(EndToEndTest):
         downgrade_topic_id = self.kafka.topic_id(self.topic)
         assert upgrade_topic_id == downgrade_topic_id
         assert self.kafka.check_protocol_errors(self)
+
+        # epoch checks aren't supported with SASL_SSL
+        if security_protocol != "SASL_SSL" and kafka_version >= LATEST_2_2:
+            self.kafka.replica_leader_epochs_match(self.topic, range(0, self.PARTITIONS))
