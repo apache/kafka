@@ -112,6 +112,8 @@ public class ReplicaVerificationTool {
 
     public static void main(String[] args) {
         try {
+            LOG.warn("This tool is deprecated and may be removed in a future major release.");
+
             ReplicaVerificationToolOptions options = new ReplicaVerificationToolOptions(args);
             // getting topic metadata
             LOG.info("Getting topic metadata...");
