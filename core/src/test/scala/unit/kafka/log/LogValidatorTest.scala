@@ -33,6 +33,8 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, LogValidator, Recor
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 
 import scala.jdk.CollectionConverters._
 
@@ -687,14 +689,10 @@ class LogValidatorTest {
     verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
       compressed = true)
   }
-  @Test
-  def testInvalidChecksum(): Unit = {
-    checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V0, Compression.gzip().build(), CompressionType.GZIP)
-    checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V1, Compression.gzip().build(),CompressionType.GZIP)
-    checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V0, Compression.lz4().build(), CompressionType.LZ4)
-    checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V1, Compression.lz4().build(), CompressionType.LZ4)
-    checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V0, Compression.snappy().build(), CompressionType.SNAPPY)
-    checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V1, Compression.snappy().build(), CompressionType.SNAPPY)
+  @ParameterizedTest
+  @CsvSource(Array("0,gzip", "1,gzip", "0,lz4", "1,lz4", "0,snappy", "1,snappy"))
+  def testInvalidChecksum(code: Byte, compression: String): Unit = {
+    checkInvalidChecksum(code, Compression.of(compression).build(), CompressionType.forName(compression))
   }
 
   private def checkInvalidChecksum(magic: Byte, compression: Compression , compressionType: CompressionType): Unit = {
