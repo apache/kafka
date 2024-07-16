@@ -31,6 +31,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
@@ -84,6 +85,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.LongUnaryOperator;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.OFFSET_SYNCS_CLIENT_ROLE_PREFIX;
@@ -1364,13 +1366,46 @@ public class MirrorConnectorsIntegrationBaseTest {
     /*
      * Generate some consumer activity on both clusters to ensure the checkpoint connector always starts promptly
      */
-    protected void warmUpConsumer(Map<String, Object> consumerProps) {
-        try (Consumer<byte[], byte[]> dummyConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
+    protected final void warmUpConsumer(Map<String, Object> consumerProps) {
+        final String topic = "test-topic-1";
+        warmUpConsumer("primary", primary.kafka(), consumerProps, topic, NUM_PARTITIONS);
+        warmUpConsumer("backup", backup.kafka(), consumerProps, topic, NUM_PARTITIONS);
+    }
+
+    private void warmUpConsumer(String clusterName, EmbeddedKafkaCluster kafkaCluster, Map<String, Object> consumerProps, String topic, int numPartitions) {
+        try (Consumer<?, ?> dummyConsumer = kafkaCluster.createConsumerAndSubscribeTo(consumerProps, topic)) {
+            // poll to ensure we've joined the group
             dummyConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
-            dummyConsumer.commitSync();
-        }
-        try (Consumer<byte[], byte[]> dummyConsumer = backup.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
-            dummyConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
+
+            // force the consumer to have a known position on every topic partition
+            // so that it will be able to commit offsets for that position
+            // (it's possible that poll returns before that has happened)
+            Set<TopicPartition> topicPartitionsPendingPosition = IntStream.range(0, NUM_PARTITIONS)
+                    .mapToObj(partition -> new TopicPartition(topic, partition))
+                    .collect(Collectors.toSet());
+            Timer positionTimer = Time.SYSTEM.timer(60_000);
+            while (!positionTimer.isExpired() && !topicPartitionsPendingPosition.isEmpty()) {
+                Set<TopicPartition> topicPartitionsWithPosition = new HashSet<>();
+
+                topicPartitionsPendingPosition.forEach(topicPartition -> {
+                    try {
+                        positionTimer.update();
+                        dummyConsumer.position(topicPartition, Duration.ofMillis(positionTimer.remainingMs()));
+                        topicPartitionsWithPosition.add(topicPartition);
+                    } catch (KafkaException e) {
+                        log.warn("Failed to calculate consumer position for {} on cluster {}", topicPartition, clusterName);
+                    }
+                });
+
+                topicPartitionsPendingPosition.removeAll(topicPartitionsWithPosition);
+            }
+            assertEquals(
+                    Collections.emptySet(),
+                    topicPartitionsPendingPosition,
+                    "Failed to calculate consumer position for one or more partitions on cluster " + clusterName + " in time"
+            );
+
+            // And finally, commit offsets
             dummyConsumer.commitSync();
         }
     }
