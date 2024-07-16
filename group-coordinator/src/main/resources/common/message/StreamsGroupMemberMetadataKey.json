@@ -17,12 +17,12 @@
 {
   "type": "data",
   "name": "StreamsGroupMemberMetadataKey",
-  "validVersions": "11",
+  "validVersions": "14",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "11",
+    { "name": "GroupId", "type": "string", "versions": "14",
       "about": "The group id." },
-    { "name": "MemberId", "type": "string", "versions": "11",
+    { "name": "MemberId", "type": "string", "versions": "14",
       "about": "The member id." }
   ]
 }

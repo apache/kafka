@@ -238,10 +238,6 @@ import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsInitializeRequestData;
 import org.apache.kafka.common.message.StreamsInitializeResponseData;
-import org.apache.kafka.common.message.StreamsInstallAssignmentRequestData;
-import org.apache.kafka.common.message.StreamsInstallAssignmentResponseData;
-import org.apache.kafka.common.message.StreamsPrepareAssignmentRequestData;
-import org.apache.kafka.common.message.StreamsPrepareAssignmentResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -4025,13 +4021,13 @@ public class RequestResponseTest {
         return new ReadShareGroupStateSummaryResponse(data);
     }
 
-    private AbstractRequest createStreamsPrepareAssignmentRequest(final short version) {
-        return new StreamsPrepareAssignmentRequest.Builder(new StreamsPrepareAssignmentRequestData()).build(version);
-    }
-
-    private AbstractRequest createStreamsInstallAssignmentRequest(final short version) {
-        return new StreamsInstallAssignmentRequest.Builder(new StreamsInstallAssignmentRequestData()).build(version);
-    }
+//    private AbstractRequest createStreamsPrepareAssignmentRequest(final short version) {
+//        return new StreamsPrepareAssignmentRequest.Builder(new StreamsPrepareAssignmentRequestData()).build(version);
+//    }
+//
+//    private AbstractRequest createStreamsInstallAssignmentRequest(final short version) {
+//        return new StreamsInstallAssignmentRequest.Builder(new StreamsInstallAssignmentRequestData()).build(version);
+//    }
 
     private AbstractRequest createStreamsInitializeRequest(final short version) {
         return new StreamsInitializeRequest.Builder(new StreamsInitializeRequestData()).build(version);
@@ -4041,20 +4037,21 @@ public class RequestResponseTest {
         return new StreamsHeartbeatRequest.Builder(new StreamsHeartbeatRequestData()).build(version);
     }
 
-    private AbstractResponse createStreamsPrepareAssignmentResponse() {
-        return new StreamsPrepareAssignmentResponse(new StreamsPrepareAssignmentResponseData());
-    }
-
-    private AbstractResponse createStreamsInstallAssignmentResponse() {
-        return new StreamsInstallAssignmentResponse(new StreamsInstallAssignmentResponseData());
-    }
-
+//    private AbstractResponse createStreamsPrepareAssignmentResponse() {
+//        return new StreamsPrepareAssignmentResponse(new StreamsPrepareAssignmentResponseData());
+//    }
+//
+//    private AbstractResponse createStreamsInstallAssignmentResponse() {
+//        return new StreamsInstallAssignmentResponse(new StreamsInstallAssignmentResponseData());
+//    }
+//
     private AbstractResponse createStreamsInitializeResponse() {
         return new StreamsInitializeResponse(new StreamsInitializeResponseData());
     }
 
     private AbstractResponse createStreamsHeartbeatResponse() {
         return new StreamsHeartbeatResponse(new StreamsHeartbeatResponseData());
+    }
 
     @Test
     public void testInvalidSaslHandShakeRequest() {

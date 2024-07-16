@@ -17,10 +17,10 @@
 {
   "type": "data",
   "name": "StreamsGroupMetadataKey",
-  "validVersions": "9",
+  "validVersions": "12",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "9",
+    { "name": "GroupId", "type": "string", "versions": "12",
       "about": "The group id." }
   ]
 }

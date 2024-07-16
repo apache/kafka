@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 76,
+  "apiKey": 89,
   "type": "response",
   "name": "StreamsHeartbeatResponse",
   "validVersions": "0",

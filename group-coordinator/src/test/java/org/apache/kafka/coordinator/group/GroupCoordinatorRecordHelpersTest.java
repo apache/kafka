@@ -283,7 +283,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new ApiMessageAndVersion(
                 new StreamsGroupTopologyKey()
                     .setGroupId("group-id"),
-                (short) 15),
+                (short) 18),
             new ApiMessageAndVersion(
                 new StreamsGroupTopologyValue()
                     .setTopology(expectedTopology),

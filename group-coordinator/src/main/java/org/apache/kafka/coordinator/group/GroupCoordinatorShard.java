@@ -119,6 +119,8 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.coordinator.group.Utils.messageOrNull;
+
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
  * classic and consumer groups. It holds the hard and the soft state of the groups. This class
@@ -238,9 +240,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withShareGroupHeartbeatInterval(config.shareGroupHeartbeatIntervalMs())
                // TODO: Do we need separate configs for streams groups?
                 .withStreamsGroupAssignors(Collections.singletonList(new MockAssignor()))
-                .withStreamsGroupMaxSize(config.consumerGroupMaxSize)
-                .withStreamsGroupSessionTimeout(config.consumerGroupSessionTimeoutMs)
-                .withStreamsGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs)
+                .withStreamsGroupMaxSize(config.consumerGroupMaxSize())
+                .withStreamsGroupSessionTimeout(config.consumerGroupSessionTimeoutMs())
+                .withStreamsGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs())
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .build();
 
@@ -796,56 +798,56 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     offset,
                     producerId,
                     (OffsetCommitKey) key.message(),
-                    (OffsetCommitValue) Utils.messageOrNull(value)
+                    (OffsetCommitValue) messageOrNull(value)
                 );
                 break;
 
             case 2:
                 groupMetadataManager.replay(
                     (GroupMetadataKey) key.message(),
-                    (GroupMetadataValue) Utils.messageOrNull(value)
+                    (GroupMetadataValue) messageOrNull(value)
                 );
                 break;
 
             case 3:
                 groupMetadataManager.replay(
                     (ConsumerGroupMetadataKey) key.message(),
-                    (ConsumerGroupMetadataValue) Utils.messageOrNull(value)
+                    (ConsumerGroupMetadataValue) messageOrNull(value)
                 );
                 break;
 
             case 4:
                 groupMetadataManager.replay(
                     (ConsumerGroupPartitionMetadataKey) key.message(),
-                    (ConsumerGroupPartitionMetadataValue) Utils.messageOrNull(value)
+                    (ConsumerGroupPartitionMetadataValue) messageOrNull(value)
                 );
                 break;
 
             case 5:
                 groupMetadataManager.replay(
                     (ConsumerGroupMemberMetadataKey) key.message(),
-                    (ConsumerGroupMemberMetadataValue) Utils.messageOrNull(value)
+                    (ConsumerGroupMemberMetadataValue) messageOrNull(value)
                 );
                 break;
 
             case 6:
                 groupMetadataManager.replay(
                     (ConsumerGroupTargetAssignmentMetadataKey) key.message(),
-                    (ConsumerGroupTargetAssignmentMetadataValue) Utils.messageOrNull(value)
+                    (ConsumerGroupTargetAssignmentMetadataValue) messageOrNull(value)
                 );
                 break;
 
             case 7:
                 groupMetadataManager.replay(
                     (ConsumerGroupTargetAssignmentMemberKey) key.message(),
-                    (ConsumerGroupTargetAssignmentMemberValue) Utils.messageOrNull(value)
+                    (ConsumerGroupTargetAssignmentMemberValue) messageOrNull(value)
                 );
                 break;
 
             case 8:
                 groupMetadataManager.replay(
                     (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
-                    (ConsumerGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
+                    (ConsumerGroupCurrentMemberAssignmentValue) messageOrNull(value)
                 );
                 break;
 
@@ -859,14 +861,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             case 10:
                 groupMetadataManager.replay(
                     (ShareGroupMemberMetadataKey) key.message(),
-                    (ShareGroupMemberMetadataValue) Utils.messageOrNull(value)
+                    (ShareGroupMemberMetadataValue) messageOrNull(value)
                 );
                 break;
 
             case 11:
                 groupMetadataManager.replay(
                     (ShareGroupMetadataKey) key.message(),
-                    (ShareGroupMetadataValue) Utils.messageOrNull(value)
+                    (ShareGroupMetadataValue) messageOrNull(value)
                 );
                 break;
 

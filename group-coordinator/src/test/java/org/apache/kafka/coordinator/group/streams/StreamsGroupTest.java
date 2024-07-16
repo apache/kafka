@@ -20,8 +20,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -605,31 +607,32 @@ public class StreamsGroupTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testValidateOffsetCommit(boolean isTransactional) {
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testValidateOffsetCommit(short version) {
+        boolean isTransactional = false;
         StreamsGroup group = createStreamsGroup("group-foo");
 
         // Simulate a call from the admin client without member id and member epoch.
         // This should pass only if the group is empty.
-        group.validateOffsetCommit("", "", -1, isTransactional);
+        group.validateOffsetCommit("", "", -1, isTransactional, version);
 
         // The member does not exist.
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("member-id", null, 0, isTransactional));
+            group.validateOffsetCommit("member-id", null, 0, isTransactional, version));
 
         // Create a member.
         group.updateMember(new StreamsGroupMember.Builder("member-id").build());
 
         // A call from the admin client should fail as the group is not empty.
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("", "", -1, isTransactional));
+            group.validateOffsetCommit("", "", -1, isTransactional, version));
 
         // The member epoch is stale.
         assertThrows(StaleMemberEpochException.class, () ->
-            group.validateOffsetCommit("member-id", "", 10, isTransactional));
+            group.validateOffsetCommit("member-id", "", 10, isTransactional, version));
 
         // This should succeed.
-        group.validateOffsetCommit("member-id", "", 0, isTransactional);
+        group.validateOffsetCommit("member-id", "", 0, isTransactional, version);
     }
 
     @Test
