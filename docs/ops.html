@@ -805,7 +805,7 @@ us-east.ssl.key.password=my-secret-password</code></pre>
   <h5 class="anchor-heading"><a id="georeplication-topic-naming" class="anchor-link"></a><a href="#georeplication-topic-naming">Custom Naming of Replicated Topics in Target Clusters</a></h5>
 
   <p>
-    Replicated topics in a target cluster—sometimes called <em>remote</em> topics—are renamed according to a replication policy. MirrorMaker uses this policy to ensure that events (aka records, messages) from different clusters are not written to the same topic-partition. By default as per <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror-client/src/main/java/org/apache/kafka/connect/mirror/DefaultReplicationPolicy.java">DefaultReplicationPolicy</a>, the names of replicated topics in the target clusters have the format <code>{source}.{source_topic_name}</code>:
+    Replicated topics in a target cluster—sometimes called <em>remote</em> topics—are renamed according to a replication policy. MirrorMaker uses this policy to ensure that events (aka records, messages) from different clusters are not written to the same topic-partition. By default as per <a href="{{version}}/javadoc/org/apache/kafka/connect/mirror/DefaultReplicationPolicy.html"><code>DefaultReplicationPolicy</code></a>, the names of replicated topics in the target clusters have the format <code>{source}.{source_topic_name}</code>:
   </p>
 
 <pre><code class="language-text">us-west         us-east
@@ -821,7 +821,11 @@ foo-topic  -->  us-west.foo-topic</code></pre>
 us-west->us-east.replication.policy.separator = _</code></pre>
 
   <p>
-    If you need further control over how replicated topics are named, you can implement a custom <code>ReplicationPolicy</code> and override <code>replication.policy.class</code> (default is <code>DefaultReplicationPolicy</code>) in the MirrorMaker configuration.
+    MirrorMaker also includes <a href="{{version}}/javadoc/org/apache/kafka/connect/mirror/IdentityReplicationPolicy.html"><code>IdentityReplicationPolicy</code></a> which does not rename topics. This is useful for simple one-way replication topologies, where topic renaming is not strictly necessary; however, be careful not to introduce cycles when using <code>IdentityReplicationPolicy</code>, since this can result in the same records being replicated in an infinite loop.
+  </p>
+
+  <p>
+    If you need further control over how replicated topics are named, you can implement a custom <a href="{{version}}/javadoc/org/apache/kafka/connect/mirror/ReplicationPolicy.html"><code>ReplicationPolicy</code></a> and override <code>replication.policy.class</code>.
   </p>
 
   <h5 class="anchor-heading"><a id="georeplication-config-conflicts" class="anchor-link"></a><a href="#georeplication-config-conflicts">Preventing Configuration Conflicts</a></h5>
