@@ -418,18 +418,11 @@ public enum Errors {
     DUPLICATE_VOTER(126, "The voter is already part of the set of voters.", DuplicateVoterException::new),
     VOTER_NOT_FOUND(127, "The voter is not part of the set of voters.", VoterNotFoundException::new),
     INVALID_REGULAR_EXPRESSION(128, "The regular expression is not valid.", InvalidRegularExpression::new),
-    STREAMS_INVALID_TOPOLOGY(129, "The supplied topology is invalid.",
-        StreamsInvalidTopologyException::new),
-    STREAMS_INCONSISTENT_TOPOLOGY(130, "The topology hash supplied is inconsistent with the topology for this consumer group.",
-        StreamsInconsistentTopologyException::new),
-    STREAMS_MISSING_SOURCE_TOPICS(131, "One or more source topics are missing.",
-        StreamsMissingSourceTopicsException::new),
-    STREAMS_MISSING_INTERNAL_TOPICS(132, "One or more internal topics are missing.",
-        StreamsMissingInternalTopicsException::new),
-    STREAMS_GROUP_UNINITIALIZED(133, "The group is not (fully) initialized, broker-side topology information or internal topics are missing.",
-        StreamsGroupUninitializedException::new),
-    STREAMS_SHUTDOWN_APPLICATION(134, "A client requested the shutdown of the whole application.",
-        StreamsShutdownApplicationException::new);
+    STREAMS_INVALID_TOPOLOGY(129, "The supplied topology is invalid.", StreamsInvalidTopologyException::new),
+    STREAMS_INCONSISTENT_TOPOLOGY(130, "The topology hash supplied is inconsistent with the topology for this consumer group.", StreamsInconsistentTopologyException::new),
+    STREAMS_MISSING_SOURCE_TOPICS(131, "One or more source topics are missing.", StreamsMissingSourceTopicsException::new),
+    STREAMS_GROUP_UNINITIALIZED(132, "The group is not (fully) initialized, broker-side topology information or internal topics are missing.", StreamsGroupUninitializedException::new),
+    STREAMS_SHUTDOWN_APPLICATION(133, "A client requested the shutdown of the whole application.", StreamsShutdownApplicationException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
