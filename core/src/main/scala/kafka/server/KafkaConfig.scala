@@ -308,8 +308,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val brokerIdGenerationEnable: Boolean = getBoolean(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG)
   val maxReservedBrokerId: Int = getInt(ServerConfigs.RESERVED_BROKER_MAX_ID_CONFIG)
   var brokerId: Int = getInt(ServerConfigs.BROKER_ID_CONFIG)
-  // Making `nodeId` mutable is a workaround to fix the issue of de-synchronization between the generated `brokerId` and `nodeId`.
-  // It should be back to immutable after removing zk.
+  var nodeId: Int = getInt(KRaftConfigs.NODE_ID_CONFIG)
   private[server] var _nodeIf: Int = getInt(KRaftConfigs.NODE_ID_CONFIG)
   def nodeId: Int = _nodeIf
   val initialRegistrationTimeoutMs: Int = getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG)
