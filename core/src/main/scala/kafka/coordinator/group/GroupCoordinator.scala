@@ -1536,13 +1536,15 @@ private[group] class GroupCoordinator(
     group.inLock {
       val notYetRejoinedDynamicMembers = group.notYetRejoinedMembers.filterNot(_._2.isStaticMember)
       if (notYetRejoinedDynamicMembers.nonEmpty) {
-        info(s"Group ${group.groupId} removed dynamic members " +
-          s"who haven't joined: ${notYetRejoinedDynamicMembers.keySet}")
+        val failMembersInfo = new mutable.HashMap[String, String]
 
         notYetRejoinedDynamicMembers.values.foreach { failedMember =>
           group.remove(failedMember.memberId)
           removeHeartbeatForLeavingMember(group, failedMember.memberId)
+          failMembersInfo.put(failedMember.memberId, failedMember.clientHost)
         }
+        info(s"Group ${group.groupId} removed dynamic members " +
+          s"who haven't joined: ${failMembersInfo.mkString("[", ",", "]")}")
       }
 
       if (group.is(Dead)) {
