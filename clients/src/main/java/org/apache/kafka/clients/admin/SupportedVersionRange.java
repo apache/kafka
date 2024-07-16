@@ -28,7 +28,7 @@ public class SupportedVersionRange {
 
     /**
      * Raises an exception unless the following conditions are met:
-     *  0 <= minVersion <= maxVersion.
+     *  0 &lt;= minVersion &lt;= maxVersion.
      *
      * @param minVersion           The minimum version value.
      * @param maxVersion           The maximum version value.
