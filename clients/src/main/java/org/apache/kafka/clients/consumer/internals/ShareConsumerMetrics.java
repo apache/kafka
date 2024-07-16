@@ -16,25 +16,17 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ShareConsumer;
-import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
-import org.apache.kafka.common.metrics.Metrics;
+import java.util.HashSet;
+import java.util.Set;
 
-/**
- * This extension interface provides a handful of methods to expose internals of the {@link ShareConsumer} for
- * various tests.
- *
- * <p/>
- *
- * <em>Note</em>: this is for internal use only and is not intended for use by end users. Internal users should
- * not attempt to determine the underlying implementation to avoid coding to an unstable interface. Rather, it is
- * the {@link ShareConsumer} API contract that should serve as the caller's interface.
- */
-public interface ShareConsumerDelegate<K, V> extends ShareConsumer<K, V> {
+public class ShareConsumerMetrics {
+    public ShareFetchMetricsRegistry shareFetchMetrics;
 
-    String clientId();
+    public ShareConsumerMetrics(Set<String> metricsTags, String metricGrpPrefix) {
+        this.shareFetchMetrics = new ShareFetchMetricsRegistry(metricsTags, metricGrpPrefix);
+    }
 
-    Metrics metricsRegistry();
-
-    KafkaShareConsumerMetrics kafkaShareConsumerMetrics();
+    public ShareConsumerMetrics(String metricGroupPrefix) {
+        this(new HashSet<>(), metricGroupPrefix);
+    }
 }

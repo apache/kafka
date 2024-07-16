@@ -17,13 +17,14 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.ShareConsumerImpl;
 import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
 /**
- * This is the abstract definition of the events created by the {@link AsyncKafkaConsumer} on the user's
- * application thread.
+ * This is the abstract definition of the events created by the {@link AsyncKafkaConsumer} and
+ * {@link ShareConsumerImpl} on the user's application thread.
  */
 public abstract class ApplicationEvent {
 
@@ -31,7 +32,10 @@ public abstract class ApplicationEvent {
         COMMIT_ASYNC, COMMIT_SYNC, POLL, FETCH_COMMITTED_OFFSETS, NEW_TOPICS_METADATA_UPDATE, ASSIGNMENT_CHANGE,
         LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS, TOPIC_METADATA, ALL_TOPICS_METADATA, SUBSCRIPTION_CHANGE,
         UNSUBSCRIBE, CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED,
-        COMMIT_ON_CLOSE
+        COMMIT_ON_CLOSE,
+        SHARE_FETCH, SHARE_ACKNOWLEDGE_ASYNC, SHARE_ACKNOWLEDGE_SYNC,
+        SHARE_SUBSCRIPTION_CHANGE, SHARE_UNSUBSCRIBE,
+        SHARE_ACKNOWLEDGE_ON_CLOSE
     }
 
     private final Type type;
@@ -74,8 +78,6 @@ public abstract class ApplicationEvent {
 
     @Override
     public final String toString() {
-        return getClass().getSimpleName() + "{" +
-                toStringBase() +
-                '}';
+        return getClass().getSimpleName() + "{" + toStringBase() + "}";
     }
 }

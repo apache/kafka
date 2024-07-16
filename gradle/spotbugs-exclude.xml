@@ -491,6 +491,15 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Ignore spurious warning about inconsistent synchronization on a currentFetch.
+             Locking is consistent but does not use synchronized methods. All accesses
+             are performed in the application thread once it has acquired the lock. -->
+        <Package name="org.apache.kafka.clients.consumer.internals" />
+        <Source name="ShareConsumerImpl.java" />
+        <Bug pattern="IS2_INCONSISTENT_SYNC" />
+    </Match>
+
+    <Match>
         <!-- Suppress a spurious warning about an unreleased lock. -->
         <Class name="kafka.utils.timer.SystemTimer"/>
         <Method name="add"/>

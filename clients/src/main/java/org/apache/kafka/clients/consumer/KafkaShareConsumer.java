@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegate;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegateCreator;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -49,11 +50,11 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
 /**
  * A client that consumes records from a Kafka cluster using a share group.
  * <p>
- *     <em>This is an early access feature introduced by KIP-932. It is not suitable for production use until it is
- *     fully implemented and released.</em>
+ *     <em>This is an early access feature under development which is introduced by KIP-932.
+ *     It is not suitable for production use until it is fully implemented and released.</em>
  *
  * <h3>Cross-Version Compatibility</h3>
- * This client can communicate with brokers that are version 4.0.0 or newer. You will receive an
+ * This client can communicate with brokers that are a version that supports share groups. You will receive an
  * {@link org.apache.kafka.common.errors.UnsupportedVersionException} when invoking an API that is not
  * available on the running broker version.
  *
@@ -696,5 +697,9 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
 
     Metrics metricsRegistry() {
         return delegate.metricsRegistry();
+    }
+
+    KafkaShareConsumerMetrics kafkaShareConsumerMetrics() {
+        return delegate.kafkaShareConsumerMetrics();
     }
 }

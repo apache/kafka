@@ -39,7 +39,11 @@ public class HeartbeatMetricsManager {
     private long lastHeartbeatMs = -1L;
 
     public HeartbeatMetricsManager(Metrics metrics) {
-        final String metricGroupName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
+        this(metrics, CONSUMER_METRIC_GROUP_PREFIX);
+    }
+
+    public HeartbeatMetricsManager(Metrics metrics, String metricGroupPrefix) {
+        final String metricGroupName = metricGroupPrefix + COORDINATOR_METRICS_SUFFIX;
         heartbeatSensor = metrics.sensor("heartbeat-latency");
         heartbeatResponseTimeMax = metrics.metricName("heartbeat-response-time-max",
             metricGroupName,
