@@ -126,7 +126,7 @@ public class SchemaBuilder implements Schema {
         checkCanSet(DEFAULT_FIELD, defaultValue, value);
         checkNotNull(TYPE_FIELD, type, DEFAULT_FIELD);
         try {
-            ConnectSchema.validateValue(this, value);
+            ConnectSchema.validateValue(build(), value);
         } catch (DataException e) {
             throw new SchemaBuilderException("Invalid default value", e);
         }
