@@ -773,11 +773,9 @@ public final class Utils {
      * @return Set
      */
     @SafeVarargs
+    @SuppressWarnings("varargs")
     public static <T> Set<T> mkSet(T... elems) {
-        Set<T> result = new HashSet<>((int) (elems.length / 0.75) + 1);
-        for (T elem : elems)
-            result.add(elem);
-        return result;
+        return new HashSet<>(Arrays.asList(elems));
     }
 
     /**
@@ -787,11 +785,9 @@ public final class Utils {
      * @return SortedSet
      */
     @SafeVarargs
+    @SuppressWarnings("varargs")
     public static <T extends Comparable<T>> SortedSet<T> mkSortedSet(T... elems) {
-        SortedSet<T> result = new TreeSet<>();
-        for (T elem : elems)
-            result.add(elem);
-        return result;
+        return new TreeSet<>(Arrays.asList(elems));
     }
 
     /**
@@ -817,7 +813,7 @@ public final class Utils {
      */
     @SafeVarargs
     public static <K, V> Map<K, V> mkMap(final Map.Entry<K, V>... entries) {
-        final LinkedHashMap<K, V> result = new LinkedHashMap<>();
+        final LinkedHashMap<K, V> result = new LinkedHashMap<>(entries.length);
         for (final Map.Entry<K, V> entry : entries) {
             result.put(entry.getKey(), entry.getValue());
         }
@@ -832,9 +828,7 @@ public final class Utils {
      */
     public static Properties mkProperties(final Map<String, String> properties) {
         final Properties result = new Properties();
-        for (final Map.Entry<String, String> entry : properties.entrySet()) {
-            result.setProperty(entry.getKey(), entry.getValue());
-        }
+        result.putAll(properties);
         return result;
     }
 
@@ -846,9 +840,7 @@ public final class Utils {
      */
     public static Properties mkObjectProperties(final Map<String, Object> properties) {
         final Properties result = new Properties();
-        for (final Map.Entry<String, Object> entry : properties.entrySet()) {
-            result.put(entry.getKey(), entry.getValue());
-        }
+        result.putAll(properties);
         return result;
     }
 
