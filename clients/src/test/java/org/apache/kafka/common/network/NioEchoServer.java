@@ -391,7 +391,9 @@ public class NioEchoServer extends Thread {
                             if (key.isAcceptable()) {
                                 SocketChannel socketChannel = ((ServerSocketChannel) key.channel()).accept();
                                 socketChannel.configureBlocking(false);
-                                newChannels.add(socketChannel);
+                                synchronized (newChannels) {
+                                    newChannels.add(socketChannel);
+                                }
                                 selector.wakeup();
                             }
                             it.remove();
