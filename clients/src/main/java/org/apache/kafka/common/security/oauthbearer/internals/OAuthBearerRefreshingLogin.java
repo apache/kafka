@@ -77,6 +77,35 @@ import javax.security.auth.login.LoginException;
  * @see SaslConfigs#SASL_LOGIN_REFRESH_BUFFER_SECONDS_DOC
  */
 public class OAuthBearerRefreshingLogin implements Login {
+
+    private static class OAuthBearerExpiringCredential implements ExpiringCredential {
+        private final OAuthBearerToken token;
+
+        public OAuthBearerExpiringCredential(OAuthBearerToken token) {
+            this.token = token;
+        }
+
+        @Override
+        public String principalName() {
+            return token.principalName();
+        }
+
+        @Override
+        public Long startTimeMs() {
+            return token.startTimeMs();
+        }
+
+        @Override
+        public long expireTimeMs() {
+            return token.lifetimeMs();
+        }
+
+        @Override
+        public Long absoluteLastRefreshTimeMs() {
+            return null;
+        }
+    }
+
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerRefreshingLogin.class);
     private ExpiringCredentialRefreshingLogin expiringCredentialRefreshingLogin = null;
 
@@ -104,27 +133,7 @@ public class OAuthBearerRefreshingLogin implements Login {
                 final OAuthBearerToken token = privateCredentialTokens.iterator().next();
                 if (log.isDebugEnabled())
                     log.debug("Found expiring credential with principal '{}'.", token.principalName());
-                return new ExpiringCredential() {
-                    @Override
-                    public String principalName() {
-                        return token.principalName();
-                    }
-
-                    @Override
-                    public Long startTimeMs() {
-                        return token.startTimeMs();
-                    }
-
-                    @Override
-                    public long expireTimeMs() {
-                        return token.lifetimeMs();
-                    }
-
-                    @Override
-                    public Long absoluteLastRefreshTimeMs() {
-                        return null;
-                    }
-                };
+                return new OAuthBearerExpiringCredential(token);
             }
         };
     }

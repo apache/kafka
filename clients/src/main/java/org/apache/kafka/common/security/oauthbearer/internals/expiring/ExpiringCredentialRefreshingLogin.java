@@ -144,8 +144,6 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
 
     // mark volatile due to existence of public subject() method
     private volatile Subject subject = null;
-    private boolean hasExpiringCredential = false;
-    private String principalName = null;
     private LoginContext loginContext = null;
     private ExpiringCredential expiringCredential = null;
     private final Class<?> mandatoryClassToSynchronizeOnPriorToRefresh;
@@ -207,16 +205,12 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
         loginContext = tmpLoginContext;
         subject = loginContext.getSubject();
         expiringCredential = expiringCredential();
-        hasExpiringCredential = expiringCredential != null;
-        if (!hasExpiringCredential) {
+        if (expiringCredential == null) {
             // do not bother with re-logins.
             log.debug("No Expiring Credential");
-            principalName = null;
             refresherThread = null;
             return loginContext;
         }
-
-        principalName = expiringCredential.principalName();
 
         // Check for a clock skew problem
         long expireTimeMs = expiringCredential.expireTimeMs();
@@ -238,11 +232,15 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
          * Re-login periodically. How often is determined by the expiration date of the
          * credential and refresh-related configuration values.
          */
-        refresherThread = KafkaThread.daemon(String.format("kafka-expiring-relogin-thread-%s", principalName),
+        refresherThread = KafkaThread.daemon(String.format("kafka-expiring-relogin-thread-%s", principalName()),
                 new Refresher());
         refresherThread.start();
         loginContextFactory.refresherThreadStarted();
         return loginContext;
+    }
+
+    private String principalName() {
+        return expiringCredential.principalName();
     }
 
     public void close() {
@@ -278,8 +276,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
              * (it seems likely to be a bug, but it doesn't hurt to keep trying to refresh).
              */
             long retvalNextRefreshMs = relativeToMs + DELAY_SECONDS_BEFORE_NEXT_RETRY_WHEN_RELOGIN_FAILS * 1000L;
-            log.warn("[Principal={}]: No Expiring credential found: will try again at {}", principalLogText(),
-                    new Date(retvalNextRefreshMs));
+            log.warn("No Expiring credential found: will try again at {}", new Date(retvalNextRefreshMs));
             return retvalNextRefreshMs;
         }
         long expireTimeMs = expiringCredential.expireTimeMs();
@@ -364,14 +361,13 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
         synchronized (mandatoryClassToSynchronizeOnPriorToRefresh) {
             // Only perform one refresh of a particular type at a time
             boolean logoutRequiredBeforeLoggingBackIn = isLogoutRequiredBeforeLoggingBackIn();
-            if (hasExpiringCredential && logoutRequiredBeforeLoggingBackIn) {
+            if (expiringCredential != null && logoutRequiredBeforeLoggingBackIn) {
                 String principalLogTextPriorToLogout = principalLogText();
                 log.info("Initiating logout for {}", principalLogTextPriorToLogout);
                 loginContext.logout();
                 // Make absolutely sure we were logged out
                 expiringCredential = expiringCredential();
-                hasExpiringCredential = expiringCredential != null;
-                if (hasExpiringCredential)
+                if (expiringCredential != null)
                     // We can't force the removal because we don't know how to do it, so abort
                     throw new ExitRefresherThreadDueToIllegalStateException(String.format(
                             "Subject's private credentials still contains an instance of %s even though logout() was invoked; exiting refresh thread",
@@ -387,7 +383,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
             try {
                 loginContext = loginContextFactory.createLoginContext(ExpiringCredentialRefreshingLogin.this);
                 log.info("Initiating re-login for {}, logout() still needs to be called on a previous login = {}",
-                        principalName, optionalCredentialToLogout != null);
+                    expiringCredential.principalName(), optionalCredentialToLogout != null);
                 loginContext.login();
                 cleanLogin = true; // no need to restore the original
                 // Perform a logout() on any original credential if necessary
@@ -403,8 +399,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
              * logout() after the login()
              */
             expiringCredential = expiringCredential();
-            hasExpiringCredential = expiringCredential != null;
-            if (!hasExpiringCredential) {
+            if (expiringCredential == null) {
                 /*
                  * Re-login has failed because our login() invocation has not generated a
                  * credential but has also not generated an exception. We won't exit here;
@@ -412,7 +407,6 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                  * seems likely to be a bug, but it doesn't hurt to keep trying to refresh).
                  */
                 log.error("No Expiring Credential after a supposedly-successful re-login");
-                principalName = null;
             } else {
                 if (expiringCredential == optionalCredentialToLogout)
                     /*
@@ -422,7 +416,6 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                     throw new ExitRefresherThreadDueToIllegalStateException(String.format(
                             "Subject's private credentials still contains the previous, soon-to-expire instance of %s even though login() followed by logout() was invoked; exiting refresh thread",
                             expiringCredential.getClass().getName()));
-                principalName = expiringCredential.principalName();
                 if (log.isDebugEnabled())
                     log.debug("[Principal={}]: It is an expiring credential after re-login as expected",
                             principalLogText());
@@ -430,9 +423,9 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
         }
     }
 
-    private String principalLogText() {
-        return expiringCredential == null ? principalName
-                : expiringCredential.getClass().getSimpleName() + ":" + principalName;
+    // Visible for testing
+    String principalLogText() {
+        return expiringCredential.getClass().getSimpleName() + ":" + principalName();
     }
 
     private long currentMs() {
