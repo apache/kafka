@@ -171,9 +171,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {
-        // open the DB dir
-        metricsRecorder.init(getMetricsImpl(context), context.taskId());
-        openDB(context.appConfigs(), context.stateDir());
 
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
@@ -187,6 +184,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             (RecordBatchingStateRestoreCallback) this::restoreBatch,
             () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
         );
+
+        // open the DB dir
+        metricsRecorder.init(getMetricsImpl(context), context.taskId());
+        openDB(context.appConfigs(), context.stateDir());
+
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
             context.appConfigs(),
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
