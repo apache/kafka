@@ -66,6 +66,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("integration")
 public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
+
+    private static final int TOPIC_ACL_SYNC_DURATION_MS = 30_000;
     private static final int FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS = 60_000;
 
     /*
@@ -298,6 +300,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
     @Test
     public void testSyncTopicACLsUseProvidedForwardingAdmin() throws Exception {
         mm2Props.put("sync.topic.acls.enabled", "true");
+        mm2Props.put("sync.topic.acls.interval.seconds", "1");
         mm2Config = new MirrorMakerConfig(mm2Props);
         List<AclBinding> aclBindings = Collections.singletonList(
                 new AclBinding(
@@ -329,8 +332,16 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
                 new AccessControlEntry("User:dummy", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW)
         );
 
-        assertTrue(getAclBindings(backup.kafka(), "primary.test-topic-1").contains(expectedACLOnBackupCluster), "topic ACLs was synced");
-        assertTrue(getAclBindings(primary.kafka(), "backup.test-topic-1").contains(expectedACLOnPrimaryCluster), "topic ACLs was synced");
+        // In some rare cases replica topics are created before ACLs are synced, so retry logic is necessary
+        waitForCondition(
+                () -> {
+                    assertTrue(getAclBindings(backup.kafka(), "primary.test-topic-1").contains(expectedACLOnBackupCluster), "topic ACLs are not synced on backup cluster");
+                    assertTrue(getAclBindings(primary.kafka(), "backup.test-topic-1").contains(expectedACLOnPrimaryCluster), "topic ACLs are not synced on primary cluster");
+                    return true;
+                },
+                TOPIC_ACL_SYNC_DURATION_MS,
+                "Topic ACLs were not synced in time"
+        );
 
         // expect to use FakeForwardingAdminWithLocalMetadata to update topic ACLs in FakeLocalMetadataStore.allAcls
         assertTrue(FakeLocalMetadataStore.aclBindings("dummy").containsAll(Arrays.asList(expectedACLOnBackupCluster, expectedACLOnPrimaryCluster)));
