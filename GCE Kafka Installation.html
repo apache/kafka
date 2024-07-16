@@ -1,0 +1,121 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<!DOCTYPE html>
+<html>
+<head>
+<title>
+GCE Kafka VM Deployment</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Generalized installation for Kafka on Google Compute Engine VM for the latest version suitable for POC, Dev or Stage Environments and small scale Prod Usage">
+<style>
+body {background-color:#ffffff;background-repeat:no-repeat;background-position:top left;background-attachment:fixed;}
+h1{font-family:Arial, sans-serif;color:#000000;background-color:#ffffff;}
+p {font-family:Georgia, serif;font-size:14px;font-style:normal;font-weight:normal;color:#000000;background-color:#ffffff;}
+</style>
+</head>
+<body>
+<h1>Installation Methods</h1>
+<p>1. cd /opt</p>
+<p>2. wget https://dlcdn.apache.org/kafka/3.2.0/kafka_2.13-3.2.0.tgz</p>
+<p>3. tar -xzf kafka_2.13-3.2.0.tgz</p>
+<p></p>
+<p>4. Edit /opt/kafka/config/server.properties</p>
+<p>add the following to the properties file using a suitable editor like vim or  nano</p>
+<p>broker.id=0</p>
+<p>port=9092</p>
+<p>log.dir=/tmp/kafka-logs  </p>
+<p></p>
+<p>Also add or edit existing configuration lines</p>
+<p></p>
+<p>listeners=PLAINTEXT://0.0.0.0:9092</p>
+<p>advertised.listeners=PLAINTEXT://<server private ip>:9092</p>
+<p></p>
+<p>5. cd kafka_2.13-3.2.0</p>
+<p></p>
+<p>6.  Start the ZooKeeper service # Note: Soon, ZooKeeper will no longer be required by Apache Kafka. </p>
+<p>$ bin/zookeeper-server-start.sh config/zookeeper.properties</p>
+<p>7.  Start the Kafka broker service </p>
+<p>$ bin/kafka-server-start.sh config/server.properties</p>
+<p>8.  Create topic </p>
+<p>$ bin/kafka-topics.sh --create --topic quickstart-events --bootstrap-server localhost:9092</p>
+<p>9. Check detail of a topic created</p>
+<p>$ bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server localhost:9092</p>
+<p>10.  Write events to topic</p>
+<p>	$ bin/kafka-console-producer.sh --topic quickstart-events --bootstrap-server localhost:9092</p>
+<p> 11. Read events from topic </p>
+<p>$ bin/kafka-console-consumer.sh --topic quickstart-events --from-beginning --bootstrap-server localhost:9092</p>
+<p></p>
+<p>Starting as demon:</p>
+<p>Install Zookeeper</p>
+<p>sudo vi /etc/systemd/system/zookeeper.service</p>
+<p>Edit zookeeper.service</p>
+<p>[Unit] </p>
+<p>Requires=network.target remote-fs.target </p>
+<p>After=network.target remote-fs.target </p>
+<p></p>
+<p>[Service] </p>
+<p>Type=simple </p>
+<p>User=root </p>
+<p>ExecStart=/opt/kafka/bin/zookeeper-server-start.sh opt/kafka/config/zookeeper.properties ExecStop=/opt/kafka/bin/zookeeper-server-stop.sh </p>
+<p>Restart=on-abnormal </p>
+<p></p>
+<p>[Install] </p>
+<p>WantedBy=multi-user.target</p>
+<p>Start Zookeeper</p>
+<p>sudo systemctl enable zookeeper.service </p>
+<p>sudo systemctl start zookeeper.service </p>
+<p>sudo systemctl status zookeeper.service</p>
+<p>sudo systemctl stop zookeeper.service</p>
+<p>active (running)</p>
+<p>Install Kafka</p>
+<p>sudo vi /etc/systemd/system/kafka.service</p>
+<p>Edit kafka.service</p>
+<p></p>
+<p>[Unit] </p>
+<p>Requires=zookeeper.service </p>
+<p>After=zookeeper.service </p>
+<p></p>
+<p>[Service] </p>
+<p>Type=simple </p>
+<p>User=root </p>
+<p>ExecStart=/bin/sh -c '/opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties > /opt/kafka/kafka.log 2>&1' </p>
+<p>ExecStop=/opt/kafka/bin/kafka-server-stop.sh </p>
+<p>Restart=on-abnormal </p>
+<p></p>
+<p>[Install] </p>
+<p>WantedBy=multi-user.target</p>
+<p>Start Kafka</p>
+<p>sudo systemctl enable kafka.service </p>
+<p>sudo systemctl start kafka.service </p>
+<p>sudo systemctl status kafka.service</p>
+<p>sudo systemctl stop kafka.service</p>
+<p>active (running)</p>
+<p>create topic</p>
+<p>sudo /opt/kafka/bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --topic test-topic</p>
+<p>sudo /opt/kafka/bin/kafka-topics.sh --describe --bootstrap-server localhost:9092 --topic test-topic</p>
+<p>put messages to topic</p>
+<p>sudo /opt/kafka/bin/kafka-console-producer.sh --broker-list localhost:9092 --topic test-topic</p>
+<p>read messages from topic</p>
+<p>sudo /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --from-beginning --topic test-topic</p>
+<p>sudo /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --from-beginning --topic test-topic  –group my-app</p>
+<p></p>
+<p></p>
+<p>sudo /opt/kafka/bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --topic test-topic –group my-app</p>
+<p></p>
+<p>sudo /opt/kafka/bin/kafka-topics.sh --delete --bootstrap-server localhost:9092 --topic test-topic –group my-app</p>
+<p></p>
+</body>
+</html>
