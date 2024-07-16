@@ -70,7 +70,7 @@ public class SimpleHeaderConverter implements HeaderConverter, Versioned {
         } catch (NoSuchElementException e) {
             throw new DataException("Failed to deserialize value for header '" + headerKey + "' on topic '" + topic + "'", e);
         } catch (Throwable t) {
-            LOG.warn("Failed to deserialize value for header '{}' on topic '{}', so using byte array", headerKey, topic, t);
+            LOG.debug("Failed to deserialize value for header '{}' on topic '{}', so using byte array", headerKey, topic, t);
             return new SchemaAndValue(Schema.BYTES_SCHEMA, value);
         }
     }
