@@ -71,6 +71,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -657,6 +658,18 @@ public final class RaftClientTestContext {
             partitionData,
             nodes
         );
+
+        List<ReplicaState> sortedVoters = response
+            .topics()
+            .get(0)
+            .partitions()
+            .get(0)
+            .currentVoters()
+            .stream()
+            .sorted(Comparator.comparingInt(ReplicaState::replicaId))
+            .collect(Collectors.toList());
+        response.topics().get(0).partitions().get(0).setCurrentVoters(sortedVoters);
+
         assertEquals(expectedResponse, response);
     }
 
@@ -691,10 +704,12 @@ public final class RaftClientTestContext {
 
         VoteResponseData.PartitionData partitionResponse = response.topics().get(0).partitions().get(0);
 
-        assertEquals(voteGranted, partitionResponse.voteGranted());
-        assertEquals(error, Errors.forCode(partitionResponse.errorCode()));
-        assertEquals(epoch, partitionResponse.leaderEpoch());
+        String voterIdDebugLog = "Leader Id: " + leaderId +
+            " Partition response leader Id: " + partitionResponse.leaderId();
+        assertEquals(voteGranted, partitionResponse.voteGranted(), voterIdDebugLog);
+        assertEquals(error, Errors.forCode(partitionResponse.errorCode()), voterIdDebugLog);
         assertEquals(leaderId.orElse(-1), partitionResponse.leaderId());
+        assertEquals(epoch, partitionResponse.leaderEpoch());
 
         if (kip853Rpc && leaderId.isPresent()) {
             Endpoints expectedLeaderEndpoints = startingVoters.listeners(leaderId.getAsInt());
@@ -795,7 +810,7 @@ public final class RaftClientTestContext {
     }
 
     void assertSentBeginQuorumEpochResponse(
-            Errors responseError
+        Errors responseError
     ) {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.BEGIN_QUORUM_EPOCH);
         assertEquals(1, sentMessages.size());
@@ -840,7 +855,12 @@ public final class RaftClientTestContext {
 
         assertEquals(epoch, partitionResponse.leaderEpoch());
         assertEquals(leaderId.orElse(-1), partitionResponse.leaderId());
-        assertEquals(partitionError, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(
+            partitionError,
+            Errors.forCode(partitionResponse.errorCode()),
+            "Leader Id: " + leaderId +
+            " Partition response leader Id: " + partitionResponse.leaderId()
+        );
 
         if (kip853Rpc && leaderId.isPresent()) {
             Endpoints expectedLeaderEndpoints = startingVoters.listeners(leaderId.getAsInt());
@@ -1318,7 +1338,11 @@ public final class RaftClientTestContext {
                 .stream()
                 .map(voterId -> new Voter().setVoterId(voterId))
                 .collect(Collectors.toList()),
-            leaderChangeMessage.voters()
+            leaderChangeMessage
+                    .voters()
+                    .stream()
+                    .sorted(Comparator.comparingInt(Voter::voterId))
+                    .collect(Collectors.toList())
         );
         assertEquals(
             grantingVoters

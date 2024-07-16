@@ -52,6 +52,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
@@ -64,7 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public final class KafkaRaftClientSnapshotTest {
     @Test
     public void testLatestSnapshotId() throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -82,7 +83,7 @@ public final class KafkaRaftClientSnapshotTest {
 
     @Test
     public void testLatestSnapshotIdMissing() throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -98,9 +99,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+    @CsvSource({ "false,false", "false,true", "true,false", "true,true" })
     public void testLeaderListenerNotified(boolean entireLog, boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, false);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
@@ -135,9 +136,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testFollowerListenerNotified(boolean entireLog) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -177,9 +178,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testSecondListenerNotified(boolean entireLog) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -223,9 +224,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testListenerRenotified(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
@@ -279,10 +280,10 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testLeaderImmediatelySendsSnapshotId(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
-        ReplicaKey otherNodeKey = replicaKey(1, withKip853Rpc);
+        int localId = randomReplicaId();
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 4);
 
@@ -313,9 +314,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestOffsetLessThanLogStart(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
 
@@ -361,10 +362,10 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestOffsetAtZero(boolean withKip853Rpc) throws Exception {
         // When the follower sends a FETCH request at offset 0, reply with snapshot id if it exists
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
 
@@ -409,9 +410,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestWithLargerLastFetchedEpoch(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
 
@@ -449,9 +450,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestTruncateToLogStart(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         int syncNodeId = otherNodeKey.id() + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id(), syncNodeId);
@@ -499,9 +500,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestAtLogStartOffsetWithValidEpoch(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         int syncNodeId = otherNodeKey.id() + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id(), syncNodeId);
@@ -545,9 +546,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestAtLogStartOffsetWithInvalidEpoch(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         int syncNodeId = otherNodeKey.id() + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id(), syncNodeId);
@@ -597,11 +598,11 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestWithLastFetchedEpochLessThanOldestSnapshot(
         boolean withKip853Rpc
     ) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         int syncNodeId = otherNodeKey.id() + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id(), syncNodeId);
@@ -650,9 +651,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestMissingSnapshot(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
@@ -713,9 +714,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestUnknownPartition(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         TopicPartition topicPartition = new TopicPartition("unknown", 0);
 
@@ -744,9 +745,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestAsLeader(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = Arrays.asList("foo", "bar");
@@ -795,14 +796,14 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testLeaderShouldResignLeadershipIfNotGetFetchSnapshotRequestFromMajorityVoters(
         boolean withKip853Rpc
     ) throws Exception {
-        int localId = 0;
-        ReplicaKey voter1 = replicaKey(1, withKip853Rpc);
-        ReplicaKey voter2 = replicaKey(2, withKip853Rpc);
-        ReplicaKey observer3 = replicaKey(3, withKip853Rpc);
+        int localId = randomReplicaId();
+        ReplicaKey voter1 = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey voter2 = replicaKey(localId + 2, withKip853Rpc);
+        ReplicaKey observer3 = replicaKey(localId + 3, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, voter1.id(), voter2.id());
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = Arrays.asList("foo", "bar");
@@ -890,9 +891,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testPartialFetchSnapshotRequestAsLeader(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(2, 1);
         List<String> records = Arrays.asList("foo", "bar");
@@ -971,9 +972,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestAsFollower(boolean withKip853Rpc) throws IOException {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1003,9 +1004,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestWithInvalidPosition(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = Arrays.asList("foo", "bar");
@@ -1063,9 +1064,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestWithOlderEpoch(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         OffsetAndEpoch snapshotId = Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 
@@ -1096,9 +1097,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestWithNewerEpoch(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         OffsetAndEpoch snapshotId = Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 
@@ -1129,9 +1130,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testFetchResponseWithInvalidSnapshotId(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1192,9 +1193,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testFetchResponseWithSnapshotId(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1265,9 +1266,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testFetchSnapshotResponsePartialData(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1370,9 +1371,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testFetchSnapshotResponseMissingSnapshot(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1431,9 +1432,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testFetchSnapshotResponseFromNewerEpochNotLeader(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int firstLeaderId = localId + 1;
         int secondLeaderId = firstLeaderId + 1;
         Set<Integer> voters = Utils.mkSet(localId, firstLeaderId, secondLeaderId);
@@ -1493,9 +1494,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testFetchSnapshotResponseFromNewerEpochLeader(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1554,9 +1555,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testFetchSnapshotResponseFromOlderEpoch(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1625,9 +1626,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testFetchSnapshotResponseWithInvalidId(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1741,9 +1742,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testFetchSnapshotResponseToNotFollower(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1815,12 +1816,12 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestClusterIdValidation(
         boolean withKip853Rpc
     ) throws Exception {
-        int localId = 0;
-        ReplicaKey otherNode = replicaKey(1, withKip853Rpc);
+        int localId = randomReplicaId();
+        ReplicaKey otherNode = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, otherNode.id());
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
@@ -1893,9 +1894,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testCreateSnapshotAsLeaderWithInvalidSnapshotId(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         int epoch = 2;
@@ -1941,11 +1942,11 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testCreateSnapshotAsFollowerWithInvalidSnapshotId(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
-        int leaderId = 1;
-        int otherFollowerId = 2;
+        int localId = randomReplicaId();
+        int leaderId = localId + 1;
+        int otherFollowerId = localId + 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, leaderId, otherFollowerId);
 
@@ -2012,6 +2013,10 @@ public final class KafkaRaftClientSnapshotTest {
     private static ReplicaKey replicaKey(int id, boolean withDirectoryId) {
         Uuid directoryId = withDirectoryId ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID;
         return ReplicaKey.of(id, directoryId);
+    }
+
+    private static int randomReplicaId() {
+        return ThreadLocalRandom.current().nextInt(1025);
     }
 
     public static FetchSnapshotRequestData fetchSnapshotRequest(
