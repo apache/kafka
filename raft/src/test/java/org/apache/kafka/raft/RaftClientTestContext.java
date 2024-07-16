@@ -57,6 +57,7 @@ import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -115,7 +116,7 @@ public final class RaftClientTestContext {
     final Uuid clusterId;
     private final OptionalInt localId;
     public final Uuid localDirectoryId;
-    public final short kraftVersion;
+    public final KRaftVersion kraftVersion;
     public final KafkaRaftClient<String> client;
     final Metrics metrics;
     public final MockLog log;
@@ -151,6 +152,7 @@ public final class RaftClientTestContext {
         private final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID, logContext);
         private final Uuid clusterId = Uuid.randomUuid();
         private final OptionalInt localId;
+        private KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_0;
         private final Uuid localDirectoryId;
 
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
@@ -159,7 +161,6 @@ public final class RaftClientTestContext {
         private MemoryPool memoryPool = MemoryPool.NONE;
         private List<InetSocketAddress> bootstrapServers = Collections.emptyList();
         private boolean kip853Rpc = false;
-        private short kraftVersion = 0;
         private Optional<VoterSet> startingVoters = Optional.empty();
         private boolean isStartingVotersStatic = false;
 
@@ -253,7 +254,7 @@ public final class RaftClientTestContext {
         Builder withEmptySnapshot(OffsetAndEpoch snapshotId) {
             try (RecordsSnapshotWriter<?> snapshot = new RecordsSnapshotWriter.Builder()
                     .setTime(time)
-                    .setKraftVersion((short) 0)
+                    .setKraftVersion(KRaftVersion.KRAFT_VERSION_0)
                     .setRawSnapshotWriter(log.createNewSnapshotUnchecked(snapshotId).get())
                     .build(SERDE)
             ) {
@@ -312,7 +313,7 @@ public final class RaftClientTestContext {
 
         Builder withBootstrapSnapshot(Optional<VoterSet> voters) {
             if (voters.isPresent()) {
-                kraftVersion = 1;
+                kraftVersion = KRaftVersion.KRAFT_VERSION_1;
 
                 startingVoters = voters;
                 isStartingVotersStatic = false;
@@ -329,7 +330,7 @@ public final class RaftClientTestContext {
                 }
             } else {
                 // Create an empty bootstrap snapshot if there is no voter set
-                kraftVersion = 0;
+                kraftVersion = KRaftVersion.KRAFT_VERSION_0;
                 withEmptySnapshot(Snapshots.BOOTSTRAP_SNAPSHOT_ID);
             }
 
@@ -431,7 +432,7 @@ public final class RaftClientTestContext {
         Uuid clusterId,
         OptionalInt localId,
         Uuid localDirectoryId,
-        short kraftVersion,
+        KRaftVersion kraftVersion,
         KafkaRaftClient<String> client,
         MockLog log,
         MockNetworkChannel channel,
@@ -600,7 +601,8 @@ public final class RaftClientTestContext {
     }
 
     public void assertElectedLeader(int epoch, int leaderId) {
-        Set<Integer> voters = kraftVersion == 0 ? startingVoters.voterIds() : Collections.emptySet();
+        Set<Integer> voters = kraftVersion.isReconfigSupported() ?
+                Collections.emptySet() : startingVoters.voterIds();
         assertEquals(
             ElectionState.withElectedLeader(epoch, leaderId, voters),
             quorumStateStore.readElectionState().get()

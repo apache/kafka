@@ -31,6 +31,7 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
 import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.util.List;
@@ -146,7 +147,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         private Time time = Time.SYSTEM;
         private int maxBatchSize = 1024;
         private MemoryPool memoryPool = MemoryPool.NONE;
-        private short kraftVersion = 1;
+        private KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
         private Optional<VoterSet> voterSet = Optional.empty();
         private Optional<RawSnapshotWriter> rawSnapshotWriter = Optional.empty();
 
@@ -180,7 +181,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             return this;
         }
 
-        public Builder setKraftVersion(short kraftVersion) {
+        public Builder setKraftVersion(KRaftVersion kraftVersion) {
             this.kraftVersion = kraftVersion;
             return this;
         }
@@ -197,7 +198,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 throw new IllegalStateException(
                     String.format("Initializing writer with a non-empty snapshot: %s", rawSnapshotWriter.get().snapshotId())
                 );
-            } else if (kraftVersion == 0 && voterSet.isPresent()) {
+            } else if (kraftVersion == KRaftVersion.KRAFT_VERSION_0 && voterSet.isPresent()) {
                 throw new IllegalStateException(
                     String.format("Voter set (%s) not expected when the kraft.version is 0", voterSet.get())
                 );
@@ -237,12 +238,12 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                             .setLastContainedLogTimestamp(lastContainedLogTimestamp)
                     );
 
-                    if (kraftVersion > 0) {
+                    if (kraftVersion.isReconfigSupported()) {
                         builder.appendKRaftVersionMessage(
                             now,
                             new KRaftVersionRecord()
                                 .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
-                                .setKRaftVersion(kraftVersion)
+                                .setKRaftVersion(kraftVersion.featureLevel())
                         );
 
                         if (voterSet.isPresent()) {
