@@ -34,4 +34,9 @@ public class RebalanceInProgressException extends ApiException {
     public RebalanceInProgressException(Throwable cause) {
         super(cause);
     }
+
+    @Override
+    public Throwable fillInStackTrace() {
+        return fillInStackTraceBypass();
+    }
 }

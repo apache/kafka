@@ -48,4 +48,7 @@ public class ApiException extends KafkaException {
         return this;
     }
 
+    protected Throwable fillInStackTraceBypass() {
+        return super.fillInStackTrace();
+    }
 }
