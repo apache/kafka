@@ -98,9 +98,6 @@ object BrokerFeatures extends Logging {
               feature.latestProduction
             }))
     }
-    if (unstableFeatureVersionsEnabled) {
-      features.put("kraft.version", new SupportedVersionRange(0, 1))
-    }
     Features.supportedFeatures(features)
   }
 

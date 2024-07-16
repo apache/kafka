@@ -26,8 +26,16 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FeaturesTest {
+    @ParameterizedTest
+    @EnumSource(Features.class)
+    public void testV0SupportedInEarliestMV(Features feature) {
+        assertTrue(feature.featureVersions().length >= 1);
+        assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION,
+                feature.featureVersions()[0].bootstrapMetadataVersion());
+    }
 
     @ParameterizedTest
     @EnumSource(Features.class)
@@ -36,13 +44,13 @@ public class FeaturesTest {
         int numFeatures = featureImplementations.length;
         short latestProductionLevel = feature.latestProduction();
 
-        for (short i = 1; i < numFeatures; i++) {
+        for (short i = 0; i < numFeatures; i++) {
             short level = i;
             if (latestProductionLevel < i) {
-                assertEquals(featureImplementations[i - 1], feature.fromFeatureLevel(level, true));
+                assertEquals(featureImplementations[i], feature.fromFeatureLevel(level, true));
                 assertThrows(IllegalArgumentException.class, () -> feature.fromFeatureLevel(level, false));
             } else {
-                assertEquals(featureImplementations[i - 1], feature.fromFeatureLevel(level, false));
+                assertEquals(featureImplementations[i], feature.fromFeatureLevel(level, false));
             }
         }
     }

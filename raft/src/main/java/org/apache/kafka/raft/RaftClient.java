@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
@@ -250,4 +251,11 @@ public interface RaftClient<T> extends AutoCloseable {
      * or 0 if there have not been any records written.
      */
     long logEndOffset();
+
+    /**
+     * Returns the latest kraft.version, even if it hasn't been committed durably to Raft.
+     *
+     * @return the current kraft.version.
+     */
+    KRaftVersion kraftVersion();
 }

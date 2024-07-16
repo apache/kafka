@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.raft.generated.QuorumStateData;
+import org.apache.kafka.server.common.KRaftVersion;
 
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
@@ -31,9 +32,9 @@ public class MockQuorumStateStore implements QuorumStateStore {
     }
 
     @Override
-    public void writeElectionState(ElectionState update, short kraftVersion) {
+    public void writeElectionState(ElectionState update, KRaftVersion kraftVersion) {
         current = Optional.of(
-            update.toQuorumStateData(quorumStateVersionFromKRaftVersion(kraftVersion))
+            update.toQuorumStateData(kraftVersion.quorumStateVersion())
         );
     }
 
@@ -45,17 +46,5 @@ public class MockQuorumStateStore implements QuorumStateStore {
     @Override
     public void clear() {
         current = Optional.empty();
-    }
-
-    private short quorumStateVersionFromKRaftVersion(short kraftVersion) {
-        if (kraftVersion == 0) {
-            return 0;
-        } else if (kraftVersion == 1) {
-            return 1;
-        } else {
-            throw new IllegalArgumentException(
-                String.format("Unknown kraft.version %d", kraftVersion)
-            );
-        }
     }
 }

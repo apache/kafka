@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.server.common.KRaftVersion;
 
 import org.slf4j.Logger;
 
@@ -66,7 +67,7 @@ public class LeaderState<T> implements EpochState {
     private final VoterSet voterSetAtEpochStart;
     // This field is non-empty if the voter set at epoch start came from a snapshot or log segment
     private final OptionalLong offsetOfVotersAtEpochStart;
-    private final short kraftVersionAtEpochStart;
+    private final KRaftVersion kraftVersionAtEpochStart;
 
     private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
     private Map<Integer, ReplicaState> voterStates = new HashMap<>();
@@ -90,7 +91,7 @@ public class LeaderState<T> implements EpochState {
         long epochStartOffset,
         VoterSet voterSetAtEpochStart,
         OptionalLong offsetOfVotersAtEpochStart,
-        short kraftVersionAtEpochStart,
+        KRaftVersion kraftVersionAtEpochStart,
         Set<Integer> grantingVoters,
         BatchAccumulator<T> accumulator,
         Endpoints endpoints,
@@ -239,7 +240,7 @@ public class LeaderState<T> implements EpochState {
                     if (offset == -1) {
                         // Latest voter set came from the bootstrap checkpoint (0-0.checkpoint)
                         // rewrite the voter set to the log so that it is replcated to the replicas.
-                        if (kraftVersionAtEpochStart < 1) {
+                        if (!kraftVersionAtEpochStart.isReconfigSupported()) {
                             throw new IllegalStateException(
                                 String.format(
                                     "The bootstrap checkpoint contains a set of voters %s at %s " +
@@ -254,7 +255,7 @@ public class LeaderState<T> implements EpochState {
                                 currentTimeMs,
                                 new KRaftVersionRecord()
                                     .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
-                                    .setKRaftVersion(kraftVersionAtEpochStart)
+                                    .setKRaftVersion(kraftVersionAtEpochStart.featureLevel())
                             );
                             builder.appendVotersMessage(
                                 currentTimeMs,
