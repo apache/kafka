@@ -270,7 +270,7 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         createAndCheckClientAuthenticationFailure(securityProtocol, node, "PLAIN",
-                "Authentication failed: Invalid username or password");
+                "Authentication failed: Invalid username " + TestJaasConfig.USERNAME + " or password");
         server.verifyAuthenticationMetrics(0, 1);
         server.verifyReauthenticationMetrics(0, 0);
     }
@@ -287,7 +287,7 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         createAndCheckClientAuthenticationFailure(securityProtocol, node, "PLAIN",
-                "Authentication failed: Invalid username or password");
+                "Authentication failed: Invalid username invaliduser or password");
         server.verifyAuthenticationMetrics(0, 1);
         server.verifyReauthenticationMetrics(0, 0);
     }
