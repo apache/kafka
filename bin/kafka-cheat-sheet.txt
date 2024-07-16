@@ -1,0 +1,48 @@
+topic list
+    bash kafka-topics.sh --bootstrap-server kafka1:9091 --list
+    
+topic & group describe
+    bash kafka-consumer-groups.sh --bootstrap-server kafka1:9091 --describe --group consumer_group_1
+
+topic list config
+    bash kafka-configs.sh --zookeeper zookeeper1:2181 --describe --entity-type topics
+
+topic alter config
+    bash kafka-configs.sh --zookeeper zookeeper1:2181 --alter --entity-type topics --entity-name test_topic --add-config retention.ms=60000
+    bash kafka-configs.sh --zookeeper zookeeper1:2181 --alter --entity-type topics --entity-name test_topic --add-config min.compaction.lag.ms=10
+    
+topic create with retention
+    bash kafka-topics.sh --bootstrap-server kafka1:9091 --create --topic test_topic --partitions 30 --replication-factor 1 --config delete.retention.ms=100
+    
+    bash kafka-topics –-zookeeper zookeeper1:2181 --create --topic test_topic --partitions 30 --replication-factor 1 --config “cleanup.policy=compact” --config “delete.retention.ms=100” --config “segment.ms=100” --config “min.cleanable.dirty.ratio=0.01”
+    
+offset override
+    bash kafka-consumer-groups.sh --bootstrap-server kafka2:9092 --reset-offsets --group consumer_group_2 --topic test_topic:0 --to-offset 0 --execute
+    
+get topic offsets (min+max)
+    bash kafka-run-class.sh kafka.tools.GetOffsetShell --topic=test_topic --broker-list=kafka1:9091
+    
+get brokers config
+    bash kafka-configs.sh --bootstrap-server kafka1:9091 --describe --entity-type brokers --entity-default
+    
+list the currently active groups
+    bash kafka-consumer-groups.sh --bootstrap-server kafka1:9091 --list
+    
+To list current members of a group:
+    bash kafka-consumer-groups.sh --bootstrap-server kafka2:9092 --group consumer_group_2 --describe --members
+
+topic delete
+    bash kafka-topics.sh --bootstrap-server kafka1:9091 --delete --topic test_topic
+    
+Delete a group
+    bash kafka-consumer-groups.sh --bootstrap-server kafka1:9091 --delete --group consumer_group_1
+
+kill bg consumers
+    ps -aux | grep 'java -Xmx512M -server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.head' | awk {'print $2'} | while [read pid]; do kill -15 $pid; done
+    ps -S | grep 'consumer_group_1 | awk {'print $1'} | while [read pid]; do kill -15 $pid; done
+    
+list partitions
+    bash kafka-consumer-groups.sh --bootstrap-server kafka2:9092 --describe --group consumer_group_2 | awk {'print $3'}
+
+list topic state offset
+    bash kafka-run-class.sh kafka.tools.GetOffsetShell --broker-list kafka1:9091 --topic test_topic
