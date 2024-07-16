@@ -55,6 +55,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -98,6 +99,7 @@ public class MetadataLoaderTest {
         volatile LogDeltaManifest latestLogDeltaManifest = null;
         volatile SnapshotManifest latestSnapshotManifest = null;
         volatile boolean closed = false;
+        volatile LeaderAndEpoch currentLeaderAndEpoch = LeaderAndEpoch.UNKNOWN;
 
         MockPublisher() {
             this("MockPublisher");
@@ -131,6 +133,11 @@ public class MetadataLoaderTest {
                     throw new RuntimeException("Invalid manifest type " + manifest.type());
             }
             firstPublish.complete(null);
+        }
+
+        @Override
+        public void onControllerChange(LeaderAndEpoch newLeaderAndEpoch) {
+            currentLeaderAndEpoch = newLeaderAndEpoch;
         }
 
         @Override
@@ -550,6 +557,7 @@ public class MetadataLoaderTest {
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setHighWaterMarkAccessor(() -> highWaterMark.get()).
+                setLeaderAndEpochAccessor(() -> new LeaderAndEpoch(OptionalInt.of(123), 456)).
                 build()) {
             loader.installPublishers(publishers).get();
             loadTestSnapshot(loader, 200);
@@ -569,6 +577,8 @@ public class MetadataLoaderTest {
             loadTestSnapshot(loader, 220);
             assertEquals(220L, loader.lastAppliedOffset());
             publishers.get(0).firstPublish.get(1, TimeUnit.MINUTES);
+            assertEquals(new LeaderAndEpoch(OptionalInt.of(123), 456),
+                    publishers.get(0).currentLeaderAndEpoch);
         }
         faultHandler.maybeRethrowFirstException();
     }
