@@ -1679,15 +1679,14 @@ public class QuorumControllerTest {
     @Test
     public void testMigrationsEnabledForOldBootstrapMetadataVersion() throws Exception {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build()
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
         ) {
-            QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
-                    setControllerBuilderInitializer(controllerBuilder -> {
-                        controllerBuilder.setZkMigrationEnabled(true);
-                    }).
-                    setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_3_IV0, "test"));
-
-            QuorumControllerTestEnv controlEnv = controlEnvBuilder.build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                setControllerBuilderInitializer(controllerBuilder -> {
+                    controllerBuilder.setZkMigrationEnabled(true);
+                }).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_3_IV0, "test")).
+                build();
             QuorumController active = controlEnv.activeController();
             assertEquals(ZkMigrationState.NONE, active.appendReadEvent("read migration state", OptionalLong.empty(),
                 () -> active.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS));
@@ -1797,12 +1796,12 @@ public class QuorumControllerTest {
     @Test
     public void testFailoverDuringMigrationTransaction() throws Exception {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build()
-        ) {
-            QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
                 setControllerBuilderInitializer(controllerBuilder -> controllerBuilder.setZkMigrationEnabled(true)).
-                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"));
-            QuorumControllerTestEnv controlEnv = controlEnvBuilder.build();
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test")).
+                build();
+        ) {
             QuorumController active = controlEnv.activeController(true);
             ZkRecordConsumer migrationConsumer = active.zkRecordConsumer();
             migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
@@ -1842,18 +1841,17 @@ public class QuorumControllerTest {
     @EnumSource(value = MetadataVersion.class, names = {"IBP_3_4_IV0", "IBP_3_5_IV0", "IBP_3_6_IV0", "IBP_3_6_IV1"})
     public void testBrokerHeartbeatDuringMigration(MetadataVersion metadataVersion) throws Exception {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build()
-        ) {
-            QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
                 setControllerBuilderInitializer(controllerBuilder ->
                     controllerBuilder
                         .setZkMigrationEnabled(true)
                         .setMaxIdleIntervalNs(OptionalLong.of(TimeUnit.MILLISECONDS.toNanos(100)))
                 ).
-                setBootstrapMetadata(BootstrapMetadata.fromVersion(metadataVersion, "test"));
-            QuorumControllerTestEnv controlEnv = controlEnvBuilder.build();
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(metadataVersion, "test")).
+                build();
+        ) {
             QuorumController active = controlEnv.activeController(true);
-
             // Register a ZK broker
             BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
@@ -1892,7 +1890,6 @@ public class QuorumControllerTest {
                 active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
                     setWantFence(false).setBrokerEpoch(reply.epoch()).setBrokerId(0).
                     setCurrentMetadataOffset(100100L)).get());
-
         }
     }
 }
