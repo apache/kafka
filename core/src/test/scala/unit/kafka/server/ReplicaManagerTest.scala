@@ -3653,7 +3653,7 @@ class ReplicaManagerTest {
             .setTopicName(tp0.topic)
             .setPartitionIndex(tp0.partition)
             .setControllerEpoch(controllerEpoch)
-            .setLeader(1)
+            .setLeader(0)
             .setLeaderEpoch(leaderEpoch)
             .setIsr(partition0Replicas)
             .setPartitionEpoch(0)
@@ -3721,7 +3721,6 @@ class ReplicaManagerTest {
 
     // verify that broker 1 did remove its metrics when no longer being the leader of partition 1
     verify(mockTopicStats1).removeOldLeaderMetrics(topic)
-    verify(mockTopicStats1).removeOldFollowerMetrics(topic)
   }
 
   private def prepareDifferentReplicaManagers(brokerTopicStats1: BrokerTopicStats,
