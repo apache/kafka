@@ -186,7 +186,7 @@ public class SenderTest {
         }));
         return Collections.unmodifiableMap(partitionRecords);
     }
- 
+
     @Test
     public void testSimple() throws Exception {
         long offset = 0;
@@ -827,6 +827,167 @@ public class SenderTest {
         assertEquals(1, request2.get().offset());
     }
 
+    @Test
+    public void testIdempotenceSendFailureWithRetriedInFlight() throws Exception {
+        // Produce 3, first 2 fails with retryable, 3rd fails with non-retryable, first 2 then retried and succeeds
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+
+        // Send first ProduceRequest
+        Future<RecordMetadata> request1 = appendToAccumulator(tp0);
+        sender.runOnce();
+        String nodeId = client.requests().peek().destination();
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+
+        // Send second ProduceRequest
+        Future<RecordMetadata> request2 = appendToAccumulator(tp0);
+        sender.runOnce();
+
+        // Send third ProduceRequest
+        Future<RecordMetadata> request3 = appendToAccumulator(tp0);
+        sender.runOnce();
+
+        assertEquals(3, client.inFlightRequestCount());
+        assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertFalse(request1.isDone());
+        assertFalse(request2.isDone());
+        assertFalse(request3.isDone());
+        assertTrue(client.isReady(node, time.milliseconds()));
+
+        sendIdempotentProducerResponse(0, tp0, Errors.LEADER_NOT_AVAILABLE, -1L);
+        sender.runOnce(); // receive response 1
+
+        sendIdempotentProducerResponse(1, tp0, Errors.LEADER_NOT_AVAILABLE, -1L);
+        sender.runOnce(); // resend request 1, receive response 2
+
+        sendIdempotentProducerResponse(2, tp0, Errors.UNKNOWN_SERVER_ERROR, -1L);
+        sender.runOnce(); // resend request 2, receive response 3
+
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+
+        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
+        sender.runOnce();  // receive response 1
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
+        assertTrue(request1.isDone());
+        assertEquals(0, request1.get().offset());
+        assertFalse(client.hasInFlightRequests());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+
+        sender.runOnce(); // re send request 2;
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+
+        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
+        sender.runOnce();  // receive response 2
+        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+        assertTrue(request2.isDone());
+        assertEquals(1, request2.get().offset());
+        assertFalse(client.hasInFlightRequests());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+
+        sender.runOnce(); // resolve unresolved sequences, bump epoch
+
+        // Epoch and sequence should be reset
+        assertFalse(transactionManager.hasUnresolvedSequence(tp0));
+        assertEquals(1, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+    }
+
+    @Test
+    public void testIdempotenceSendFailureWithRetriedAndFailedInFlight() throws Exception {
+        // Produce 3, first 2 fails with retryable, 3rd fails with non-retryable, first 2 then retried and fails
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+
+        // Send first ProduceRequest
+        Future<RecordMetadata> request1 = appendToAccumulator(tp0);
+        sender.runOnce();
+        String nodeId = client.requests().peek().destination();
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+
+        // Send second ProduceRequest
+        Future<RecordMetadata> request2 = appendToAccumulator(tp0);
+        sender.runOnce();
+
+        // Send third ProduceRequest
+        Future<RecordMetadata> request3 = appendToAccumulator(tp0);
+        sender.runOnce();
+
+        assertEquals(3, client.inFlightRequestCount());
+        assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertFalse(request1.isDone());
+        assertFalse(request2.isDone());
+        assertFalse(request3.isDone());
+        assertTrue(client.isReady(node, time.milliseconds()));
+
+        sendIdempotentProducerResponse(0, tp0, Errors.LEADER_NOT_AVAILABLE, -1L);
+        sender.runOnce(); // receive response 1
+
+        sendIdempotentProducerResponse(1, tp0, Errors.LEADER_NOT_AVAILABLE, -1L);
+        sender.runOnce(); // resend request 1, receive response 2
+
+        sendIdempotentProducerResponse(2, tp0, Errors.UNKNOWN_SERVER_ERROR, -1L);
+        sender.runOnce(); // resend request 2, receive response 3
+
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+
+        sendIdempotentProducerResponse(0, tp0, Errors.UNKNOWN_SERVER_ERROR, -1L);
+        sender.runOnce();  // receive response 1
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertTrue(request1.isDone());
+        assertFalse(client.hasInFlightRequests());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+
+        sender.runOnce(); // re send request 2;
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+
+        sendIdempotentProducerResponse(1, tp0, Errors.UNKNOWN_SERVER_ERROR, -1L);
+        sender.runOnce();  // receive response 2
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertTrue(request2.isDone());
+        assertFalse(client.hasInFlightRequests());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+
+        sender.runOnce(); // resolve unresolved sequences, bump epoch
+
+        // Epoch and sequence should be reset
+        assertFalse(transactionManager.hasUnresolvedSequence(tp0));
+        assertEquals(1, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+    }
 
     @Test
     public void testIdempotenceWithMultipleInflightsRetriedInOrder() throws Exception {
@@ -3665,7 +3826,7 @@ public class SenderTest {
     private TransactionManager createTransactionManager() {
         return new TransactionManager(new LogContext(), null, 0, RETRY_BACKOFF_MS, new ApiVersions());
     }
-    
+
     private void setupWithTransactionState(TransactionManager transactionManager) {
         setupWithTransactionState(transactionManager, false, null, true, Integer.MAX_VALUE, 0);
     }
@@ -3836,7 +3997,7 @@ public class SenderTest {
         assertTrue(transactionManager.hasProducerId());
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
     }
-    
+
     private AddPartitionsToTxnResponse buildAddPartitionsToTxnResponseData(int throttleMs, Map<TopicPartition, Errors> errors) {
         AddPartitionsToTxnResponseData.AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(
                 AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, errors);

@@ -37,6 +37,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
@@ -601,6 +602,48 @@ public class TransactionManagerTest {
         assertEquals(1, b3.baseSequence());
         assertEquals(2, b4.baseSequence());
         assertEquals(3, b5.baseSequence());
+    }
+
+    @Test
+    public void testEpochBumpAfterBatchFailureWithInFlightPrecedingBatch() {
+        initializeTransactionManager(Optional.empty());
+        initializeIdempotentProducerId(producerId, epoch);
+
+        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
+        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
+        ProducerBatch b3 = writeIdempotentBatchWithValue(transactionManager, tp0, "3");
+
+        assertEquals(3, transactionManager.sequenceNumber(tp0).intValue());
+
+        // Third batch fails with non-retriable
+        b3.completeExceptionally(new UnknownServerException(), i -> null);
+        transactionManager.handleFailedBatch(b3, new UnknownServerException(), true);
+
+        // Producer epoch and sequence number should not be reset for the preceding batches
+        assertEquals(epoch, b1.producerEpoch());
+        assertEquals(0, b1.baseSequence());
+        assertEquals(epoch, b2.producerEpoch());
+        assertEquals(1, b2.baseSequence());
+
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
+
+        // First batch succeeds
+        long b1AppendTime = time.milliseconds();
+        ProduceResponse.PartitionResponse b1Response = new ProduceResponse.PartitionResponse(
+                Errors.NONE, 500L, b1AppendTime, 0L);
+        b1.complete(500L, b1AppendTime);
+        transactionManager.handleCompletedBatch(b1, b1Response);
+
+        // Second batch succeeds
+        long b2AppendTime = time.milliseconds();
+        ProduceResponse.PartitionResponse b2Response = new ProduceResponse.PartitionResponse(
+                Errors.NONE, 501L, b2AppendTime, 0L);
+        b2.complete(502L, b2AppendTime);
+        transactionManager.handleCompletedBatch(b2, b2Response);
+
+        transactionManager.maybeResolveSequences();
+
+        assertFalse(transactionManager.hasUnresolvedSequence(tp0));
     }
 
     @Test
