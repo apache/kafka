@@ -258,7 +258,7 @@ class KafkaServer(
         initialMetaPropsEnsemble.verify(Optional.of(_clusterId), verificationId, verificationFlags)
 
         /* generate brokerId */
-        config.brokerId = getOrGenerateBrokerId(initialMetaPropsEnsemble)
+        config._brokerIf = getOrGenerateBrokerId(initialMetaPropsEnsemble)
         // Currently, we are migrating from ZooKeeper to KRaft. If broker.id.generation.enable is set to true,
         // we must ensure that the nodeId synchronizes with the broker.id to prevent the nodeId from being -1,
         // which would result in a failure during the migration.
