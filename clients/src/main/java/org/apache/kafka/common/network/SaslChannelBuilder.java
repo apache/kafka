@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -193,9 +194,13 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     }
 
     @Override
-    public void validateReconfiguration(Map<String, ?> configs) {
+    public void validateReconfiguration(Map<String, ?> configs) throws ConfigException {
         if (this.securityProtocol == SecurityProtocol.SASL_SSL)
-            sslFactory.validateReconfiguration(configs);
+            try {
+                sslFactory.validateReconfiguration(configs);
+            } catch (IllegalStateException e) {
+                throw new ConfigException("SASL reconfiguration failed due to " + e);
+            }
     }
 
     @Override
