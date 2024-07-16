@@ -1,6 +1,9 @@
 Apache Kafka
 =================
-See our [web site](https://kafka.apache.org) for details on the project.
+
+Kafka is a distributed system consisting of servers and clients that communicate via a high-performance [TCP network protocol](https://kafka.apache.org/protocol.html). It can be deployed on bare-metal hardware, virtual machines, and containers in on-premise as well as cloud environments. Kafka allows you to write distributed applications and microservices that read, write, and process streams of events in parallel, at scale, and in a fault-tolerant manner even in the case of network problems or machine failures.
+
+This README page serves as a system setup and execution guide. A quickstart tutorial, documentation, use cases, video walkthroughs, and more can be located on our [web site](https://kafka.apache.org).
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
