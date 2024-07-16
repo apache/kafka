@@ -262,10 +262,10 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           </tr>
           <tr class="row-odd"><td>statestore.cache.max.bytes</td>
             <td>Medium</td>
-            <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads.</td>
+            <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads. Note that at the debug level you can use <code>cache.size</code> to monitor the actual size of the Kafka Streams cache.</td>
             <td>10485760</td>
           </tr>
-          <tr class="row-even"><td>cache.max.bytes.buffering (Deprecated. Use statestore.cache.max.bytes instead.)</td>
+          <tr class="row-even"><td>cache.max.bytes.buffering (Deprecated. Use cache.max.bytes instead.)</td>
             <td>Medium</td>
             <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads.</td>
             <td>10485760 bytes</td>
@@ -308,17 +308,15 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
               set by the user or all serdes must be passed in explicitly (see also default.key.serde).</td>
             <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
-          <tr class="row-even"><td>default.windowed.key.serde.inner (Deprecated. Use windowed.inner.class.serde instead.)</td>
-            <td>Medium</td>
-            <td colspan="2">Default serializer/deserializer for the inner class of windowed keys, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
-            <td><code class="docutils literal"><span class="pre">null</span></code></td>
-          </tr>
-          <tr class="row-odd"><td>default.windowed.value.serde.inner (Deprecated. Use windowed.inner.class.serde instead.)</td>
+          <tr class="row-even"><td>default.windowed.key.serde.inner (Deprecated.)</td>
+
+          <tr class="row-odd"><td>default.windowed.key.serde.inner (Deprecated. Use windowed.inner.class.serde instead.)</td>
+          <tr class="row-even"><td>default.windowed.value.serde.inner (Deprecated. Use windowed.inner.class.serde instead.)</td>
             <td>Medium</td>
             <td colspan="2">Default serializer/deserializer for the inner class of windowed values, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
-          <tr class="row-even"><td>default.dsl.store</td>
+          <tr class="row-odd"><td>default.dsl.store</td>
             <td>Low</td>
             <td colspan="2">
               [DEPRECATED] The default state store type used by DSL operators. Deprecated in
@@ -326,7 +324,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
               </td>
             <td><code>ROCKS_DB</code></td>
           </tr>
-          <tr class="row-odd"><td>dsl.store.suppliers.class</td>
+          <tr class="row-even"><td>dsl.store.suppliers.class</td>
             <td>Low</td>
             <td colspan="2">
               Defines a default state store implementation to be used by any stateful DSL operator
@@ -1199,7 +1197,7 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
         </tr>
         </thead>
         <tbody valign="top">
-        <tr class="row-odd"><td>allow.auto.create.topics</td>
+        <tr class="row-even"><td>allow.auto.create.topics</td>
           <td>Consumer</td>
           <td><code class="docutils literal"><span class="pre">false</span></code></td>
         </tr>

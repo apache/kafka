@@ -504,7 +504,9 @@ public class StreamsConfig extends AbstractConfig {
     private static final String BUILT_IN_METRICS_VERSION_DOC = "Version of the built-in metrics to use.";
 
     /** {@code cache.max.bytes.buffering}
+
      * @deprecated since 3.4.0 Use {@link #STATESTORE_CACHE_MAX_BYTES_CONFIG "statestore.cache.max.bytes"} instead. */
+
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
@@ -667,7 +669,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 
     /** {@code auto.include.jmx.reporter}
-     * @deprecated and will be removed in 4.0.0 */
+     * @deprecated and will removed in 4.0.0 Users should instead include org.apache.kafka.common.metrics.JmxReporter in metric.reporters in order to enable the JmxReporter.} */
     @Deprecated
     public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG;
 
