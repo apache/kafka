@@ -66,7 +66,7 @@ public final class VoterSetHistoryTest {
 
         assertThrows(
             IllegalArgumentException.class,
-            () -> votersHistory.addAt(-1, new VoterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true)))
+            () -> votersHistory.addAt(-2, new VoterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true)))
         );
         assertEquals(staticVoterSet, votersHistory.lastValue());
 
@@ -84,6 +84,37 @@ public final class VoterSetHistoryTest {
 
         assertEquals(removedVoterSet, votersHistory.lastValue());
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(99));
+        assertEquals(Optional.of(addedVoterSet), votersHistory.valueAtOrBefore(199));
+        assertEquals(Optional.of(removedVoterSet), votersHistory.valueAtOrBefore(200));
+    }
+
+    @Test
+    void testBootstrapAddAt() {
+        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(IntStream.of(1, 2, 3), true);
+        VoterSet bootstrapVoterSet = new VoterSet(new HashMap<>(voterMap));
+        VoterSetHistory votersHistory = new VoterSetHistory(Optional.empty());
+
+        votersHistory.addAt(-1, bootstrapVoterSet);
+        assertEquals(bootstrapVoterSet, votersHistory.lastValue());
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(-2));
+        assertEquals(Optional.of(bootstrapVoterSet), votersHistory.valueAtOrBefore(-1));
+
+        voterMap.put(4, VoterSetTest.voterNode(4, true));
+        VoterSet addedVoterSet = new VoterSet(new HashMap<>(voterMap));
+        votersHistory.addAt(100, addedVoterSet);
+
+        assertEquals(addedVoterSet, votersHistory.lastValue());
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(-2));
+        assertEquals(Optional.of(bootstrapVoterSet), votersHistory.valueAtOrBefore(99));
+        assertEquals(Optional.of(addedVoterSet), votersHistory.valueAtOrBefore(100));
+
+        voterMap.remove(4);
+        VoterSet removedVoterSet = new VoterSet(new HashMap<>(voterMap));
+        votersHistory.addAt(200, removedVoterSet);
+
+        assertEquals(removedVoterSet, votersHistory.lastValue());
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(-2));
+        assertEquals(Optional.of(bootstrapVoterSet), votersHistory.valueAtOrBefore(99));
         assertEquals(Optional.of(addedVoterSet), votersHistory.valueAtOrBefore(199));
         assertEquals(Optional.of(removedVoterSet), votersHistory.valueAtOrBefore(200));
     }

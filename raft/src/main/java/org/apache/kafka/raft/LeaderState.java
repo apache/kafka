@@ -17,10 +17,14 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordUtils;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -39,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -58,6 +63,10 @@ public class LeaderState<T> implements EpochState {
     private final long epochStartOffset;
     private final Set<Integer> grantingVoters;
     private final Endpoints endpoints;
+    private final VoterSet voterSetAtEpochStart;
+    // This field is non-empty if the voter set at epoch start came from a snapshot or log segment
+    private final OptionalLong offsetOfVotersAtEpochStart;
+    private final short kraftVersionAtEpochStart;
 
     private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
     private Map<Integer, ReplicaState> voterStates = new HashMap<>();
@@ -79,7 +88,9 @@ public class LeaderState<T> implements EpochState {
         ReplicaKey localReplicaKey,
         int epoch,
         long epochStartOffset,
-        VoterSet voters,
+        VoterSet voterSetAtEpochStart,
+        OptionalLong offsetOfVotersAtEpochStart,
+        short kraftVersionAtEpochStart,
         Set<Integer> grantingVoters,
         BatchAccumulator<T> accumulator,
         Endpoints endpoints,
@@ -91,7 +102,7 @@ public class LeaderState<T> implements EpochState {
         this.epochStartOffset = epochStartOffset;
         this.endpoints = endpoints;
 
-        for (VoterSet.VoterNode voterNode: voters.voterNodes()) {
+        for (VoterSet.VoterNode voterNode: voterSetAtEpochStart.voterNodes()) {
             boolean hasAcknowledgedLeader = voterNode.isVoter(localReplicaKey);
             this.voterStates.put(
                 voterNode.voterKey().id(),
@@ -106,6 +117,9 @@ public class LeaderState<T> implements EpochState {
         this.checkQuorumTimer = time.timer(checkQuorumTimeoutMs);
         this.beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
         this.beginQuorumEpochTimer = time.timer(0);
+        this.voterSetAtEpochStart =  voterSetAtEpochStart;
+        this.offsetOfVotersAtEpochStart = offsetOfVotersAtEpochStart;
+        this.kraftVersionAtEpochStart = kraftVersionAtEpochStart;
     }
 
     public long timeUntilBeginQuorumEpochTimerExpires(long currentTimeMs) {
@@ -149,7 +163,7 @@ public class LeaderState<T> implements EpochState {
     /**
      * Reset the checkQuorumTimer if we've received fetch/fetchSnapshot request from the majority of the voter
      *
-     * @param id the node id
+     * @param replicaKey the replica key of the voter
      * @param currentTimeMs the current timestamp in millisecond
      */
     public void updateCheckQuorumForFollowingVoter(ReplicaKey replicaKey, long currentTimeMs) {
@@ -192,7 +206,7 @@ public class LeaderState<T> implements EpochState {
             .collect(Collectors.toList());
     }
 
-    public void appendLeaderChangeMessage(long currentTimeMs) {
+    public void appendLeaderChangeMessageAndBootstrapRecords(long currentTimeMs) {
         List<Voter> voters = convertToVoters(voterStates.keySet());
         List<Voter> grantingVoters = convertToVoters(this.grantingVoters());
 
@@ -202,7 +216,59 @@ public class LeaderState<T> implements EpochState {
             .setVoters(voters)
             .setGrantingVoters(grantingVoters);
 
-        accumulator.appendLeaderChangeMessage(leaderChangeMessage, currentTimeMs);
+        accumulator.appendControlMessages((baseOffset, epoch, compression, buffer) -> {
+            try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
+                    buffer,
+                    RecordBatch.CURRENT_MAGIC_VALUE,
+                    compression,
+                    TimestampType.CREATE_TIME,
+                    baseOffset,
+                    currentTimeMs,
+                    RecordBatch.NO_PRODUCER_ID,
+                    RecordBatch.NO_PRODUCER_EPOCH,
+                    RecordBatch.NO_SEQUENCE,
+                    false, // isTransactional
+                    true,  // isControlBatch
+                    epoch,
+                    buffer.capacity()
+                )
+            ) {
+                builder.appendLeaderChangeMessage(currentTimeMs, leaderChangeMessage);
+
+                offsetOfVotersAtEpochStart.ifPresent(offset -> {
+                    if (offset == -1) {
+                        // Latest voter set came from the bootstrap checkpoint (0-0.checkpoint)
+                        // rewrite the voter set to the log so that it is replcated to the replicas.
+                        if (kraftVersionAtEpochStart < 1) {
+                            throw new IllegalStateException(
+                                String.format(
+                                    "The bootstrap checkpoint contains a set of voters %s at %s " +
+                                    "and the KRaft version is %s",
+                                    voterSetAtEpochStart,
+                                    offset,
+                                    kraftVersionAtEpochStart
+                                )
+                            );
+                        } else {
+                            builder.appendKRaftVersionMessage(
+                                currentTimeMs,
+                                new KRaftVersionRecord()
+                                    .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
+                                    .setKRaftVersion(kraftVersionAtEpochStart)
+                            );
+                            builder.appendVotersMessage(
+                                currentTimeMs,
+                                voterSetAtEpochStart.toVotersRecord(
+                                    ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION
+                                )
+                            );
+                        }
+                    }
+                });
+
+                return builder.build();
+            }
+        });
         accumulator.forceDrain();
     }
 
@@ -338,7 +404,7 @@ public class LeaderState<T> implements EpochState {
      * Update the local replica state.
      *
      * @param endOffsetMetadata updated log end offset of local replica
-     * @param lastVoters the up-to-date voter set
+     * @param lastVoterSet the up-to-date voter set
      * @return true if the high watermark is updated as a result of this call
      */
     public boolean updateLocalState(
@@ -362,8 +428,7 @@ public class LeaderState<T> implements EpochState {
     /**
      * Update the replica state in terms of fetch time and log end offsets.
      *
-     * @param replicaId replica id
-     * @param replicaDirectoryId replica directory id
+     * @param replicaKey replica key
      * @param currentTimeMs current time in milliseconds
      * @param fetchOffsetMetadata new log offset and metadata
      * @return true if the high watermark is updated as a result of this call
