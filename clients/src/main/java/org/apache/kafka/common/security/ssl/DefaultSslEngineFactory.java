@@ -276,6 +276,11 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
 
     // Visibility to override for testing
     protected SecurityStore createKeystore(String type, String path, Password password, Password keyPassword, Password privateKey, Password certificateChain) {
+        path = nullify(path);
+        password = nullify(password);
+        keyPassword = nullify(keyPassword);
+        privateKey = nullify(privateKey);
+        certificateChain = nullify(certificateChain);
         if (privateKey != null) {
             if (!PEM_TYPE.equals(type))
                 throw new InvalidConfigurationException("SSL private key can be specified only for PEM, but key store type is " + type + ".");
@@ -305,6 +310,9 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
     }
 
     private static SecurityStore createTruststore(String type, String path, Password password, Password trustStoreCerts) {
+        path = nullify(path);
+        password = nullify(password);
+        trustStoreCerts = nullify(trustStoreCerts);
         if (trustStoreCerts != null) {
             if (!PEM_TYPE.equals(type))
                 throw new InvalidConfigurationException("SSL trust store certs can be specified only for PEM, but trust store type is " + type + ".");
@@ -325,6 +333,22 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             return new FileBasedStore(type, path, password, null, false);
         } else
             return null;
+    }
+
+    private static String nullify(String string) {
+        if (string == null || "".equals(string)) {
+            return null;
+        } else {
+            return string;
+        }
+    }
+
+    private static Password nullify(Password password) {
+        if (password == null || "".equals(password.value())) {
+            return null;
+        } else {
+            return password;
+        }
     }
 
     interface SecurityStore {
