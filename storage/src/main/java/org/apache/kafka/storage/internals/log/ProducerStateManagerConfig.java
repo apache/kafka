@@ -18,15 +18,25 @@ package org.apache.kafka.storage.internals.log;
 
 public class ProducerStateManagerConfig {
     private volatile int producerIdExpirationMs;
+    private volatile int producerIdExpirationCheckIntervalMs;
     private volatile boolean transactionVerificationEnabled;
 
-    public ProducerStateManagerConfig(int producerIdExpirationMs, boolean transactionVerificationEnabled) {
+    public ProducerStateManagerConfig(
+        int producerIdExpirationMs,
+        int producerIdExpirationCheckIntervalMs,
+        boolean transactionVerificationEnabled
+    ) {
         this.producerIdExpirationMs = producerIdExpirationMs;
+        this.producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs;
         this.transactionVerificationEnabled = transactionVerificationEnabled;
     }
 
     public void setProducerIdExpirationMs(int producerIdExpirationMs) {
         this.producerIdExpirationMs = producerIdExpirationMs;
+    }
+
+    public void setProducerIdExpirationCheckIntervalMs(int producerIdExpirationCheckIntervalMs) {
+        this.producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs;
     }
 
     public void setTransactionVerificationEnabled(boolean transactionVerificationEnabled) {
@@ -35,6 +45,10 @@ public class ProducerStateManagerConfig {
 
     public int producerIdExpirationMs() {
         return producerIdExpirationMs;
+    }
+
+    public int producerIdExpirationCheckIntervalMs() {
+        return producerIdExpirationCheckIntervalMs;
     }
 
     public boolean transactionVerificationEnabled() {

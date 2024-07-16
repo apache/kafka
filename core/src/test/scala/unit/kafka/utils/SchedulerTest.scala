@@ -142,7 +142,7 @@ class SchedulerTest {
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
       logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "", None, mockTime.scheduler)
     val producerStateManager = new ProducerStateManager(topicPartition, logDir,
-      maxTransactionTimeoutMs, new ProducerStateManagerConfig(maxProducerIdExpirationMs, false), mockTime)
+      maxTransactionTimeoutMs, new ProducerStateManagerConfig(maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, false), mockTime)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -161,7 +161,7 @@ class SchedulerTest {
       offsets.nextOffsetMetadata, scheduler, mockTime, topicPartition, logDirFailureChannel)
     val log = new UnifiedLog(logStartOffset = offsets.logStartOffset,
       localLog = localLog,
-      brokerTopicStats, producerIdExpirationCheckIntervalMs,
+      brokerTopicStats,
       leaderEpochCache, producerStateManager,
       _topicId = None, keepPartitionMetadataFile = true)
     assertTrue(scheduler.taskRunning(log.producerExpireCheck))

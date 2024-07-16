@@ -65,7 +65,7 @@ class UnifiedLogTest {
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val mockTime = new MockTime()
   var logsToClose: Seq[UnifiedLog] = Seq()
-  val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false)
+  val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT, false)
   def metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
   @BeforeEach
@@ -531,7 +531,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L)
 
     // create a log
-    val log = createLog(logDir, logConfig, producerStateManagerConfig = new ProducerStateManagerConfig(24 * 60, false))
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = new ProducerStateManagerConfig(24 * 60, 600000, false))
     assertEquals(1, log.numberOfSegments, "Log begins with a single empty segment.")
     // Test the segment rolling behavior when messages do not have a timestamp.
     mockTime.sleep(log.config.segmentMs + 1)
@@ -770,6 +770,32 @@ class UnifiedLogTest {
       log.delete()
       assertFalse(scheduler.taskRunning(producerExpireCheck),
         "producerExpireCheck is part of scheduled tasks even after log deletion")
+    } finally {
+      scheduler.shutdown()
+    }
+  }
+
+  /**
+   * Test that "PeriodicProducerExpirationCheck" scheduled task gets restarted
+   */
+  @Test
+  def testProducerExpireCheckIsRestarted(): Unit = {
+    val scheduler = new KafkaScheduler(1)
+    try {
+      scheduler.startup()
+      val logConfig = LogTestUtils.createLogConfig()
+      val log = createLog(logDir, logConfig, scheduler = scheduler)
+
+      val producerExpireCheck = log.producerExpireCheck
+      assertTrue(scheduler.taskRunning(producerExpireCheck), "producerExpireCheck isn't as part of scheduled tasks")
+
+      log.restartProducerExpireCheck(log.producerStateManager.producerStateManagerConfig())
+      assertFalse(scheduler.taskRunning(producerExpireCheck),
+        "producerExpireCheck is part of scheduled tasks even after log deletion")
+
+      val nextProducerExpireCheck = log.producerExpireCheck
+      assertTrue(scheduler.taskRunning(nextProducerExpireCheck), "nextProducerExpireCheck isn't as part of scheduled tasks")
+      assertNotEquals(nextProducerExpireCheck, producerExpireCheck)
     } finally {
       scheduler.shutdown()
     }
@@ -1227,13 +1253,12 @@ class UnifiedLogTest {
 
   @Test
   def testPeriodicProducerIdExpiration(): Unit = {
-    val producerStateManagerConfig = new ProducerStateManagerConfig(200, false)
+    val producerStateManagerConfig = new ProducerStateManagerConfig(200, 100, false)
     val producerIdExpirationCheckIntervalMs = 100
 
     val pid = 23L
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
-    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig,
-      producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
     val records = Seq(new SimpleRecord(mockTime.milliseconds(), "foo".getBytes))
     log.appendAsLeader(TestUtils.records(records, producerId = pid, producerEpoch = 0, sequence = 0), leaderEpoch = 0)
 
@@ -3832,7 +3857,7 @@ class UnifiedLogTest {
   @ParameterizedTest
   @EnumSource(value = classOf[AppendOrigin], names = Array("CLIENT", "COORDINATOR"))
   def testTransactionIsOngoingAndVerificationGuard(appendOrigin: AppendOrigin): Unit = {
-    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, 600000, true)
 
     val producerId = 23L
     val producerEpoch = 1.toShort
@@ -3906,7 +3931,7 @@ class UnifiedLogTest {
 
   @Test
   def testEmptyTransactionStillClearsVerificationGuard(): Unit = {
-    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, 600000, true)
 
     val producerId = 23L
     val producerEpoch = 1.toShort
@@ -3929,7 +3954,7 @@ class UnifiedLogTest {
 
   @Test
   def testDisabledVerificationClearsVerificationGuard(): Unit = {
-    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, 600000, true)
 
     val producerId = 23L
     val producerEpoch = 1.toShort
@@ -3957,7 +3982,7 @@ class UnifiedLogTest {
 
   @Test
   def testEnablingVerificationWhenRequestIsAtLogLayer(): Unit = {
-    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, false)
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, 600000, false)
 
     val producerId = 23L
     val producerEpoch = 1.toShort
@@ -3989,7 +4014,7 @@ class UnifiedLogTest {
 
   @Test
   def testAllowNonZeroSequenceOnFirstAppendNonZeroEpoch(): Unit = {
-    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, 600000, true)
 
     val producerId = 23L
     val producerEpoch = 1.toShort
@@ -4321,7 +4346,6 @@ class UnifiedLogTest {
                         time: Time = mockTime,
                         maxTransactionTimeoutMs: Int = 60 * 60 * 1000,
                         producerStateManagerConfig: ProducerStateManagerConfig = producerStateManagerConfig,
-                        producerIdExpirationCheckIntervalMs: Int = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
                         lastShutdownClean: Boolean = true,
                         topicId: Option[Uuid] = None,
                         keepPartitionMetadataFile: Boolean = true,
@@ -4329,7 +4353,7 @@ class UnifiedLogTest {
                         remoteLogManager: Option[RemoteLogManager] = None,
                         logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
     val log = LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
-      maxTransactionTimeoutMs, producerStateManagerConfig, producerIdExpirationCheckIntervalMs,
+      maxTransactionTimeoutMs, producerStateManagerConfig,
       lastShutdownClean, topicId, keepPartitionMetadataFile, new ConcurrentHashMap[String, Int],
       remoteStorageSystemEnable, remoteLogManager, logOffsetsListener)
     logsToClose = logsToClose :+ log

@@ -168,9 +168,12 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() => producerState.isEmpty, "Producer ID did not expire.")
 
     // Update the producer ID expiration ms to a very high value.
-    admin.incrementalAlterConfigs(producerIdExpirationConfig("100000"))
+    admin.incrementalAlterConfigs(producerIdExpirationConfigs("100000", "60000")).all().get()
 
-    brokers.foreach(broker => TestUtils.waitUntilTrue(() => broker.logManager.producerStateManagerConfig.producerIdExpirationMs == 100000, "Configuration was not updated."))
+    brokers.foreach { broker =>
+      TestUtils.waitUntilTrue(() => broker.logManager.producerStateManagerConfig.producerIdExpirationMs == 100000, "Expiration configuration was not updated.")
+      TestUtils.waitUntilTrue(() => broker.logManager.producerStateManagerConfig.producerIdExpirationCheckIntervalMs == 60000, "Expiration check interval configuration was not updated.")
+    }
 
     // Send more records to send producer ID back to brokers.
     producer.send(new ProducerRecord(topic1, 0, null, "key".getBytes, "value".getBytes))
@@ -185,13 +188,16 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     )
 
     // Update the expiration time to a low value again.
-    admin.incrementalAlterConfigs(producerIdExpirationConfig("100")).all().get()
+    admin.incrementalAlterConfigs(producerIdExpirationConfigs("100", "10000")).all().get()
 
     // restart a broker to ensure that dynamic config changes are picked up on restart
     killBroker(0)
     restartDeadBrokers()
 
-    brokers.foreach(broker => TestUtils.waitUntilTrue(() => broker.logManager.producerStateManagerConfig.producerIdExpirationMs == 100, "Configuration was not updated."))
+    brokers.foreach { broker =>
+      TestUtils.waitUntilTrue(() => broker.logManager.producerStateManagerConfig.producerIdExpirationMs == 100, "Expiration configuration was not updated.")
+      TestUtils.waitUntilTrue(() => broker.logManager.producerStateManagerConfig.producerIdExpirationCheckIntervalMs == 10000, "Expiration check interval configuration was not updated.")
+    }
 
     // Ensure producer ID expires quickly again.
     TestUtils.waitUntilTrue(() => producerState.isEmpty, "Producer ID did not expire.")
@@ -203,9 +209,13 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     activeProducers
   }
 
-  private def producerIdExpirationConfig(configValue: String): util.Map[ConfigResource, util.Collection[AlterConfigOp]] = {
-    val producerIdCfg = new ConfigEntry(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG, configValue)
-    val configs = Collections.singletonList(new AlterConfigOp(producerIdCfg, AlterConfigOp.OpType.SET))
+  private def producerIdExpirationConfigs(expirationMs: String, expirationCheckIntervalMs: String): util.Map[ConfigResource, util.Collection[AlterConfigOp]] = {
+    val producerIdExpirationCfg = new ConfigEntry(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG, expirationMs)
+    val producerIdExpirationCheckIntervalCfg = new ConfigEntry(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG, expirationCheckIntervalMs)
+    val configs = util.Arrays.asList(
+      new AlterConfigOp(producerIdExpirationCfg, AlterConfigOp.OpType.SET),
+      new AlterConfigOp(producerIdExpirationCheckIntervalCfg, AlterConfigOp.OpType.SET),
+    )
     Collections.singletonMap(configResource, configs)
   }
 

@@ -87,7 +87,11 @@ import scala.jdk.CollectionConverters._
 object DynamicBrokerConfig {
 
   private[server] val DynamicSecurityConfigs = SslConfigs.RECONFIGURABLE_CONFIGS.asScala
-  private[server] val DynamicProducerStateManagerConfig = Set(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG, TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG)
+  private[server] val DynamicProducerStateManagerConfig = Set(
+    TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG,
+    TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG,
+    TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG,
+  )
 
   val AllDynamicConfigs = DynamicSecurityConfigs ++
     LogCleaner.ReconfigurableConfigs ++
@@ -270,7 +274,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
     addBrokerReconfigurable(kafkaServer.socketServer)
-    addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
+    addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager))
     addBrokerReconfigurable(new DynamicRemoteLogConfig(kafkaServer))
   }
 
@@ -1126,11 +1130,21 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
 
 }
 
-class DynamicProducerStateManagerConfig(val producerStateManagerConfig: ProducerStateManagerConfig) extends BrokerReconfigurable with Logging {
+class DynamicProducerStateManagerConfig(val logManager: LogManager) extends BrokerReconfigurable with Logging {
+  val producerStateManagerConfig: ProducerStateManagerConfig = logManager.producerStateManagerConfig
+
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     if (producerStateManagerConfig.producerIdExpirationMs != newConfig.producerIdExpirationMs) {
       info(s"Reconfigure ${TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG} from ${producerStateManagerConfig.producerIdExpirationMs} to ${newConfig.producerIdExpirationMs}")
       producerStateManagerConfig.setProducerIdExpirationMs(newConfig.producerIdExpirationMs)
+    }
+    if (producerStateManagerConfig.producerIdExpirationCheckIntervalMs != newConfig.producerIdExpirationCheckIntervalMs) {
+      info(s"Reconfigure ${TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG} from ${producerStateManagerConfig.producerIdExpirationCheckIntervalMs} to ${newConfig.producerIdExpirationCheckIntervalMs}")
+      producerStateManagerConfig.setProducerIdExpirationCheckIntervalMs(newConfig.producerIdExpirationCheckIntervalMs)
+
+      logManager.allLogs.foreach { log =>
+        log.restartProducerExpireCheck(producerStateManagerConfig)
+      }
     }
     if (producerStateManagerConfig.transactionVerificationEnabled != newConfig.transactionPartitionVerificationEnable) {
       info(s"Reconfigure ${TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG} from ${producerStateManagerConfig.transactionVerificationEnabled} to ${newConfig.transactionPartitionVerificationEnable}")
@@ -1141,6 +1155,8 @@ class DynamicProducerStateManagerConfig(val producerStateManagerConfig: Producer
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     if (newConfig.producerIdExpirationMs < 0)
       throw new ConfigException(s"${TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG} cannot be less than 0, current value is ${producerStateManagerConfig.producerIdExpirationMs}, and new value is ${newConfig.producerIdExpirationMs}")
+    if (newConfig.producerIdExpirationCheckIntervalMs < 0)
+      throw new ConfigException(s"${TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG} cannot be less than 0, current value is ${producerStateManagerConfig.producerIdExpirationCheckIntervalMs}, and new value is ${newConfig.producerIdExpirationCheckIntervalMs}")
   }
 
   override def reconfigurableConfigs: Set[String] = DynamicProducerStateManagerConfig

@@ -2925,7 +2925,7 @@ class ReplicaManagerTest {
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
       logDir, tp, mockLogDirFailureChannel, logConfig.recordVersion, "", None, time.scheduler)
     val producerStateManager = new ProducerStateManager(tp, logDir,
-      maxTransactionTimeoutMs, new ProducerStateManagerConfig(maxProducerIdExpirationMs, true), time)
+      maxTransactionTimeoutMs, new ProducerStateManagerConfig(maxProducerIdExpirationMs, 30000, true), time)
     val offsets = new LogLoader(
       logDir,
       tp,
@@ -2946,7 +2946,6 @@ class ReplicaManagerTest {
       logStartOffset = offsets.logStartOffset,
       localLog = localLog,
       brokerTopicStats = mockBrokerTopicStats,
-      producerIdExpirationCheckIntervalMs = 30000,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = producerStateManager,
       _topicId = topicId,
