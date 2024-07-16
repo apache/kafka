@@ -575,6 +575,48 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   }
 
   @Test
+  def testAutoPreferredReplicaLeaderElectionFollowedByAnotherNewReassignment(): Unit = {
+    servers = makeServers(5, autoLeaderRebalanceEnable = true)
+    val controller = getController().kafkaController
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(0, 2, 4))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+
+    // Shutdown broker 2 and reassign partition tp from [0, 2, 4] to [1, 0, 2] to create a stuck reassignment.
+    servers(2).shutdown()
+    servers(2).awaitShutdown()
+    val reassignment = Map(tp -> Some(Seq(1, 0, 2)))
+    controller.eventManager.put(ApiPartitionReassignment(reassignment, _ => ()))
+
+    // Make sure broker 1 is elected as leader (preferred) of partition tp automatically
+    // even though the reassignment is still ongoing.
+    waitForPartitionState(tp, firstControllerEpoch, 1, LeaderAndIsr.InitialLeaderEpoch + 3,
+      "failed to get expected partition state after auto preferred replica leader election")
+
+    // Submit another reassignment to replace the current leader 1 with broker 3 which
+    // should be rejected.
+    val reassignment_update = Map(tp -> Some(Seq(3, 0, 2)))
+    controller.eventManager.put(ApiPartitionReassignment(reassignment_update, _ => ()))
+
+    // Start broker 2 and make sure the reassignment which was stuck can be fulfilled.
+    servers(2).startup()
+    waitForPartitionState(tp, firstControllerEpoch, 1, LeaderAndIsr.InitialLeaderEpoch + 4,
+      "failed to get expected partition state after broker startup")
+
+    TestUtils.waitUntilTrue(() => {
+      val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
+      leaderIsrAndControllerEpochMap.contains(tp) &&
+        isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), firstControllerEpoch, 1, LeaderAndIsr.InitialLeaderEpoch + 6) &&
+        leaderIsrAndControllerEpochMap(tp).leaderAndIsr.isr.toSet == Set(1, 0, 2)
+    }, "failed to get expected partition state for assignment")
+
+    controller.eventManager.put(ListPartitionReassignments(None, {
+      case Left(results) => assert(results.isEmpty)
+      case Right(e) => assertEquals(Errors.NOT_CONTROLLER, e.error())
+    }))
+  }
+
+  @Test
   def testLeaderAndIsrWhenEntireIsrOfflineAndUncleanLeaderElectionDisabled(): Unit = {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
