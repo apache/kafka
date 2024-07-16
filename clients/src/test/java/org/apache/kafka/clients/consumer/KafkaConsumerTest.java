@@ -912,7 +912,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
-    public void testMissingOffsetNoResetPolicy(GroupProtocol groupProtocol) {
+    public void testMissingOffsetNoResetPolicy(GroupProtocol groupProtocol) throws InterruptedException {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -929,7 +929,24 @@ public class KafkaConsumerTest {
 
         // lookup committed offset and find nothing
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, -1L), Errors.NONE), coordinator);
-        assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ofSeconds(3)));
+
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            // New consumer poll(ZERO) needs to wait for the offset fetch event add by a call to poll, to be processed
+            // by the background thread, so it can realize there are no committed offsets and then
+            // throw the NoOffsetForPartitionException
+            TestUtils.waitForCondition(() -> {
+                while (true) {
+                    try {
+                        consumer.poll(Duration.ZERO);
+                    } catch (NoOffsetForPartitionException e) {
+                        return true;
+                    }
+                }
+            }, "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
+        } else {
+            // CLASSIC CONSUMER PROTOCOL
+            assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
+        }
     }
 
     // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
