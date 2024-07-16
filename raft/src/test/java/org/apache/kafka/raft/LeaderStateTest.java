@@ -24,6 +24,7 @@ import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.raft.internals.VoterSetTest;
+import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -59,7 +60,7 @@ public class LeaderStateTest {
     private final int fetchTimeoutMs = 2000;
     private final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
     private final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
-    private final short kraftVersion = 1;
+    private final KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
 
     private LeaderState<?> newLeaderState(
         VoterSet voters,
