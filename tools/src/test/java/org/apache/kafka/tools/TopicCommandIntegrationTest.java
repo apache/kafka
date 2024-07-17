@@ -383,7 +383,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testListTopicsWithIncludeList(TestInfo testInfo) throws InterruptedException {
+    public void testListTopicsWithIncludeList() throws InterruptedException {
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             String topic1 = "kafka.testTopic1";
             String topic2 = "kafka.testTopic2";
@@ -405,7 +405,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testListTopicsWithExcludeInternal(TestInfo testInfo) throws InterruptedException {
+    public void testListTopicsWithExcludeInternal() throws InterruptedException {
         try (Admin adminClient = clusterInstance.createAdminClient();) {
             String topic1 = "kafka.testTopic1";
             String hiddenConsumerTopic = Topic.GROUP_METADATA_TOPIC_NAME;
@@ -670,7 +670,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testTopicWithCollidingCharDeletionAndCreateAgain(TestInfo testInfo) throws Exception {
+    public void testTopicWithCollidingCharDeletionAndCreateAgain() throws Exception {
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             // create the topic with colliding chars
@@ -697,7 +697,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate1")
-    public void testDeleteInternalTopic(TestInfo testInfo) throws Exception {
+    public void testDeleteInternalTopic() throws Exception {
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
 
@@ -1072,7 +1072,7 @@ public class TopicCommandIntegrationTest {
      * Output should only display the (1) topic with partition under min ISR count and (3) topic with offline partition
      */
     @ClusterTemplate("generate1")
-    public void testDescribeUnderMinIsrPartitionsMixed(TestInfo testInfo) throws InterruptedException {
+    public void testDescribeUnderMinIsrPartitionsMixed() throws InterruptedException {
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             String underMinIsrTopic = "under-min-isr-topic";
             String notUnderMinIsrTopic = "not-under-min-isr-topic";
