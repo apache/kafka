@@ -180,6 +180,7 @@ public class MembershipManagerImplTest {
         receiveEmptyAssignment(manager);
         mockLeaveGroup();
         manager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.LEAVING, manager.state());
         manager.onHeartbeatRequestSent();
         assertEquals(MemberState.UNSUBSCRIBED, manager.state());
@@ -235,6 +236,9 @@ public class MembershipManagerImplTest {
         membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+
+        membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
     }
 
     @Test
@@ -286,6 +290,7 @@ public class MembershipManagerImplTest {
 
         mockLeaveGroup();
         membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.LEAVING, membershipManager.state());
         verify(listener).onMemberEpochUpdated(Optional.empty(), Optional.empty());
     }
@@ -394,6 +399,7 @@ public class MembershipManagerImplTest {
         // Start leaving group.
         mockLeaveGroup();
         membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.LEAVING, membershipManager.state());
 
         // Get fenced while leaving. Member should not trigger any callback or try to
@@ -420,6 +426,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMemberInStableState("instance1");
         mockLeaveGroup();
         membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.LEAVING, membershipManager.state());
         assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH,
                 membershipManager.memberEpoch());
@@ -428,6 +435,7 @@ public class MembershipManagerImplTest {
         membershipManager = createMemberInStableState(null);
         mockLeaveGroup();
         membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.LEAVING, membershipManager.state());
         assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
                 membershipManager.memberEpoch());
@@ -883,6 +891,7 @@ public class MembershipManagerImplTest {
         mockLeaveGroup();
 
         CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
 
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(createAssignment(true)).data());
 
@@ -962,6 +971,7 @@ public class MembershipManagerImplTest {
         // callbacks complete and the heartbeat is sent out.
         mockLeaveGroup();
         CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
         assertFalse(leaveResult1.isDone());
         assertEquals(MemberState.LEAVING, membershipManager.state());
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
@@ -972,6 +982,7 @@ public class MembershipManagerImplTest {
         // leave operation completes.
         mockLeaveGroup();
         CompletableFuture<Void> leaveResult2 = membershipManager.leaveGroup();
+        verify(subscriptionState, never()).unsubscribe();
         verify(subscriptionState, never()).rebalanceListener();
         assertFalse(leaveResult2.isDone());
 
@@ -993,6 +1004,7 @@ public class MembershipManagerImplTest {
         // Leave group triggered and completed
         mockLeaveGroup();
         CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.LEAVING, membershipManager.state());
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
@@ -1005,6 +1017,7 @@ public class MembershipManagerImplTest {
         // no assignment updated)
         mockLeaveGroup();
         CompletableFuture<Void> leaveResult2 = membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
         assertTrue(leaveResult2.isDone());
         assertFalse(leaveResult2.isCompletedExceptionally());
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
@@ -1021,6 +1034,7 @@ public class MembershipManagerImplTest {
 
         mockLeaveGroup();
         membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
 
@@ -1035,6 +1049,7 @@ public class MembershipManagerImplTest {
 
         mockLeaveGroup();
         CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
         assertTrue(leaveResult1.isDone());
         assertEquals(MemberState.STALE, membershipManager.state());
     }
@@ -1076,6 +1091,7 @@ public class MembershipManagerImplTest {
         // Start leaving group.
         mockLeaveGroup();
         membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.LEAVING, membershipManager.state());
 
         // Get fatal failure while waiting to send the heartbeat to leave. Member should
@@ -1095,6 +1111,7 @@ public class MembershipManagerImplTest {
         // Start leaving group.
         mockLeaveGroup();
         membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.LEAVING, membershipManager.state());
 
         // Last heartbeat sent.
@@ -2121,6 +2138,7 @@ public class MembershipManagerImplTest {
         assertTrue(membershipManager.currentAssignment().isNone());
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
+        verify(subscriptionState, never()).unsubscribe();
     }
 
     @Test
@@ -2665,6 +2683,7 @@ public class MembershipManagerImplTest {
         mockLeaveGroup();
 
         CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
+        verify(subscriptionState).unsubscribe();
 
         assertEquals(MemberState.LEAVING, membershipManager.state());
         assertFalse(leaveResult.isDone(), "Leave group result should not complete until the " +
