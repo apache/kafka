@@ -43,6 +43,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -54,6 +55,7 @@ import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.test.NoRetryException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -699,12 +701,29 @@ public class ExactlyOnceSourceIntegrationTest {
             )).all().get();
         }
 
-        StartAndStopLatch connectorStart = connectorAndTaskStart(tasksMax);
-
         log.info("Bringing up connector with fresh slate; fencing should not be necessary");
         connect.configureConnector(CONNECTOR_NAME, props);
-        assertConnectorStarted(connectorStart);
-        // Verify that the connector and its tasks have been able to start successfully
+
+        // Hack: There is a small chance that our recent ACL updates for the connector have
+        // not yet been propagated across the entire Kafka cluster, and that our connector
+        // will fail on startup when it tries to list the end offsets of the worker's offsets topic
+        // So, we implement some retry logic here to add a layer of resiliency in that case
+        waitForCondition(
+                () -> {
+                    ConnectorStateInfo status = connect.connectorStatus(CONNECTOR_NAME);
+                    if ("RUNNING".equals(status.connector().state())) {
+                        return true;
+                    } else if ("FAILED".equals(status.connector().state())) {
+                        log.debug("Restarting failed connector {}", CONNECTOR_NAME);
+                        connect.restartConnector(CONNECTOR_NAME);
+                    }
+                    return false;
+                },
+                30_000,
+                "Connector was not able to start in time"
+        );
+
+        // Also verify that the connector's tasks have been able to start successfully
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, tasksMax, "Connector and task should have started successfully");
 
         log.info("Reconfiguring connector; fencing should be necessary, and tasks should fail to start");
@@ -730,8 +749,39 @@ public class ExactlyOnceSourceIntegrationTest {
 
         log.info("Restarting connector after tweaking its ACLs; fencing should succeed this time");
         connect.restartConnectorAndTasks(CONNECTOR_NAME, false, true, false);
+
         // Verify that the connector and its tasks have been able to restart successfully
-        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, tasksMax, "Connector and task should have restarted successfully");
+        // Use the same retry logic as above, in case there is a delay in the propagation of our ACL updates
+        waitForCondition(
+                () -> {
+                    ConnectorStateInfo status = connect.connectorStatus(CONNECTOR_NAME);
+                    boolean connectorRunning = "RUNNING".equals(status.connector().state());
+                    boolean allTasksRunning = status.tasks().stream()
+                            .allMatch(t -> "RUNNING".equals(t.state()));
+                    boolean expectedNumTasks = status.tasks().size() == tasksMax;
+                    if (connectorRunning && allTasksRunning && expectedNumTasks) {
+                        return true;
+                    } else {
+                        if (!connectorRunning) {
+                            if ("FAILED".equals(status.connector().state())) {
+                                // Only task failures are expected ;if the connector has failed, something
+                                // else is wrong and we should fail the test immediately
+                                throw new NoRetryException(
+                                        new AssertionError("Connector " + CONNECTOR_NAME + " has failed unexpectedly")
+                                );
+                            }
+                        }
+                        // Restart all failed tasks
+                        status.tasks().stream()
+                                .filter(t -> "FAILED".equals(t.state()))
+                                .map(ConnectorStateInfo.TaskState::id)
+                                .forEach(t -> connect.restartTask(CONNECTOR_NAME, t));
+                        return false;
+                    }
+                },
+                ConnectAssertions.CONNECTOR_SETUP_DURATION_MS,
+                "Connector and task should have restarted successfully"
+        );
     }
 
     /**
