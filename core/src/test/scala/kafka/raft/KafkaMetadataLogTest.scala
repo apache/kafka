@@ -669,7 +669,6 @@ final class KafkaMetadataLogTest {
       Compression.NONE,
       0L,
       mockTime.milliseconds(),
-      false,
       leaderEpoch,
       maxBatchSizeInBytes
     )
