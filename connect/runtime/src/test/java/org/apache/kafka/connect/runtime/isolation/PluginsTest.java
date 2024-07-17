@@ -32,6 +32,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -593,6 +594,25 @@ public class PluginsTest {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.SERVICE_LOAD, nonEmpty, nonEmpty);
             assertTrue(logCaptureAppender.getEvents().stream().noneMatch(e -> e.getLevel().contains("ERROR") || e.getLevel().equals("WARN")));
+        }
+    }
+
+    @Test
+    public void testAliasesInConverters() throws ClassNotFoundException {
+        ClassLoader connectorLoader = plugins.connectorLoader(TestPlugin.SAMPLING_CONNECTOR.className());
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
+            String configKey = "config.key";
+            String alias = "SamplingConverter";
+            assertTrue(TestPlugin.SAMPLING_CONVERTER.className().contains(alias));
+            ConfigDef def = new ConfigDef().define(configKey, ConfigDef.Type.CLASS, ConfigDef.Importance.HIGH, "docstring");
+            AbstractConfig config = new AbstractConfig(def, Collections.singletonMap(configKey, alias));
+
+            assertNotNull(config.getClass(configKey));
+            assertNotNull(config.getConfiguredInstance(configKey, Converter.class));
+            assertNotNull(plugins.newConverter(config, configKey, ClassLoaderUsage.CURRENT_CLASSLOADER));
+            assertNotNull(plugins.newConverter(config, configKey, ClassLoaderUsage.PLUGINS));
+
+            assertNotNull(Utils.newInstance(alias, Converter.class));
         }
     }
 

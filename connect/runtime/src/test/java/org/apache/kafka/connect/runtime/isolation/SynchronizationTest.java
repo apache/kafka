@@ -44,7 +44,9 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.storage.Converter;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -328,7 +330,7 @@ public class SynchronizationTest {
             synchronized (externalTestLock) {
                 try {
                     progress.await(null);
-                    Class.forName(TestPlugins.TestPlugin.SAMPLING_CONVERTER.className(), true, connectorLoader);
+                    Utils.loadClass(TestPlugins.TestPlugin.SAMPLING_CONVERTER.className(), Converter.class);
                 } catch (ClassNotFoundException e) {
                     throw new RuntimeException("Failed to load test plugin", e);
                 }

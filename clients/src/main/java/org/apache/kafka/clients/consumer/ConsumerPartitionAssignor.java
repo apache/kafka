@@ -297,7 +297,7 @@ public interface ConsumerPartitionAssignor {
             // first try to get the class if passed in as a string
             if (klass instanceof String) {
                 try {
-                    klass = Class.forName((String) klass, true, Utils.getContextOrKafkaClassLoader());
+                    klass = Utils.loadClass((String) klass, Object.class);
                 } catch (ClassNotFoundException classNotFound) {
                     throw new KafkaException(klass + " ClassNotFoundException exception occurred", classNotFound);
                 }
