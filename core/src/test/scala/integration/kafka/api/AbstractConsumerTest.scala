@@ -231,14 +231,32 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
                                      numRecords: Int,
                                      maxPollRecords: Int = Int.MaxValue): ArrayBuffer[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]
+    var firstRecordReceivedTimeMs = -1L;
+    var lastRecordReceivedTimeMs = -1L;
+    val recordsByTopicPartition = mutable.Map[TopicPartition, Int]().withDefaultValue(0)
     def pollAction(polledRecords: ConsumerRecords[K, V]): Boolean = {
-      assertTrue(polledRecords.asScala.size <= maxPollRecords)
-      records ++= polledRecords.asScala
+      val receivedRecords = polledRecords.asScala
+      if (receivedRecords.nonEmpty) {
+        val nowMs = System.currentTimeMillis()
+        if (firstRecordReceivedTimeMs == -1L)
+          firstRecordReceivedTimeMs = nowMs
+        lastRecordReceivedTimeMs = nowMs
+
+        receivedRecords.foreach { rec =>
+          val tp = new TopicPartition(rec.topic(), rec.partition())
+          recordsByTopicPartition.update(tp, recordsByTopicPartition(tp) + 1)
+        }
+
+        assertTrue(receivedRecords.size <= maxPollRecords)
+        records ++= receivedRecords
+      }
       records.size >= numRecords
     }
     TestUtils.pollRecordsUntilTrue(consumer, pollAction, waitTimeMs = 60000,
       msg = s"Timed out before consuming expected $numRecords records. " +
-        s"The number consumed was ${records.size}.")
+        s"The number consumed was ${records.size}. firstRecordReceivedTimeMs: $firstRecordReceivedTimeMs, " +
+        s"lastRecordReceivedTimeMs: $lastRecordReceivedTimeMs, " +
+        s"records received by partition: $recordsByTopicPartition")
     records
   }
 
