@@ -183,7 +183,7 @@ Found problem:
       val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
-      assertTrue(stream.toString().split("\\r?\\n").exists(_.startsWith("Formatting %s".format(tempDir))))
+      assertTrue(stream.toString().startsWith("Formatting %s".format(tempDir)))
 
       try assertEquals(1, StorageTool.
         formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false)) catch {
@@ -195,7 +195,7 @@ Found problem:
       val stream2 = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = true))
-      assertEquals(1, stream2.toString().split("\\r?\\n").count(_.startsWith("All of the log directories are already formatted")))
+      assertEquals("All of the log directories are already formatted.%n".format(), stream2.toString())
     } finally Utils.delete(tempDir)
   }
 
