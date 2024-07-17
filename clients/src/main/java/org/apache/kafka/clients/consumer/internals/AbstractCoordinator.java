@@ -141,6 +141,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected final ExponentialBackoff retryBackoff;
 
     private Node coordinator = null;
+    private boolean closing = false;
     private String rejoinReason = "";
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
@@ -729,9 +730,32 @@ public abstract class AbstractCoordinator implements Closeable {
                 synchronized (AbstractCoordinator.this) {
                     AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID, memberId, null);
                 }
-                requestRejoin("need to re-join with the given member-id: " + memberId);
 
-                future.raise(error);
+                if (closing && rebalanceConfig.leaveGroupOnClose) {
+                    RequestFuture<Void> leaveGroupFuture = maybeLeaveGroup(
+                            "the consumer is being closed "
+                                    + "and must notify the broker that its newly-assigned member ID can be discarded",
+                            false
+                    );
+                    if (leaveGroupFuture != null) {
+                        leaveGroupFuture.addListener(new RequestFutureListener<Void>() {
+                            @Override
+                            public void onSuccess(Void value) {
+                                future.raise(error);
+                            }
+
+                            @Override
+                            public void onFailure(RuntimeException e) {
+                                future.raise(error);
+                            }
+                        });
+                    } else {
+                        future.raise(error);
+                    }
+                } else {
+                    requestRejoin("need to re-join with the given member-id: " + memberId);
+                    future.raise(error);
+                }
             } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                 log.info("JoinGroup failed due to non-fatal error: REBALANCE_IN_PROGRESS, " +
                     "which could indicate a replication timeout on the broker. Will retry.");
@@ -1121,6 +1145,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * @throws KafkaException if the rebalance callback throws exception
      */
     protected void close(Timer timer) {
+        closing = true;
         try {
             closeHeartbeatThread();
         } finally {
@@ -1162,13 +1187,18 @@ public abstract class AbstractCoordinator implements Closeable {
      * @throws KafkaException if the rebalance callback throws exception
      */
     public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason) {
+        return maybeLeaveGroup(leaveReason, true);
+    }
+
+    private synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason, boolean checkState) {
         RequestFuture<Void> future = null;
 
         // Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
         // consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,
         // and the membership expiration is only controlled by session timeout.
-        if (isDynamicMember() && !coordinatorUnknown() &&
-            state != MemberState.UNJOINED && generation.hasMemberId()) {
+        if (isDynamicMember() && !coordinatorUnknown()
+                && (state != MemberState.UNJOINED || !checkState)
+                && generation.hasMemberId()) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
             log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
