@@ -104,7 +104,7 @@ def docs_version(version):
     return ''.join(major_minor)
 
 
-def docs_release_version(version):
+def detect_docs_release_version(version):
     """
     Detects the version from gradle.properties and converts it to a release version number that should be valid for the
     current release branch. For example, 0.10.2.0-SNAPSHOT would remain 0.10.2.0-SNAPSHOT (because no release has been
@@ -130,7 +130,7 @@ def command_stage_docs():
     # We explicitly override the version of the project that we normally get from gradle.properties since we want to be
     # able to run this from a release branch where we made some updates, but the build would show an incorrect SNAPSHOT
     # version due to already having bumped the bugfix version number.
-    gradle_version_override = docs_release_version(project_version)
+    gradle_version_override = detect_docs_release_version(project_version)
 
     cmd("Building docs", f"./gradlew -Pversion={gradle_version_override} clean siteDocsTar aggregatedJavadoc", cwd=repo_dir, env=jdk17_env)
 

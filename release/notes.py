@@ -132,11 +132,10 @@ def issue_str(issue):
     """
     Provides a human readable string representation for the given issue.
     """
-    key = issue.key
-    resolution = issue.fields.resolution
+    key = "%15s" % issue.key
+    resolution = "%15s" % issue.fields.resolution
     link = issue_link(issue)
-    return f"{key:>15} {resolution:>20} {link}"
-
+    return f"{key} {resolution} {link}"
 
 def generate(version):
     """
