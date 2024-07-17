@@ -469,7 +469,7 @@ public class RemoteLogManager implements Closeable {
             leaderPartitions.forEach(this::doHandleLeaderPartition);
 
             // Based on tiered state of a topic, cancel or create "copy" and "expire" tasks
-            if(validateTasksForTieredStateOfTopic) {
+            if (validateTasksForTieredStateOfTopic) {
                 leaderPartitions.forEach(leaderPartition -> validateCopyAndExpireTasks(leaderPartition, tieredStateOfTopic));
             }
         }
@@ -1809,7 +1809,7 @@ public class RemoteLogManager implements Closeable {
     }
 
     void validateCopyAndExpireTasks(TopicIdPartition topicPartition, boolean tieredStateOfTopic) {
-        if(tieredStateOfTopic) {
+        if (tieredStateOfTopic) {
             // make sure a copy task is available
             leaderCopyRLMTasks.computeIfAbsent(topicPartition, topicIdPartition -> {
                 RLMCopyTask task = new RLMCopyTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxBytes());
