@@ -24,7 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -177,7 +177,13 @@ public class JaasContext {
         AppConfigurationEntry[] entries = configuration.getAppConfigurationEntry(name);
         if (entries == null)
             throw new IllegalArgumentException("Could not find a '" + name + "' entry in this JAAS configuration.");
-        this.configurationEntries = Collections.unmodifiableList(new ArrayList<>(Arrays.asList(entries)));
+        Map<String, AppConfigurationEntry> loginModuleEntries = new HashMap<>();
+        for (AppConfigurationEntry entry : entries) {
+            if (loginModuleEntries.containsKey(entry.getLoginModuleName()))
+                throw new IllegalArgumentException("The loginModule '" + entry.getLoginModuleName() + "' in the JAAS config property should only be configured once");
+            loginModuleEntries.put(entry.getLoginModuleName(), entry);
+        }
+        this.configurationEntries = Collections.unmodifiableList(new ArrayList<>(loginModuleEntries.values()));
         this.dynamicJaasConfig = dynamicJaasConfig;
     }
 
