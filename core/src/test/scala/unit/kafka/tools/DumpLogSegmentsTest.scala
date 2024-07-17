@@ -52,7 +52,7 @@ import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import java.nio.file.attribute.PosixFilePermissions
 import java.nio.file.{AccessDeniedException, Files, NoSuchFileException, Paths}
@@ -73,8 +73,35 @@ class DumpLogSegmentsTest {
   val indexFilePath = s"$logDir/$segmentName.index"
   val timeIndexFilePath = s"$logDir/$segmentName.timeindex"
   val time = new MockTime(0, 0)
+  var log: UnifiedLog = _
 
-  def addSimpleRecords(log: UnifiedLog, batches: ArrayBuffer[BatchInfo]): Unit = {
+  @AfterEach
+  def afterEach(): Unit = {
+    Option(log).foreach(log => Utils.closeQuietly(log, "UnifiedLog"))
+  }
+
+  private def createTestLog = {
+    val props = new Properties
+    props.setProperty(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "128")
+    log = UnifiedLog(
+      dir = logDir,
+      config = new LogConfig(props),
+      logStartOffset = 0L,
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time,
+      brokerTopicStats = new BrokerTopicStats,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
+      producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+      producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true
+    )
+    log
+  }
+
+  private def addSimpleRecords(log: UnifiedLog, batches: ArrayBuffer[BatchInfo]): Unit = {
     val now = System.currentTimeMillis()
     val firstBatchRecords = (0 until 10).map { i => new SimpleRecord(now + i * 2, s"message key $i".getBytes, s"message value $i".getBytes)}
     batches += BatchInfo(firstBatchRecords, hasKeys = true, hasValues = true)
@@ -95,7 +122,7 @@ class DumpLogSegmentsTest {
 
   @Test
   def testBatchAndRecordMetadataOutput(): Unit = {
-    val log = createTestLog
+    log = createTestLog
 
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0,
       new SimpleRecord("a".getBytes),
@@ -127,38 +154,11 @@ class DumpLogSegmentsTest {
     ), origin = AppendOrigin.COORDINATOR, leaderEpoch = 7)
 
     assertDumpLogRecordMetadata(log)
-
-    closeTestLog(log)
-  }
-
-  private def createTestLog = {
-    val props = new Properties
-    props.setProperty(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "128")
-    val log = UnifiedLog(
-      dir = logDir,
-      config = new LogConfig(props),
-      logStartOffset = 0L,
-      recoveryPoint = 0L,
-      scheduler = time.scheduler,
-      time = time,
-      brokerTopicStats = new BrokerTopicStats,
-      maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-      producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-      logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None,
-      keepPartitionMetadataFile = true
-    )
-    log
-  }
-  
-  private def closeTestLog(log: UnifiedLog): Unit = {
-    Utils.closeQuietly(log, "UnifiedLog")
   }
 
   @Test
   def testPrintDataLog(): Unit = {
-    val log = createTestLog
+    log = createTestLog
     val batches = new ArrayBuffer[BatchInfo]
     addSimpleRecords(log, batches)
     
@@ -227,13 +227,11 @@ class DumpLogSegmentsTest {
 
     // Verify that records are not printed by default
     verifyNoRecordsInOutput(Array("--files", logFilePath))
-
-    closeTestLog(log)
   }
 
   @Test
   def testDumpIndexMismatches(): Unit = {
-    val log = createTestLog
+    log = createTestLog
     val batches = new ArrayBuffer[BatchInfo]
     addSimpleRecords(log, batches)
     
@@ -241,13 +239,11 @@ class DumpLogSegmentsTest {
     DumpLogSegments.dumpIndex(new File(indexFilePath), indexSanityOnly = false, verifyOnly = true, offsetMismatches,
       Int.MaxValue)
     assertEquals(Map.empty, offsetMismatches)
-    
-    closeTestLog(log)
   }
 
   @Test
   def testDumpTimeIndexErrors(): Unit = {
-    val log = createTestLog
+    log = createTestLog
     val batches = new ArrayBuffer[BatchInfo]
     addSimpleRecords(log, batches)
     
@@ -256,8 +252,6 @@ class DumpLogSegmentsTest {
     assertEquals(Map.empty, errors.misMatchesForTimeIndexFilesMap)
     assertEquals(Map.empty, errors.outOfOrderTimestamp)
     assertEquals(Map.empty, errors.shallowOffsetNotFound)
-    
-    closeTestLog(log)
   }
 
   def countSubstring(str: String, sub: String): Int =
@@ -276,14 +270,12 @@ class DumpLogSegmentsTest {
   @Test
   def testDumpRemoteLogMetadataEmpty(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
-    val log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
 
     val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
     assertTrue(batchCount(output) == 0)
     assertTrue(recordCount(output) == 0)
     assertTrue(output.contains("Log starting offset: 0"))
-
-    closeTestLog(log)
   }
 
   @Test
@@ -299,7 +291,7 @@ class DumpLogSegmentsTest {
     }).toArray
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
-    val log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
     log.flush(false)
 
@@ -311,8 +303,6 @@ class DumpLogSegmentsTest {
     assertTrue(recordCount(output) == 1)
     assertTrue(output.contains("Log starting offset: 0"))
     assertTrue(output.contains(expectedDeletePayload))
-
-    closeTestLog(log)
   }
 
   @Test
@@ -333,7 +323,7 @@ class DumpLogSegmentsTest {
     }).toArray
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
-    val log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
     log.flush(false)
 
@@ -349,8 +339,6 @@ class DumpLogSegmentsTest {
     assertTrue(output.contains("Log starting offset: 0"))
     assertTrue(output.contains(expectedUpdatePayload))
     assertTrue(output.contains(expectedDeletePayload))
-
-    closeTestLog(log)
   }
   
   @Test
@@ -373,7 +361,7 @@ class DumpLogSegmentsTest {
     }).toArray
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
-    val log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
     log.flush(false)
@@ -390,8 +378,6 @@ class DumpLogSegmentsTest {
     assertTrue(output.contains("Log starting offset: 0"))
     assertTrue(countSubstring(output, expectedUpdatePayload) == 2)
     assertTrue(countSubstring(output, expectedDeletePayload) == 2)
-
-    closeTestLog(log)
   }
 
   @Test
@@ -407,7 +393,7 @@ class DumpLogSegmentsTest {
     }).toArray
     
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
-    val log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
     val secondSegment = log.roll();
     secondSegment.append(1L, RecordBatch.NO_TIMESTAMP, 1L, MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*))
@@ -422,8 +408,6 @@ class DumpLogSegmentsTest {
     assertTrue(recordCount(output) == 1)
     assertTrue(output.contains("Log starting offset: 1"))
     assertTrue(output.contains(expectedDeletePayload))
-
-    closeTestLog(log)
   }
 
   @Test
@@ -431,7 +415,7 @@ class DumpLogSegmentsTest {
     val metadataRecords = Array(new SimpleRecord(null, "corrupted".getBytes()))
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
-    val log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
     log.flush(false)
 
@@ -440,8 +424,6 @@ class DumpLogSegmentsTest {
     assertTrue(recordCount(output) == 1)
     assertTrue(output.contains("Log starting offset: 0"))
     assertTrue(output.contains("Could not deserialize metadata record"))
-
-    closeTestLog(log)
   }
 
   @Test
@@ -457,7 +439,7 @@ class DumpLogSegmentsTest {
     }).toArray
     
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
-    val log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
     log.flush(false)
     
@@ -465,8 +447,6 @@ class DumpLogSegmentsTest {
     
     assertThrows(classOf[AccessDeniedException],
       () => runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath)))
-
-    closeTestLog(log)
   }
 
   @Test
@@ -491,7 +471,7 @@ class DumpLogSegmentsTest {
   def testDumpMetadataRecords(): Unit = {
     val mockTime = new MockTime
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
-    val log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, mockTime.scheduler, mockTime)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, mockTime.scheduler, mockTime)
 
     val metadataRecords = Seq(
       new ApiMessageAndVersion(
@@ -539,8 +519,6 @@ class DumpLogSegmentsTest {
     assertTrue(output.contains("TOPIC_RECORD"))
     assertTrue(output.contains("BROKER_RECORD"))
     assertTrue(output.contains("skipping"))
-
-    closeTestLog(log)
   }
 
   @Test
@@ -614,7 +592,7 @@ class DumpLogSegmentsTest {
 
   @Test
   def testDumpEmptyIndex(): Unit = {
-    val log = createTestLog
+    log = createTestLog
     
     val indexFile = new File(indexFilePath)
     new PrintWriter(indexFile).close()
@@ -625,8 +603,6 @@ class DumpLogSegmentsTest {
         misMatchesForIndexFilesMap = mutable.Map[String, List[(Long, Long)]](), Int.MaxValue)
     }
     assertEquals(expectOutput, outContent.toString)
-
-    closeTestLog(log)
   }
 
   private def runDumpLogSegments(args: Array[String]): String = {
@@ -639,7 +615,7 @@ class DumpLogSegmentsTest {
 
   @Test
   def testPrintDataLogPartialBatches(): Unit = {
-    val log = createTestLog
+    log = createTestLog
     val batches = new ArrayBuffer[BatchInfo]
     addSimpleRecords(log, batches)
     
@@ -661,8 +637,6 @@ class DumpLogSegmentsTest {
     val partialBatchesCount = countBatches(partialLines)
 
     assertEquals(partialBatches, partialBatchesCount)
-
-    closeTestLog(log)
   }
 
   @Test
