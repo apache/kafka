@@ -133,7 +133,7 @@ public class RequestManager {
      * If there is a connection with a pending request it returns the amount of time to wait until
      * the request times out.
      *
-     * Returns zero, if there are no pending request and at least one of the boorstrap servers is
+     * Returns zero, if there are no pending requests and at least one of the boorstrap servers is
      * ready.
      *
      * If all of the bootstrap servers are backing off and there are no pending requests, return
@@ -220,7 +220,7 @@ public class RequestManager {
             return 0;
         }
 
-        return  state.remainingBackoffMs(timeMs);
+        return state.remainingBackoffMs(timeMs);
     }
 
     public boolean isResponseExpected(Node node, long correlationId) {
@@ -372,12 +372,12 @@ public class RequestManager {
         @Override
         public String toString() {
             return String.format(
-                "ConnectionState(node=%s, state=%s, lastSendTimeMs=%d, lastFailTimeMs=%d, inFlightCorrelationId=%d)",
+                "ConnectionState(node=%s, state=%s, lastSendTimeMs=%d, lastFailTimeMs=%d, inFlightCorrelationId=%s)",
                 node,
                 state,
                 lastSendTimeMs,
                 lastFailTimeMs,
-                inFlightCorrelationId
+                inFlightCorrelationId.isPresent() ? inFlightCorrelationId.getAsLong() : "undefined"
             );
         }
     }

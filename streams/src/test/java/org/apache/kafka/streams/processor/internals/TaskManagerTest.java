@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -52,28 +53,25 @@ import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTas
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
-import java.nio.file.Files;
-import java.time.Duration;
-import java.util.ArrayList;
-
 import org.hamcrest.Matchers;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Answers;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoJUnitRunner;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -110,13 +108,13 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -127,15 +125,16 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.mock;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class TaskManagerTest {
 
     private final String topic1 = "topic1";
@@ -212,13 +211,10 @@ public class TaskManagerTest {
     private TopologyMetadata topologyMetadata;
     private final Time time = new MockTime();
 
-    @Rule
-    public final TemporaryFolder testFolder = new TemporaryFolder();
+    @TempDir
+    Path testFolder;
 
-    @Rule
-    public final MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
-
-    @Before
+    @BeforeEach
     public void setUp() {
         taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, null, false);
     }
@@ -716,6 +712,35 @@ public class TaskManagerTest {
         verify(stateUpdater).add(reassignedActiveTask);
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+    }
+
+    @Test
+    public void shouldFirstHandleTasksInStateUpdaterThenSuspendedActiveTasksInTaskRegistry() {
+        final StreamTask reassignedActiveTask1 = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.SUSPENDED)
+            .withInputPartitions(taskId03Partitions).build();
+        final StreamTask reassignedActiveTask2 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId02Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.allTasks()).thenReturn(mkSet(reassignedActiveTask1));
+        when(stateUpdater.getTasks()).thenReturn(mkSet(reassignedActiveTask2));
+        when(stateUpdater.remove(reassignedActiveTask2.id()))
+            .thenReturn(CompletableFuture.completedFuture(new StateUpdater.RemovedTaskResult(reassignedActiveTask2)));
+
+        taskManager.handleAssignment(
+            mkMap(
+                mkEntry(reassignedActiveTask1.id(), reassignedActiveTask1.inputPartitions()),
+                mkEntry(reassignedActiveTask2.id(), taskId00Partitions)
+            ),
+            Collections.emptyMap()
+        );
+
+        final InOrder inOrder = inOrder(stateUpdater, tasks);
+        inOrder.verify(stateUpdater).remove(reassignedActiveTask2.id());
+        inOrder.verify(tasks).removeTask(reassignedActiveTask1);
+        inOrder.verify(stateUpdater).add(reassignedActiveTask1);
     }
 
     @Test
@@ -1343,6 +1368,26 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldCloseCleanTasksPendingInitOnPartitionLost() {
+        final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask task2 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId02Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.drainPendingActiveTasksToInit()).thenReturn(mkSet(task1, task2));
+        final TaskManager taskManager = setupForRevocationAndLost(emptySet(), tasks);
+
+        taskManager.handleLostAll();
+
+        verify(task1).suspend();
+        verify(task1).closeClean();
+        verify(task2).suspend();
+        verify(task2).closeClean();
+    }
+
+    @Test
     public void shouldCloseDirtyWhenRemoveFailedActiveTasksFromStateUpdaterOnPartitionLost() {
         final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING)
@@ -1357,15 +1402,48 @@ public class TaskManagerTest {
         future1.complete(new StateUpdater.RemovedTaskResult(task1, new StreamsException("Something happened")));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future3 = new CompletableFuture<>();
         when(stateUpdater.remove(task2.id())).thenReturn(future3);
-        future3.complete(new StateUpdater.RemovedTaskResult(task2));
+        future3.complete(new StateUpdater.RemovedTaskResult(task2, new StreamsException("Something else happened")));
 
         taskManager.handleLostAll();
 
         verify(task1).prepareCommit();
         verify(task1).suspend();
         verify(task1).closeDirty();
+        verify(task2).prepareCommit();
         verify(task2).suspend();
-        verify(task2).closeClean();
+        verify(task2).closeDirty();
+    }
+
+    @Test
+    public void shouldCloseTasksWhenRemoveFailedActiveTasksFromStateUpdaterOnPartitionLost() {
+        final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask task2 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId02Partitions).build();
+        final StreamTask task3 = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId03Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.drainPendingActiveTasksToInit()).thenReturn(mkSet(task1));
+        final TaskManager taskManager = setupForRevocationAndLost(mkSet(task2, task3), tasks);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = new CompletableFuture<>();
+        when(stateUpdater.remove(task2.id())).thenReturn(future2);
+        future2.complete(new StateUpdater.RemovedTaskResult(task2, new StreamsException("Something happened")));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future3 = new CompletableFuture<>();
+        when(stateUpdater.remove(task3.id())).thenReturn(future3);
+        future3.complete(new StateUpdater.RemovedTaskResult(task3));
+
+        taskManager.handleLostAll();
+
+        verify(task1).suspend();
+        verify(task1).closeClean();
+        verify(task2).prepareCommit();
+        verify(task2).suspend();
+        verify(task2).closeDirty();
+        verify(task3).suspend();
+        verify(task3).closeClean();
     }
 
     private TaskManager setupForRevocationAndLost(final Set<Task> tasksInStateUpdater,
@@ -1428,6 +1506,7 @@ public class TaskManagerTest {
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
         verify(task).maybeInitTaskTimeoutOrThrow(anyLong(), eq(timeoutException));
+        verify(stateUpdater).add(task);
         verify(tasks, never()).addTask(task);
         verify(task, never()).clearTaskTimeout();
         verifyNoInteractions(consumer);
@@ -1953,8 +2032,8 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createTasks(taskId01Assignment)).thenReturn(singletonList(task01));
 
         final ArrayList<TaskDirectory> taskFolders = new ArrayList<>(2);
-        taskFolders.add(new TaskDirectory(testFolder.newFolder(taskId00.toString()), null));
-        taskFolders.add(new TaskDirectory(testFolder.newFolder(taskId01.toString()), null));
+        taskFolders.add(new TaskDirectory(testFolder.resolve(taskId00.toString()).toFile(), null));
+        taskFolders.add(new TaskDirectory(testFolder.resolve(taskId01.toString()).toFile(), null));
 
         when(stateDirectory.listNonEmptyTaskDirectories())
             .thenReturn(taskFolders)
@@ -4613,22 +4692,28 @@ public class TaskManagerTest {
 
     private void makeTaskFolders(final String... names) throws Exception {
         final ArrayList<TaskDirectory> taskFolders = new ArrayList<>(names.length);
-        for (int i = 0; i < names.length; ++i) {
-            taskFolders.add(new TaskDirectory(testFolder.newFolder(names[i]), null));
+        for (int i = 0; i < names.length; i++) {
+            final String name = names[i];
+            final Path path = testFolder.resolve(name).toAbsolutePath();
+            if (Files.notExists(path)) {
+                Files.createDirectories(path);
+            }
+            taskFolders.add(new TaskDirectory(path.toFile(), null));
         }
         when(stateDirectory.listNonEmptyTaskDirectories()).thenReturn(taskFolders);
     }
 
     private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, Long> offsets) throws Exception {
         final File checkpointFile = getCheckpointFile(task);
-        Files.createFile(checkpointFile.toPath());
+        final Path checkpointFilePath = checkpointFile.toPath();
+        Files.createFile(checkpointFilePath);
         new OffsetCheckpoint(checkpointFile).write(offsets);
         lenient().when(stateDirectory.checkpointFileFor(task)).thenReturn(checkpointFile);
         expectDirectoryNotEmpty(task);
     }
 
     private File getCheckpointFile(final TaskId task) {
-        return new File(new File(testFolder.getRoot(), task.toString()), StateManagerUtil.CHECKPOINT_FILE_NAME);
+        return new File(new File(testFolder.toAbsolutePath().toString(), task.toString()), StateManagerUtil.CHECKPOINT_FILE_NAME);
     }
 
     private static ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final long offset) {

@@ -33,6 +33,7 @@ import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
@@ -880,5 +881,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     public void resignAfterNonAtomicCommit() {
         resignAfterNonAtomicCommit.set(true);
+    }
+
+    @Override
+    public KRaftVersion kraftVersion() {
+        return KRaftVersion.KRAFT_VERSION_0;
     }
 }
