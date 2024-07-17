@@ -935,12 +935,11 @@ public class KafkaConsumerTest {
             // by the background thread, so it can realize there are no committed offsets and then
             // throw the NoOffsetForPartitionException
             TestUtils.waitForCondition(() -> {
-                while (true) {
-                    try {
-                        consumer.poll(Duration.ZERO);
-                    } catch (NoOffsetForPartitionException e) {
-                        return true;
-                    }
+                try {
+                    consumer.poll(Duration.ZERO);
+                    return false;
+                } catch (NoOffsetForPartitionException e) {
+                    return true;
                 }
             }, "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
         } else {
