@@ -567,7 +567,7 @@ public class KafkaAdminClient extends AdminClient {
                     "admin-client",
                     channelBuilder,
                     logContext);
-            bootstrapConfig = new NetworkClient.BootstrapConfiguration(bootstrapAddresses, ClientDnsLookup.forConfig(config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG)), 12 * 60 * 1000);
+            bootstrapConfig = new NetworkClient.BootstrapConfiguration(bootstrapAddresses, ClientDnsLookup.forConfig(config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG)), 2 * 60 * 1000);
             networkClient = new NetworkClient(metadataManager.updater(),
                     null,
                     selector,
