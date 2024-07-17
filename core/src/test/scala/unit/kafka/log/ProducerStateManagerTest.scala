@@ -1177,24 +1177,19 @@ class ProducerStateManagerTest {
 
   @Test
   def testReadWriteSnapshot(): Unit = {
-    val entry = new ProducerStateEntry(1L, 2, 3, RecordBatch.NO_TIMESTAMP,
-      OptionalLong.of(100L), java.util.Optional.of(new BatchMetadata(1, 2L, 3, RecordBatch.NO_TIMESTAMP)))
-    val entryWithOptionalEmpty = new ProducerStateEntry(11L, 12, 13, 123456L,
-      OptionalLong.empty(), java.util.Optional.empty())
-    val entryMap = new java.util.HashMap[java.lang.Long, ProducerStateEntry]
-    entryMap.put(1, entry)
-    entryMap.put(11, entryWithOptionalEmpty)
+    val expectedEntryMap = new java.util.HashMap[java.lang.Long, ProducerStateEntry]
+    expectedEntryMap.put(1, new ProducerStateEntry(1L, 2, 3, RecordBatch.NO_TIMESTAMP,
+      OptionalLong.of(100L), java.util.Optional.of(new BatchMetadata(1, 2L, 3, RecordBatch.NO_TIMESTAMP))))
+    expectedEntryMap.put(11, new ProducerStateEntry(11L, 12, 13, 123456L,
+      OptionalLong.empty(), java.util.Optional.empty()))
 
     def assertEntries(actual: util.List[ProducerStateEntry]): Unit = {
-      assertEquals(actual.size(), 2)
-      val actualEntry =
-        actual.stream().filter(e => e.producerId() == entry.producerId()).findAny()
-          .orElseThrow(() => new IllegalArgumentException("entry not found"))
-      val actualEntryWithOptionalEmpty =
-        actual.stream().filter(e => e.producerId() == entryWithOptionalEmpty.producerId()).findAny()
-          .orElseThrow(() => new IllegalArgumentException("entryWithOptionalEmpty not found"))
-      assertProducerStateEntry(entry, actualEntry)
-      assertProducerStateEntry(entryWithOptionalEmpty, actualEntryWithOptionalEmpty)
+      val actualEntryMap = actual.asScala.map(p => (p.producerId(), p)).toMap.asJava
+      assertEquals(expectedEntryMap.keySet(), actualEntryMap.keySet())
+      expectedEntryMap.forEach {
+        case (producerId, entry) =>
+          assertProducerStateEntry(entry, actualEntryMap.get(producerId))
+      }
     }
 
     def assertProducerStateEntry(actual: ProducerStateEntry, expected: ProducerStateEntry): Unit = {
@@ -1209,7 +1204,7 @@ class ProducerStateManagerTest {
     val tmpDir: File = TestUtils.tempDir()
     try {
       val file = new File(tmpDir, "testReadWriteSnapshot")
-      ProducerStateManager.writeSnapshot(file, entryMap, true)
+      ProducerStateManager.writeSnapshot(file, expectedEntryMap, true)
       assertEntries(ProducerStateManager.readSnapshot(file))
     } finally Utils.delete(tmpDir)
   }
