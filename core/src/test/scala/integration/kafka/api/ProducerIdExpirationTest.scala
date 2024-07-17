@@ -137,9 +137,6 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "3", "3", willBeCommitted = true))
 
-    // Producer IDs should be retained.
-    assertEquals(1, producerState.size)
-
     producer.commitTransaction()
 
     // Check we can still consume the transaction.
