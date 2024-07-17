@@ -2077,6 +2077,15 @@ public class AsyncKafkaConsumerTest {
         verify(backgroundEventReaper).reap(time.milliseconds());
     }
 
+    @Test
+    public void testUnsubscribeWithoutGroupId() {
+        consumer = newConsumerWithoutGroupId();
+
+        completeUnsubscribeApplicationEventSuccessfully();
+        consumer.unsubscribe();
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
+    }
+
     private void verifyUnsubscribeEvent(SubscriptionState subscriptions) {
         // Check that an unsubscribe event was generated, and that the consumer waited for it to
         // complete processing background events.

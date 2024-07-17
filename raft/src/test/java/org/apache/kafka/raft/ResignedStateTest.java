@@ -28,7 +28,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
-import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,17 +50,14 @@ class ResignedStateTest {
         )
     );
 
-    private ResignedState newResignedState(
-        Set<Integer> voters,
-        List<Integer> preferredSuccessors
-    ) {
+    private ResignedState newResignedState(Set<Integer> voters) {
         return new ResignedState(
             time,
             localId,
             epoch,
             voters,
             electionTimeoutMs,
-            preferredSuccessors,
+            Collections.emptyList(),
             localEndpoints,
             logContext
         );
@@ -72,7 +68,7 @@ class ResignedStateTest {
         int remoteId = 1;
         Set<Integer> voters = Utils.mkSet(localId, remoteId);
 
-        ResignedState state = newResignedState(voters, Collections.emptyList());
+        ResignedState state = newResignedState(voters);
 
         assertEquals(ElectionState.withElectedLeader(epoch, localId, voters), state.election());
         assertEquals(epoch, state.epoch());
@@ -94,10 +90,7 @@ class ResignedStateTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testGrantVote(boolean isLogUpToDate) {
-        ResignedState state = newResignedState(
-            Utils.mkSet(1, 2, 3),
-            Collections.emptyList()
-        );
+        ResignedState state = newResignedState(Utils.mkSet(1, 2, 3));
 
         assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
         assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
@@ -108,7 +101,7 @@ class ResignedStateTest {
     void testNegativeScenarioAcknowledgeResignation() {
         Set<Integer> voters = Utils.mkSet(0, 1, 2, 3, 4, 5);
 
-        ResignedState state = newResignedState(voters, Collections.emptyList());
+        ResignedState state = newResignedState(voters);
 
         assertEquals(ElectionState.withElectedLeader(epoch, 0, voters), state.election());
         assertEquals(epoch, state.epoch());
@@ -119,10 +112,7 @@ class ResignedStateTest {
 
     @Test
     void testLeaderEndpoints() {
-        ResignedState state = newResignedState(
-            Utils.mkSet(1, 2, 3),
-            Collections.emptyList()
-        );
+        ResignedState state = newResignedState(Utils.mkSet(1, 2, 3));
 
         assertEquals(localEndpoints, state.leaderEndpoints());
         assertNotEquals(Endpoints.empty(), state.leaderEndpoints());

@@ -28,7 +28,6 @@ import org.apache.kafka.common.requests.{ConsumerGroupDescribeRequest, ConsumerG
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.common.Features
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{Tag, Timeout}
@@ -70,38 +69,6 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
       new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-    )
-  )
-  def testConsumerGroupDescribeIsInaccessibleWhenDisabledByGroupVersion(): Unit = {
-    val consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
-      new ConsumerGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava)
-    ).build(ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled))
-
-    val consumerGroupDescribeResponse = connectAndReceive[ConsumerGroupDescribeResponse](consumerGroupDescribeRequest)
-    val expectedResponse = new ConsumerGroupDescribeResponseData()
-    expectedResponse.groups().add(
-      new ConsumerGroupDescribeResponseData.DescribedGroup()
-        .setGroupId("grp-1")
-        .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-    )
-    expectedResponse.groups.add(
-      new ConsumerGroupDescribeResponseData.DescribedGroup()
-        .setGroupId("grp-2")
-        .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-    )
-
-    assertEquals(expectedResponse, consumerGroupDescribeResponse.data)
-  }
-
-  @ClusterTest(
-    types = Array(Type.KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-    ),
-    features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
     )
   )
   def testConsumerGroupDescribeWithNewGroupCoordinator(): Unit = {

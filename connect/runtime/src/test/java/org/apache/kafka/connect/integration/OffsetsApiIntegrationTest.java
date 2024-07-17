@@ -37,6 +37,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -77,6 +79,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("integration")
 public class OffsetsApiIntegrationTest {
+
+    private static final Logger log = LoggerFactory.getLogger(OffsetsApiIntegrationTest.class);
+
     private static final long OFFSET_COMMIT_INTERVAL_MS = TimeUnit.SECONDS.toMillis(1);
     private static final long OFFSET_READ_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
     private static final int NUM_WORKERS = 3;
@@ -457,6 +462,11 @@ public class OffsetsApiIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connectorName, 1,
                 "Connector tasks did not start in time.");
 
+        // Make sure the tasks' consumers have had a chance to actually form a group
+        // (otherwise, the reset request will succeed because there won't be any active consumers)
+        verifyExpectedSinkConnectorOffsets(connectorName, topic, 1, NUM_RECORDS_PER_PARTITION,
+                "Sink connector consumer group offsets should catch up to the topic end offsets");
+
         connect.stopConnector(connectorName);
 
         // Try to delete the offsets for the single topic partition
@@ -802,6 +812,8 @@ public class OffsetsApiIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connectorName, 1,
                 "Connector tasks did not start in time.");
 
+        // Make sure the tasks' consumers have had a chance to actually form a group
+        // (otherwise, the reset request will succeed because there won't be any active consumers)
         verifyExpectedSinkConnectorOffsets(connectorName, topic, 1, NUM_RECORDS_PER_PARTITION,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
 
@@ -984,19 +996,45 @@ public class OffsetsApiIntegrationTest {
      */
     private void verifyExpectedSinkConnectorOffsets(String connectorName, String expectedTopic, int expectedPartitions,
                                                     int expectedOffset, String conditionDetails) throws InterruptedException {
-        waitForCondition(() -> {
-            ConnectorOffsets offsets = connect.connectorOffsets(connectorName);
-            if (offsets.offsets().size() != expectedPartitions) {
-                return false;
-            }
-            for (ConnectorOffset offset: offsets.offsets()) {
-                assertEquals(expectedTopic, offset.partition().get(SinkUtils.KAFKA_TOPIC_KEY));
-                if ((Integer) offset.offset().get(SinkUtils.KAFKA_OFFSET_KEY) != expectedOffset) {
-                    return false;
+        AtomicReference<ConnectorOffsets> latestOffsets = new AtomicReference<>();
+        waitForCondition(
+                () -> {
+                    ConnectorOffsets offsets;
+                    try {
+                        offsets = connect.connectorOffsets(connectorName);
+                    } catch (Throwable t) {
+                        log.warn("Failed to list offsets for sink connector {}", connectorName, t);
+                        return false;
+                    }
+
+                    latestOffsets.set(offsets);
+
+                    if (offsets.offsets().size() != expectedPartitions) {
+                        return false;
+                    }
+                    for (ConnectorOffset offset: offsets.offsets()) {
+                        assertEquals(expectedTopic, offset.partition().get(SinkUtils.KAFKA_TOPIC_KEY));
+                        if ((Integer) offset.offset().get(SinkUtils.KAFKA_OFFSET_KEY) != expectedOffset) {
+                            return false;
+                        }
+                    }
+                    return true;
+                },
+                OFFSET_READ_TIMEOUT_MS,
+                () -> {
+                    String result = conditionDetails + ". ";
+                    ConnectorOffsets offsets = latestOffsets.get();
+                    if (offsets == null) {
+                        result += "No attempt to list the offsets for the connector ever succeeded.";
+                    } else {
+                        result += "Expected every committed offset to be for topic " + expectedTopic
+                                + " and for " + expectedPartitions + " partition(s) of that topic to have "
+                                + "a committed offset of " + expectedOffset + ". ";
+                        result += "The most-recently-available offsets for the connector are: " + offsets;
+                    }
+                    return result;
                 }
-            }
-            return true;
-        }, OFFSET_READ_TIMEOUT_MS, conditionDetails);
+        );
     }
 
     /**

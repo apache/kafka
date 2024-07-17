@@ -50,6 +50,8 @@ import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -59,6 +61,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ExpiredTimeout;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ScheduledTimeout;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
@@ -68,16 +71,18 @@ import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorExceptio
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
-import org.apache.kafka.coordinator.group.consumer.Assignment;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupBuilder;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
-import org.apache.kafka.coordinator.group.consumer.MemberAssignmentImpl;
-import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.TopicMetadata;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -124,7 +129,7 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGro
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupSyncKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
-import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupSessionTimeoutKey;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
@@ -997,6 +1002,7 @@ public class GroupMetadataManagerTest {
             .setInstanceId(memberId1)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
+            .setRebalanceTimeoutMs(5000)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
@@ -1045,22 +1051,6 @@ public class GroupMetadataManagerTest {
                     }
                 }))
             .build();
-
-        assignor.prepareGroupAssignment(new GroupAssignment(
-            new HashMap<String, MemberAssignment>() {
-                {
-                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
-                        mkTopicAssignment(fooTopicId, 0, 1, 2),
-                        mkTopicAssignment(barTopicId, 0, 1)
-                    )));
-                    // When the member rejoins, it gets the same assignments.
-                    put(member2RejoinId, new MemberAssignmentImpl(mkAssignment(
-                        mkTopicAssignment(fooTopicId, 3, 4, 5),
-                        mkTopicAssignment(barTopicId, 2)
-                    )));
-                }
-            }
-        ));
 
         // Member 2 leaves the consumer group.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
@@ -1117,11 +1107,26 @@ public class GroupMetadataManagerTest {
             rejoinResult.response()
         );
 
+        ConsumerGroupMember expectedCopiedMember = new ConsumerGroupMember.Builder(member2RejoinId)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .setInstanceId(memberId2)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 2)))
+            .build();
+
         ConsumerGroupMember expectedRejoinedMember = new ConsumerGroupMember.Builder(member2RejoinId)
             .setState(MemberState.STABLE)
             .setMemberEpoch(10)
-            .setInstanceId(memberId2)
             .setPreviousMemberEpoch(0)
+            .setInstanceId(memberId2)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setRebalanceTimeoutMs(5000)
@@ -1133,14 +1138,215 @@ public class GroupMetadataManagerTest {
             .build();
 
         List<CoordinatorRecord> expectedRecordsAfterRejoin = Arrays.asList(
+            // The previous member is deleted.
             CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId2),
             CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId2),
             CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId2),
-            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedRejoinedMember),
+
+            // The previous member is replaced by the new one.
+            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedCopiedMember),
             CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, member2RejoinId, mkAssignment(
                 mkTopicAssignment(fooTopicId, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 2))),
-            CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId, 10),
+            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedCopiedMember),
+
+            // The new member is updated.
+            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedRejoinedMember)
+        );
+
+        assertRecordsEquals(expectedRecordsAfterRejoin, rejoinResult.records());
+        // Verify that there are no timers.
+        context.assertNoSessionTimeout(groupId, memberId2);
+        context.assertNoRebalanceTimeout(groupId, memberId2);
+    }
+
+    @Test
+    public void testStaticMemberRejoinsWithNewSubscribedTopics() {
+        String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String member2RejoinId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
+            .setInstanceId("instance-id-1")
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setRebalanceTimeoutMs(5000)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2)))
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
+            .setState(MemberState.STABLE)
+            .setInstanceId("instance-id-2")
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setRebalanceTimeoutMs(5000)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5)))
+            .build();
+
+        // Consumer group with two static members.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(member2)
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
+                    {
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                    }
+                }))
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            new HashMap<String, MemberAssignment>() {
+                {
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2)
+                    )));
+                    put(member2RejoinId, new MemberAssignmentImpl(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5),
+                        mkTopicAssignment(barTopicId, 0, 1, 2)
+                    )));
+                }
+            }
+        ));
+
+        // Member 2 leaves the consumer group.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setInstanceId("instance-id-2")
+                .setMemberEpoch(-2));
+
+        // Member epoch of the response would be set to -2.
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId2)
+                .setMemberEpoch(-2),
+            result.response()
+        );
+
+        // The departing static member will have it's epoch set to -2.
+        ConsumerGroupMember member2UpdatedEpoch = new ConsumerGroupMember.Builder(member2)
+            .setMemberEpoch(-2)
+            .build();
+
+        assertEquals(1, result.records().size());
+        assertRecordEquals(result.records().get(0), CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch));
+
+        // Member 2 rejoins the group with the same instance id.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> rejoinResult = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setMemberId(member2RejoinId)
+                .setGroupId(groupId)
+                .setInstanceId("instance-id-2")
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setServerAssignor("range")
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")) // bar is new.
+                .setTopicPartitions(Collections.emptyList()));
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(member2RejoinId)
+                .setMemberEpoch(11)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(Arrays.asList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(Arrays.asList(3, 4, 5)),
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(barTopicId)
+                            .setPartitions(Arrays.asList(0, 1, 2))
+                    ))),
+            rejoinResult.response()
+        );
+
+        ConsumerGroupMember expectedCopiedMember = new ConsumerGroupMember.Builder(member2RejoinId)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .setInstanceId("instance-id-2")
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5)))
+            .build();
+
+        ConsumerGroupMember expectedRejoinedMember = new ConsumerGroupMember.Builder(member2RejoinId)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(0)
+            .setInstanceId("instance-id-2")
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 0, 1, 2)))
+            .build();
+
+        List<CoordinatorRecord> expectedRecordsAfterRejoin = Arrays.asList(
+            // The previous member is deleted.
+            CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId2),
+            CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId2),
+            CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId2),
+
+            // The new member is created as a copy of the previous one but
+            // with its new member id and new epochs.
+            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedCopiedMember),
+            CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, member2RejoinId, mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5))),
+            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedCopiedMember),
+
+            // As the new member as a different subscribed topic set, a rebalance is triggered.
+            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedRejoinedMember),
+            CoordinatorRecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                {
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                }
+            }),
+            CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11),
+            CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, member2RejoinId, mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 0, 1, 2)
+            )),
+            CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId, 11),
             CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedRejoinedMember)
         );
 
@@ -2911,7 +3117,7 @@ public class GroupMetadataManagerTest {
         // Verify the expired timeout.
         assertEquals(
             Collections.singletonList(new ExpiredTimeout<Void, CoordinatorRecord>(
-                consumerGroupSessionTimeoutKey(groupId, memberId),
+                groupSessionTimeoutKey(groupId, memberId),
                 new CoordinatorResult<>(
                     Arrays.asList(
                         CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
@@ -2992,7 +3198,7 @@ public class GroupMetadataManagerTest {
         // Verify the expired timeout.
         assertEquals(
             Collections.singletonList(new ExpiredTimeout<Void, CoordinatorRecord>(
-                consumerGroupSessionTimeoutKey(groupId, memberId),
+                groupSessionTimeoutKey(groupId, memberId),
                 new CoordinatorResult<>(
                     Arrays.asList(
                         CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
@@ -3353,8 +3559,8 @@ public class GroupMetadataManagerTest {
         context.groupMetadataManager.onLoaded();
 
         // All members should have a session timeout in place.
-        assertNotNull(context.timer.timeout(consumerGroupSessionTimeoutKey("foo", "foo-1")));
-        assertNotNull(context.timer.timeout(consumerGroupSessionTimeoutKey("foo", "foo-2")));
+        assertNotNull(context.timer.timeout(groupSessionTimeoutKey("foo", "foo-1")));
+        assertNotNull(context.timer.timeout(groupSessionTimeoutKey("foo", "foo-2")));
 
         // foo-1 should also have a revocation timeout in place.
         assertNotNull(context.timer.timeout(consumerGroupRebalanceTimeoutKey("foo", "foo-1")));
@@ -8214,12 +8420,14 @@ public class GroupMetadataManagerTest {
     public void testListGroups() {
         String consumerGroupId = "consumer-group-id";
         String classicGroupId = "classic-group-id";
+        String shareGroupId = "share-group-id";
         String memberId1 = Uuid.randomUuid().toString();
         String fooTopicName = "foo";
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroupAssignors(Collections.singletonList(assignor))
+            .withShareGroupAssignor(assignor)
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
             .build();
 
@@ -8234,6 +8442,8 @@ public class GroupMetadataManagerTest {
                 .setProtocol("range")
                 .setCurrentStateTimestamp(context.time.milliseconds()),
             MetadataVersion.latestTesting()));
+        // Create one share group record.
+        context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(shareGroupId, 6, GroupType.SHARE));
         context.commit();
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(classicGroupId, false);
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord(consumerGroupId, new ConsumerGroupMember.Builder(memberId1)
@@ -8257,7 +8467,12 @@ public class GroupMetadataManagerTest {
                     .setGroupId(consumerGroupId)
                     .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                     .setGroupState(ConsumerGroup.ConsumerGroupState.EMPTY.toString())
-                    .setGroupType(Group.GroupType.CONSUMER.toString())
+                    .setGroupType(Group.GroupType.CONSUMER.toString()),
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId(shareGroupId)
+                    .setProtocolType(ShareGroup.PROTOCOL_TYPE)
+                    .setGroupState(ShareGroup.ShareGroupState.EMPTY.toString())
+                    .setGroupType(Group.GroupType.SHARE.toString())
             ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
@@ -8293,7 +8508,12 @@ public class GroupMetadataManagerTest {
                 .setGroupId(classicGroup.groupId())
                 .setProtocolType("classic")
                 .setGroupState(EMPTY.toString())
-                .setGroupType(Group.GroupType.CLASSIC.toString())
+                .setGroupType(Group.GroupType.CLASSIC.toString()),
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(shareGroupId)
+                .setProtocolType(ShareGroup.PROTOCOL_TYPE)
+                .setGroupState(ShareGroup.ShareGroupState.EMPTY.toString())
+                .setGroupType(Group.GroupType.SHARE.toString())
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
@@ -8324,6 +8544,18 @@ public class GroupMetadataManagerTest {
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
+        actualAllGroupMap = context.sendListGroups(Collections.emptyList(), Collections.singletonList("Share")).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Stream.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(shareGroupId)
+                .setProtocolType(ShareGroup.PROTOCOL_TYPE)
+                .setGroupState(ShareGroup.ShareGroupState.EMPTY.toString())
+                .setGroupType(Group.GroupType.SHARE.toString())
+        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
         actualAllGroupMap = context.sendListGroups(Arrays.asList("empty", "Assigning"), Collections.emptyList()).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
         expectAllGroupMap = Stream.of(
@@ -8336,7 +8568,12 @@ public class GroupMetadataManagerTest {
                 .setGroupId(consumerGroupId)
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
-                .setGroupType(Group.GroupType.CONSUMER.toString())
+                .setGroupType(Group.GroupType.CONSUMER.toString()),
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(shareGroupId)
+                .setProtocolType(ShareGroup.PROTOCOL_TYPE)
+                .setGroupState(ShareGroup.ShareGroupState.EMPTY.toString())
+                .setGroupType(Group.GroupType.SHARE.toString())
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
@@ -10551,7 +10788,7 @@ public class GroupMetadataManagerTest {
         // Advance time past the session timeout.
         // Member 2 should be fenced from the group, thus triggering the downgrade.
         MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord> timeout = context.sleep(45000 + 1).get(0);
-        assertEquals(consumerGroupSessionTimeoutKey(groupId, memberId2), timeout.key);
+        assertEquals(groupSessionTimeoutKey(groupId, memberId2), timeout.key);
 
         byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(Arrays.asList(
             new TopicPartition(fooTopicName, 0),
@@ -11240,6 +11477,7 @@ public class GroupMetadataManagerTest {
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(10)
                     .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
+                    .setRebalanceTimeoutMs(500)
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1)))
                     .build())
@@ -11269,6 +11507,17 @@ public class GroupMetadataManagerTest {
         String newMemberId = joinResult.joinFuture.get().memberId();
         assertNotEquals("", newMemberId);
 
+        ConsumerGroupMember expectedCopiedMember = new ConsumerGroupMember.Builder(newMemberId)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .setInstanceId(instanceId)
+            .setState(MemberState.STABLE)
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1)))
+            .setRebalanceTimeoutMs(500)
+            .build();
+
         ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(newMemberId)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(0)
@@ -11283,8 +11532,7 @@ public class GroupMetadataManagerTest {
             .setClassicMemberMetadata(
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                     .setSessionTimeoutMs(request.sessionTimeoutMs())
-                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(request.protocols()))
-            )
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(request.protocols())))
             .build();
 
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
@@ -11293,10 +11541,13 @@ public class GroupMetadataManagerTest {
             CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId),
             CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId),
 
-            // Create the new static member.
-            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
+            // Replace the old static member by the new static member.
+            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedCopiedMember),
             CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, newMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1))),
-            CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId, 10),
+            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedCopiedMember),
+
+            // Updated the new static member.
+            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
             CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
         );
         assertRecordsEquals(expectedRecords, joinResult.records);
@@ -12728,7 +12979,7 @@ public class GroupMetadataManagerTest {
         // The member is fenced from the group.
         assertEquals(1, timeouts.size());
         MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
-        assertEquals(consumerGroupSessionTimeoutKey(groupId, memberId), timeout.key);
+        assertEquals(groupSessionTimeoutKey(groupId, memberId), timeout.key);
         assertRecordsEquals(
             Arrays.asList(
                 // The member is removed.
@@ -13209,6 +13460,394 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(Group.GroupType.CONSUMER, context.groupMetadataManager.group(groupId).type());
+    }
+
+    @Test
+    public void testShareGroupHeartbeatRequestValidation() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+        Exception ex;
+
+        // GroupId must be present in all requests.
+        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()));
+        assertEquals("GroupId can't be empty.", ex.getMessage());
+
+        // GroupId can't be all whitespaces.
+        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId("   ")));
+        assertEquals("GroupId can't be empty.", ex.getMessage());
+
+        // SubscribedTopicNames must be present and empty in the first request (epoch == 0).
+        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberEpoch(0)));
+        assertEquals("SubscribedTopicNames must be set in first request.", ex.getMessage());
+
+        // MemberId must be non-empty in all requests except for the first one where it
+        // could be empty (epoch != 0).
+        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberEpoch(1)));
+        assertEquals("MemberId can't be empty.", ex.getMessage());
+
+        // RackId must be non-empty if provided in all requests.
+        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberId(Uuid.randomUuid().toString())
+                .setMemberEpoch(1)
+                .setRackId("")));
+        assertEquals("RackId can't be empty.", ex.getMessage());
+    }
+
+    @Test
+    public void testShareGroupMemberIdGeneration() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .withMetadataImage(MetadataImage.EMPTY)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.emptyMap()
+        ));
+
+        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId("group-foo")
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+
+        // Verify that a member id was generated for the new member.
+        String memberId = result.response().memberId();
+        assertNotNull(memberId);
+        assertNotEquals("", memberId);
+
+        // The response should get a bumped epoch and should not
+        // contain any assignment because we did not provide
+        // topics metadata.
+        assertEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()),
+            result.response()
+        );
+    }
+
+    @Test
+    public void testShareGroupUnknownGroupId() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        assertThrows(IllegalStateException.class, () ->
+            context.shareGroupHeartbeat(
+                new ShareGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(100) // Epoch must be > 0.
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
+    }
+
+    @Test
+    public void testShareGroupUnknownMemberIdJoins() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(new NoOpPartitionAssignor())
+            .build();
+
+        // A first member joins to create the group.
+        context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+
+        // The second member is rejected because the member id is unknown and
+        // the member epoch is not zero.
+        assertThrows(UnknownMemberIdException.class, () ->
+            context.shareGroupHeartbeat(
+                new ShareGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(Uuid.randomUuid().toString())
+                    .setMemberEpoch(1)
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
+    }
+
+    @Test
+    public void testShareGroupMemberRejoinAfterFailover() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(new NoOpPartitionAssignor())
+            .build();
+
+        context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 100, GroupType.SHARE));
+
+        // Member is not known after the failover.
+        assertThrows(UnknownMemberIdException.class, () ->
+            context.shareGroupHeartbeat(
+                new ShareGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(100)
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
+
+        // Member joins with epoch 0 to re-join the group.
+        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+        assertEquals(101, result.response().memberEpoch());
+    }
+
+    @Test
+    public void testShareGroupMemberJoinsEmptyGroupWithAssignments() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
+                .build())
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 0, 1, 2)
+            )))
+        ));
+
+        assertThrows(GroupIdNotFoundException.class, () ->
+            context.groupMetadataManager.shareGroup(groupId));
+
+        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+
+        assertResponseEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(Arrays.asList(
+                        new ShareGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(Arrays.asList(0, 1, 2, 3, 4, 5)),
+                        new ShareGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(barTopicId)
+                            .setPartitions(Arrays.asList(0, 1, 2))
+                    ))),
+            result.response()
+        );
+
+        ShareGroupMember expectedMember = new ShareGroupMember.Builder(memberId)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .build();
+
+        List<CoordinatorRecord> expectedRecords = Arrays.asList(
+            CoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, expectedMember),
+            CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 1, GroupType.SHARE)
+        );
+
+        assertRecordsEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testShareGroupLeavingMemberBumpsGroupEpoch() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        // A share group cannot have pre-defined members and member metadata as members and assignments
+        // are not persisted.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.emptyMap()
+        ));
+
+        context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 100, GroupType.SHARE));
+
+        // Member 1 joins the group.
+        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+        assertEquals(101, result.response().memberEpoch());
+
+        // Member 2 joins the group.
+        result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+        assertEquals(102, result.response().memberEpoch());
+
+        // Member 2 leaves the consumer group.
+        result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+
+        assertResponseEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId2)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH),
+            result.response()
+        );
+
+        List<CoordinatorRecord> expectedRecords = Arrays.asList(
+            CoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord(groupId, memberId2),
+            CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 103, GroupType.SHARE)
+        );
+
+        assertRecordsEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testShareGroupNewMemberIsRejectedWithMaximumMembersIsReached() {
+        String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        // A share group cannot have pre-defined members and member metadata as members and assignments
+        // are not persisted.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .withShareGroupMaxSize(1)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.emptyMap()
+        ));
+
+        context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 100, GroupType.SHARE));
+
+        // Member 1 joins the group.
+        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+        assertEquals(101, result.response().memberEpoch());
+
+        // Member 2 joins the group.
+        assertThrows(GroupMaxSizeReachedException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
+    }
+
+    @Test
+    public void testShareGroupDelete() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.groupMetadataManager.getOrMaybeCreatePersistedShareGroup("share-group-id", true);
+
+        List<CoordinatorRecord> expectedRecords = Collections.singletonList(
+            CoordinatorRecordHelpers.newGroupEpochTombstoneRecord("share-group-id", GroupType.SHARE)
+        );
+        List<CoordinatorRecord> records = new ArrayList<>();
+        context.groupMetadataManager.createGroupTombstoneRecords("share-group-id", records);
+        assertEquals(expectedRecords, records);
+    }
+
+    @Test
+    public void testShareGroupStates() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share-range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.emptyMap()
+        ));
+
+        context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 10, GroupType.SHARE), GroupType.SHARE);
+
+        assertEquals(ShareGroup.ShareGroupState.EMPTY, context.shareGroupState(groupId));
+
+        context.replay(CoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, new ShareGroupMember.Builder(memberId1)
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
+            .build()), GroupType.SHARE);
+        context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11, GroupType.SHARE), GroupType.SHARE);
+
+        assertEquals(ShareGroup.ShareGroupState.STABLE, context.shareGroupState(groupId));
+
+        context.replay(CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, memberId1, mkAssignment(
+            mkTopicAssignment(fooTopicId, 1, 2, 3))), GroupType.SHARE);
+        context.replay(CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId, 11), GroupType.SHARE);
+
+        assertEquals(ShareGroup.ShareGroupState.STABLE, context.shareGroupState(groupId));
+
+        context.replay(CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, new ShareGroupMember.Builder(memberId1)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(10)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2)))
+            .build()), GroupType.SHARE);
+
+        assertEquals(ShareGroup.ShareGroupState.STABLE, context.shareGroupState(groupId));
+
+        context.replay(CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, new ShareGroupMember.Builder(memberId1)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(10)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2, 3)))
+            .build()), GroupType.SHARE);
+
+        assertEquals(ShareGroup.ShareGroupState.STABLE, context.shareGroupState(groupId));
     }
 
     private static void checkJoinGroupResponse(
