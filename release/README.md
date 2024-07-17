@@ -52,7 +52,7 @@ Then start the release script:
 python release.py
 ```
 
-Should you encounter some problem during the script re-running doesn't work look at the following steps:
+Should you encounter some problem, where re-running the script doesn't work, look at the following steps:
 
 - The script remembers data inputted previously if you need to correct it, it is saved under the
 `.release-settings.json` file in the `release` folder.
