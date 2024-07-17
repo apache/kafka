@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.server.common.KRaftVersion;
+
 import java.nio.file.Path;
 import java.util.Optional;
 
@@ -39,7 +41,7 @@ public interface QuorumStateStore {
      * @param latest the latest election state
      * @param kraftVersion the finalized kraft.version
      */
-    void writeElectionState(ElectionState latest, short kraftVersion);
+    void writeElectionState(ElectionState latest, KRaftVersion kraftVersion);
 
     /**
      * Path to the quorum state store

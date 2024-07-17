@@ -1663,6 +1663,16 @@ public final class Utils {
     }
 
     /**
+     * Checks requirement. Throw {@link IllegalArgumentException} if {@code requirement} failed.
+     * @param requirement Requirement to check.
+     * @param errorMessage String to include in the failure message
+     */
+    public static void require(boolean requirement, String errorMessage) {
+        if (!requirement)
+            throw new IllegalArgumentException(errorMessage);
+    }
+
+    /**
      * Merge multiple {@link ConfigDef} into one
      * @param configDefs List of {@link ConfigDef}
      */

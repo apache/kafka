@@ -72,6 +72,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.OFFSET_SYNCS_CLIENT_ROLE_PREFIX;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.OFFSET_SYNCS_TOPIC_CONFIG_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.SYNC_TOPIC_ACLS_ENABLED;
 import static org.apache.kafka.connect.mirror.MirrorUtils.SOURCE_CLUSTER_KEY;
 import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
@@ -104,7 +106,6 @@ public class MirrorSourceConnector extends SourceConnector {
     private int replicationFactor;
     private Admin sourceAdminClient;
     private Admin targetAdminClient;
-    private Admin offsetSyncsAdminClient;
     private volatile boolean useIncrementalAlterConfigs;
 
     public MirrorSourceConnector() {
@@ -161,7 +162,7 @@ public class MirrorSourceConnector extends SourceConnector {
         sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("replication-source-admin"));
         targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("replication-target-admin"));
         useIncrementalAlterConfigs =  !config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
-        offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig());
+
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
@@ -187,7 +188,6 @@ public class MirrorSourceConnector extends SourceConnector {
         Utils.closeQuietly(configPropertyFilter, "config property filter");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
-        Utils.closeQuietly(offsetSyncsAdminClient, "offset syncs admin client");
         log.info("Stopping {} took {} ms.", connectorName, System.currentTimeMillis() - start);
     }
 
@@ -234,6 +234,30 @@ public class MirrorSourceConnector extends SourceConnector {
     @Override
     public org.apache.kafka.common.config.Config validate(Map<String, String> props) {
         List<ConfigValue> configValues = super.validate(props).configValues();
+        validateExactlyOnceConfigs(props, configValues);
+        validateEmitOffsetSyncConfigs(props, configValues);
+
+        return new org.apache.kafka.common.config.Config(configValues);
+    }
+
+    private static void validateEmitOffsetSyncConfigs(Map<String, String> props, List<ConfigValue> configValues) {
+        boolean offsetSyncsConfigured = props.keySet().stream()
+                .anyMatch(conf -> conf.startsWith(OFFSET_SYNCS_CLIENT_ROLE_PREFIX) || conf.startsWith(OFFSET_SYNCS_TOPIC_CONFIG_PREFIX));
+
+        if ("false".equals(props.get(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED)) && offsetSyncsConfigured) {
+            ConfigValue emitOffsetSyncs = configValues.stream().filter(prop -> MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED.equals(prop.name()))
+                    .findAny()
+                    .orElseGet(() -> {
+                        ConfigValue result = new ConfigValue(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED);
+                        configValues.add(result);
+                        return result;
+                    });
+            emitOffsetSyncs.addErrorMessage("MirrorSourceConnector can't setup offset-syncs feature while " +
+                    MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED + " set to false");
+        }
+    }
+
+    private void validateExactlyOnceConfigs(Map<String, String> props, List<ConfigValue> configValues) {
         if ("required".equals(props.get(EXACTLY_ONCE_SUPPORT_CONFIG))) {
             if (!consumerUsesReadCommitted(props)) {
                 ConfigValue exactlyOnceSupport = configValues.stream()
@@ -256,7 +280,6 @@ public class MirrorSourceConnector extends SourceConnector {
                 );
             }
         }
-        return new org.apache.kafka.common.config.Config(configValues);
     }
 
     @Override
@@ -430,11 +453,15 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     private void createOffsetSyncsTopic() {
-        MirrorUtils.createSinglePartitionCompactedTopic(
-                config.offsetSyncsTopic(),
-                config.offsetSyncsTopicReplicationFactor(),
-                offsetSyncsAdminClient
-        );
+        if (config.emitOffsetSyncsEnabled()) {
+            try (Admin offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig())) {
+                MirrorUtils.createSinglePartitionCompactedTopic(
+                        config.offsetSyncsTopic(),
+                        config.offsetSyncsTopicReplicationFactor(),
+                        offsetSyncsAdminClient
+                );
+            }
+        }
     }
 
     void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {
