@@ -17,8 +17,7 @@
 
 package kafka.zk
 
-import org.apache.zookeeper.server.ZooKeeperServer
-import org.apache.zookeeper.server.NIOServerCnxnFactory
+import org.apache.zookeeper.server.{NIOServerCnxnFactory, SessionTrackerImpl, ZooKeeperServer}
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 
 import java.net.InetSocketAddress
@@ -53,6 +52,12 @@ class EmbeddedZookeeper extends Closeable with Logging {
   def shutdown(): Unit = {
     // Also shuts down ZooKeeperServer
     CoreUtils.swallow(factory.shutdown(), this)
+
+    val sessionTracker: SessionTrackerImpl = zookeeper.getSessionTracker.asInstanceOf[SessionTrackerImpl]
+    while (sessionTracker.isAlive) {
+      // wait sessionTracker close.
+      Thread.sleep(100)
+    }
 
     def isDown(): Boolean = {
       try {
