@@ -1602,11 +1602,8 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         // Rebalance will be triggered when the new config is detected
-        // TODO: This is still buggy; we're requesting a rebalance for a connector
-        //       that's already been assigned to us, which is clearly unnecessary.
-        //       We might consider tracking the offsets of records we've read from the
-        //       config topic and only triggering rebalances if we see something that's
-        //       greater than the offset included by the leader in the latest assignment
+        // This rebalance is unnecessary and only the result of a mostly-benign bug;
+        // see https://issues.apache.org/jira/browse/KAFKA-17155
         doNothing().when(member).requestRejoin();
 
         // Rebalance will be triggered when the new config is detected
