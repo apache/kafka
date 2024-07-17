@@ -44,6 +44,8 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -162,15 +164,13 @@ public class ProducerStateManagerCompatibilityTest {
 
     @Test
     public void testProducerSnapshotCompatibility() throws IOException {
-        ProducerStateEntry entry = new ProducerStateEntry(1L, (short) 2, 3, RecordBatch.NO_TIMESTAMP,
-                OptionalLong.of(100L), Optional.of(new BatchMetadata(1, 2L, 3, RecordBatch.NO_TIMESTAMP)));
-        ProducerStateEntry entryWithOptionalEmpty = new ProducerStateEntry(11L, (short) 12, 13, 123456L,
-                OptionalLong.empty(), Optional.empty());
-        Map<Long, ProducerStateEntry> entryMap = new HashMap<>();
-        entryMap.put(1L, entry);
-        entryMap.put(11L, entryWithOptionalEmpty);
+        Map<Long, ProducerStateEntry> expectedEntryMap = new HashMap<>();
+        expectedEntryMap.put(1L, new ProducerStateEntry(1L, (short) 2, 3, RecordBatch.NO_TIMESTAMP,
+                OptionalLong.of(100L), Optional.of(new BatchMetadata(1, 2L, 3, RecordBatch.NO_TIMESTAMP))));
+        expectedEntryMap.put(11L, new ProducerStateEntry(11L, (short) 12, 13, 123456L,
+                OptionalLong.empty(), Optional.empty()));
 
-        BiConsumer<ProducerStateEntry, ProducerStateEntry> assertProducerStateEntry = (actual, expected) -> {
+        BiConsumer<ProducerStateEntry, ProducerStateEntry> assertProducerStateEntry = (expected, actual) -> {
             assertEquals(expected.producerId(), actual.producerId());
             assertEquals(expected.producerEpoch(), actual.producerEpoch());
             assertEquals(expected.coordinatorEpoch(), actual.coordinatorEpoch());
@@ -180,23 +180,17 @@ public class ProducerStateManagerCompatibilityTest {
         };
 
         Consumer<List<ProducerStateEntry>> assertEntries = actual -> {
-            assertEquals(actual.size(), 2);
-            ProducerStateEntry actualEntry =
-                    actual.stream().filter(e -> e.producerId() == entry.producerId())
-                            .findAny().orElseThrow(() -> new IllegalArgumentException("entry not found"));
-            ProducerStateEntry actualEntryWithOptionalEmpty =
-                    actual.stream().filter(e -> e.producerId() == entryWithOptionalEmpty.producerId())
-                            .findAny().orElseThrow(() -> new IllegalArgumentException("entry not found"));
-            assertProducerStateEntry.accept(entry, actualEntry);
-            assertProducerStateEntry.accept(entryWithOptionalEmpty, actualEntryWithOptionalEmpty);
+            Map<Long, ProducerStateEntry> actualEntryMap =
+                    actual.stream().collect(Collectors.toMap(ProducerStateEntry::producerId, Function.identity()));
+            expectedEntryMap.forEach((key, value) -> assertProducerStateEntry.accept(value, actualEntryMap.get(key)));
         };
 
         File tmpDir = TestUtils.tempDirectory();
         try {
             File oldImpl = new File(tmpDir, "old_impl");
-            writeSnapshot(oldImpl, entryMap, true);
+            writeSnapshot(oldImpl, expectedEntryMap, true);
             File newImpl = new File(tmpDir, "new_impl");
-            ProducerStateManager.writeSnapshot(newImpl, entryMap, true);
+            ProducerStateManager.writeSnapshot(newImpl, expectedEntryMap, true);
             // check bytes in files in old and new implementation are the same
             assertArrayEquals(Files.readAllBytes(oldImpl.toPath()), Files.readAllBytes(newImpl.toPath()));
 
