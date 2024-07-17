@@ -1192,7 +1192,7 @@ class ProducerStateManagerTest {
       }
     }
 
-    def assertProducerStateEntry(actual: ProducerStateEntry, expected: ProducerStateEntry): Unit = {
+    def assertProducerStateEntry(expected: ProducerStateEntry, actual: ProducerStateEntry): Unit = {
       assertEquals(expected.producerId(), actual.producerId())
       assertEquals(expected.producerEpoch(), actual.producerEpoch())
       assertEquals(expected.coordinatorEpoch(), actual.coordinatorEpoch())
