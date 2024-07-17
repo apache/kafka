@@ -1652,7 +1652,6 @@ public final class RaftClientTestContext {
         }
     }
 
-
     private short raftRequestVersion(ApiMessage request) {
         if (request instanceof FetchRequestData) {
             return fetchRpcVersion();

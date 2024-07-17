@@ -56,14 +56,14 @@ public final class AddVoterHandlerState implements AutoCloseable {
     public void setLastOffset(long lastOffset) {
         if (this.lastOffset.isPresent()) {
             throw new IllegalStateException(
-                    String.format(
-                        "Cannot override last offset to %s for adding voter %s because it is " +
-                        "already set to %s",
-                        lastOffset,
-                        voterKey,
-                        this.lastOffset
-                        )
-                    );
+                String.format(
+                    "Cannot override last offset to %s for adding voter %s because it is " +
+                    "already set to %s",
+                    lastOffset,
+                    voterKey,
+                    this.lastOffset
+                )
+            );
         }
 
         this.lastOffset = OptionalLong.of(lastOffset);

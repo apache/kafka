@@ -39,29 +39,30 @@ import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * This type implement the protocol for adding a voter to a KRaft partition.
+ * This type implements the protocol for adding a voter to a KRaft partition.
  *
  * The general algorithm for adding a voter to the voter set is:
  *
- * 1. Wait until there are no uncommitted VotersRecord. Note that the implementation may just
- *    return a REQUEST_TIMED_OUT error if there are pending operations.
- * 2. Wait for the LeaderChangeMessage control record from the current epoch to get committed.
- *    Note that the implementation may just return a REQUEST_TIMED_OUT error if there are pending
- *    operations.
- * 3. Send an ApiVersions RPC to the first listener to discover the supported kraft.version of the
- *    new voter.
- * 4. Check that the new voter supports the current kraft.version.
- * 5. Wait for the fetch offset of the replica (ID, UUID) to catch up to the log end offset of
- *    the leader.
- * 6. Append the updated VotersRecord to the log.
- * 7. The KRaft internal listener will read this record from the log and add the new voter to the
- *    set of voters.
- * 8. Wait for the VotersRecord to commit using the majority of the new set of voters. Return a
- *    REQUEST_TIMED_OUT error if it doesn't succeed in time.
- * 9. Send the AddVoter response to the client.
+ * 1. Check that the leader has fenced the previous leader(s) by checking that the HWM is known,
+ *    otherwise return the REQUEST_TIMED_OUT error.
+ * 2. Check that the cluster supports kraft.version 1, otherwise return the UNSUPPORTED_VERSION error.
+ * 3. Check that there are no uncommitted voter changes, otherwise return the REQUEST_TIMED_OUT error.
+ * 4. Check that the new voter's id is not part of the existing voter set, otherwise return the
+ *    DUPLICATE_VOTER error.
+ * 5. Send an API_VERSIONS RPC to the first (default) listener to discover the supported
+ *    kraft.version of the new voter.
+ * 6. Check that the new voter supports the current kraft.version, otherwise return the
+ *    INVALID_REQUEST error.
+ * 7. Check that the new voter is caught up to the log end offset of the leader, otherwise return
+ *    a REQUEST_TIMED_OUT error.
+ * 8. Append the updated VotersRecord to the log. The KRaft internal listener will read this
+ *    uncommitted record from the log and add the new voter to the set of voters.
+ * 9. Wait for the VotersRecord to commit using the majority of the new set of voters. Return a
+ *    REQUEST_TIMED_OUT error if it doesn't commit in time.
+ * 10. Send the AddVoter successful response to the client.
  *
  * The algorithm above could be improved as part of KAFKA-17147. Instead of returning an error
- * immediately for 1. and 2., KRaft can wait with a timeout until those invariants become true.
+ * immediately for 1., 2. and 7., KRaft can wait with a timeout until those invariants are true.
  */
 public final class AddVoterHandler {
     private final KRaftControlRecordStateMachine partitionState;

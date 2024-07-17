@@ -752,16 +752,17 @@ public class KafkaRaftClientReconfigTest {
 
         // Handle the the API_VERSIONS response
         context.client.poll();
-        // Append new VotersRecord to log
-        context.client.poll();
-        // The new voter is now a voter after writing the VotersRecord to the log
-        assertTrue(context.client.quorum().isVoter(newVoter));
 
+        // Wait for request timeout without sending a FETCH request to timeout the add voter RPC
         context.time.sleep(context.requestTimeoutMs());
 
         // Expect the AddVoter RPC to timeout
         context.pollUntilResponse();
         context.assertSentAddVoterResponse(Errors.REQUEST_TIMED_OUT);
+
+        // Event though the voters record never committed and the RPC timeout show that the new
+        // voter is part of the voter set
+        assertTrue(context.client.quorum().isVoter(newVoter));
     }
 
     @Test
@@ -935,6 +936,93 @@ public class KafkaRaftClientReconfigTest {
         );
         context.pollUntilResponse();
         context.assertSentAddVoterResponse(Errors.REQUEST_TIMED_OUT);
+    }
+
+    @Test
+    void testAddVoterFailsWhenLosingLeadership() throws Exception {
+        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        ReplicaKey newVoter = replicaKey(local.id() + 2, true);
+        InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
+            "localhost",
+            9990 + newVoter.id()
+        );
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+            Collections.singletonMap(context.channel.listenerName(), newAddress)
+        );
+
+        // Establish a HWM and fence previous leaders
+        context.deliverRequest(
+            context.fetchRequest(epoch, follower, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+
+        // Attempt to add new voter to the quorum
+        context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
+
+        // Leader should send an API_VERSIONS request to the new voter's endpoint
+        context.pollUntilRequest();
+        RaftRequest.Outbound apiVersionRequest = context.assertSentApiVersionsRequest();
+        assertEquals(
+            new Node(newVoter.id(), newAddress.getHostString(), newAddress.getPort()),
+            apiVersionRequest.destination()
+        );
+
+        // Leader completes the AddVoter RPC when resigning
+        context.client.resign(epoch);
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.NOT_LEADER_OR_FOLLOWER);
+    }
+
+    @Test
+    void testAddVoterWithMissingDirectoryId() throws Exception {
+        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        ReplicaKey newVoter = replicaKey(local.id() + 2, false);
+        InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
+            "localhost",
+            9990 + newVoter.id()
+        );
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+            Collections.singletonMap(context.channel.listenerName(), newAddress)
+        );
+
+        // Establish a HWM and fence previous leaders
+        context.deliverRequest(
+            context.fetchRequest(epoch, follower, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+
+        // Attempt to add new voter to the quorum
+        context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.INVALID_REQUEST);
     }
 
     private static void verifyVotersRecord(

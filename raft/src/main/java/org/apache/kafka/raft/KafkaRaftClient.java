@@ -201,7 +201,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private volatile QuorumState quorum;
     private volatile RequestManager requestManager;
 
-    // Specialized handles
+    // Specialized handlers
     private volatile AddVoterHandler addVoterHandler;
 
     /**
@@ -341,7 +341,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             logger.debug("Leader high watermark updated to {}", highWatermark);
             log.updateHighWatermark(highWatermark);
 
-            // Notify the add voter handler that the HWM has been updated incase there are add
+            // Notify the add voter handler that the HWM has been updated in case there are add
             // voter request that need to be completed
             addVoterHandler.highWatermarkUpdated(state);
 
@@ -360,30 +360,23 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private void updateListenersProgress(long highWatermark) {
         for (ListenerContext listenerContext : listenerContexts.values()) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
-                // Send snapshot to the listener, if the listener is at the beginning of the log and there is a snapshot,
-                // or the listener is trying to read an offset for which there isn't a segment in the log.
+                // Send snapshot to the listener, if there is a snapshot for the partition,
+                // and it is a new listener or
+                // the listener is trying to read an offset for which there isn't a segment in the log.
                 if (nextExpectedOffset < highWatermark &&
                     ((nextExpectedOffset == ListenerContext.STARTING_NEXT_OFFSET || nextExpectedOffset < log.startOffset())
                      && latestSnapshot().isPresent())
                 ) {
-                    SnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> new IllegalStateException(
-                        String.format(
-                            "Snapshot expected since next offset of %s is %d, log start offset is %d and high-watermark is %d",
-                            listenerContext.listenerName(),
-                            nextExpectedOffset,
-                            log.startOffset(),
-                            highWatermark
-                        )
-                    ));
-                    listenerContext.fireHandleSnapshot(snapshot);
+                    listenerContext.fireHandleSnapshot(latestSnapshot().get());
                 } else if (nextExpectedOffset == ListenerContext.STARTING_NEXT_OFFSET) {
                     // Reset the next offset to 0 since it is a new listener context and there is no
                     // bootstraping checkpoint
-                    listenerContext.resetOffsetForEmptyPartition();
+                    listenerContext.resetOffsetToLogStart();
                 } else if (nextExpectedOffset < log.startOffset()) {
                     throw new IllegalStateException(
                         String.format(
-                            "Snapshot expected since next offset of %s is %d, log start offset is %d and high-watermark is %d",
+                            "Snapshot expected since next offset of %s is %d, log start offset " +
+                            "is %d and high-watermark is %d",
                             listenerContext.listenerName(),
                             nextExpectedOffset,
                             log.startOffset(),
@@ -2029,7 +2022,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         Optional<ReplicaKey> newVoter = RaftUtil.addVoterRequestVoterKey(data);
-        if (!newVoter.isPresent()) {
+        if (!newVoter.isPresent() || !newVoter.get().directoryId().isPresent()) {
             return completedFuture(
                 new AddRaftVoterResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
@@ -3313,7 +3306,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
          *
          * This is done when the partition is empty. No log and no bootstraping snapshot.
          */
-        private synchronized void resetOffsetForEmptyPartition() {
+        private synchronized void resetOffsetToLogStart() {
             nextOffset = 0;
         }
 

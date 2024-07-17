@@ -558,6 +558,11 @@ public class QuorumState {
     }
 
     private void durableTransitionTo(EpochState newState) {
+        store.writeElectionState(newState.election(), partitionState.lastKraftVersion());
+        memoryTransitionTo(newState);
+    }
+
+    private void memoryTransitionTo(EpochState newState) {
         if (state != null) {
             try {
                 state.close();
@@ -567,11 +572,6 @@ public class QuorumState {
             }
         }
 
-        store.writeElectionState(newState.election(), partitionState.lastKraftVersion());
-        memoryTransitionTo(newState);
-    }
-
-    private void memoryTransitionTo(EpochState newState) {
         EpochState from = state;
         state = newState;
         log.info("Completed transition to {} from {}", newState, from);
