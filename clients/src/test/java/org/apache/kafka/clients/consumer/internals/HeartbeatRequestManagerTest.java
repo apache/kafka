@@ -277,7 +277,6 @@ public class HeartbeatRequestManagerTest {
         // Member in state where it should not send Heartbeat anymore
         when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
-        membershipManager.transitionToFatal();
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
     }
