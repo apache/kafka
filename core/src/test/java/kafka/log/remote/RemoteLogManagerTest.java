@@ -691,7 +691,7 @@ public class RemoteLogManagerTest {
     void testLeadershipChangesWithoutRemoteLogManagerConfiguring() {
         assertThrows(KafkaException.class, () -> {
             remoteLogManager.onLeadershipChange(
-                Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+                Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds, false, false);
         }, "RemoteLogManager is not configured when remote storage system is enabled");
     }
 
@@ -783,7 +783,7 @@ public class RemoteLogManagerTest {
         assertEquals(0, safeLongYammerMetricValue("RemoteLogSizeBytes,topic=" + leaderTopic));
         assertEquals(0, safeLongYammerMetricValue("RemoteLogMetadataCount"));
         assertEquals(0, safeLongYammerMetricValue("RemoteLogSizeBytes"));
-        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds);
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds, false, false);
         assertTrue((double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent") < 1.0);
 
         copyLogSegmentLatch.countDown();
@@ -892,7 +892,7 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 2)).thenReturn(metadataList.iterator());
 
         // leadership change to log in dir1
-        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.emptySet(), topicIds);
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.emptySet(), topicIds, false, false);
 
         TestUtils.waitForCondition(() -> {
             ArgumentCaptor<Long> argument = ArgumentCaptor.forClass(Long.class);
@@ -909,7 +909,7 @@ public class RemoteLogManagerTest {
         when(mockLog.config()).thenReturn(logConfig);
         when(mockLog.logEndOffset()).thenReturn(500L);
 
-        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.emptySet(), topicIds);
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.emptySet(), topicIds, false, false);
 
         // after copyLogSegment completes for log (in dir1), updateHighestOffsetInRemoteStorage will be triggered with new offset
         // even though the leader replica has changed to log in dir2
@@ -1045,7 +1045,7 @@ public class RemoteLogManagerTest {
         assertEquals(0L, yammerMetricValue("RemoteCopyLagSegments"));
         assertEquals(0L, yammerMetricValue("RemoteLogSizeComputationTime"));
 
-        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.emptySet(), topicIds);
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.emptySet(), topicIds, false, false);
         TestUtils.waitForCondition(
                 () -> 75 == safeLongYammerMetricValue("RemoteCopyLagBytes") && 75 == safeLongYammerMetricValue("RemoteCopyLagBytes,topic=" + leaderTopic),
                 String.format("Expected to find 75 for RemoteCopyLagBytes metric value, but found %d for topic 'Leader' and %d for all topics.",
@@ -1303,7 +1303,7 @@ public class RemoteLogManagerTest {
             .thenReturn(Optional.empty());
         verifyNotInCache(followerTopicIdPartition, leaderTopicIdPartition);
         // Load topicId cache
-        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds);
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds, false, false);
         verify(remoteLogMetadataManager, times(1))
             .onPartitionLeadershipChanges(Collections.singleton(leaderTopicIdPartition), Collections.singleton(followerTopicIdPartition));
         verifyInCache(followerTopicIdPartition, leaderTopicIdPartition);
@@ -1322,7 +1322,7 @@ public class RemoteLogManagerTest {
     void testFetchRemoteLogSegmentMetadata() throws RemoteStorageException {
         remoteLogManager.startup();
         remoteLogManager.onLeadershipChange(
-            Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+            Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds, false, false);
         remoteLogManager.fetchRemoteLogSegmentMetadata(leaderTopicIdPartition.topicPartition(), 10, 100L);
         remoteLogManager.fetchRemoteLogSegmentMetadata(followerTopicIdPartition.topicPartition(), 20, 200L);
 
@@ -1337,13 +1337,13 @@ public class RemoteLogManagerTest {
         remoteLogManager.startup();
         RemoteLogManager spyRemoteLogManager = spy(remoteLogManager);
         spyRemoteLogManager.onLeadershipChange(
-            Collections.emptySet(), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+            Collections.emptySet(), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds, false, false);
         verify(spyRemoteLogManager).doHandleFollowerPartition(eq(followerTopicIdPartition));
 
         Mockito.reset(spyRemoteLogManager);
 
         spyRemoteLogManager.onLeadershipChange(
-            Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
+            Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds, false, false);
         verify(spyRemoteLogManager).doHandleLeaderPartition(eq(leaderTopicIdPartition));
     }
 
@@ -1503,7 +1503,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.logEndOffset()).thenReturn(600L);
 
-        remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds, false, false);
     }
 
     @Test
@@ -1840,7 +1840,7 @@ public class RemoteLogManagerTest {
         partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, false));
         partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, false));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
-                Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+                Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds, false, false);
         assertNotNull(remoteLogManager.leaderCopyTask(leaderTopicIdPartition));
         assertNotNull(remoteLogManager.leaderExpirationTask(leaderTopicIdPartition));
         assertNotNull(remoteLogManager.followerTask(followerTopicIdPartition));
@@ -1863,7 +1863,7 @@ public class RemoteLogManagerTest {
         partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, true));
         partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, true));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
-                Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+                Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds, false, false);
         assertNotNull(remoteLogManager.leaderCopyTask(leaderTopicIdPartition));
         assertNotNull(remoteLogManager.leaderExpirationTask(leaderTopicIdPartition));
         assertNotNull(remoteLogManager.followerTask(followerTopicIdPartition));
@@ -3021,7 +3021,7 @@ public class RemoteLogManagerTest {
         remoteLogManager.startup();
         setupRLMTask(true);
         remoteLogManager.onLeadershipChange(
-            Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
+            Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds, false, false);
         // Ensure the copy operation is waiting for quota to be available
         TestUtils.waitForCondition(() -> {
             verify(rlmCopyQuotaManager, atLeast(1)).getThrottleTimeMs();
@@ -3182,7 +3182,7 @@ public class RemoteLogManagerTest {
     public void testTierLagResetsToZeroOnBecomingFollower() {
         remoteLogManager.startup();
         remoteLogManager.onLeadershipChange(
-                Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
+                Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds, false, false);
         RemoteLogManager.RLMCopyTask rlmTask = (RemoteLogManager.RLMCopyTask) remoteLogManager.rlmCopyTask(leaderTopicIdPartition);
         assertNotNull(rlmTask);
         rlmTask.recordLagStats(1024, 2);
@@ -3190,7 +3190,7 @@ public class RemoteLogManagerTest {
         assertEquals(2, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagSegments());
         // The same node becomes follower now which was the previous leader
         remoteLogManager.onLeadershipChange(Collections.emptySet(),
-                Collections.singleton(mockPartition(leaderTopicIdPartition)), topicIds);
+                Collections.singleton(mockPartition(leaderTopicIdPartition)), topicIds, false, false);
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagBytes());
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagSegments());
 

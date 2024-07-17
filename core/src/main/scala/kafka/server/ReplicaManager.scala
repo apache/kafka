@@ -2064,7 +2064,7 @@ class ReplicaManager(val config: KafkaConfig,
           replicaFetcherManager.shutdownIdleFetcherThreads()
           replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
 
-          remoteLogManager.foreach(rlm => rlm.onLeadershipChange(partitionsBecomeLeader.asJava, partitionsBecomeFollower.asJava, topicIds))
+          remoteLogManager.foreach(rlm => rlm.onLeadershipChange(partitionsBecomeLeader.asJava, partitionsBecomeFollower.asJava, topicIds, false, false))
 
           onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
 
@@ -2765,10 +2765,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         val isTieredStateEnabled = getLogConfig(localChanges.deletes.asScala.head).get.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG)
 
-        remoteLogManager.foreach(rlm => {
-          rlm.validateCopyAndExpireTasks(isTieredStateEnabled, leaderChangedPartitions.asJava, localChanges.topicIds())
-          rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds())
-        })
+        remoteLogManager.foreach(rlm => rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds(), true, isTieredStateEnabled))
       }
 
       if (metadataVersion.isDirectoryAssignmentSupported) {

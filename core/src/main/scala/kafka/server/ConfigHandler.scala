@@ -84,7 +84,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
         logs.flatMap(log => replicaManager.onlinePartition(log.topicPartition)).partition(_.isLeader)
       val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
       replicaManager.remoteLogManager.foreach(rlm =>
-        rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
+        rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds, false, false))
     } else if (wasRemoteLogEnabledBeforeUpdate && !isRemoteLogEnabled) {
       warn(s"Disabling remote log on the topic: $topic is not supported.")
     }

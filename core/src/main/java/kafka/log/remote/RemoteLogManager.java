@@ -433,10 +433,13 @@ public class RemoteLogManager implements Closeable {
      * @param partitionsBecomeLeader   partitions that have become leaders on this broker.
      * @param partitionsBecomeFollower partitions that have become followers on this broker.
      * @param topicIds                 topic name to topic id mappings.
+     * @param tieredStateOfTopic       tiered state of a topic if enabled or disabled.
      */
     public void onLeadershipChange(Set<Partition> partitionsBecomeLeader,
                                    Set<Partition> partitionsBecomeFollower,
-                                   Map<String, Uuid> topicIds) {
+                                   Map<String, Uuid> topicIds,
+                                   boolean validateTasksForTieredStateOfTopic,
+                                   boolean tieredStateOfTopic) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
         if (rlmConfig.isRemoteStorageSystemEnabled() && !isRemoteLogManagerConfigured()) {
@@ -464,48 +467,12 @@ public class RemoteLogManager implements Closeable {
             followerPartitions.forEach(this::removeRemoteTopicPartitionMetrics);
 
             leaderPartitions.forEach(this::doHandleLeaderPartition);
-        }
-    }
 
-    /**
-     * Based on tiered state of a topic, cancel or create "copy" and "expire" tasks
-     *
-     * @param tieredStateOfTopicEnabled  tiered state of a topic if enabled or disabled
-     * @param partitionsBecomeLeader   partitions that have become leaders on this broker.
-     * @param topicIds                 topic name to topic id mappings.
-     */
-    public void validateCopyAndExpireTasks(boolean tieredStateOfTopicEnabled, Set<Partition> partitionsBecomeLeader,
-                                           Map<String, Uuid> topicIds) {
-        Map<TopicIdPartition, Integer> leaderPartitionsWithLeaderEpoch = filterPartitions(partitionsBecomeLeader)
-            .collect(Collectors.toMap(
-                partition -> new TopicIdPartition(topicIds.get(partition.topic()), partition.topicPartition()),
-                Partition::getLeaderEpoch));
-        Set<TopicIdPartition> leaderPartitions = leaderPartitionsWithLeaderEpoch.keySet();
-        leaderPartitions.forEach(leaderPartition -> {
-            if(tieredStateOfTopicEnabled) {
-                // make sure a copy task is available
-                leaderCopyRLMTasks.computeIfAbsent(leaderPartition, topicIdPartition -> {
-                    RLMCopyTask task = new RLMCopyTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxBytes());
-                    // set this upfront when it is getting initialized instead of doing it after scheduling.
-                    LOGGER.info("Created a new copy task: {} and getting scheduled", task);
-                    ScheduledFuture<?> future = rlmCopyThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
-                    return new RLMTaskWithFuture(task, future);
-                });
-            } else {
-                // make sure no copy task exists
-                leaderCopyRLMTasks.computeIfPresent(leaderPartition, (topicIdPartition, task) -> {
-                    LOGGER.info("Cancelling the copy RLM task for tpId: {}", leaderPartition);
-                    task.cancel();
-                    return null;
-                });
+            // Based on tiered state of a topic, cancel or create "copy" and "expire" tasks
+            if(validateTasksForTieredStateOfTopic) {
+                leaderPartitions.forEach(leaderPartition -> validateCopyAndExpireTasks(leaderPartition, tieredStateOfTopic));
             }
-            leaderExpirationRLMTasks.computeIfAbsent(leaderPartition, topicIdPartition -> {
-                RLMExpirationTask task = new RLMExpirationTask(topicIdPartition);
-                LOGGER.info("Created a new expiration task: {} and getting scheduled", task);
-                ScheduledFuture<?> future = rlmExpirationThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
-                return new RLMTaskWithFuture(task, future);
-            });
-        });
+        }
     }
 
     /**
@@ -1839,6 +1806,32 @@ public class RemoteLogManager implements Closeable {
     public Future<Void> asyncRead(RemoteStorageFetchInfo fetchInfo, Consumer<RemoteLogReadResult> callback) {
         return remoteStorageReaderThreadPool.submit(
                 new RemoteLogReader(fetchInfo, this, callback, brokerTopicStats, rlmFetchQuotaManager, remoteReadTimer));
+    }
+
+    void validateCopyAndExpireTasks(TopicIdPartition topicPartition, boolean tieredStateOfTopic) {
+        if(tieredStateOfTopic) {
+            // make sure a copy task is available
+            leaderCopyRLMTasks.computeIfAbsent(topicPartition, topicIdPartition -> {
+                RLMCopyTask task = new RLMCopyTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxBytes());
+                // set this upfront when it is getting initialized instead of doing it after scheduling.
+                LOGGER.info("Created a new copy task: {} and getting scheduled", task);
+                ScheduledFuture<?> future = rlmCopyThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
+                return new RLMTaskWithFuture(task, future);
+            });
+        } else {
+            // make sure no copy task exists
+            leaderCopyRLMTasks.computeIfPresent(topicPartition, (topicIdPartition, task) -> {
+                LOGGER.info("Cancelling the copy RLM task for tpId: {}", topicPartition);
+                task.cancel();
+                return null;
+            });
+        }
+        leaderExpirationRLMTasks.computeIfAbsent(topicPartition, topicIdPartition -> {
+            RLMExpirationTask task = new RLMExpirationTask(topicIdPartition);
+            LOGGER.info("Created a new expiration task: {} and getting scheduled", task);
+            ScheduledFuture<?> future = rlmExpirationThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
+            return new RLMTaskWithFuture(task, future);
+        });
     }
 
     void doHandleLeaderPartition(TopicIdPartition topicPartition) {
