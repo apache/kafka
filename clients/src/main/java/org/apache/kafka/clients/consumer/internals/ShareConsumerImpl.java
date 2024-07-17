@@ -298,6 +298,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                     logContext,
                     metadata,
+                    subscriptions,
                     requestManagersSupplier
             );
 
@@ -398,6 +399,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
                 metadata,
+                subscriptions,
                 requestManagersSupplier
         );
 
