@@ -468,6 +468,47 @@ public class RemoteLogManager implements Closeable {
     }
 
     /**
+     * Based on tiered state of a topic, cancel or create "copy" and "expire" tasks
+     *
+     * @param tieredStateOfTopicEnabled  tiered state of a topic if enabled or disabled
+     * @param partitionsBecomeLeader   partitions that have become leaders on this broker.
+     * @param topicIds                 topic name to topic id mappings.
+     */
+    public void validateCopyAndExpireTasks(boolean tieredStateOfTopicEnabled, Set<Partition> partitionsBecomeLeader,
+                                           Map<String, Uuid> topicIds) {
+        Map<TopicIdPartition, Integer> leaderPartitionsWithLeaderEpoch = filterPartitions(partitionsBecomeLeader)
+            .collect(Collectors.toMap(
+                partition -> new TopicIdPartition(topicIds.get(partition.topic()), partition.topicPartition()),
+                Partition::getLeaderEpoch));
+        Set<TopicIdPartition> leaderPartitions = leaderPartitionsWithLeaderEpoch.keySet();
+        leaderPartitions.forEach(leaderPartition -> {
+            if(tieredStateOfTopicEnabled) {
+                // make sure a copy task is available
+                leaderCopyRLMTasks.computeIfAbsent(leaderPartition, topicIdPartition -> {
+                    RLMCopyTask task = new RLMCopyTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxBytes());
+                    // set this upfront when it is getting initialized instead of doing it after scheduling.
+                    LOGGER.info("Created a new copy task: {} and getting scheduled", task);
+                    ScheduledFuture<?> future = rlmCopyThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
+                    return new RLMTaskWithFuture(task, future);
+                });
+            } else {
+                // make sure no copy task exists
+                leaderCopyRLMTasks.computeIfPresent(leaderPartition, (topicIdPartition, task) -> {
+                    LOGGER.info("Cancelling the copy RLM task for tpId: {}", leaderPartition);
+                    task.cancel();
+                    return null;
+                });
+            }
+            leaderExpirationRLMTasks.computeIfAbsent(leaderPartition, topicIdPartition -> {
+                RLMExpirationTask task = new RLMExpirationTask(topicIdPartition);
+                LOGGER.info("Created a new expiration task: {} and getting scheduled", task);
+                ScheduledFuture<?> future = rlmExpirationThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
+                return new RLMTaskWithFuture(task, future);
+            });
+        });
+    }
+
+    /**
      * Stop the remote-log-manager task for the given partitions. And, calls the
      * {@link RemoteLogMetadataManager#onStopPartitions(Set)} when {@link StopPartition#deleteLocalLog()} is true.
      * Deletes the partitions from the remote storage when {@link StopPartition#deleteRemoteLog()} is true.

@@ -30,6 +30,7 @@ import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
@@ -2762,7 +2763,12 @@ class ReplicaManager(val config: KafkaConfig,
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
 
-        remoteLogManager.foreach(rlm => rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds()))
+        val isTieredStateEnabled = getLogConfig(localChanges.deletes.asScala.head).get.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG)
+
+        remoteLogManager.foreach(rlm => {
+          rlm.validateCopyAndExpireTasks(isTieredStateEnabled, leaderChangedPartitions.asJava, localChanges.topicIds())
+          rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds())
+        })
       }
 
       if (metadataVersion.isDirectoryAssignmentSupported) {
