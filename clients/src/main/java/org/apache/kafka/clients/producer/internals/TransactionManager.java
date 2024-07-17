@@ -277,12 +277,10 @@ public class TransactionManager {
         shouldPoisonStateOnInvalidTransition.set(shouldPoisonState);
     }
 
-    // TODO: from here
     public synchronized TransactionalRequestResult initializeTransactions() {
         return initializeTransactions(ProducerIdAndEpoch.NONE);
     }
 
-    // may want to check this method to see if it is being invoked the same # of times and with the same code path
     synchronized TransactionalRequestResult initializeTransactions(ProducerIdAndEpoch producerIdAndEpoch) {
         maybeFailWithError();
 
@@ -291,9 +289,9 @@ public class TransactionManager {
             // If this is an epoch bump, we will transition the state as part of handling the EndTxnRequest
             if (!isEpochBump) {
                 transitionTo(State.INITIALIZING);
-                log.warn("Invoking InitProducerId for the first time in order to acquire a producer ID");
+                log.info("Invoking InitProducerId for the first time in order to acquire a producer ID");
             } else {
-                log.warn("Invoking InitProducerId with current producer ID and epoch {} in order to bump the epoch", producerIdAndEpoch);
+                log.info("Invoking InitProducerId with current producer ID and epoch {} in order to bump the epoch", producerIdAndEpoch);
             }
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
                     .setTransactionalId(transactionalId)
@@ -358,7 +356,6 @@ public class TransactionManager {
 
         return initializeTransactions(this.producerIdAndEpoch);
     }
-    // TODO: to here
 
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                                                             final ConsumerGroupMetadata groupMetadata) {
