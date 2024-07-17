@@ -31,9 +31,9 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidPidMappingException, TransactionalIdNotFoundException}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
-import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -136,6 +136,9 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     producer.beginTransaction()
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "3", "3", willBeCommitted = true))
+
+    // Producer IDs should be retained.
+    assertTrue(producerState.size() > 0)
 
     producer.commitTransaction()
 
