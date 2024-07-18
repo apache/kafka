@@ -404,12 +404,6 @@ class ControllerApis(
       }
     }
 
-    /* The cluster metadata topic is an internal topic with a different implementation. The user should not be
-     * allowed to create it as a regular topic.
-     */
-    if (topicNames.contains(Topic.CLUSTER_METADATA_TOPIC_NAME)) {
-      info(s"Rejecting creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME}")
-    }
     val allowedTopicNames = topicNames.asScala.diff(Set(Topic.CLUSTER_METADATA_TOPIC_NAME))
 
     val authorizedTopicNames = if (hasClusterAuth) {
@@ -435,7 +429,12 @@ class ControllerApis(
           setErrorMessage("Duplicate topic name."))
       }
       topicNames.forEach { name =>
-        if (!authorizedTopicNames.contains(name)) {
+        if (name == Topic.CLUSTER_METADATA_TOPIC_NAME) {
+          response.topics().add(new CreatableTopicResult().
+            setName(name).
+            setErrorCode(INVALID_REQUEST.code).
+            setErrorMessage(s"Creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME} is prohibited."))
+        } else if (!authorizedTopicNames.contains(name)) {
           response.topics().add(new CreatableTopicResult().
             setName(name).
             setErrorCode(TOPIC_AUTHORIZATION_FAILED.code).
