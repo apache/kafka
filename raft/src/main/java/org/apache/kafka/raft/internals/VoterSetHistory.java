@@ -93,6 +93,13 @@ public final class VoterSetHistory {
     }
 
     /**
+     * Return the latest entry for the set of voters.
+     */
+    public Optional<LogHistory.Entry<VoterSet>> lastEntry() {
+        return votersHistory.lastEntry();
+    }
+
+    /**
      * Returns the offset of the last voter set stored in the partition history.
      *
      * Returns {@code OptionalLong.empty} if the last voter set is from the static voters
