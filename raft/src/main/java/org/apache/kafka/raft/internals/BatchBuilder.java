@@ -53,7 +53,6 @@ public class BatchBuilder<T> {
     private final DataOutputStreamWritable recordOutput;
     private final long baseOffset;
     private final long appendTime;
-    private final boolean isControlBatch;
     private final int leaderEpoch;
     private final int initialPosition;
     private final int maxBytes;
@@ -70,7 +69,6 @@ public class BatchBuilder<T> {
         Compression compression,
         long baseOffset,
         long appendTime,
-        boolean isControlBatch,
         int leaderEpoch,
         int maxBytes
     ) {
@@ -81,7 +79,6 @@ public class BatchBuilder<T> {
         this.baseOffset = baseOffset;
         this.nextOffset = baseOffset;
         this.appendTime = appendTime;
-        this.isControlBatch = isControlBatch;
         this.initialPosition = batchOutput.position();
         this.leaderEpoch = leaderEpoch;
         this.maxBytes = maxBytes;
@@ -255,7 +252,7 @@ public class BatchBuilder<T> {
             RecordBatch.NO_PRODUCER_EPOCH,
             RecordBatch.NO_SEQUENCE,
             false,
-            isControlBatch,
+            false,
             false,
             leaderEpoch,
             numRecords()

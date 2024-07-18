@@ -19,9 +19,8 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
-import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -38,6 +37,13 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
+import org.apache.kafka.coordinator.group.modern.TopicMetadata;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -186,18 +192,49 @@ public class CoordinatorRecordHelpers {
         String groupId,
         int newGroupEpoch
     ) {
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupMetadataKey()
-                    .setGroupId(groupId),
-                (short) 3
-            ),
-            new ApiMessageAndVersion(
-                new ConsumerGroupMetadataValue()
-                    .setEpoch(newGroupEpoch),
-                (short) 0
-            )
-        );
+        return newGroupEpochRecord(groupId, newGroupEpoch, GroupType.CONSUMER);
+    }
+
+    /**
+     * Creates a ConsumerGroupMetadata record.
+     *
+     * @param groupId       The consumer group id.
+     * @param newGroupEpoch The consumer group epoch.
+     * @return The record.
+     */
+    public static CoordinatorRecord newGroupEpochRecord(
+        String groupId,
+        int newGroupEpoch,
+        GroupType groupType
+    ) {
+        if (groupType == GroupType.CONSUMER) {
+            return new CoordinatorRecord(
+                new ApiMessageAndVersion(
+                    new ConsumerGroupMetadataKey()
+                        .setGroupId(groupId),
+                    (short) 3
+                ),
+                new ApiMessageAndVersion(
+                    new ConsumerGroupMetadataValue()
+                        .setEpoch(newGroupEpoch),
+                    (short) 0
+                )
+            );
+        } else if (groupType == GroupType.SHARE) {
+            return new CoordinatorRecord(
+                new ApiMessageAndVersion(
+                    new ShareGroupMetadataKey()
+                        .setGroupId(groupId),
+                    (short) 11
+                ),
+                new ApiMessageAndVersion(
+                    new ShareGroupMetadataValue()
+                        .setEpoch(newGroupEpoch),
+                    (short) 0
+                )
+            );
+        }
+        throw new IllegalArgumentException("Unsupported group type: " + groupType);
     }
 
     /**
@@ -209,14 +246,40 @@ public class CoordinatorRecordHelpers {
     public static CoordinatorRecord newGroupEpochTombstoneRecord(
         String groupId
     ) {
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupMetadataKey()
-                    .setGroupId(groupId),
-                (short) 3
-            ),
-            null // Tombstone.
-        );
+        return newGroupEpochTombstoneRecord(groupId, GroupType.CONSUMER);
+    }
+
+    /**
+     * Creates a ConsumerGroupMetadata tombstone.
+     *
+     * @param groupId   The consumer group id.
+     * @param groupType The group type.
+     * @return The record.
+     */
+    public static CoordinatorRecord newGroupEpochTombstoneRecord(
+        String groupId,
+        GroupType groupType
+    ) {
+        if (groupType == GroupType.CONSUMER) {
+            return new CoordinatorRecord(
+                new ApiMessageAndVersion(
+                    new ConsumerGroupMetadataKey()
+                        .setGroupId(groupId),
+                    (short) 3
+                ),
+                null // Tombstone.
+            );
+        } else if (groupType == GroupType.SHARE) {
+            return new CoordinatorRecord(
+                new ApiMessageAndVersion(
+                    new ShareGroupMetadataKey()
+                        .setGroupId(groupId),
+                    (short) 11
+                ),
+                null // Tombstone.
+            );
+        }
+        throw new IllegalArgumentException("Unsupported group type: " + groupType);
     }
 
     /**
@@ -349,6 +412,35 @@ public class CoordinatorRecordHelpers {
                     .setState(member.state().value())
                     .setAssignedPartitions(toTopicPartitions(member.assignedPartitions()))
                     .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocation())),
+                (short) 0
+            )
+        );
+    }
+
+    /**
+     * Creates a ConsumerGroupCurrentMemberAssignment record.
+     *
+     * @param groupId   The consumer group id.
+     * @param member    The share group member.
+     * @return The record.
+     */
+    public static CoordinatorRecord newCurrentAssignmentRecord(
+        String groupId,
+        ShareGroupMember member
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupCurrentMemberAssignmentKey()
+                    .setGroupId(groupId)
+                    .setMemberId(member.memberId()),
+                (short) 8
+            ),
+            new ApiMessageAndVersion(
+                new ConsumerGroupCurrentMemberAssignmentValue()
+                    .setMemberEpoch(member.memberEpoch())
+                    .setPreviousMemberEpoch(member.previousMemberEpoch())
+                    .setState(member.state().value())
+                    .setAssignedPartitions(toTopicPartitions(member.assignedPartitions())),
                 (short) 0
             )
         );
@@ -545,6 +637,59 @@ public class CoordinatorRecordHelpers {
                 (short) 1
             ),
             null
+        );
+    }
+
+    /**
+     * Creates a ShareGroupMemberMetadata record.
+     *
+     * @param groupId   The consumer group id.
+     * @param member    The consumer group member.
+     * @return The record.
+     */
+    public static CoordinatorRecord newShareGroupMemberSubscriptionRecord(
+        String groupId,
+        ShareGroupMember member
+    ) {
+        List<String> topicNames = new ArrayList<>(member.subscribedTopicNames());
+        Collections.sort(topicNames);
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ShareGroupMemberMetadataKey()
+                    .setGroupId(groupId)
+                    .setMemberId(member.memberId()),
+                (short) 10
+            ),
+            new ApiMessageAndVersion(
+                new ShareGroupMemberMetadataValue()
+                    .setRackId(member.rackId())
+                    .setClientId(member.clientId())
+                    .setClientHost(member.clientHost())
+                    .setSubscribedTopicNames(topicNames),
+                (short) 0
+            )
+        );
+    }
+
+    /**
+     * Creates a ShareGroupMemberMetadata tombstone.
+     *
+     * @param groupId   The share group id.
+     * @param memberId  The share group member id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newShareGroupMemberSubscriptionTombstoneRecord(
+        String groupId,
+        String memberId
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ShareGroupMemberMetadataKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                (short) 10
+            ),
+            null // Tombstone.
         );
     }
 

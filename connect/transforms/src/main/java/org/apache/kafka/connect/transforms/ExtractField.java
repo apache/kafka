@@ -41,21 +41,28 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
     private static final String FIELD_CONFIG = "field";
+    private static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
     public static final ConfigDef CONFIG_DEF = FieldSyntaxVersion.appendConfigTo(
-        new ConfigDef()
-            .define(
-                FIELD_CONFIG,
-                ConfigDef.Type.STRING,
-                ConfigDef.NO_DEFAULT_VALUE,
-                ConfigDef.Importance.MEDIUM,
-                "Field name to extract."
-            ));
+            new ConfigDef()
+                    .define(
+                            FIELD_CONFIG,
+                            ConfigDef.Type.STRING,
+                            ConfigDef.NO_DEFAULT_VALUE,
+                            ConfigDef.Importance.MEDIUM,
+                            "Field name to extract."
+                    )
+                    .define(REPLACE_NULL_WITH_DEFAULT_CONFIG,
+                            ConfigDef.Type.BOOLEAN,
+                            true,
+                            ConfigDef.Importance.MEDIUM,
+                            "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used."));
 
     private static final String PURPOSE = "field extraction";
 
     private SingleFieldPath fieldPath;
     private String originalPath;
+    private boolean replaceNullWithDefault;
 
     @Override
     public String version() {
@@ -67,6 +74,7 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         originalPath = config.getString(FIELD_CONFIG);
         fieldPath = new SingleFieldPath(originalPath, FieldSyntaxVersion.fromConfig(config));
+        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
     }
 
     @Override
@@ -83,7 +91,7 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
                 throw new IllegalArgumentException("Unknown field: " + originalPath);
             }
 
-            return newRecord(record, field.schema(), value == null ? null : fieldPath.valueFrom(value));
+            return newRecord(record, field.schema(), value == null ? null : fieldPath.valueFrom(value, replaceNullWithDefault));
         }
     }
 

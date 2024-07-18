@@ -71,6 +71,11 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
       assertEquals(2, apiVersionsResponse.data().supportedFeatures().size())
       assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MetadataVersion.FEATURE_NAME).minVersion())
+      if (apiVersion < 4) {
+        assertEquals(1, apiVersionsResponse.data().supportedFeatures().find("kraft.version").minVersion())
+      } else {
+        assertEquals(0, apiVersionsResponse.data().supportedFeatures().find("kraft.version").minVersion())
+      }
       assertEquals(MetadataVersion.latestTesting().featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MetadataVersion.FEATURE_NAME).maxVersion())
 
       assertEquals(0, apiVersionsResponse.data().supportedFeatures().find(TransactionVersion.FEATURE_NAME).minVersion())

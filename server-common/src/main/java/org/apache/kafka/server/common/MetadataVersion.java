@@ -217,6 +217,7 @@ public enum MetadataVersion {
     // Add ELR related supports (KIP-966).
     IBP_3_9_IV1(22, "3.9", "IV1", true),
 
+    // Bootstrapping transaction version 2
     IBP_3_9_IV2(23, "3.9", "IV2", false),
 
     // Introduce version 1 of the GroupVersion feature (KIP-848).
@@ -248,6 +249,8 @@ public enum MetadataVersion {
      * IT CANNOT BE CHANGED.</strong>
      */
     public static final MetadataVersion LATEST_PRODUCTION = IBP_3_8_IV0;
+    // If you change the value above please also update
+    // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 
     /**
      * An array containing all of the MetadataVersion entries.
