@@ -52,6 +52,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.ByteArrayOutputStream;
@@ -292,6 +293,7 @@ public class ConsoleConsumerTest {
         consumer.cleanup();
     }
 
+    @Timeout(20)
     @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, brokers = 3)
     public void testTransactionLogMessageFormatter() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
