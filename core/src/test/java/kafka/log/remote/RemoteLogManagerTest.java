@@ -1886,6 +1886,25 @@ public class RemoteLogManagerTest {
         verify(remoteLogMetadataManager, times(16)).updateRemoteLogSegmentMetadata(any());
     }
 
+    @Test
+    public void testLeaderPartitionsWithTieredStateEnabledOnTopic() {
+        remoteLogManager.startup();
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
+            Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds, true, true);
+        assertNotNull(remoteLogManager.leaderCopyTask(leaderTopicIdPartition));
+        assertNotNull(remoteLogManager.leaderExpirationTask(leaderTopicIdPartition));
+    }
+
+    @Test
+    public void testLeaderPartitionsWithTieredStateDisabledOnTopic() {
+        remoteLogManager.startup();
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
+            Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds, true, false);
+
+        assertNull(remoteLogManager.leaderCopyTask(leaderTopicIdPartition));
+        assertNotNull(remoteLogManager.leaderExpirationTask(leaderTopicIdPartition));
+    }
+
     /**
      * This test asserts that the newly elected leader for a partition is able to find the log-start-offset.
      * Note that the case tested here is that the previous leader deleted the log segments up-to offset 500. And, the
