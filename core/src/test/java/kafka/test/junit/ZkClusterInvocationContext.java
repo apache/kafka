@@ -234,12 +234,12 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         @Override
         public void verifyTopicDeletion(String topic, int partions) throws InterruptedException {
             org.apache.kafka.test.TestUtils.waitForCondition(
-                () -> clusterReference.get().zkClient().isTopicMarkedForDeletion(topic),
+                () -> !clusterReference.get().zkClient().isTopicMarkedForDeletion(topic),
                 String.format("Admin path /admin/delete_topics/%s path not deleted even after a replica is restarted", topic)
             );
 
             org.apache.kafka.test.TestUtils.waitForCondition(
-                () -> clusterReference.get().zkClient().topicExists(topic),
+                () -> !clusterReference.get().zkClient().topicExists(topic),
                 String.format("Topic path /brokers/topics/%s not deleted after /admin/delete_topics/%s path is deleted", topic, topic)
             );
 
