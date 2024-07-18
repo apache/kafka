@@ -145,10 +145,7 @@ public final class VoterSet {
      * Returns all of the voters.
      */
     public Set<VoterNode> voterNodes() {
-        return voters
-            .values()
-            .stream()
-            .collect(Collectors.toSet());
+        return new HashSet<>(voters.values());
     }
 
     /**

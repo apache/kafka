@@ -168,21 +168,15 @@ public class MockLogTest {
         // Throw exception for out of order records
         assertThrows(
             RuntimeException.class,
-            () -> {
-                log.appendAsLeader(
+            () -> log.appendAsLeader(
                     MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
-                    currentEpoch
-                );
-            }
+                    currentEpoch)
         );
 
         assertThrows(
             RuntimeException.class,
-            () -> {
-                log.appendAsFollower(
-                    MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo)
-                );
-            }
+            () -> log.appendAsFollower(
+                    MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo))
         );
     }
 
@@ -513,7 +507,7 @@ public class MockLogTest {
     }
 
     @Test
-    public void testCreateSnapshotMuchEalierEpoch() {
+    public void testCreateSnapshotMuchEarlierEpoch() {
         int numberOfRecords = 10;
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(numberOfRecords, epoch);

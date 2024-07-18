@@ -136,9 +136,9 @@ public final class SnapshotWriterReaderTest {
 
         try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id, 0).get()) {
             assertEquals(id, snapshot.snapshotId());
-            expected.forEach(batch -> {
-                assertDoesNotThrow(() -> snapshot.append(batch));
-            });
+            expected.forEach(batch ->
+                assertDoesNotThrow(() -> snapshot.append(batch))
+            );
         }
 
         assertEquals(Optional.empty(), context.log.readSnapshot(id));
@@ -163,9 +163,9 @@ public final class SnapshotWriterReaderTest {
 
         try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id, 0).get()) {
             assertEquals(id, snapshot.snapshotId());
-            expected.forEach(batch -> {
-                assertDoesNotThrow(() -> snapshot.append(batch));
-            });
+            expected.forEach(batch ->
+                assertDoesNotThrow(() -> snapshot.append(batch))
+            );
 
             snapshot.freeze();
 
