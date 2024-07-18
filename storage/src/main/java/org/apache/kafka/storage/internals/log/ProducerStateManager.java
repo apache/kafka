@@ -659,7 +659,7 @@ public class ProducerStateManager {
     }
 
     // visible for testing
-    static void writeSnapshot(File file, Map<Long, ProducerStateEntry> entries, boolean sync) throws IOException {
+    public static void writeSnapshot(File file, Map<Long, ProducerStateEntry> entries, boolean sync) throws IOException {
         ProducerSnapshot producerSnapshot = new ProducerSnapshot();
         producerSnapshot.setCrc(0L); // we'll fill this after writing the entries
         List<ProducerSnapshot.ProducerEntry> producerEntries = new ArrayList<>(entries.size());
