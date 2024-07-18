@@ -178,17 +178,14 @@ class KafkaServerTest extends QuorumTestHarness {
 
   @Test
   def testGeneratedBrokerIdSyncWithNodeId(): Unit = {
-    var kafkaServer: KafkaServer = null
+    val props = TestUtils.createBrokerConfig(-1, zkConnect)
+    props.put("reserved.broker.max.id", "2000")
+    val kafkaServer: KafkaServer = TestUtils.createServer(KafkaConfig.fromProps(props))
     try {
-      val props = TestUtils.createBrokerConfig(-1, zkConnect)
-      props.put("reserved.broker.max.id", "2000")
-      kafkaServer = TestUtils.createServer(KafkaConfig.fromProps(props))
       kafkaServer.startup()
       assertEquals(2001, kafkaServer.config.brokerId)
       assertEquals(2001, kafkaServer.config.nodeId)
-    } finally if (null != kafkaServer) {
-      kafkaServer.shutdown()
-    }
+    } finally kafkaServer.shutdown()
   }
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
