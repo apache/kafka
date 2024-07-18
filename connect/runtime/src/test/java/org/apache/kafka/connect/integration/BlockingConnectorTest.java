@@ -527,7 +527,7 @@ public class BlockingConnectorTest {
                     }
                 }
             } else {
-                log.trace("Will not block on {}", block);
+                log.debug("Will not block on {}", block);
             }
         }
     }
