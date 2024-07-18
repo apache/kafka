@@ -2763,9 +2763,17 @@ class ReplicaManager(val config: KafkaConfig,
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
 
-        val isTieredStateEnabled = getLogConfig(localChanges.deletes.asScala.head).get.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG)
+        var isTieredStateEnabledForTopic = false
 
-        remoteLogManager.foreach(rlm => rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds(), true, isTieredStateEnabled))
+        // get topic config
+        if (!localChanges.leaders.isEmpty) {
+          val logConfig:Option[LogConfig] = getLogConfig(localChanges.leaders.asScala.head._1)
+          if (logConfig.isDefined) {
+            isTieredStateEnabledForTopic = logConfig.get.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG)
+          }
+        }
+
+        remoteLogManager.foreach(rlm => rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds(), true, isTieredStateEnabledForTopic))
       }
 
       if (metadataVersion.isDirectoryAssignmentSupported) {

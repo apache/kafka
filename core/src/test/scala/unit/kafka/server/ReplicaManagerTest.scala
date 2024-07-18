@@ -5076,7 +5076,7 @@ class ReplicaManagerTest {
     val leaderCapture: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
     val followerCapture: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
     val topicIdsCapture: ArgumentCaptor[util.Map[String, Uuid]] = ArgumentCaptor.forClass(classOf[util.Map[String, Uuid]])
-    verify(mockRemoteLogManager).onLeadershipChange(leaderCapture.capture(), followerCapture.capture(), topicIdsCapture.capture(), false, false)
+    verify(mockRemoteLogManager).onLeadershipChange(leaderCapture.capture(), followerCapture.capture(), topicIdsCapture.capture(), anyBoolean(), anyBoolean())
 
     val actualLeaderPartitions = leaderCapture.getValue
     val actualFollowerPartitions = followerCapture.getValue
@@ -5431,7 +5431,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(notReplicaTopicsDelta, notReplicaMetadataImage)
 
       if (enableRemoteStorage) {
-        verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap(), false, false)
+        verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap(), anyBoolean(), anyBoolean())
         verify(mockRemoteLogManager, times(1))
           .stopPartitions(ArgumentMatchers.eq(Collections.singleton(StopPartition(topicPartition, deleteLocalLog = true))), any())
       }
