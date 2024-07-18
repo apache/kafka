@@ -52,7 +52,7 @@ import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs, ServerLogCon
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.LoggerFactory
@@ -2597,6 +2597,47 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val props = new Properties()
     props.setProperty(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "1:1")
     testAppendConfig(props, "0:0", "1:1,0:0")
+  }
+
+   @Test
+  def testFenceProducersTimeoutMs(): Unit = {
+  }
+
+  @Test
+  def testListClientMetricsResources(): Unit = {
+  }
+
+  @Test
+  def testListClientMetricsResourcesTimeoutMs(): Unit = {
+  }
+
+  @Test
+  def testClientInstanceId(): Unit = {
+  }
+
+  @Test
+  def testAddRaftVoter(): Unit = {
+  }
+
+  @Test
+  def testRemoveRaftVoter(): Unit = {
+  }
+
+  @Test
+  def testMetrics(): Unit = {
+    client = createAdminClient
+    createTopic(topic)
+    val metric = client.metrics()
+    metric.forEach((key, value) => {
+      //      assertTrue(metricName.tags().containsKey("client-id"))
+      //      assertTrue(metricName.tags().containsKey("client-type"))
+      //      assertTrue(metricName.tags().containsKey("client-software-name"))
+      //      assertTrue(metricName.tags().containsKey("client-software-version"))
+      //      assertTrue(metricName.tags().containsKey("client-instance-id"))
+      assertTrue(key == value.metricName())
+      println(value.metricName())
+      println(value.metricValue())
+    })
   }
 
   private def testAppendConfig(props: Properties, append: String, expected: String): Unit = {
