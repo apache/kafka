@@ -30,7 +30,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CompletedTxn, LogFileUtils, LogOffsetMetadata, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, TxnMetadata, VerificationStateEntry}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, BatchMetadata, CompletedTxn, LogFileUtils, LogOffsetMetadata, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, TxnMetadata, VerificationStateEntry}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -1173,6 +1173,40 @@ class ProducerStateManagerTest {
     time.sleep((producerStateManagerConfig.producerIdExpirationMs / 2) + 1)
     stateManager.removeExpiredProducers(time.milliseconds())
     assertNull(stateManager.verificationStateEntry(producerId))
+  }
+
+  @Test
+  def testReadWriteSnapshot(): Unit = {
+    val expectedEntryMap = new java.util.HashMap[java.lang.Long, ProducerStateEntry]
+    expectedEntryMap.put(1, new ProducerStateEntry(1L, 2, 3, RecordBatch.NO_TIMESTAMP,
+      OptionalLong.of(100L), java.util.Optional.of(new BatchMetadata(1, 2L, 3, RecordBatch.NO_TIMESTAMP))))
+    expectedEntryMap.put(11, new ProducerStateEntry(11L, 12, 13, 123456L,
+      OptionalLong.empty(), java.util.Optional.empty()))
+
+    def assertEntries(actual: util.List[ProducerStateEntry]): Unit = {
+      val actualEntryMap = actual.asScala.map(p => (p.producerId(), p)).toMap.asJava
+      assertEquals(expectedEntryMap.keySet(), actualEntryMap.keySet())
+      expectedEntryMap.forEach {
+        case (producerId, entry) =>
+          assertProducerStateEntry(entry, actualEntryMap.get(producerId))
+      }
+    }
+
+    def assertProducerStateEntry(expected: ProducerStateEntry, actual: ProducerStateEntry): Unit = {
+      assertEquals(expected.producerId(), actual.producerId())
+      assertEquals(expected.producerEpoch(), actual.producerEpoch())
+      assertEquals(expected.coordinatorEpoch(), actual.coordinatorEpoch())
+      assertEquals(expected.lastTimestamp(), actual.lastTimestamp())
+      assertEquals(expected.currentTxnFirstOffset(), actual.currentTxnFirstOffset())
+      assertIterableEquals(expected.batchMetadata(), actual.batchMetadata())
+    }
+
+    val tmpDir: File = TestUtils.tempDir()
+    try {
+      val file = new File(tmpDir, "testReadWriteSnapshot")
+      ProducerStateManager.writeSnapshot(file, expectedEntryMap, true)
+      assertEntries(ProducerStateManager.readSnapshot(file))
+    } finally Utils.delete(tmpDir)
   }
 
   private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {
