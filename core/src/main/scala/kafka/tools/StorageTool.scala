@@ -461,7 +461,6 @@ object StorageTool extends Logging {
     metaPropertiesEnsemble.verify(metaProperties.clusterId(), metaProperties.nodeId(),
       util.EnumSet.noneOf(classOf[VerificationFlag]))
 
-    System.out.println(s"metaPropertiesEnsemble=${metaPropertiesEnsemble}")
     val copier = new MetaPropertiesEnsemble.Copier(metaPropertiesEnsemble)
     if (!(ignoreFormatted || copier.logDirProps().isEmpty)) {
       val firstLogDir = copier.logDirProps().keySet().iterator().next()
