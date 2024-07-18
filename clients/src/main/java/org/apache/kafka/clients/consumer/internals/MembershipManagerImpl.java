@@ -477,9 +477,8 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     /**
-     * Complete the leave in progress (if any), if the member is UNSUBSCRIBED. This is expected to
-     * be used to complete the leave in progress when a member receives the response to the leave
-     * heartbeat.
+     * Complete the leave in progress (if any). This is expected to be used to complete the leave
+     * in progress when a member receives the response to the leave heartbeat.
      */
     private boolean maybeCompleteLeaveInProgress() {
         if (leaveGroupInProgress.isPresent()) {
@@ -619,8 +618,8 @@ public class MembershipManagerImpl implements MembershipManager {
 
         if (previousState == MemberState.LEAVING || previousState == MemberState.PREPARE_LEAVING) {
             log.info("Member {} with epoch {} was leaving the group with state {} when it got a " +
-                "fatal error from the broker. It will discard the ongoing leave and remain in {} " +
-                "state.", memberId, memberEpoch, previousState, state);
+                "fatal error from the broker. It will discard the ongoing leave and remain in " +
+                "fatal state.", memberId, memberEpoch, previousState);
             maybeCompleteLeaveInProgress();
             return;
         }

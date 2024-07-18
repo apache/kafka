@@ -77,6 +77,8 @@ public interface MembershipManager extends RequestManager {
 
     /**
      * Notify the member that an error heartbeat response was received.
+     *
+     * @param retriable True if the request failed with a retriable error.
      */
     void onHeartbeatFailure(boolean retriable);
 
