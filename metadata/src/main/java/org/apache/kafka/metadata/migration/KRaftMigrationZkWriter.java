@@ -154,7 +154,7 @@ public class KRaftMigrationZkWriter {
         if (!pendingTopicDeletions.isEmpty()) {
             operationConsumer.accept(
                 DELETE_PENDING_TOPIC_DELETION,
-                "Delete pending topic deletions",
+                "Deleted pending topic deletions",
                 migrationState -> migrationClient.topicClient().clearPendingTopicDeletions(pendingTopicDeletions, migrationState)
             );
         }
@@ -229,7 +229,7 @@ public class KRaftMigrationZkWriter {
             TopicImage topic = topicsImage.getTopic(topicId);
             operationConsumer.accept(
                 CREATE_TOPIC,
-                "Create Topic " + topic.name() + ", ID " + topicId,
+                "Created Topic " + topic.name() + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().createTopic(topic.name(), topicId, topic.partitions(), migrationState)
             );
         });
@@ -246,7 +246,7 @@ public class KRaftMigrationZkWriter {
         deletedTopics.forEach((topicId, topicName) -> {
             operationConsumer.accept(
                 DELETE_TOPIC,
-                "Delete Topic " + topicName + ", ID " + topicId,
+                "Deleted Topic " + topicName + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().deleteTopic(topicName, migrationState)
             );
             ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
@@ -256,7 +256,7 @@ public class KRaftMigrationZkWriter {
             TopicImage topic = topicsImage.getTopic(topicId);
             operationConsumer.accept(
                 UPDATE_PARTITION,
-                "Creating additional partitions for Topic " + topic.name() + ", ID " + topicId,
+                "Created additional partitions for Topic " + topic.name() + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().updateTopicPartitions(
                     Collections.singletonMap(topic.name(), partitionMap),
                     migrationState));
@@ -266,7 +266,7 @@ public class KRaftMigrationZkWriter {
             TopicImage topic = topicsImage.getTopic(topicId);
             operationConsumer.accept(
                 UPDATE_PARTITION,
-                "Updating Partitions for Topic " + topic.name() + ", ID " + topicId,
+                "Updated Partitions for Topic " + topic.name() + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().updateTopicPartitions(
                     Collections.singletonMap(topic.name(), partitionMap),
                     migrationState));
@@ -275,7 +275,7 @@ public class KRaftMigrationZkWriter {
         extraneousPartitionsInZk.forEach((topicName, partitions) -> {
             operationConsumer.accept(
                 DELETE_PARTITION,
-                "Deleting extraneous Partitions " + partitions + " for Topic " + topicName,
+                "Deleted extraneous Partitions " + partitions + " for Topic " + topicName,
                 migrationState -> migrationClient.topicClient().deleteTopicPartitions(
                     Collections.singletonMap(topicName, partitions),
                     migrationState));
@@ -290,7 +290,7 @@ public class KRaftMigrationZkWriter {
     ) {
         topicsDelta.deletedTopicIds().forEach(topicId -> {
             String name = deletedTopicNameResolver.apply(topicId);
-            operationConsumer.accept(DELETE_TOPIC, "Deleting topic " + name + ", ID " + topicId,
+            operationConsumer.accept(DELETE_TOPIC, "Deleted topic " + name + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().deleteTopic(name, migrationState));
         });
 
@@ -298,7 +298,7 @@ public class KRaftMigrationZkWriter {
             if (topicsDelta.createdTopicIds().contains(topicId)) {
                 operationConsumer.accept(
                     CREATE_TOPIC,
-                    "Create Topic " + topicDelta.name() + ", ID " + topicId,
+                    "Created Topic " + topicDelta.name() + ", ID " + topicId,
                     migrationState -> migrationClient.topicClient().createTopic(
                         topicDelta.name(),
                         topicId,
@@ -308,7 +308,7 @@ public class KRaftMigrationZkWriter {
                 if (topicDelta.hasPartitionsWithAssignmentChanges())
                     operationConsumer.accept(
                         UPDATE_TOPIC,
-                        "Updating Topic " + topicDelta.name() + ", ID " + topicId,
+                        "Updated Topic " + topicDelta.name() + ", ID " + topicId,
                         migrationState -> migrationClient.topicClient().updateTopic(
                             topicDelta.name(),
                             topicId,
@@ -319,7 +319,7 @@ public class KRaftMigrationZkWriter {
                 if (!newPartitions.isEmpty()) {
                     operationConsumer.accept(
                         UPDATE_PARTITION,
-                        "Create new partitions for Topic " + topicDelta.name() + ", ID " + topicId,
+                        "Created new partitions for Topic " + topicDelta.name() + ", ID " + topicId,
                         migrationState -> migrationClient.topicClient().createTopicPartitions(
                             Collections.singletonMap(topicDelta.name(), newPartitions),
                             migrationState));
@@ -330,7 +330,7 @@ public class KRaftMigrationZkWriter {
                     final Map<Integer, PartitionRegistration> finalChangedPartitions = changedPartitions;
                     operationConsumer.accept(
                         UPDATE_PARTITION,
-                        "Updating Partitions for Topic " + topicDelta.name() + ", ID " + topicId,
+                        "Updated Partitions for Topic " + topicDelta.name() + ", ID " + topicId,
                         migrationState -> migrationClient.topicClient().updateTopicPartitions(
                             Collections.singletonMap(topicDelta.name(), finalChangedPartitions),
                             migrationState));
@@ -378,7 +378,7 @@ public class KRaftMigrationZkWriter {
             Map<String, String> props = configsImage.configMapForResource(resource);
             if (!props.isEmpty()) {
                 String opType = brokerOrTopicOpType(resource, UPDATE_BROKER_CONFIG, UPDATE_TOPIC_CONFIG);
-                operationConsumer.accept(opType, "Create configs for " + resource.type().name() + " " + resource.name(),
+                operationConsumer.accept(opType, "Created configs for " + resource.type().name() + " " + resource.name(),
                     migrationState -> migrationClient.configClient().writeConfigs(resource, props, migrationState));
             }
         });
@@ -387,11 +387,11 @@ public class KRaftMigrationZkWriter {
             Map<String, String> props = configsImage.configMapForResource(resource);
             if (props.isEmpty()) {
                 String opType = brokerOrTopicOpType(resource, DELETE_BROKER_CONFIG, DELETE_TOPIC_CONFIG);
-                operationConsumer.accept(opType, "Delete configs for " + resource.type().name() + " " + resource.name(),
+                operationConsumer.accept(opType, "Deleted configs for " + resource.type().name() + " " + resource.name(),
                     migrationState -> migrationClient.configClient().deleteConfigs(resource, migrationState));
             } else {
                 String opType = brokerOrTopicOpType(resource, UPDATE_BROKER_CONFIG, UPDATE_TOPIC_CONFIG);
-                operationConsumer.accept(opType, "Update configs for " + resource.type().name() + " " + resource.name(),
+                operationConsumer.accept(opType, "Updated configs for " + resource.type().name() + " " + resource.name(),
                     migrationState -> migrationClient.configClient().writeConfigs(resource, props, migrationState));
             }
         });
@@ -464,7 +464,7 @@ public class KRaftMigrationZkWriter {
 
         changedNonUserEntities.forEach(entity -> {
             Map<String, Double> quotaMap = clientQuotasImage.entities().getOrDefault(entity, ClientQuotaImage.EMPTY).quotaMap();
-            opConsumer.accept(UPDATE_CLIENT_QUOTA, "Update client quotas for " + entity, migrationState ->
+            opConsumer.accept(UPDATE_CLIENT_QUOTA, "Updated client quotas for " + entity, migrationState ->
                 migrationClient.configClient().writeClientQuotas(entity.entries(), quotaMap, Collections.emptyMap(), migrationState));
         });
 
@@ -473,7 +473,7 @@ public class KRaftMigrationZkWriter {
             Map<String, Double> quotaMap = clientQuotasImage.entities().
                 getOrDefault(entity, ClientQuotaImage.EMPTY).quotaMap();
             Map<String, String> scramMap = getScramCredentialStringsForUser(scramImage, userName);
-            opConsumer.accept(UPDATE_CLIENT_QUOTA, "Update client quotas for " + userName, migrationState ->
+            opConsumer.accept(UPDATE_CLIENT_QUOTA, "Updated client quotas for " + userName, migrationState ->
                 migrationClient.configClient().writeClientQuotas(entity.entries(), quotaMap, scramMap, migrationState));
         });
     }
@@ -486,11 +486,11 @@ public class KRaftMigrationZkWriter {
         Optional<ProducerIdsBlock> zkProducerId = migrationClient.readProducerId();
         if (zkProducerId.isPresent()) {
             if (zkProducerId.get().nextBlockFirstId() != image.nextProducerId()) {
-                operationConsumer.accept(UPDATE_PRODUCER_ID, "Setting next producer ID", migrationState ->
+                operationConsumer.accept(UPDATE_PRODUCER_ID, "Set next producer ID", migrationState ->
                     migrationClient.writeProducerId(image.nextProducerId(), migrationState));
             }
         } else {
-            operationConsumer.accept(UPDATE_PRODUCER_ID, "Setting next producer ID", migrationState ->
+            operationConsumer.accept(UPDATE_PRODUCER_ID, "Set next producer ID", migrationState ->
                 migrationClient.writeProducerId(image.nextProducerId(), migrationState));
         }
     }
@@ -500,10 +500,10 @@ public class KRaftMigrationZkWriter {
         updatedResources.forEach(configResource -> {
             Map<String, String> props = configsImage.configMapForResource(configResource);
             if (props.isEmpty()) {
-                operationConsumer.accept("DeleteConfig", "Delete configs for " + configResource, migrationState ->
+                operationConsumer.accept("DeleteConfig", "Deleted configs for " + configResource, migrationState ->
                     migrationClient.configClient().deleteConfigs(configResource, migrationState));
             } else {
-                operationConsumer.accept("UpdateConfig", "Update configs for " + configResource, migrationState ->
+                operationConsumer.accept("UpdateConfig", "Updated configs for " + configResource, migrationState ->
                     migrationClient.configClient().writeConfigs(configResource, props, migrationState));
             }
         });
@@ -532,7 +532,7 @@ public class KRaftMigrationZkWriter {
                         users.add(userName);
                     } else {
                         Map<String, Double> quotaMap = metadataImage.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
-                        operationConsumer.accept(UPDATE_CLIENT_QUOTA, "Updating client quota " + clientQuotaEntity, migrationState ->
+                        operationConsumer.accept(UPDATE_CLIENT_QUOTA, "Updated client quota " + clientQuotaEntity, migrationState ->
                             migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), quotaMap, Collections.emptyMap(), migrationState));
                     }
                 });
@@ -544,11 +544,11 @@ public class KRaftMigrationZkWriter {
                 ClientQuotaEntity clientQuotaEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, userName));
                 if ((metadataImage.clientQuotas() == null) ||
                     (metadataImage.clientQuotas().entities().get(clientQuotaEntity) == null)) {
-                    operationConsumer.accept(UPDATE_CLIENT_QUOTA, "Updating scram credentials for " + clientQuotaEntity, migrationState ->
+                    operationConsumer.accept(UPDATE_CLIENT_QUOTA, "Updated scram credentials for " + clientQuotaEntity, migrationState ->
                         migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), Collections.emptyMap(), userScramMap, migrationState));
                 } else {
                     Map<String, Double> quotaMap = metadataImage.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
-                    operationConsumer.accept(UPDATE_CLIENT_QUOTA, "Updating client quota for " + clientQuotaEntity, migrationState ->
+                    operationConsumer.accept(UPDATE_CLIENT_QUOTA, "Updated client quota for " + clientQuotaEntity, migrationState ->
                         migrationClient.configClient().writeClientQuotas(clientQuotaEntity.entries(), quotaMap, userScramMap, migrationState));
                 }
             });
@@ -556,7 +556,7 @@ public class KRaftMigrationZkWriter {
     }
 
     void handleProducerIdDelta(ProducerIdsDelta delta, KRaftMigrationOperationConsumer operationConsumer) {
-        operationConsumer.accept(UPDATE_PRODUCER_ID, "Setting next producer ID", migrationState ->
+        operationConsumer.accept(UPDATE_PRODUCER_ID, "Set next producer ID", migrationState ->
             migrationClient.writeProducerId(delta.nextProducerId(), migrationState));
     }
 
@@ -593,20 +593,20 @@ public class KRaftMigrationZkWriter {
         newResources.forEach(resourcePattern -> {
             // newResources is generated from allAclsInSnapshot, and we don't remove from that map, so this unguarded .get() is safe
             Set<AccessControlEntry> accessControlEntries = allAclsInSnapshot.get(resourcePattern);
-            String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
-            operationConsumer.accept(UPDATE_ACL, name, migrationState ->
+            String logMsg = "Wrote " + accessControlEntries.size() + " for resource " + resourcePattern;
+            operationConsumer.accept(UPDATE_ACL, logMsg, migrationState ->
                 migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
         });
 
         resourcesToDelete.forEach(deletedResource -> {
-            String name = "Deleting resource " + deletedResource + " which has no ACLs in snapshot";
-            operationConsumer.accept(DELETE_ACL, name, migrationState ->
+            String logMsg = "Deleted resource " + deletedResource + " which has no ACLs in snapshot";
+            operationConsumer.accept(DELETE_ACL, logMsg, migrationState ->
                 migrationClient.aclClient().deleteResource(deletedResource, migrationState));
         });
 
         changedResources.forEach((resourcePattern, accessControlEntries) -> {
-            String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
-            operationConsumer.accept(UPDATE_ACL, name, migrationState ->
+            String logMsg = "Wrote " + accessControlEntries.size() + " for resource " + resourcePattern;
+            operationConsumer.accept(UPDATE_ACL, logMsg, migrationState ->
                 migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
         });
     }
@@ -642,12 +642,12 @@ public class KRaftMigrationZkWriter {
         // If there are no more ACLs for a resource, delete it. Otherwise, update it with the new set of ACLs
         aclsToWrite.forEach((resourcePattern, accessControlEntries) -> {
             if (accessControlEntries.isEmpty()) {
-                String name = "Deleting resource " + resourcePattern + " which has no more ACLs";
-                operationConsumer.accept(DELETE_ACL, name, migrationState ->
+                String logMsg = "Deleted resource " + resourcePattern + " which has no more ACLs";
+                operationConsumer.accept(DELETE_ACL, logMsg, migrationState ->
                     migrationClient.aclClient().deleteResource(resourcePattern, migrationState));
             } else {
-                String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
-                operationConsumer.accept(UPDATE_ACL, name, migrationState ->
+                String logMsg = "Wrote " + accessControlEntries.size() + " for resource " + resourcePattern;
+                operationConsumer.accept(UPDATE_ACL, logMsg, migrationState ->
                     migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
             }
         });
@@ -658,10 +658,10 @@ public class KRaftMigrationZkWriter {
         updatedTokens.forEach(tokenId -> {
             DelegationTokenData tokenData = image.tokens().get(tokenId);
             if (tokenData == null) {
-                operationConsumer.accept("DeleteDelegationToken", "Delete DelegationToken for " + tokenId, migrationState ->
+                operationConsumer.accept("DeleteDelegationToken", "Deleted DelegationToken for " + tokenId, migrationState ->
                     migrationClient.delegationTokenClient().deleteDelegationToken(tokenId, migrationState));
             } else {
-                operationConsumer.accept("UpdateDelegationToken", "Update DelegationToken for " + tokenId, migrationState ->
+                operationConsumer.accept("UpdateDelegationToken", "Updated DelegationToken for " + tokenId, migrationState ->
                     migrationClient.delegationTokenClient().writeDelegationToken(tokenId, tokenData.tokenInformation(), migrationState));
             }
         });
@@ -670,14 +670,14 @@ public class KRaftMigrationZkWriter {
     void handleDelegationTokenSnapshot(DelegationTokenImage image, KRaftMigrationOperationConsumer operationConsumer) {
         image.tokens().keySet().forEach(tokenId -> {
             DelegationTokenData tokenData = image.tokens().get(tokenId);
-            operationConsumer.accept("UpdateDelegationToken", "Update DelegationToken for " + tokenId, migrationState ->
+            operationConsumer.accept("UpdateDelegationToken", "Updated DelegationToken for " + tokenId, migrationState ->
                 migrationClient.delegationTokenClient().writeDelegationToken(tokenId, tokenData.tokenInformation(), migrationState));
         });
 
         List<String> tokens = migrationClient.delegationTokenClient().getDelegationTokens();
         tokens.forEach(tokenId -> {
             if (!image.tokens().containsKey(tokenId)) {
-                operationConsumer.accept("DeleteDelegationToken", "Delete DelegationToken for " + tokenId, migrationState ->
+                operationConsumer.accept("DeleteDelegationToken", "Deleted DelegationToken for " + tokenId, migrationState ->
                     migrationClient.delegationTokenClient().deleteDelegationToken(tokenId, migrationState));
             }
         });
