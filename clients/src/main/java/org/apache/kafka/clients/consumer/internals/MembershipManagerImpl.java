@@ -701,6 +701,7 @@ public class MembershipManagerImpl implements MembershipManager {
                 clearAssignment();
                 transitionTo(MemberState.UNSUBSCRIBED);
             }
+            subscriptions.unsubscribe();
             return CompletableFuture.completedFuture(null);
         }
 
