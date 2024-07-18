@@ -589,17 +589,6 @@ public class KafkaAdminClient extends AdminClient {
                     (hostResolver == null) ? new DefaultHostResolver() : hostResolver,
                     null,
                     MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)));
-//            networkClient = ClientUtils.createNetworkClient(config,
-//                clientId,
-//                metrics,
-//                "admin-client",
-//                logContext,
-//                apiVersions,
-//                time,
-//                1,
-//                (int) TimeUnit.HOURS.toMillis(1),
-//                metadataManager.updater(),
-//                (hostResolver == null) ? new DefaultHostResolver() : hostResolver);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,
                 timeoutProcessorFactory, logContext);
         } catch (Throwable exc) {

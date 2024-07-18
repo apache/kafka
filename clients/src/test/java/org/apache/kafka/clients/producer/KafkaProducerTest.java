@@ -190,7 +190,6 @@ public class KafkaProducerTest {
         return new KafkaProducer<>(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
             keySerializer, valueSerializer, metadata, kafkaClient, interceptors, time);
     }
-    // mockClient
 
     @BeforeEach
     public void setup(TestInfo testInfo) {

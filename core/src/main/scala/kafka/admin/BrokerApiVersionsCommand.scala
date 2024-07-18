@@ -318,8 +318,6 @@ object BrokerApiVersionsCommand {
         logContext,
         MetadataRecoveryStrategy.NONE)
 
-      networkClient.poll(10000, time.milliseconds())
-
       val highLevelClient = new ConsumerNetworkClient(
         logContext,
         networkClient,
