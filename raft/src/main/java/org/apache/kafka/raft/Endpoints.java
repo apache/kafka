@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
@@ -99,6 +100,21 @@ public final class Endpoints {
         }
 
         return leaderEndpoints;
+    }
+
+    public AddRaftVoterRequestData.ListenerCollection toAddVoterRequest() {
+        AddRaftVoterRequestData.ListenerCollection listeners =
+            new AddRaftVoterRequestData.ListenerCollection(endpoints.size());
+        for (Map.Entry<ListenerName, InetSocketAddress> entry : endpoints.entrySet()) {
+            listeners.add(
+                new AddRaftVoterRequestData.Listener()
+                    .setName(entry.getKey().value())
+                    .setHost(entry.getValue().getHostString())
+                    .setPort(entry.getValue().getPort())
+            );
+        }
+
+        return listeners;
     }
 
     private static final Endpoints EMPTY = new Endpoints(Collections.emptyMap());
@@ -229,5 +245,17 @@ public final class Endpoints {
                 )
             )
             .orElse(Endpoints.empty());
+    }
+
+    public static Endpoints fromAddVoterRequest(AddRaftVoterRequestData.ListenerCollection endpoints) {
+        Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(endpoints.size());
+        for (AddRaftVoterRequestData.Listener endpoint : endpoints) {
+            listeners.put(
+                ListenerName.normalised(endpoint.name()),
+                InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+            );
+        }
+
+        return new Endpoints(listeners);
     }
 }

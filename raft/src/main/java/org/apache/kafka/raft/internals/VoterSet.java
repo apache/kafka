@@ -360,6 +360,14 @@ public final class VoterSet {
                 supportedKRaftVersion
             );
         }
+
+        public static VoterNode of(
+            ReplicaKey voterKey,
+            Endpoints listeners,
+            SupportedVersionRange supportedKRaftVersion
+        ) {
+            return new VoterNode(voterKey, listeners, supportedKRaftVersion);
+        }
     }
 
     /**

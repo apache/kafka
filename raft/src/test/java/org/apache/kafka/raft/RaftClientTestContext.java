@@ -21,6 +21,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
+import org.apache.kafka.common.message.AddRaftVoterResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
@@ -300,12 +303,16 @@ public final class RaftClientTestContext {
                     Collectors.toMap(Function.identity(), RaftClientTestContext::mockAddress)
                 );
 
-            this.startingVoters = Optional.of(
+            return withStaticVoters(
                 VoterSet.fromInetSocketAddresses(
                     MockNetworkChannel.LISTENER_NAME,
                     staticVoterAddressMap
                 )
             );
+        }
+
+        Builder withStaticVoters(VoterSet staticVoters) {
+            this.startingVoters = Optional.of(staticVoters);
             this.isStartingVotersStatic = true;
 
             return this;
@@ -1081,6 +1088,26 @@ public final class RaftClientTestContext {
         return result;
     }
 
+    RaftRequest.Outbound assertSentApiVersionsRequest() {
+        List<RaftRequest.Outbound> sentRequests = channel.drainSentRequests(Optional.of(ApiKeys.API_VERSIONS));
+        assertEquals(1, sentRequests.size());
+
+        return sentRequests.get(0);
+    }
+
+    AddRaftVoterResponseData assertSentAddVoterResponse(Errors error) {
+        List<RaftResponse.Outbound> sentResponses = drainSentResponses(ApiKeys.ADD_RAFT_VOTER);
+        assertEquals(1, sentResponses.size());
+
+        RaftResponse.Outbound response = sentResponses.get(0);
+        assertInstanceOf(AddRaftVoterResponseData.class, response.data());
+
+        AddRaftVoterResponseData addVoterResponse = (AddRaftVoterResponseData) response.data();
+        assertEquals(error, Errors.forCode(addVoterResponse.errorCode()));
+
+        return addVoterResponse;
+    }
+
     List<RaftRequest.Outbound> collectEndQuorumRequests(
         int epoch,
         Set<Integer> destinationIdSet,
@@ -1339,12 +1366,8 @@ public final class RaftClientTestContext {
             voters
                 .stream()
                 .map(voterId -> new Voter().setVoterId(voterId))
-                .collect(Collectors.toList()),
-            leaderChangeMessage
-                    .voters()
-                    .stream()
-                    .sorted(Comparator.comparingInt(Voter::voterId))
-                    .collect(Collectors.toList())
+                .collect(Collectors.toSet()),
+            new HashSet<>(leaderChangeMessage.voters())
         );
         assertEquals(
             grantingVoters
@@ -1545,6 +1568,34 @@ public final class RaftClientTestContext {
         return RaftUtil.singletonDescribeQuorumRequest(metadataPartition);
     }
 
+    AddRaftVoterRequestData addVoterRequest(
+        int timeoutMs,
+        ReplicaKey voter,
+        Endpoints endpoints
+    ) {
+        return addVoterRequest(
+            clusterId.toString(),
+            timeoutMs,
+            voter,
+            endpoints
+        );
+    }
+
+    AddRaftVoterRequestData addVoterRequest(
+        String clusterId,
+        int timeoutMs,
+        ReplicaKey voter,
+        Endpoints endpoints
+    ) {
+        return RaftUtil.addVoterRequest(
+            clusterId,
+            timeoutMs,
+            voter,
+            endpoints
+        );
+    }
+
+
     private short fetchRpcVersion() {
         if (kip853Rpc) {
             return 17;
@@ -1593,6 +1644,14 @@ public final class RaftClientTestContext {
         }
     }
 
+    private short addVoterRpcVersion() {
+        if (kip853Rpc) {
+            return 0;
+        } else {
+            throw new IllegalStateException("Reconfiguration must be enabled by calling withKip853Rpc(true)");
+        }
+    }
+
     private short raftRequestVersion(ApiMessage request) {
         if (request instanceof FetchRequestData) {
             return fetchRpcVersion();
@@ -1606,6 +1665,8 @@ public final class RaftClientTestContext {
             return endQuorumEpochRpcVersion();
         } else if (request instanceof DescribeQuorumRequestData) {
             return describeQuorumRpcVersion();
+        } else if (request instanceof AddRaftVoterRequestData) {
+            return addVoterRpcVersion();
         } else {
             throw new IllegalArgumentException(String.format("Request %s is not a raft request", request));
         }
@@ -1624,6 +1685,10 @@ public final class RaftClientTestContext {
             return endQuorumEpochRpcVersion();
         } else if (response instanceof DescribeQuorumResponseData) {
             return describeQuorumRpcVersion();
+        } else if (response instanceof AddRaftVoterResponseData) {
+            return addVoterRpcVersion();
+        } else if (response instanceof ApiVersionsResponseData) {
+            return 4;
         } else {
             throw new IllegalArgumentException(String.format("Request %s is not a raft response", response));
         }

@@ -47,6 +47,9 @@ import java.util.OptionalLong;
  * indirectly call {@code voterSetAtOffset} and {@code kraftVersionAtOffset} when freezing a snapshot.
  */
 public final class KRaftControlRecordStateMachine {
+    private static final long STARTING_NEXT_OFFSET = -1;
+    private static final long SMALLEST_LOG_OFFSET = 0;
+
     private final ReplicatedLog log;
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;
@@ -65,7 +68,7 @@ public final class KRaftControlRecordStateMachine {
     //
     // 2. The read operations lastVoterSet, voterSetAtOffset and kraftVersionAtOffset read
     // the nextOffset first before reading voterSetHistory or kraftVersionHistory
-    private volatile long nextOffset = 0;
+    private volatile long nextOffset = STARTING_NEXT_OFFSET;
 
     /**
      * Constructs an internal log listener
@@ -135,6 +138,15 @@ public final class KRaftControlRecordStateMachine {
     public VoterSet lastVoterSet() {
         synchronized (voterSetHistory) {
             return voterSetHistory.lastValue();
+        }
+    }
+
+    /**
+     * Return the latest entry for the set of voters.
+     */
+    public Optional<LogHistory.Entry<VoterSet>> lastVoterSetEntry() {
+        synchronized (voterSetHistory) {
+            return voterSetHistory.lastEntry();
         }
     }
 
@@ -221,7 +233,7 @@ public final class KRaftControlRecordStateMachine {
     }
 
     private void maybeLoadSnapshot() {
-        if ((nextOffset == 0 || nextOffset < log.startOffset()) && log.latestSnapshot().isPresent()) {
+        if ((nextOffset == STARTING_NEXT_OFFSET || nextOffset < log.startOffset()) && log.latestSnapshot().isPresent()) {
             RawSnapshotReader rawSnapshot = log.latestSnapshot().get();
             // Clear the current state
             synchronized (kraftVersionHistory) {
@@ -254,6 +266,10 @@ public final class KRaftControlRecordStateMachine {
 
                 nextOffset = reader.lastContainedLogOffset() + 1;
             }
+        } else if (nextOffset == STARTING_NEXT_OFFSET) {
+            // Listener just started and there are no snapshots; set the nextOffset to
+            // 0 to start reading the log
+            nextOffset = SMALLEST_LOG_OFFSET;
         }
     }
 
