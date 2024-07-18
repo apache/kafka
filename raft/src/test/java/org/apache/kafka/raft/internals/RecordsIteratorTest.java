@@ -166,7 +166,7 @@ public final class RecordsIteratorTest {
             .setKraftVersion(KRaftVersion.KRAFT_VERSION_0)
             .setVoterSet(Optional.empty())
             .setRawSnapshotWriter(
-                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), snapshotBuf -> buffer.set(snapshotBuf))
+                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), buffer::set)
             );
         try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
             snapshot.append(Arrays.asList("a", "b", "c"));
@@ -216,7 +216,7 @@ public final class RecordsIteratorTest {
             .setKraftVersion(KRaftVersion.KRAFT_VERSION_1)
             .setVoterSet(Optional.of(voterSet))
             .setRawSnapshotWriter(
-                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), snapshotBuf -> buffer.set(snapshotBuf))
+                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), buffer::set)
             );
         try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
             snapshot.append(Arrays.asList("a", "b", "c"));

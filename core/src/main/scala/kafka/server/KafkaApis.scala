@@ -2017,12 +2017,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           .map(_.name)
           .toSet
 
-          /* The cluster metadata topic is an internal topic with a different implementation. The user should not be
-           * allowed to create it as a regular topic.
-           */
-          if (topicNames.contains(Topic.CLUSTER_METADATA_TOPIC_NAME)) {
-            info(s"Rejecting creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME}")
-          }
           topicNames.diff(Set(Topic.CLUSTER_METADATA_TOPIC_NAME))
       }
 
@@ -2040,14 +2034,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       )(identity).map(name => name -> results.find(name)).toMap
 
       results.forEach { topic =>
-        if (results.findAll(topic.name).size > 1) {
+        if (topic.name() == Topic.CLUSTER_METADATA_TOPIC_NAME) {
+          topic.setErrorCode(Errors.INVALID_REQUEST.code)
+          topic.setErrorMessage(s"Creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME} is prohibited.")
+        } else if (results.findAll(topic.name).size > 1) {
           topic.setErrorCode(Errors.INVALID_REQUEST.code)
           topic.setErrorMessage("Found multiple entries for this topic.")
         } else if (!authorizedTopics.contains(topic.name)) {
           topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
           topic.setErrorMessage("Authorization failed.")
         }
-        if (!authorizedForDescribeConfigs.contains(topic.name)) {
+        if (!authorizedForDescribeConfigs.contains(topic.name) && topic.name() != Topic.CLUSTER_METADATA_TOPIC_NAME) {
           topic.setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
         }
       }
