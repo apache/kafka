@@ -803,6 +803,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException], e.toString)
       assertEquals("This server does not host this topic-partition.", e.getCause.getMessage)
     } else {
+      // Not throwing InvalidTopicException, instead it is throwing UnknownTopicOrPartitionException because the topic
+      // was already deleted I believe. The logging message says it does not exist
       assertTrue(e.getCause.isInstanceOf[InvalidTopicException], e.toString)
       assertEquals("The topic is queued for deletion.", e.getCause.getMessage)
     }
