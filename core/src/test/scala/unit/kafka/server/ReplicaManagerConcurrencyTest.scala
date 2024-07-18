@@ -42,7 +42,7 @@ import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesVersion}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion}
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
@@ -84,7 +84,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
   def testIsrExpandAndShrinkWithConcurrentProduce(): Unit = {
     val localId = 0
     val remoteId = 1
-    val metadataCache = MetadataCache.kRaftMetadataCache(localId)
+    val metadataCache = MetadataCache.kRaftMetadataCache(localId, () => KRaftVersion.KRAFT_VERSION_0)
     channel = new ControllerChannel
     replicaManager = buildReplicaManager(localId, channel, metadataCache)
 

@@ -61,6 +61,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.FinalizedFeatures;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
 
@@ -107,7 +108,7 @@ public class KRaftMetadataRequestBenchmark {
     private final Metrics metrics = new Metrics();
     private final int brokerId = 1;
     private final ForwardingManager forwardingManager = Mockito.mock(ForwardingManager.class);
-    private final KRaftMetadataCache metadataCache = MetadataCache.kRaftMetadataCache(brokerId);
+    private final KRaftMetadataCache metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () -> KRaftVersion.KRAFT_VERSION_1);
     private final ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private final ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
     private final ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
