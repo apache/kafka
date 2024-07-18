@@ -285,11 +285,11 @@ public final class MetaPropertiesEnsembleTest {
     public void testMetaPropertiesEnsembleLoadError() throws IOException {
         MetaPropertiesEnsemble.Loader loader = new MetaPropertiesEnsemble.Loader();
         loader.addMetadataLogDir(createErrorLogDir());
-        loader.addLogDir(createLogDir(new MetaProperties.Builder().
+        loader.addLogDirs(Collections.singletonList(createLogDir(new MetaProperties.Builder().
             setVersion(MetaPropertiesVersion.V1).
             setClusterId("AtgGav8yQjiaJ3rTXE7VCA").
             setNodeId(1).
-            build()));
+            build())));
         MetaPropertiesEnsemble metaPropertiesEnsemble = loader.load();
         assertEquals(1, metaPropertiesEnsemble.errorLogDirs().size());
         assertEquals(1, metaPropertiesEnsemble.logDirProps().size());
@@ -435,9 +435,8 @@ public final class MetaPropertiesEnsembleTest {
         MetaPropertiesEnsemble.Loader loader = new MetaPropertiesEnsemble.Loader();
         String dir0 = createLogDir(SAMPLE_META_PROPS_LIST.get(0));
         loader.addMetadataLogDir(dir0);
-        loader.addLogDir(dir0);
         String dir1 = createLogDir(SAMPLE_META_PROPS_LIST.get(1));
-        loader.addLogDir(dir1);
+        loader.addLogDirs(Arrays.asList(dir0, dir1));
         MetaPropertiesEnsemble ensemble = loader.load();
         MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(ensemble);
         copier.setLogDirProps(dir0, SAMPLE_META_PROPS_LIST.get(2));

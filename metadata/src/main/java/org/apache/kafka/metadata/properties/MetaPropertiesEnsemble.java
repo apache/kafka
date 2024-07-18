@@ -105,11 +105,6 @@ public final class MetaPropertiesEnsemble {
             return this;
         }
 
-        public Loader addLogDir(String logDir) {
-            this.logDirs.add(logDir);
-            return this;
-        }
-
         public Loader addMetadataLogDir(String metadataLogDir) {
             if (this.metadataLogDir.isPresent()) {
                 throw new RuntimeException("Cannot specify more than one metadata log directory. " +
