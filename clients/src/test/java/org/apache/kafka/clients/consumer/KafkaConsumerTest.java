@@ -931,7 +931,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, -1L), Errors.NONE), coordinator);
 
         if (groupProtocol == GroupProtocol.CONSUMER) {
-            // New consumer poll(ZERO) needs to wait for the offset fetch event add by a call to poll, to be processed
+            // New consumer poll(ZERO) needs to wait for the offset fetch event added by a call to poll, to be processed
             // by the background thread, so it can realize there are no committed offsets and then
             // throw the NoOffsetForPartitionException
             TestUtils.waitForCondition(() -> {
@@ -943,7 +943,6 @@ public class KafkaConsumerTest {
                 }
             }, "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
         } else {
-            // CLASSIC CONSUMER PROTOCOL
             assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
         }
     }
