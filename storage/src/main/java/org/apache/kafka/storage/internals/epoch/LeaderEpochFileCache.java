@@ -348,7 +348,8 @@ public class LeaderEpochFileCache {
                 // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
                 //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
                 //     another truncateFromEnd call on log loading procedure, so it won't be a problem
-                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFileForTruncation);
+                List<EpochEntry> entries = new ArrayList<>(epochs.values());
+                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, () -> checkpoint.writeForTruncation(entries));
 
                 log.debug("Cleared entries {} from epoch cache after truncating to end offset {}, leaving {} entries in the cache.", removedEntries, endOffset, epochs.size());
             }
@@ -380,7 +381,8 @@ public class LeaderEpochFileCache {
                 // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
                 //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
                 //     another truncateFromStart call on log loading procedure, so it won't be a problem
-                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFileForTruncation);
+                List<EpochEntry> entries = new ArrayList<>(epochs.values());
+                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, () -> checkpoint.writeForTruncation(entries));
 
                 EpochEntry updatedFirstEntry = removedEntries.get(removedEntries.size() - 1);
                 log.debug("Cleared entries {} and rewrote first entry {} after truncating to start offset {}, leaving {} in the cache.", removedEntries, updatedFirstEntry, startOffset, epochs.size());
@@ -523,16 +525,5 @@ public class LeaderEpochFileCache {
         } finally {
             lock.readLock().unlock();
         }
-    }
-
-    private void writeToFileForTruncation() {
-        List<EpochEntry> entries;
-        lock.readLock().lock();
-        try {
-            entries = new ArrayList<>(epochs.values());
-        } finally {
-            lock.readLock().unlock();
-        }
-        checkpoint.writeForTruncation(entries);
     }
 }
