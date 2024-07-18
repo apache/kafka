@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
@@ -61,6 +63,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -69,6 +72,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -82,6 +86,7 @@ import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CON
 import static org.apache.kafka.common.config.TopicConfig.DELETE_RETENTION_MS_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.SEGMENT_MS_CONFIG;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.TASK_STOP;
+import static org.apache.kafka.connect.integration.ExactlyOnceSourceIntegrationTest.assertAndCast;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
@@ -103,6 +108,8 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CON
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.util.clusters.ConnectAssertions.CONNECTOR_SETUP_DURATION_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -945,40 +952,115 @@ public class ConnectWorkerIntegrationTest {
     }
 
     @Test
-    public void testDuplicateTaskAssignmentOnWorkerPollTimeoutExpiry() throws Exception {
+    public void testNoDuplicateTaskAssignmentOnWorkerPollTimeoutExpiry() throws Exception {
+        String statusTopic = "status-topic";
         // This is a fabricated test to ensure that a poll timeout expiry happens. The tick thread awaits on
         // task#stop method which is blocked. The timeouts have been set accordingly
-        workerProps.put(REBALANCE_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(20)));
-        workerProps.put(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(30)));
-        workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(0)));
+        workerProps.put(REBALANCE_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(10)));
+        // This is set to a high value to ensure that all tasks can stop in time and also, we don't have the blocked
+        // task meddling with the rest of the test by being started midway.
+        workerProps.put(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(60)));
+        workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(5)));
+        workerProps.put(STATUS_STORAGE_TOPIC_CONFIG, statusTopic);
+        workerProps.put(STATUS_STORAGE_PARTITIONS_CONFIG, Integer.toString(1));
         connect = connectBuilder
             .numBrokers(1)
             .numWorkers(1)
             .build();
 
         connect.start();
+        WorkerHandle leader = connect.workers().iterator().next();
 
-        Map<String, String> blockingTaskConnectorConfig = new HashMap<>();
-        blockingTaskConnectorConfig.put(CONNECTOR_CLASS_CONFIG, BlockingConnectorTest.BlockingSourceConnector.class.getName());
-        blockingTaskConnectorConfig.put(TASKS_MAX_CONFIG, "1");
-        blockingTaskConnectorConfig.put(BlockingConnectorTest.Block.BLOCK_CONFIG, Objects.requireNonNull(TASK_STOP));
-
-        connect.configureConnector(CONNECTOR_NAME, blockingTaskConnectorConfig);
-
+        Map<String, String> connectorConfig = defaultSourceConnectorProps("topic1");
+        connectorConfig.put(TASKS_MAX_CONFIG, "1");
+        connect.configureConnector(CONNECTOR_NAME, connectorConfig);
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
             CONNECTOR_NAME, 1, "connector and tasks did not start in time"
         );
 
-        connect.addWorker();
+        // The task that has a blocking stop call gets scheduled on this worker eventually leading to a poll timeout.
+        WorkerHandle timingOutWorker = connect.addWorker();
         connect.assertions().assertExactlyNumWorkersAreUp(2, "Workers didn't start in time");
 
+        Map<String, String> blockingTaskConnectorConfig = new HashMap<>();
+        blockingTaskConnectorConfig.put(CONNECTOR_CLASS_CONFIG, BlockingConnectorTest.BlockingSourceConnector.class.getSimpleName());
+        blockingTaskConnectorConfig.put(TASKS_MAX_CONFIG, "1");
+        blockingTaskConnectorConfig.put(BlockingConnectorTest.Block.BLOCK_CONFIG, Objects.requireNonNull(TASK_STOP));
         connect.configureConnector(CONNECTOR_NAME + "-1", blockingTaskConnectorConfig);
 
-        TaskHandle blockingStartTaskHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME + "-1").taskHandle(CONNECTOR_NAME + "-1-0");
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME + "-1", 1, "connector and tasks did not start in time"
+        );
 
-        connect.restartTask(CONNECTOR_NAME + "-1", 0);
+        connectorConfig.put(TOPIC_CONFIG, "topic2");
+        connectorConfig.put(TASKS_MAX_CONFIG, "2");
+        connect.configureConnector(CONNECTOR_NAME + "-2", connectorConfig);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME + "-2", 2, "connector and tasks did not start in time"
+        );
+        // We verify this task id because it is the one which gets duplicated. Banking upon the assignment logic of
+        // ICR here.
+        String taskIdToVerify = new ConnectorTaskId(CONNECTOR_NAME + "-2", 1).toString();
 
-        TestUtils.waitForCondition(() -> blockingStartTaskHandle.startAndStopCounter().starts() == 2, 40000, "Duplicate task not created");
+        // Restarting the task on a separate thread to not block the test thread.
+        Thread restartThread = new Thread(() -> {
+            try {
+                connect.restartTask(CONNECTOR_NAME + "-1", 0);
+            } catch (Exception e) {
+                log.error("Exception while restarting task", e);
+            }
+        });
+        restartThread.start();
+
+        // rebalance.timeout.ms + scheduled.rebalance.delay + 5s buffer.
+        Thread.sleep(Duration.ofSeconds(20).toMillis());
+        List<Map<String, Object>> statuses = new ArrayList<>();
+        try (JsonConverter converter = new JsonConverter()) {
+            ConsumerRecords<byte[], byte[]> records = connect.kafka().consumeAll(Duration.ofSeconds(30).toMillis(), statusTopic);
+            converter.configure(Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"), false);
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+                String key = new String(record.key());
+                if (!key.equals("status-task-" + taskIdToVerify)) {
+                    continue;
+                }
+                Object valueObject = converter.toConnectData("unused", record.value()).value();
+                @SuppressWarnings("unchecked")
+                Map<String, Object> value = assertAndCast(valueObject, Map.class, "Value");
+                statuses.add(value);
+            }
+        }
+        restartThread.interrupt();
+        String leaderWorkerId = leader.url().getHost() + ":" + leader.url().getPort();
+        String timedOutWorkerId = timingOutWorker.url().getHost() + ":" + timingOutWorker.url().getPort();
+
+        // The task goes through 3 states. RUNNING on first worker, UNASSIGNED on the same worker and then starting on the other
+        // worker. If we had duplicate assignments, because the worker doesn't revoke tasks on poll timeout expiry,
+        // we notice just 2 RUNNING statuses on 2 different workers which means duplicate instances. Note that in some
+        // cases, it could also mean that we couldn't write the UNASSIGNED status to the status topic, but the timeouts
+        // have been set to a high value and I have run the test multiple times to observe the same behaviour.
+        assertEquals(3, statuses.size());
+        assertEquals("RUNNING", statuses.get(0).get("state"));
+        assertEquals(timedOutWorkerId, statuses.get(0).get("worker_id"));
+
+        assertEquals("UNASSIGNED", statuses.get(1).get("state"));
+        assertEquals(timedOutWorkerId, statuses.get(1).get("worker_id"));
+
+        assertEquals("RUNNING", statuses.get(2).get("state"));
+        assertEquals(leaderWorkerId, statuses.get(2).get("worker_id"));
+
+        // All the connectors and tasks are running.
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME, 1, "connector and tasks did not start in time"
+        );
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME + "-1", 1, "connector and tasks did not start in time"
+        );
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME + "-2", 2, "connector and tasks did not start in time"
+        );
+
         BlockingConnectorTest.Block.reset();
     }
 

@@ -105,7 +105,7 @@ public class WorkerHandle {
     public String toString() {
         return "WorkerHandle{" +
                 "workerName='" + workerName + '\'' +
-                "workerURL='" + worker.rest().serverUrl() + '\'' +
+                ",workerURL='" + worker.rest().serverUrl() + '\'' +
                 '}';
     }
 

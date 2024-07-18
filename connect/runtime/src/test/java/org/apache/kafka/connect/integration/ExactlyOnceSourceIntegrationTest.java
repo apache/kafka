@@ -1147,7 +1147,7 @@ public class ExactlyOnceSourceIntegrationTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> T assertAndCast(Object o, Class<T> klass, String objectDescription) {
+    static <T> T assertAndCast(Object o, Class<T> klass, String objectDescription) {
         String className = o == null ? "null" : o.getClass().getName();
         assertInstanceOf(klass, o, objectDescription + " should be " + klass.getName() + "; was " + className + " instead");
         return (T) o;
