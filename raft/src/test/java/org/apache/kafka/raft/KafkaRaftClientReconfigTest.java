@@ -302,13 +302,13 @@ public class KafkaRaftClientReconfigTest {
                 new LeaderChangeMessage()
             );
             builder.appendKRaftVersionMessage(
-                0, // timesteamp
+                0, // timestamp
                 new KRaftVersionRecord()
                     .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
                     .setKRaftVersion((short) 1)
             );
             builder.appendVotersMessage(
-                0, // timesteamp
+                0, // timestamp
                 leadersVoterSet.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
             );
             MemoryRecords leaderRecords = builder.build();

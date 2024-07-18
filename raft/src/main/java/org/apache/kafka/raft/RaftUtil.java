@@ -301,7 +301,7 @@ public class RaftUtil {
         String clusterId,
         int leaderEpoch,
         int leaderId,
-        Endpoints leaderEndponts,
+        Endpoints leaderEndpoints,
         ReplicaKey voterKey
     ) {
         return new BeginQuorumEpochRequestData()
@@ -322,7 +322,7 @@ public class RaftUtil {
                         )
                 )
             )
-            .setLeaderEndpoints(leaderEndponts.toBeginQuorumEpochRequest());
+            .setLeaderEndpoints(leaderEndpoints.toBeginQuorumEpochRequest());
     }
 
     public static BeginQuorumEpochResponseData singletonBeginQuorumEpochResponse(

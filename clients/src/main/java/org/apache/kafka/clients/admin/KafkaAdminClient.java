@@ -2347,7 +2347,6 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
                 final long now = time.milliseconds();
-                log.warn("The DescribeTopicPartitions API is not supported, using Metadata API to describe topics.");
                 runnable.call(generateDescribeTopicsCallWithMetadataApi(topicNamesList, topicFutures, options, now), now);
                 return false;
             }

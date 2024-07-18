@@ -57,7 +57,7 @@ final class RecordsSnapshotWriterTest {
             .setTime(new MockTime())
             .setMaxBatchSize(maxBatchSize)
             .setRawSnapshotWriter(
-                new MockRawSnapshotWriter(snapshotId, snapshotBuf -> buffer.set(snapshotBuf))
+                new MockRawSnapshotWriter(snapshotId, buffer::set)
             );
         try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
             snapshot.freeze();
@@ -109,7 +109,7 @@ final class RecordsSnapshotWriterTest {
             .setTime(new MockTime())
             .setMaxBatchSize(maxBatchSize)
             .setRawSnapshotWriter(
-                new MockRawSnapshotWriter(snapshotId, snapshotBuf -> buffer.set(snapshotBuf))
+                new MockRawSnapshotWriter(snapshotId, buffer::set)
             );
 
         assertThrows(IllegalStateException.class, () -> builder.build(STRING_SERDE));
@@ -129,7 +129,7 @@ final class RecordsSnapshotWriterTest {
             .setTime(new MockTime())
             .setMaxBatchSize(maxBatchSize)
             .setRawSnapshotWriter(
-                new MockRawSnapshotWriter(snapshotId, snapshotBuf -> buffer.set(snapshotBuf))
+                new MockRawSnapshotWriter(snapshotId, buffer::set)
             );
         try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
             snapshot.freeze();
@@ -186,7 +186,7 @@ final class RecordsSnapshotWriterTest {
             .setTime(new MockTime())
             .setMaxBatchSize(maxBatchSize)
             .setRawSnapshotWriter(
-                new MockRawSnapshotWriter(snapshotId, snapshotBuf -> buffer.set(snapshotBuf))
+                new MockRawSnapshotWriter(snapshotId, buffer::set)
             );
         try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
             snapshot.freeze();
