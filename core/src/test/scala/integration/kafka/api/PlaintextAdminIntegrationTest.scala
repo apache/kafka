@@ -797,6 +797,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     deleteResult.topicNameValues.get(topic1).get
     alterResult = client.createPartitions(Map(topic1 ->
       NewPartitions.increaseTo(4)).asJava, validateOnly)
+    // Getting different errors returned on debug, only passes when debugging
+    // The ZK case should be changed
     e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
       () => "Expect InvalidTopicException or UnknownTopicOrPartitionException when the topic is queued for deletion")
     if (isKRaftTest()) {
