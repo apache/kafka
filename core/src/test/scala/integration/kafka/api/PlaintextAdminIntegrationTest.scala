@@ -97,6 +97,62 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
+  @Timeout(30)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeConfigWithOptionTimeoutMs(quorum: String): Unit = {
+    val config = createConfig
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
+    val brokenClient = Admin.create(config)
+
+    client = createAdminClient
+
+    // Create topics
+    val topic1 = "describe-alter-configs-topic-1"
+    val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
+    val topicConfig1 = new Properties
+    topicConfig1.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "500000")
+    topicConfig1.setProperty(TopicConfig.RETENTION_MS_CONFIG, "60000000")
+    createTopic(topic1)
+
+    val topic2 = "describe-alter-configs-topic-2"
+    val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
+    createTopic(topic2)
+
+    // Describe topics and broker
+    val brokerResource1 = new ConfigResource(ConfigResource.Type.BROKER, brokers(1).config.brokerId.toString)
+    val brokerResource2 = new ConfigResource(ConfigResource.Type.BROKER, brokers(2).config.brokerId.toString)
+    val configResources = Seq(topicResource1, topicResource2, brokerResource1, brokerResource2)
+
+    val exception = assertThrows(classOf[ExecutionException], () => {
+      brokenClient.describeConfigs(configResources.asJava,new DescribeConfigsOptions().timeoutMs(0)).all().get()
+    })
+    assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    brokenClient.close(time.Duration.ZERO)
+  }
+
+  @ParameterizedTest
+  @Timeout(30)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAlterConfigsWithOptionTimeoutMs(quorum: String): Unit = {
+    client = createAdminClient
+    val config = createConfig
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
+    val brokenClient = Admin.create(config)
+
+    val alterLogLevelsEntries = Seq(
+      new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.INFO_LOG_LEVEL)
+    ).asJavaCollection
+
+    val exception = assertThrows(classOf[ExecutionException], () => {
+      brokenClient.alterConfigs(
+      Map(brokerLoggerConfigResource -> new Config(alterLogLevelsEntries)).asJava,
+      new AlterConfigsOptions().timeoutMs(0)).all()
+    })
+    assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    brokenClient.close(time.Duration.ZERO)
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreatePartitionWithOptionRetryOnQuotaViolation(quorum: String): Unit = {
     // Since it's hard to stably reach quota limit in integration test, we only verify quota configs are set correctly

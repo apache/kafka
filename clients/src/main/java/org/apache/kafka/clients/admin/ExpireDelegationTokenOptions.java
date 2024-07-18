@@ -28,6 +28,14 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 public class ExpireDelegationTokenOptions extends AbstractOptions<ExpireDelegationTokenOptions> {
     private long expiryTimePeriodMs = -1L;
 
+    /**
+     * When {@link Admin#expireDelegationToken(byte[], ExpireDelegationTokenOptions)} method is called this option will control the time of token expiry,
+     * i.e. {@code expiryTimestamp}.
+     * If {@code expiryTimePeriodMs} < 0, token will be expired immediately.
+     * If {@code expiryTimePeriodMs} > 0 and {@code expiryTimestamp} is not due,
+     * {@code expiryTimestamp} will be set to {@code min(expiryTimestamp, maxTimestamp)}
+     * @param expiryTimePeriodMs the time period until we should expire this token.
+     */
     public ExpireDelegationTokenOptions expiryTimePeriodMs(long expiryTimePeriodMs) {
         this.expiryTimePeriodMs = expiryTimePeriodMs;
         return this;
