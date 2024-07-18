@@ -2256,8 +2256,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val tp1 = new TopicPartition(topic, 0)
     val tp2 = new TopicPartition(topic, 1)
     val tp3 = new TopicPartition(topic, 2)
-    createTopic(topic, numPartitions = 4)
-
+    val tp4 = new TopicPartition(topic, 3)
+    createTopic(topic, numPartitions = 4, brokerCount)
 
     val validAssignment = Optional.of(new NewPartitionReassignment(
       (0 until brokerCount).map(_.asInstanceOf[Integer]).asJava
@@ -2278,14 +2278,17 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val extraNonExistentReplica = Optional.of(new NewPartitionReassignment((0 until brokerCount + 1).map(_.asInstanceOf[Integer]).asJava))
     val negativeIdReplica = Optional.of(new NewPartitionReassignment(Seq(-3, -2, -1).map(_.asInstanceOf[Integer]).asJava))
     val duplicateReplica = Optional.of(new NewPartitionReassignment(Seq(0, 1, 1).map(_.asInstanceOf[Integer]).asJava))
+    val shrinkReplica = Optional.of(new NewPartitionReassignment((0 until brokerCount - 1).map(_.asInstanceOf[Integer]).asJava))
     val invalidReplicaResult = client.alterPartitionReassignments(Map(
       tp1 -> extraNonExistentReplica,
       tp2 -> negativeIdReplica,
-      tp3 -> duplicateReplica
+      tp3 -> duplicateReplica,
+      tp4 -> shrinkReplica
     ).asJava).values()
     assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp1), classOf[InvalidReplicaAssignmentException])
     assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp2), classOf[InvalidReplicaAssignmentException])
     assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp3), classOf[InvalidReplicaAssignmentException])
+    assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp4), classOf[InvalidReplicaAssignmentException])
   }
 
   @ParameterizedTest

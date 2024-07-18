@@ -1895,13 +1895,18 @@ class KafkaController(val config: KafkaConfig,
     else {
       // Ensure that any new replicas are among the live brokers
       val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
-      val newAssignment = currentAssignment.reassignTo(replicas)
-      val areNewReplicasAlive = newAssignment.addingReplicas.toSet.subsetOf(controllerContext.liveBrokerIds)
-      if (!areNewReplicasAlive)
+      if (currentAssignment.originReplicas.nonEmpty && currentAssignment.originReplicas.size != replicas.size) {
         Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
-          s"Replica assignment has brokers that are not alive. Replica list: " +
-            s"${newAssignment.addingReplicas}, live broker list: ${controllerContext.liveBrokerIds}"))
-      else None
+          s"Replica assignment on ${topicPartition}: ${replicas} violates its replication factor"))
+      } else {
+        val newAssignment = currentAssignment.reassignTo(replicas)
+        val areNewReplicasAlive = newAssignment.addingReplicas.toSet.subsetOf(controllerContext.liveBrokerIds)
+        if (!areNewReplicasAlive)
+          Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+            s"Replica assignment has brokers that are not alive. Replica list: " +
+              s"${newAssignment.addingReplicas}, live broker list: ${controllerContext.liveBrokerIds}"))
+        else None
+      }
     }
   }
 
