@@ -1416,6 +1416,7 @@ public class ConnectWorkerIntegrationTest {
         // Create the connector and ensure it and its tasks can start
         connect.configureConnector(sourceConnectorName, sourceConnectorConfig);
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(sourceConnectorName, NUM_TASKS, "Connector and tasks did not start in time");
+        connect.deleteConnector(sourceConnectorName);
 
         // Test a sink connector
         final String sinkConnectorName = "plugins-alias-test-sink";
@@ -1426,7 +1427,8 @@ public class ConnectWorkerIntegrationTest {
         sinkConnectorConfig.put(TOPICS_CONFIG, topic);
         // Create the connector and ensure it and its tasks can start
         connect.configureConnector(sinkConnectorName, sinkConnectorConfig);
-        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(sourceConnectorName, NUM_TASKS, "Connector and tasks did not start in time");
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(sinkConnectorName, NUM_TASKS, "Connector and tasks did not start in time");
+        connect.deleteConnector(sinkConnectorName);
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {
