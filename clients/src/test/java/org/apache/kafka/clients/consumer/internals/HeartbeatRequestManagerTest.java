@@ -38,7 +38,6 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.Builder;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -223,7 +222,7 @@ public class HeartbeatRequestManagerTest {
         subscriptions.subscribe(set, Optional.empty());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
-        mockJoiningMemberData(true);
+        mockJoiningMemberData(DEFAULT_GROUP_INSTANCE_ID);
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
@@ -397,7 +396,7 @@ public class HeartbeatRequestManagerTest {
         membershipManager.onHeartbeatSuccess(result.data());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
-        mockDefaultMemberData(true);
+        mockDefaultMemberData(DEFAULT_GROUP_INSTANCE_ID);
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
@@ -536,8 +535,7 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testHeartbeatState() {
-        CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
-        mockJoiningMemberData(false);
+        mockJoiningMemberData(null);
 
         heartbeatState = new HeartbeatState(
                 subscriptions,
@@ -557,7 +555,6 @@ public class HeartbeatRequestManagerTest {
         assertEquals(Collections.emptyList(), data.subscribedTopicNames());
         assertEquals(DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
         assertEquals(Collections.emptyList(), data.topicPartitions());
-        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
 
         // Mock a response from the group coordinator, that supplies the member ID and a new epoch
         when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
@@ -568,8 +565,7 @@ public class HeartbeatRequestManagerTest {
                 .setMemberEpoch(DEFAULT_MEMBER_EPOCH)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment())
         );
-        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-        mockDefaultMemberData(false);
+        mockDefaultMemberData(null);
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
         assertEquals(DEFAULT_MEMBER_ID, data.memberId());
@@ -579,7 +575,6 @@ public class HeartbeatRequestManagerTest {
         assertNull(data.subscribedTopicNames());
         assertNull(data.serverAssignor());
         assertEquals(Collections.emptyList(), data.topicPartitions());
-        assertEquals(MemberState.STABLE, membershipManager.state());
 
         // Join the group and subscribe to a topic, but the response has not yet been received
         String topic = "topic1";
@@ -595,7 +590,6 @@ public class HeartbeatRequestManagerTest {
         assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
         assertEquals(DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
         assertEquals(Collections.emptyList(), data.topicPartitions());
-        assertEquals(MemberState.JOINING, membershipManager.state());
 
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
@@ -606,7 +600,6 @@ public class HeartbeatRequestManagerTest {
         assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
         assertEquals(DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
         assertEquals(Collections.emptyList(), data.topicPartitions());
-        assertEquals(MemberState.JOINING, membershipManager.state());
 
         // Mock the response from the group coordinator which returns an assignment
         ConsumerGroupHeartbeatResponseData.TopicPartitions tpTopic1 =
@@ -617,16 +610,7 @@ public class HeartbeatRequestManagerTest {
         ConsumerGroupHeartbeatResponseData.Assignment assignmentTopic1 =
             new ConsumerGroupHeartbeatResponseData.Assignment();
         assignmentTopic1.setTopicPartitions(Collections.singletonList(tpTopic1));
-        rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
-                .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
-                .setMemberId(DEFAULT_MEMBER_ID)
-                .setMemberEpoch(1)
-                .setAssignment(assignmentTopic1));
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
-        mockReconcilingState();
-
-        // We remain in RECONCILING state, as the assignment will be reconciled on the next poll
-        assertEquals(MemberState.RECONCILING, membershipManager.state());
     }
 
     @Test
@@ -857,17 +841,13 @@ public class HeartbeatRequestManagerTest {
                 new Metrics());
     }
 
-    private void mockJoiningMemberData(boolean instanceId) {
+    private void mockJoiningMemberData(String instanceId) {
+        when(membershipManager.groupInstanceId()).thenReturn(Optional.ofNullable(instanceId));
         when(membershipManager.memberId()).thenReturn("");
         when(membershipManager.memberEpoch()).thenReturn(0);
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
-        if (instanceId)
-            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(DEFAULT_GROUP_INSTANCE_ID));
-        else
-            when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
         when(membershipManager.currentAssignment()).thenReturn(LocalAssignment.NONE);
-        when(membershipManager.serverAssignor()).thenReturn(Optional.of("uniform"));
-        when(membershipManager.state()).thenReturn(MemberState.UNSUBSCRIBED);
+        when(membershipManager.serverAssignor()).thenReturn(Optional.of(DEFAULT_REMOTE_ASSIGNOR));
     }
 
     private void mockFencedToJoiningMemberData() {
@@ -876,20 +856,12 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
     }
 
-    private void mockDefaultMemberData(boolean instanceId) {
+    private void mockDefaultMemberData(String instanceId) {
+        when(membershipManager.groupInstanceId()).thenReturn(Optional.ofNullable(instanceId));
         when(membershipManager.currentAssignment()).thenReturn(new LocalAssignment(0, Collections.emptyMap()));
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
         when(membershipManager.memberId()).thenReturn(DEFAULT_MEMBER_ID);
         when(membershipManager.memberEpoch()).thenReturn(DEFAULT_MEMBER_EPOCH);
-        if (instanceId)
-            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(DEFAULT_GROUP_INSTANCE_ID));
-        else
-            when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
-        when(membershipManager.serverAssignor()).thenReturn(Optional.of("uniform"));
-        when(membershipManager.state()).thenReturn(MemberState.STABLE);
-    }
-
-    private void mockReconcilingState() {
-        when(membershipManager.state()).thenReturn(MemberState.RECONCILING);
+        when(membershipManager.serverAssignor()).thenReturn(Optional.of(DEFAULT_REMOTE_ASSIGNOR));
     }
 }
