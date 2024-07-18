@@ -788,6 +788,8 @@ public class LeaderState<T> implements EpochState {
     @Override
     public void close() {
         addVoterHandlerState.ifPresent(AddVoterHandlerState::close);
+        addVoterHandlerState = Optional.empty();
+
         accumulator.close();
     }
 }

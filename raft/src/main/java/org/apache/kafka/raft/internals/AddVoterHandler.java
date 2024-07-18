@@ -208,7 +208,6 @@ public final class AddVoterHandler {
             return true;
         }
 
-
         // Check that the API_VERSIONS response matches the id of the voter getting added
         AddVoterHandlerState current = handlerState.get();
         if (!current.expectingApiResponse(source.id())) {
@@ -244,7 +243,8 @@ public final class AddVoterHandler {
         }
 
         // Check that the new voter supports the kraft.verion for reconfiguration
-        if (!validVersionRange(supportedKraftVersions)) {
+        KRaftVersion kraftVersion = partitionState.lastKraftVersion();
+        if (!validVersionRange(kraftVersion, supportedKraftVersions)) {
             logger.info(
                 "Aborting add voter operation for {} at {} since kraft.version range {} doesn't " +
                 "support reconfiguration",
@@ -257,9 +257,10 @@ public final class AddVoterHandler {
                 leaderState,
                 Errors.INVALID_REQUEST,
                 String.format(
-                    "Aborted add voter operation for %s since kraft.version range %s doesn't " +
-                    "support reconfiguration",
+                    "Aborted add voter operation for %s since the %s range %s doesn't " +
+                    "support the finalized version %s",
                     current.voterKey(),
+                    KRaftVersion.FEATURE_NAME,
                     supportedKraftVersions
                         .map(
                             range -> String.format(
@@ -268,7 +269,8 @@ public final class AddVoterHandler {
                                 range.maxVersion()
                             )
                         )
-                        .orElse("(min: 0, max: 0)")
+                        .orElse("(min: 0, max: 0)"),
+                    kraftVersion.featureLevel()
                 )
             );
 
@@ -363,11 +365,12 @@ public final class AddVoterHandler {
     }
 
     private boolean validVersionRange(
+        KRaftVersion finalizedVersion,
         Optional<ApiVersionsResponseData.SupportedFeatureKey> supportedKraftVersions
     ) {
         return supportedKraftVersions.isPresent() &&
-            (supportedKraftVersions.get().minVersion() <= 1 &&
-             supportedKraftVersions.get().maxVersion() >= 1);
+            (supportedKraftVersions.get().minVersion() <= finalizedVersion.featureLevel() &&
+             supportedKraftVersions.get().maxVersion() >= finalizedVersion.featureLevel());
     }
 
     private void completeAddVoter(LeaderState<?> leaderState) {

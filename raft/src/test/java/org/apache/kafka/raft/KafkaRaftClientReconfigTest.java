@@ -875,7 +875,7 @@ public class KafkaRaftClientReconfigTest {
             apiVersionRequest.destination()
         );
 
-        // Reply with API_VERSIONS response with supported kraft.version
+        // Reply with API_VERSIONS response that doesn't support kraft.version 1
         context.deliverResponse(
             apiVersionRequest.correlationId(),
             apiVersionRequest.destination(),
