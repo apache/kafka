@@ -239,7 +239,7 @@ public class LeaderState<T> implements EpochState {
                 offsetOfVotersAtEpochStart.ifPresent(offset -> {
                     if (offset == -1) {
                         // Latest voter set came from the bootstrap checkpoint (0-0.checkpoint)
-                        // rewrite the voter set to the log so that it is replcated to the replicas.
+                        // rewrite the voter set to the log so that it is replicated to the replicas.
                         if (!kraftVersionAtEpochStart.isReconfigSupported()) {
                             throw new IllegalStateException(
                                 String.format(
