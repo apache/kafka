@@ -71,7 +71,7 @@ public class KafkaMetricsGroup {
         return new MetricName(group, typeName, name, scope, nameBuilder.toString());
     }
 
-    public final <T> Gauge<T> newGauge(String name, Supplier<T> metric, Map<String, String> tags) {
+    public <T> Gauge<T> newGauge(String name, Supplier<T> metric, Map<String, String> tags) {
         return KafkaYammerMetrics.defaultRegistry().newGauge(metricName(name, tags), new Gauge<T>() {
             @Override
             public T value() {
@@ -80,11 +80,11 @@ public class KafkaMetricsGroup {
         });
     }
 
-    public final <T> Gauge<T> newGauge(String name, Supplier<T> metric) {
+    public <T> Gauge<T> newGauge(String name, Supplier<T> metric) {
         return newGauge(name, metric, Collections.emptyMap());
     }
 
-    public final <T> Gauge<T> newGauge(MetricName name, Supplier<T> metric) {
+    public <T> Gauge<T> newGauge(MetricName name, Supplier<T> metric) {
         return KafkaYammerMetrics.defaultRegistry().newGauge(name, new Gauge<T>() {
             @Override
             public T value() {
