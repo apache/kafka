@@ -65,7 +65,7 @@ public final class KRaftControlRecordStateMachine {
     //
     // 2. The read operations lastVoterSet, voterSetAtOffset and kraftVersionAtOffset read
     // the nextOffset first before reading voterSetHistory or kraftVersionHistory
-    private volatile long nextOffset = 0;
+    private volatile long nextOffset = -1;
 
     /**
      * Constructs an internal log listener
@@ -135,6 +135,15 @@ public final class KRaftControlRecordStateMachine {
     public VoterSet lastVoterSet() {
         synchronized (voterSetHistory) {
             return voterSetHistory.lastValue();
+        }
+    }
+
+    /**
+     * Return the latest entry for the set of voters.
+     */
+    public Optional<LogHistory.Entry<VoterSet>> lastVoterSetEntry() {
+        synchronized (voterSetHistory) {
+            return voterSetHistory.lastEntry();
         }
     }
 
@@ -221,7 +230,7 @@ public final class KRaftControlRecordStateMachine {
     }
 
     private void maybeLoadSnapshot() {
-        if ((nextOffset == 0 || nextOffset < log.startOffset()) && log.latestSnapshot().isPresent()) {
+        if ((nextOffset == -1 || nextOffset < log.startOffset()) && log.latestSnapshot().isPresent()) {
             RawSnapshotReader rawSnapshot = log.latestSnapshot().get();
             // Clear the current state
             synchronized (kraftVersionHistory) {
@@ -254,6 +263,10 @@ public final class KRaftControlRecordStateMachine {
 
                 nextOffset = reader.lastContainedLogOffset() + 1;
             }
+        } else if (nextOffset == -1) {
+            // Listener just started and there are no snapshots; set the nextOffset to
+            // 0 to start reading the log
+            nextOffset = 0;
         }
     }
 
