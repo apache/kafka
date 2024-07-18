@@ -107,6 +107,7 @@
     <allow pkg="kafka.api"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk" />
+    <allow pkg="kafka.log"/>
     <allow pkg="org.apache.kafka.clients.admin"/>
     <allow pkg="org.apache.kafka.clients.consumer"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>

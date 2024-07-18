@@ -18,10 +18,12 @@
 package kafka.test.junit;
 
 import kafka.api.IntegrationTestHarness;
+import kafka.log.UnifiedLog;
 import kafka.network.SocketServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 import kafka.server.KafkaServer;
+import kafka.server.checkpoints.OffsetCheckpointFile;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.Type;
@@ -30,6 +32,7 @@ import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
@@ -39,6 +42,7 @@ import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -51,6 +55,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import scala.Option;
 import scala.collection.JavaConverters;
@@ -224,6 +229,65 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
             clusterConfig.ifPresent(config -> clusterReference.get().setClusterConfig(config));
             clusterReference.get().restartDeadBrokers(true);
             clusterReference.get().adminClientConfig().put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        }
+
+        @Override
+        public void verifyTopicDeletion(String topic, int partions) throws InterruptedException {
+            org.apache.kafka.test.TestUtils.waitForCondition(
+                () -> clusterReference.get().zkClient().isTopicMarkedForDeletion(topic),
+                String.format("Admin path /admin/delete_topics/%s path not deleted even after a replica is restarted", topic)
+            );
+
+            org.apache.kafka.test.TestUtils.waitForCondition(
+                () -> clusterReference.get().zkClient().topicExists(topic),
+                String.format("Topic path /brokers/topics/%s not deleted after /admin/delete_topics/%s path is deleted", topic, topic)
+            );
+
+            List<TopicPartition> topicPartitions = IntStream.range(0, partions).mapToObj(i -> new TopicPartition(topic, i)).collect(Collectors.toList());
+            org.apache.kafka.test.TestUtils.waitForCondition(
+                () ->
+                    brokers().values().stream().allMatch(broker ->
+                        topicPartitions.stream().allMatch(tp ->
+                              broker.replicaManager().onlinePartition(tp).isEmpty())
+                    ), "Replica manager's should have deleted all of this topic's partitions"
+            );
+
+            org.apache.kafka.test.TestUtils.waitForCondition(
+                () ->
+                    brokers().values().stream().allMatch(broker ->
+                        topicPartitions.stream().allMatch(tp ->
+                            broker.replicaManager().onlinePartition(tp).isEmpty())
+                    ), "Replica logs not deleted after delete topic is complete"
+            );
+
+
+            org.apache.kafka.test.TestUtils.waitForCondition(() -> brokers().values().stream().allMatch(broker ->
+                topicPartitions.stream().allMatch(tp -> {
+                        List<Map<TopicPartition, Object>> checkPoints = new ArrayList<>();
+                        broker.logManager().liveLogDirs()
+                                .map(logDir -> checkPoints.add(JavaConverters.mapAsJavaMap(new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null).read())));
+                        return checkPoints.stream().noneMatch(checkpointsPerLogDir -> checkpointsPerLogDir.containsKey(tp));
+                    }
+                )
+            ), "Cleaner offset for deleted partition should have been removed");
+
+            org.apache.kafka.test.TestUtils.waitForCondition(() -> brokers().values().stream().allMatch(
+                broker -> broker.config().logDirs().forall(
+                    logDir -> topicPartitions.stream().noneMatch(
+                        tp -> new File(logDir, tp.topic() + "-" + tp.partition()).exists()))),
+                    "Failed to soft-delete the data to a delete directory"
+            );
+
+            org.apache.kafka.test.TestUtils.waitForCondition(() -> brokers().values().stream().allMatch(
+                broker -> broker.config().logDirs().forall(
+                    logDir -> topicPartitions.stream().noneMatch(
+                        tp -> Arrays.asList(new File(logDir).list()).stream().allMatch(
+                            partitionDirectoryName -> partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&
+                                partitionDirectoryName.endsWith(UnifiedLog.DeleteDirSuffix())
+                        )
+                    )
+                )
+            ), "Failed to hard-delete the delete directory");
         }
 
         @Override
