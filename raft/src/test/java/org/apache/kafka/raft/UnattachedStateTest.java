@@ -113,18 +113,9 @@ public class UnattachedStateTest {
         // Check that the leader is persisted if the leader is known
         assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), state.election());
 
-        // Check that the replcia rejects all votes request if the leader is known
-        assertEquals(
-            false,
-            state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
-        );
-        assertEquals(
-            false,
-            state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
-        );
-        assertEquals(
-            false,
-            state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
-        );
+        // Check that the replica rejects all votes request if the leader is known
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
     }
 }

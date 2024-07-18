@@ -1097,9 +1097,9 @@ public final class RaftClientTestContext {
 
                 assertEquals(epoch, partitionRequest.leaderEpoch());
                 assertEquals(localIdOrThrow(), partitionRequest.leaderId());
-                preferredSuccessorsOpt.ifPresent(preferredSuccessors -> {
-                    assertEquals(preferredSuccessors, partitionRequest.preferredSuccessors());
-                });
+                preferredSuccessorsOpt.ifPresent(preferredSuccessors ->
+                    assertEquals(preferredSuccessors, partitionRequest.preferredSuccessors())
+                );
 
                 collectedDestinationIdSet.add(raftMessage.destination().id());
                 endQuorumRequests.add(raftMessage);
@@ -1709,7 +1709,7 @@ public final class RaftClientTestContext {
             return commits.stream()
                 .filter(batch -> batch.lastOffset() == lastOffset)
                 .findFirst()
-                .map(batch -> batch.records())
+                .map(Batch::records)
                 .orElse(null);
         }
 
