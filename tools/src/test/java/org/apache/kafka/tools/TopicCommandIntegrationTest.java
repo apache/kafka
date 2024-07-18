@@ -17,7 +17,6 @@
 
 package org.apache.kafka.tools;
 
-import kafka.server.KafkaBroker;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTemplate;
@@ -44,13 +43,9 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.internals.Topic;
-import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData;
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.TestUtils;
 
@@ -61,7 +56,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -69,7 +63,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
@@ -846,36 +839,7 @@ public class TopicCommandIntegrationTest {
             assertEquals(5, clusterInstance.aliveBrokers().size());
 
             // wait until the topic metadata for the test topic is propagated to each alive broker
-            TestUtils.waitForCondition(
-                    () -> {
-                        boolean result = true;
-                        for (KafkaBroker server : clusterInstance.brokers().values()) {
-                            if (server.config().brokerId() != 0) {
-                                Set<String> topicNames = Collections.singleton(testTopicName);
-                                Collection<MetadataResponseData.MetadataResponseTopic> topicMetadatas =
-                                        JavaConverters.asJavaCollection(server.dataPlaneRequestProcessor().metadataCache()
-                                                .getTopicMetadata(JavaConverters.asScalaSetConverter(topicNames).asScala().toSet(),
-                                                        ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
-                                                        false, false)
-                                        );
-                                Optional<MetadataResponseData.MetadataResponseTopic> testTopicMetadata = topicMetadatas.stream()
-                                        .filter(metadata -> metadata.name().equals(testTopicName))
-                                        .findFirst();
-                                if (!testTopicMetadata.isPresent()) {
-                                    throw new AssertionError("Topic metadata is not found in metadata cache");
-                                }
-                                Optional<MetadataResponseData.MetadataResponsePartition> testPartitionMetadata = testTopicMetadata.get().partitions().stream()
-                                        .filter(metadata -> metadata.partitionIndex() == partitionOnBroker0)
-                                        .findFirst();
-                                if (!testPartitionMetadata.isPresent()) {
-                                    throw new AssertionError("Partition metadata is not found in metadata cache");
-                                }
-                                result = result && testPartitionMetadata.get().errorCode() == Errors.LEADER_NOT_AVAILABLE.code();
-                            }
-                        }
-                        return result;
-                    }, 60000, String.format("Partition metadata for %s is not propagated", testTopicName)
-            );
+            clusterInstance.waitForTopic(testTopicName, 6);
 
             // grab the console output and assert
             String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName, "--unavailable-partitions"));
