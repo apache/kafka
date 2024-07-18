@@ -228,9 +228,16 @@ public class StreamThreadTest {
     @AfterEach
     public void tearDown() {
         if (thread != null) {
+            // KAFKA-17122 manually stop taskManager if `thread` is not in CREATED state.
+            if (thread.state() != State.CREATED) {
+                thread.taskManager().shutdown(false);
+            }
             thread.shutdown();
             thread = null;
         }
+        final Set<Thread> t = Collections.unmodifiableSet(Thread.getAllStackTraces().keySet());
+        assertTrue(t.stream().noneMatch(thread -> thread.getName().contains("TaskExecutor")));
+        assertTrue(t.stream().noneMatch(thread -> thread.getName().contains("StateUpdater")));
         stateDirectory = null;
     }
 
