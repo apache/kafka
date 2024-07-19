@@ -43,7 +43,8 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 Collections.emptyMap(),
-                Collections.emptyList()
+                Collections.emptyList(),
+                Collections.emptyMap()
             ),
             x -> 5
         );
@@ -70,7 +71,8 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 Collections.singletonMap("test_member", memberSpec),
-                Collections.singletonList("test-subtopology")
+                Collections.singletonList("test-subtopology"),
+                    Collections.emptyMap()
             ),
             x -> 4
         );
@@ -88,44 +90,44 @@ public class MockAssignorTest {
     public void testTwoMembersTwoSubtopologies() {
 
         final AssignmentMemberSpec memberSpec1 = new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            "test-process",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap()
+                Optional.empty(),
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                "test-process",
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
         );
 
         final AssignmentMemberSpec memberSpec2 = new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            "test-process",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap()
+                Optional.empty(),
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                "test-process",
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
         );
 
         final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(
-                mkMap(mkEntry("test_member1", memberSpec1), mkEntry("test_member2", memberSpec2)),
-                Arrays.asList("test-subtopology1", "test-subtopology2")
-            ),
-            x -> 4
+                new GroupSpecImpl(
+                        mkMap(mkEntry("test_member1", memberSpec1), mkEntry("test_member2", memberSpec2)),
+                        Arrays.asList("test-subtopology1", "test-subtopology2"), Collections.emptyMap()
+                ),
+                x -> 4
         );
 
         final Map<String, Set<Integer>> expected1 = mkMap(
-            mkEntry("test-subtopology1", mkSet(1, 3)),
-            mkEntry("test-subtopology2", mkSet(1, 3))
+                mkEntry("test-subtopology1", mkSet(1, 3)),
+                mkEntry("test-subtopology2", mkSet(1, 3))
         );
         final Map<String, Set<Integer>> expected2 = mkMap(
-            mkEntry("test-subtopology1", mkSet(0, 2)),
-            mkEntry("test-subtopology2", mkSet(0, 2))
+                mkEntry("test-subtopology1", mkSet(0, 2)),
+                mkEntry("test-subtopology2", mkSet(0, 2))
         );
 
         assertEquals(2, result.members().size());
@@ -172,7 +174,7 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 mkMap(mkEntry("test_member1", memberSpec1), mkEntry("test_member2", memberSpec2)),
-                Arrays.asList("test-subtopology1", "test-subtopology2")
+                Arrays.asList("test-subtopology1", "test-subtopology2"), Collections.emptyMap()
             ),
             x -> 4
         );

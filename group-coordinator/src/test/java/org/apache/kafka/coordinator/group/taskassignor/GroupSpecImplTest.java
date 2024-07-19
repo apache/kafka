@@ -56,7 +56,8 @@ public class GroupSpecImplTest {
 
         groupSpec = new GroupSpecImpl(
             members,
-            subtopologies
+            subtopologies,
+                Collections.emptyMap()
         );
     }
 

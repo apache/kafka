@@ -34,4 +34,6 @@ public interface GroupSpec {
      */
     List<String> subtopologies();
 
+    Map<String, String> assignmentConfigs();
+
 }
