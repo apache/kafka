@@ -43,7 +43,7 @@ import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{ConsumerGroupState, ElectionType, IsolationLevel, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
+import org.apache.kafka.common.{ConsumerGroupState, ElectionType, IsolationLevel, KafkaException, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
@@ -2599,28 +2599,60 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     testAppendConfig(props, "0:0", "1:1,0:0")
   }
 
-   @Test
+  @Test
   def testFenceProducersTimeoutMs(): Unit = {
+    client = createAdminClient
+    client.fenceProducers(Collections.singleton("1"))
   }
 
-  @Test
-  def testListClientMetricsResources(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("quorum=kraft"))
+  def testListClientMetricsResources(ignored: String): Unit = {
+    client = createAdminClient
+    def newTopic = new NewTopic(topic, partition, 1.toShort)
+    client.createTopics(Collections.singleton(newTopic))
+    assertTrue(client.listClientMetricsResources().all().get().isEmpty)
+    def name = "name"
+    def configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, name)
+    val configEntry = new ConfigEntry("interval.ms", "111")
+    def configOp = new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET)
+    client.incrementalAlterConfigs(Collections.singletonMap(configResource, Collections.singletonList(configOp))).all().get()
+    def result = client.listClientMetricsResources().all().get()
+    def expected = Collections.singletonList(new ClientMetricsResourceListing(name))
+    assertEquals(new util.HashSet(expected), new util.HashSet(result))
   }
 
-  @Test
-  def testListClientMetricsResourcesTimeoutMs(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("quorum=kraft"))
+  def testListClientMetricsResourcesTimeoutMs(ignored: String): Unit = {
+    client = createAdminClient
+    def timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0)
+    assertThrows(classOf[ExecutionException], () => client.listClientMetricsResources(timeoutOption).all().get())
+    def enoughOption = new ListClientMetricsResourcesOptions().timeoutMs(1000)
+    assertDoesNotThrow(() => client.listClientMetricsResources(enoughOption).all().get())
   }
 
-  @Test
-  def testClientInstanceId(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("quorum=kraft"))
+  def testClientInstanceId(ignored: String): Unit = {
+    def additional = new Properties()
+    additional.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG,true)
+    client = createAdminClient(configOverrides = additional)
+    assertThrows(classOf[KafkaException], () => client.clientInstanceId(JDuration.ofSeconds(1)))
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testAddRaftVoter(): Unit = {
+    client = createAdminClient()
+    assertThrows(classOf[ExecutionException], () => client.addRaftVoter(1,Uuid.randomUuid(),Collections.emptySet()).all().get())
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testRemoveRaftVoter(): Unit = {
+    client = createAdminClient()
+    assertThrows(classOf[ExecutionException], () => client.removeRaftVoter(1,Uuid.randomUuid()).all().get())
   }
 
   @Test
