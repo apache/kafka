@@ -1387,7 +1387,7 @@ public class ConnectWorkerIntegrationTest {
         connect.start();
 
         // Create a topic; not strictly necessary but prevents log spam when we start a source connector later
-        final String topic = "kafka17510";
+        final String topic = "kafka17150";
         connect.kafka().createTopic(topic, 1);
 
         Map<String, String> baseConnectorConfig = new HashMap<>();
