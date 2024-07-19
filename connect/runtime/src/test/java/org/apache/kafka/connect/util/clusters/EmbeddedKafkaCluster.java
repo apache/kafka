@@ -219,7 +219,9 @@ public class EmbeddedKafkaCluster {
 
     public boolean sslEnabled() {
         final String listenerSecurityProtocolMap = brokerConfig.getProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG);
-        return listenerSecurityProtocolMap != null && listenerSecurityProtocolMap.contains("SSL");
+        if (listenerSecurityProtocolMap == null)
+            return false;
+        return listenerSecurityProtocolMap.contains(":SSL") || listenerSecurityProtocolMap.contains(":SASL_SSL");
     }
 
     /**
