@@ -2093,14 +2093,27 @@ public class KafkaConsumerTest {
         assertThrows(AuthenticationException.class, () -> consumer.endOffsets(Collections.singleton(tp0)));
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
-    public void testPollAuthenticationFailure(GroupProtocol groupProtocol) {
+    @EnumSource(GroupProtocol.class)
+    public void testPollAuthenticationFailure(GroupProtocol groupProtocol) throws InterruptedException {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         consumer.subscribe(singleton(topic));
-        assertThrows(AuthenticationException.class, () -> consumer.poll(Duration.ZERO));
+
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            // New consumer poll(ZERO) needs to wait for the event added by a call to poll, to be processed
+            // by the background thread, so it can realize there is authentication fail  and then
+            // throw the AuthenticationException
+            TestUtils.waitForCondition(() -> {
+                try {
+                    consumer.poll(Duration.ZERO);
+                    return false;
+                } catch (AuthenticationException e) {
+                    return true;
+                }
+            }, "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
+        } else {
+            assertThrows(AuthenticationException.class, () -> consumer.poll(Duration.ZERO));
+        }
     }
 
     // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
@@ -2940,11 +2953,9 @@ public class KafkaConsumerTest {
         }
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
-    public void testSubscriptionOnInvalidTopic(GroupProtocol groupProtocol) {
+    @EnumSource(GroupProtocol.class)
+    public void testSubscriptionOnInvalidTopic(GroupProtocol groupProtocol) throws InterruptedException {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -2965,7 +2976,21 @@ public class KafkaConsumerTest {
         KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singleton(invalidTopicName), getConsumerRebalanceListener(consumer));
 
-        assertThrows(InvalidTopicException.class, () -> consumer.poll(Duration.ZERO));
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            // New consumer poll(ZERO) needs to wait for the event added by a call to poll, to be processed
+            // by the background thread, so it can realize there is invalid topics and then
+            // throw the InvalidTopicException
+            TestUtils.waitForCondition(() -> {
+                try {
+                    consumer.poll(Duration.ZERO);
+                    return false;
+                } catch (InvalidTopicException e) {
+                    return true;
+                }
+            }, "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
+        } else {
+            assertThrows(InvalidTopicException.class, () -> consumer.poll(Duration.ZERO));
+        }
     }
 
     @ParameterizedTest
