@@ -1161,6 +1161,7 @@ public class NetworkClientTest {
                 bootstrapConfiguration, time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
                 MetadataRecoveryStrategy.NONE);
 
+        // Assuming the client has already been bootstrapped
         client.ensureBootstrapped();
 
         // First connection attempt should fail
