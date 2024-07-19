@@ -240,6 +240,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        @SuppressWarnings("deprecation")
         public void verifyTopicDeletion(String topic, int partions) throws InterruptedException {
             List<TopicPartition> topicPartitions = IntStream.range(0, partions).mapToObj(i -> new TopicPartition(topic, i)).collect(Collectors.toList());
             TestUtils.waitForCondition(
@@ -260,12 +261,12 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
 
             TestUtils.waitForCondition(() -> brokers().values().stream().allMatch(broker ->
-                topicPartitions.stream().allMatch(tp -> {
-                        List<Map<TopicPartition, Object>> checkPoints = new ArrayList<>();
-                        broker.logManager().liveLogDirs()
-                                .map(logDir -> checkPoints.add(JavaConverters.mapAsJavaMap(new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null).read())));
-                        return checkPoints.stream().noneMatch(checkpointsPerLogDir -> checkpointsPerLogDir.containsKey(tp));
-                    }
+                topicPartitions.stream().allMatch(tp ->
+                        JavaConverters.seqAsJavaList(broker.logManager().liveLogDirs()).stream()
+                                .map(logDir -> JavaConverters.mapAsJavaMap(new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null).read()))
+                                .collect(Collectors.toList())
+                                .stream()
+                                .noneMatch(checkpointsPerLogDir -> checkpointsPerLogDir.containsKey(tp))
                 )
             ), "Cleaner offset for deleted partition should have been removed");
 
