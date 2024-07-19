@@ -595,7 +595,7 @@ public class NetworkClient implements KafkaClient {
         if (!this.isBootstrapped() && !isBootstrapDisabled()) {
             bootstrapState.timer.reset(bootstrapState.dnsResolutionTimeoutMs);
         }
-        //ensureBootstrapped();
+        ensureBootstrapped();
 
         if (!abortedSends.isEmpty()) {
             // If there are aborted sends because of unsupported version exceptions or disconnects,
@@ -625,8 +625,6 @@ public class NetworkClient implements KafkaClient {
         handleTimedOutConnections(responses, updatedNow);
         handleTimedOutRequests(responses, updatedNow);
         completeResponses(responses);
-
-        ensureBootstrapped();
 
         return responses;
     }

@@ -1161,17 +1161,19 @@ public class NetworkClientTest {
                 bootstrapConfiguration, time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
                 MetadataRecoveryStrategy.NONE);
 
+        client.ensureBootstrapped();
+
         // First connection attempt should fail
         client.ready(node, time.milliseconds());
-        time.sleep(bootstrapConfiguration.bootstrapResolveTimeoutMs);
-        assertThrows(BootstrapResolutionException.class, () -> client.poll(0, time.milliseconds()));
+        time.sleep(connectionSetupTimeoutMaxMsTest);
+        client.poll(0, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
         assertNull(client.telemetryConnectedNode());
 
         // Second connection attempt should succeed
         time.sleep(reconnectBackoffMaxMsTest);
         client.ready(node, time.milliseconds());
-        //time.sleep(connectionSetupTimeoutMaxMsTest);
+        time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
         assertNull(client.telemetryConnectedNode());
