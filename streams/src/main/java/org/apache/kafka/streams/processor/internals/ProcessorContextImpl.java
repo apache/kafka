@@ -261,7 +261,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                     recordContext.offset(),
                     recordContext.partition(),
                     recordContext.topic(),
-                    record.headers());
+                    record.headers(),
+                    recordContext.rawRecord());
             }
 
             if (childName == null) {
