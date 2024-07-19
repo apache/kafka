@@ -592,7 +592,10 @@ public class NetworkClient implements KafkaClient {
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
         ensureActive();
-        ensureBootstrapped();
+        if (!this.isBootstrapped() && !isBootstrapDisabled()) {
+            bootstrapState.timer.reset(bootstrapState.dnsResolutionTimeoutMs);
+        }
+        //ensureBootstrapped();
 
         if (!abortedSends.isEmpty()) {
             // If there are aborted sends because of unsupported version exceptions or disconnects,
@@ -622,6 +625,8 @@ public class NetworkClient implements KafkaClient {
         handleTimedOutConnections(responses, updatedNow);
         handleTimedOutRequests(responses, updatedNow);
         completeResponses(responses);
+
+        ensureBootstrapped();
 
         return responses;
     }
@@ -1176,6 +1181,7 @@ public class NetworkClient implements KafkaClient {
                 timer.update(time.milliseconds());
 
             } while (timer.notExpired());
+
 
             throw new BootstrapResolutionException("Timeout while attempting to resolve bootstrap servers.");
         }

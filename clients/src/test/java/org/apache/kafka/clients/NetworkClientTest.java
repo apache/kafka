@@ -1101,7 +1101,8 @@ public class NetworkClientTest {
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
-        time.sleep(connectionSetupTimeoutMaxMsTest);
+        // If we want to connect we cannot sleep for this amount of time
+        // time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
         // First poll should try to update the node but couldn't because node remains in connecting state
@@ -1162,15 +1163,15 @@ public class NetworkClientTest {
 
         // First connection attempt should fail
         client.ready(node, time.milliseconds());
-        time.sleep(connectionSetupTimeoutMaxMsTest);
-        client.poll(0, time.milliseconds());
+        time.sleep(bootstrapConfiguration.bootstrapResolveTimeoutMs);
+        assertThrows(BootstrapResolutionException.class, () -> client.poll(0, time.milliseconds()));
         assertFalse(client.isReady(node, time.milliseconds()));
         assertNull(client.telemetryConnectedNode());
 
         // Second connection attempt should succeed
         time.sleep(reconnectBackoffMaxMsTest);
         client.ready(node, time.milliseconds());
-        time.sleep(connectionSetupTimeoutMaxMsTest);
+        //time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
         assertNull(client.telemetryConnectedNode());
@@ -1215,7 +1216,7 @@ public class NetworkClientTest {
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
-        time.sleep(connectionSetupTimeoutMaxMsTest);
+        //time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
         assertNull(client.telemetryConnectedNode());
