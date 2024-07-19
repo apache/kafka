@@ -399,7 +399,7 @@ public class HeartbeatRequestManagerTest {
         membershipManager.onHeartbeatSuccess(result.data());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
-        mockDefaultMemberData(DEFAULT_GROUP_INSTANCE_ID);
+        mockStableMemberData(DEFAULT_GROUP_INSTANCE_ID);
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
@@ -564,9 +564,10 @@ public class HeartbeatRequestManagerTest {
         assertEquals(Collections.emptyList(), data.topicPartitions());
 
         // Mock a response from the group coordinator, that supplies the member ID and a new epoch
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
         when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptions.rebalanceListener()).thenReturn(Optional.empty());
-        mockDefaultMemberData(null);
+        mockStableMemberData(null);
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
         assertEquals(DEFAULT_MEMBER_ID, data.memberId());
@@ -581,7 +582,7 @@ public class HeartbeatRequestManagerTest {
         String topic = "topic1";
         subscriptions.subscribe(Collections.singleton(topic), Optional.empty());
         when(subscriptions.subscription()).thenReturn(Collections.singleton(topic));
-        mockFencedToJoiningMemberData();
+        mockRejoiningMemberData();
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
         assertEquals(DEFAULT_MEMBER_ID, data.memberId());
@@ -633,7 +634,6 @@ public class HeartbeatRequestManagerTest {
         verify(heartbeatRequestState).reset();
         verify(membershipManager).onHeartbeatRequestGenerated();
 
-        when(membershipManager.state()).thenReturn(MemberState.STALE);
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
         assertNoHeartbeat(heartbeatRequestManager);
         heartbeatRequestManager.resetPollTimer(time.milliseconds());
@@ -707,12 +707,10 @@ public class HeartbeatRequestManagerTest {
         verify(heartbeatRequestState).reset();
 
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
-        when(membershipManager.state()).thenReturn(MemberState.FENCED);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size(), "Member should not send heartbeats while FENCED");
 
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
-        when(membershipManager.state()).thenReturn(MemberState.JOINING);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size(), "Fenced member should resume heartbeat after transitioning to JOINING");
     }
@@ -844,6 +842,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     private void mockJoiningMemberData(String instanceId) {
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
         when(membershipManager.groupInstanceId()).thenReturn(Optional.ofNullable(instanceId));
         when(membershipManager.memberId()).thenReturn("");
         when(membershipManager.memberEpoch()).thenReturn(0);
@@ -852,13 +851,13 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.serverAssignor()).thenReturn(Optional.of(DEFAULT_REMOTE_ASSIGNOR));
     }
 
-    private void mockFencedToJoiningMemberData() {
+    private void mockRejoiningMemberData() {
         when(membershipManager.state()).thenReturn(MemberState.JOINING);
         when(membershipManager.memberEpoch()).thenReturn(0);
         when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
     }
 
-    private void mockDefaultMemberData(String instanceId) {
+    private void mockStableMemberData(String instanceId) {
         when(membershipManager.groupInstanceId()).thenReturn(Optional.ofNullable(instanceId));
         when(membershipManager.currentAssignment()).thenReturn(new LocalAssignment(0, Collections.emptyMap()));
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
