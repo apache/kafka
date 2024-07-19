@@ -52,7 +52,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.ByteArrayOutputStream;
@@ -63,7 +62,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
 import java.util.regex.Pattern;
 
@@ -293,13 +291,13 @@ public class ConsoleConsumerTest {
         consumer.cleanup();
     }
 
-    @Timeout(20)
     @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, brokers = 3)
     public void testTransactionLogMessageFormatter() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
             admin.createTopics(singleton(newTopic));
+            produceMessages(cluster);
 
             String[] transactionLogMessageFormatter = new String[]{
                 "--bootstrap-server", cluster.bootstrapServers(),
@@ -311,29 +309,22 @@ public class ConsoleConsumerTest {
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(transactionLogMessageFormatter);
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PrintStream output = new PrintStream(out);
-            Thread consumerThread = new Thread(() -> ConsoleConsumer.process(-1, options.formatter(),
-                    new ConsoleConsumer.ConsumerWrapper(options, createConsumer(cluster)), output, true));
-            consumerThread.start();
-            produceMessages(cluster);
-            while (consumerThread.isAlive()) {
-                JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
-                if (Objects.nonNull(jsonNode) && !jsonNode.isEmpty()) {
-                    JsonNode keyNode = jsonNode.get("key");
-                    
-                    TransactionLogKey logKey =
-                            TransactionLogKeyJsonConverter.read(keyNode.get("data"), TransactionLogKey.HIGHEST_SUPPORTED_VERSION);
-                    assertNotNull(logKey);
-                    assertEquals(transactionId, logKey.transactionalId());
-                    
-                    JsonNode valueNode = jsonNode.get("value");
-                    TransactionLogValue logValue =
-                            TransactionLogValueJsonConverter.read(valueNode.get("data"), TransactionLogValue.HIGHEST_SUPPORTED_VERSION);
-                    assertNotNull(logValue);
-                    assertEquals(0, logValue.producerId());
-                    assertEquals(0, logValue.transactionStatus());
-                    consumerThread.interrupt();
-                }
-            }
+            ConsoleConsumer.process(1, options.formatter(),
+                    new ConsoleConsumer.ConsumerWrapper(options, createConsumer(cluster)), output, true);
+            JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
+            JsonNode keyNode = jsonNode.get("key");
+            
+            TransactionLogKey logKey =
+                    TransactionLogKeyJsonConverter.read(keyNode.get("data"), TransactionLogKey.HIGHEST_SUPPORTED_VERSION);
+            assertNotNull(logKey);
+            assertEquals(transactionId, logKey.transactionalId());
+            
+            JsonNode valueNode = jsonNode.get("value");
+            TransactionLogValue logValue =
+                    TransactionLogValueJsonConverter.read(valueNode.get("data"), TransactionLogValue.HIGHEST_SUPPORTED_VERSION);
+            assertNotNull(logValue);
+            assertEquals(0, logValue.producerId());
+            assertEquals(0, logValue.transactionStatus());
         }
     }
 
