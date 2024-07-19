@@ -35,6 +35,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 
+import static org.apache.kafka.common.config.SaslConfigs.GSSAPI_MECHANISM;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.common.security.plain.internals.PlainSaslServer.PLAIN_MECHANISM;
+
 public class JaasTestUtils {
 
     public static class Krb5LoginModule implements JaasModule {
@@ -373,7 +377,7 @@ public class JaasTestUtils {
     }
 
     public static String clientLoginModule(String mechanism, Optional<File> keytabLocation) {
-        return clientLoginModule(mechanism, keytabLocation, SERVICE_NAME).toString();
+        return clientLoginModule(mechanism, keytabLocation, SERVICE_NAME);
     }
 
     public static String adminLoginModule(String mechanism, Optional<File> keytabLocation, String serviceName) {
@@ -381,7 +385,7 @@ public class JaasTestUtils {
     }
 
     public static String adminLoginModule(String mechanism, Optional<File> keytabLocation) {
-        return adminLoginModule(mechanism, keytabLocation, SERVICE_NAME).toString();
+        return adminLoginModule(mechanism, keytabLocation, SERVICE_NAME);
     }
 
     public static String tokenClientLoginModule(String tokenId, String password) {
@@ -408,7 +412,7 @@ public class JaasTestUtils {
         List<JaasModule> modules = new ArrayList<>();
         for (String mechanism : mechanisms) {
             switch (mechanism) {
-                case "GSSAPI":
+                case GSSAPI_MECHANISM:
                     modules.add(new Krb5LoginModule(
                             true,
                             true,
@@ -419,14 +423,14 @@ public class JaasTestUtils {
                             IS_IBM_SECURITY
                     ));
                     break;
-                case "PLAIN":
+                case PLAIN_MECHANISM:
                     Map<String, String> validUsers = new HashMap<>();
                     validUsers.put(KAFKA_PLAIN_ADMIN, KAFKA_PLAIN_ADMIN_PASSWORD);
                     validUsers.put(KAFKA_PLAIN_USER, KAFKA_PLAIN_PASSWORD);
                     validUsers.put(KAFKA_PLAIN_USER_2, KAFKA_PLAIN_PASSWORD_2);
                     modules.add(new PlainLoginModule(KAFKA_PLAIN_ADMIN, KAFKA_PLAIN_ADMIN_PASSWORD, false, validUsers));
                     break;
-                case "OAUTHBEARER":
+                case OAUTHBEARER_MECHANISM:
                     modules.add(new OAuthBearerLoginModule(KAFKA_OAUTH_BEARER_ADMIN, false));
                     break;
                 default:
@@ -443,7 +447,7 @@ public class JaasTestUtils {
 
     private static JaasModule kafkaClientModule(String mechanism, Optional<File> keytabLocation, String clientPrincipal, String plainUser, String plainPassword, String scramUser, String scramPassword, String oauthBearerUser, String serviceName) {
         switch (mechanism) {
-            case "GSSAPI":
+            case GSSAPI_MECHANISM:
                 return new Krb5LoginModule(
                         true,
                         true,
@@ -453,9 +457,9 @@ public class JaasTestUtils {
                         Optional.of(serviceName),
                         IS_IBM_SECURITY
                 );
-            case "PLAIN":
+            case PLAIN_MECHANISM:
                 return new PlainLoginModule(plainUser, plainPassword, false, new HashMap<>());
-            case "OAUTHBEARER":
+            case OAUTHBEARER_MECHANISM:
                 return new OAuthBearerLoginModule(oauthBearerUser, false);
             default:
                 if (ScramMechanism.fromMechanismName(mechanism) != ScramMechanism.UNKNOWN) {
@@ -467,7 +471,17 @@ public class JaasTestUtils {
     }
 
     public static JaasSection kafkaClientSection(Optional<String> mechanism, Optional<File> keytabLocation) {
-        return new JaasSection(KAFKA_CLIENT_CONTEXT_NAME, mechanism.map(m -> kafkaClientModule(m, keytabLocation, KAFKA_CLIENT_PRINCIPAL_2, KAFKA_PLAIN_USER_2, KAFKA_PLAIN_PASSWORD_2, KAFKA_SCRAM_USER_2, KAFKA_SCRAM_PASSWORD_2, KAFKA_OAUTH_BEARER_USER_2, SERVICE_NAME)).map(Collections::singletonList).orElse(Collections.emptyList()));
+        return new JaasSection(KAFKA_CLIENT_CONTEXT_NAME,
+                mechanism.map(m -> kafkaClientModule(m,
+                        keytabLocation,
+                        KAFKA_CLIENT_PRINCIPAL_2,
+                        KAFKA_PLAIN_USER_2,
+                        KAFKA_PLAIN_PASSWORD_2,
+                        KAFKA_SCRAM_USER_2,
+                        KAFKA_SCRAM_PASSWORD_2,
+                        KAFKA_OAUTH_BEARER_USER_2,
+                        SERVICE_NAME)
+                ).map(Collections::singletonList).orElse(Collections.emptyList()));
     }
 
     private static String jaasSectionsToString(List<JaasSection> jaasSections) {

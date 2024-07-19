@@ -52,8 +52,8 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
   private val kafkaServerSaslMechanisms = Seq("SCRAM-SHA-256")
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
-  override protected val serverSaslProperties: Some[Properties] = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
-  override protected val clientSaslProperties: Some[Properties] = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
+  override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
+  override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
   private val adminClients = new ArrayBuffer[Admin]()
   private var producerWithoutQuota: KafkaProducer[Array[Byte], Array[Byte]] = _
 
@@ -364,8 +364,8 @@ object GroupedUserQuotaCallback {
 class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable with Logging {
 
   var brokerId: Int = -1
-  val customQuotasUpdated: Map[ClientQuotaType, AtomicBoolean] = ClientQuotaType.values.map(quotaType => quotaType -> new AtomicBoolean).toMap
-  val quotas: Map[ClientQuotaType, ConcurrentHashMap[String, Double]] = ClientQuotaType.values.map(quotaType => quotaType -> new ConcurrentHashMap[String, Double]).toMap
+  val customQuotasUpdated = ClientQuotaType.values.map(quotaType => quotaType -> new AtomicBoolean).toMap
+  val quotas = ClientQuotaType.values.map(quotaType => quotaType -> new ConcurrentHashMap[String, Double]).toMap
 
   val partitionRatio = new ConcurrentHashMap[String, Double]()
 

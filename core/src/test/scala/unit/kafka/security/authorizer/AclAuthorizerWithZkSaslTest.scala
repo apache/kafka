@@ -45,7 +45,6 @@ import java.util.UUID
 import java.util.concurrent.{Executors, TimeUnit}
 import javax.security.auth.Subject
 import javax.security.auth.callback.CallbackHandler
-import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class AclAuthorizerWithZkSaslTest extends QuorumTestHarness with SaslSetup {
@@ -69,7 +68,7 @@ class AclAuthorizerWithZkSaslTest extends QuorumTestHarness with SaslSetup {
     val jaasSections = JaasTestUtils.zkSections
     val serverJaas = jaasSections.asScala.filter(section => section.getContextName == "Server")
     val clientJaas = jaasSections.asScala.filter(section => section.getContextName == "Client")
-      .map(section => new TestableJaasSection(section.getContextName, section.getModules.asScala))
+      .map(section => new TestableJaasSection(section.getContextName, section.getModules))
     startSasl(serverJaas ++ clientJaas)
 
     // Increase maxUpdateRetries to avoid transient failures
@@ -180,7 +179,7 @@ class TestableDigestLoginModule extends DigestLoginModule {
   }
 }
 
-class TestableJaasSection(contextName: String, modules: Seq[JaasModule]) extends JaasSection(contextName, modules.asJava) {
+class TestableJaasSection(contextName: String, modules: util.List[JaasModule]) extends JaasSection(contextName, modules) {
   override def toString: String = {
     super.toString.replaceFirst(classOf[DigestLoginModule].getName, classOf[TestableDigestLoginModule].getName)
   }
