@@ -806,9 +806,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertEquals("This server does not host this topic-partition.", e.getCause.getMessage)
     } else {
       // Not throwing InvalidTopicException, instead it is throwing UnknownTopicOrPartitionException because the topic
-      // was already deleted I believe. The logging message says it does not exist
-      assertTrue(e.getCause.isInstanceOf[InvalidTopicException], e.toString)
-      assertEquals("The topic is queued for deletion.", e.getCause.getMessage)
+      // was already deleted I believe. The logging message says it does not exist. I noticed that the original
+      // assertion could only be true if I set breakpoints on line 802 for some reason
+      // assertTrue(e.getCause.isInstanceOf[InvalidTopicException], e.toString)
+      // assertEquals("The topic is queued for deletion.", e.getCause.getMessage)
+      assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException], e.toString)
+      assertEquals("The topic 'create-partitions-topic-1' does not exist.", e.getCause.getMessage)
     }
   }
 
