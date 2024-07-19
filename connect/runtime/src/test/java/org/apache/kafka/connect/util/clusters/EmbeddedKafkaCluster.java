@@ -155,20 +155,20 @@ public class EmbeddedKafkaCluster {
     }
 
     /**
-     * Restarts the Kafka brokers. This can be called after {@link #stopOnlyBrokers()}. Note that if the Kafka brokers
+     * Restarts the Kafka brokers. This can be called after {@link #stopTemporarily()}. Note that if the Kafka brokers
      * need to be listening on the same ports as earlier, the {@link #brokerConfig} should contain the
      * {@link SocketServerConfigs#LISTENERS_CONFIG} property and it should use a fixed non-zero free port. Also note that this is
      * only possible when {@code numBrokers} is 1.
      */
-    public void restartOnlyBrokers() {
+    public void restart() {
         cluster.brokers().values().forEach(BrokerServer::startup);
     }
 
     /**
-     * Stop only the Kafka brokers (and not the KRaft controllers). This can be used to test Connect's functionality
+     * Stop the brokers (and controllers) in the Kafka cluster. This can be used to test Connect's functionality
      * when the backing Kafka cluster goes offline.
      */
-    public void stopOnlyBrokers() {
+    public void stopTemporarily() {
         cluster.brokers().values().forEach(BrokerServer::shutdown);
         cluster.brokers().values().forEach(BrokerServer::awaitShutdown);
     }

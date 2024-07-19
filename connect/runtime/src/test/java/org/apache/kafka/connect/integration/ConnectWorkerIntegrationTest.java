@@ -264,7 +264,7 @@ public class ConnectWorkerIntegrationTest {
         // expect that the connector will be stopped once the coordinator is detected to be down
         StartAndStopLatch stopLatch = connectorHandle.expectedStops(1, false);
 
-        connect.kafka().stopOnlyBrokers();
+        connect.kafka().stopTemporarily();
 
         // Allow for the workers to discover that the coordinator is unavailable, wait is
         // heartbeat timeout * 2 + 4sec
@@ -295,7 +295,7 @@ public class ConnectWorkerIntegrationTest {
                         + CONNECTOR_SETUP_DURATION_MS + "ms");
 
         StartAndStopLatch startLatch = connectorHandle.expectedStarts(1, false);
-        connect.kafka().restartOnlyBrokers();
+        connect.kafka().restart();
 
         // Allow for the kafka brokers to come back online
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
@@ -857,7 +857,7 @@ public class ConnectWorkerIntegrationTest {
 
         // Bring down Kafka, which should cause some REST requests to fail
         log.info("Stopping Kafka cluster");
-        connect.kafka().stopOnlyBrokers();
+        connect.kafka().stopTemporarily();
 
         // Try to reconfigure the connector, which should fail with a timeout error
         log.info("Trying to reconfigure connector while Kafka cluster is down");
@@ -866,7 +866,7 @@ public class ConnectWorkerIntegrationTest {
                 "flushing updates to the status topic"
         );
         log.info("Restarting Kafka cluster");
-        connect.kafka().restartOnlyBrokers();
+        connect.kafka().restart();
         connect.assertions().assertExactlyNumBrokersAreUp(1, "Broker did not complete startup in time");
         log.info("Kafka cluster is restarted");
 
