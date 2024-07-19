@@ -91,7 +91,7 @@ object BrokerFeatures extends Logging {
             MetadataVersion.latestProduction.featureLevel
           }))
     PRODUCTION_FEATURES.forEach {
-      feature => {
+      feature =>
         val maxVersion = if (unstableFeatureVersionsEnabled)
           feature.latestTesting
         else
@@ -99,7 +99,6 @@ object BrokerFeatures extends Logging {
         if (maxVersion > 0) {
           features.put(feature.featureName, new SupportedVersionRange(feature.minimumProduction(), maxVersion))
         }
-      }
     }
     Features.supportedFeatures(features)
   }

@@ -36,8 +36,9 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class QuorumFeaturesTest {
     private static final Map<String, VersionRange> LOCAL;
@@ -85,10 +86,10 @@ public class QuorumFeaturesTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void ensureDefaultSupportedFeaturesRangeNotZeroZero(boolean unstableVersionsEnabled) {
+    public void ensureDefaultSupportedFeaturesRangeMaxNotZero(boolean unstableVersionsEnabled) {
         Map<String, VersionRange> quorumFeatures = QuorumFeatures.defaultFeatureMap(unstableVersionsEnabled);
         for (VersionRange range : quorumFeatures.values()) {
-            assertFalse(range.min() == 0 && range.max() == 0);
+            assertNotEquals(0, range.max());
         }
     }
 

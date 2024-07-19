@@ -19,7 +19,7 @@ package kafka.server
 
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.server.common.{MetadataVersion, Features => ServerFeatures}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -107,10 +107,10 @@ class BrokerFeaturesTest {
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
-  def ensureDefaultSupportedFeaturesRangeNotZeroZero(unstableVersionsEnabled: Boolean): Unit = {
+  def ensureDefaultSupportedFeaturesRangeMaxNotZero(unstableVersionsEnabled: Boolean): Unit = {
     val brokerFeatures = BrokerFeatures.createDefault(unstableVersionsEnabled)
     brokerFeatures.supportedFeatures.features().values().forEach { supportedVersionRange =>
-      assertFalse(supportedVersionRange.min() == 0 && supportedVersionRange.max() == 0)
+      assertNotEquals(0, supportedVersionRange.max())
     }
   }
 }
