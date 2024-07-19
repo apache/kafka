@@ -306,7 +306,7 @@ public class HeartbeatRequestManagerTest {
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, result.timeUntilNextPollMs);
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         // Membership manager updated (to transition out of the heartbeating state)
-        verify(membershipManager).onHeartbeatRequestSent();
+        verify(membershipManager).onHeartbeatRequestGenerated();
     }
 
     @Test
@@ -319,6 +319,8 @@ public class HeartbeatRequestManagerTest {
         assertEquals(1, result.unsentRequests.size());
         // Mimic network timeout
         result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new TimeoutException("timeout"));
+        verify(membershipManager).onHeartbeatFailure(true);
+        verify(backgroundEventHandler, never()).add(any());
 
         // Assure the manager will backoff on timeout
         time.sleep(DEFAULT_RETRY_BACKOFF_MS - 1);
@@ -340,6 +342,7 @@ public class HeartbeatRequestManagerTest {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
         result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new KafkaException("fatal"));
+        verify(membershipManager).onHeartbeatFailure(false);
         verify(membershipManager).transitionToFatal();
         verify(backgroundEventHandler).add(any());
     }
@@ -494,6 +497,10 @@ public class HeartbeatRequestManagerTest {
                 break;
         }
 
+        if (error != Errors.NONE) {
+            verify(membershipManager).onHeartbeatFailure(false);
+        }
+
         if (!isFatal) {
             // Make sure a next heartbeat is sent for all non-fatal errors (to retry or rejoin)
             time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
@@ -524,7 +531,7 @@ public class HeartbeatRequestManagerTest {
         assertEquals(Collections.emptyList(), data.subscribedTopicNames());
         assertEquals(ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
         assertEquals(Collections.emptyList(), data.topicPartitions());
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
 
         // Mock a response from the group coordinator, that supplies the member ID and a new epoch
@@ -538,7 +545,7 @@ public class HeartbeatRequestManagerTest {
         assertNull(data.subscribedTopicNames());
         assertNull(data.serverAssignor());
         assertEquals(data.topicPartitions(), Collections.emptyList());
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
 
         // Join the group and subscribe to a topic, but the response has not yet been received
@@ -555,7 +562,7 @@ public class HeartbeatRequestManagerTest {
         assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
         assertEquals(ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
         assertEquals(Collections.emptyList(), data.topicPartitions());
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.JOINING, membershipManager.state());
 
         membershipManager.transitionToFenced();
@@ -568,7 +575,7 @@ public class HeartbeatRequestManagerTest {
         assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
         assertEquals(ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
         assertEquals(Collections.emptyList(), data.topicPartitions());
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.JOINING, membershipManager.state());
 
         // Mock the response from the group coordinator which returns an assignment
@@ -622,7 +629,7 @@ public class HeartbeatRequestManagerTest {
         verify(membershipManager).transitionToSendingLeaveGroup(true);
         verify(heartbeatState).reset();
         verify(heartbeatRequestState).reset();
-        verify(membershipManager).onHeartbeatRequestSent();
+        verify(membershipManager).onHeartbeatRequestGenerated();
 
         when(membershipManager.state()).thenReturn(MemberState.STALE);
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
@@ -798,7 +805,7 @@ public class HeartbeatRequestManagerTest {
         );
         membershipManager.onHeartbeatSuccess(rs1.data());
         membershipManager.poll(time.milliseconds());
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
     }
 
