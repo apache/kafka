@@ -142,7 +142,7 @@ public class NewTopicTest {
         assertNotNull(creatableTopic.configs());
         assertEquals(1, creatableTopic.configs().size());
 
-        CreateTopicsRequestData.CreateableTopicConfig config = creatableTopic.configs().find(CLEANUP_POLICY_CONFIG_KEY);
+        CreateTopicsRequestData.CreatableTopicConfig config = creatableTopic.configs().find(CLEANUP_POLICY_CONFIG_KEY);
         assertEquals(CLEANUP_POLICY_CONFIG_KEY, config.name());
         assertEquals(CLEANUP_POLICY_CONFIG_VALUE, config.value());
     }
