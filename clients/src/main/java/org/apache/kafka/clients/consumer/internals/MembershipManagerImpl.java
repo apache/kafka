@@ -426,6 +426,11 @@ public class MembershipManagerImpl implements MembershipManager {
                     "already leaving the group.", memberId, memberEpoch);
             return;
         }
+        if (state == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
+            log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
+                "to leave the group and completed the leave operation. ", memberId, memberEpoch);
+            return;
+        }
         if (isNotInGroup()) {
             log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
                 " so it's not a member of the group. ", memberId, state);
@@ -459,8 +464,29 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     @Override
-    public void onHeartbeatFailure() {
-        metricsManager.maybeRecordRebalanceFailed();
+    public void onHeartbeatFailure(boolean retriable) {
+        if (!retriable) {
+            metricsManager.maybeRecordRebalanceFailed();
+        }
+        // The leave group request is sent out once (not retried), so we should complete the leave
+        // operation once the request completes, regardless of the response.
+        if (state == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
+            log.warn("Member {} with epoch {} received a failed response to the heartbeat to " +
+                "leave the group and completed the leave operation. ", memberId, memberEpoch);
+        }
+    }
+
+    /**
+     * Complete the leave in progress (if any). This is expected to be used to complete the leave
+     * in progress when a member receives the response to the leave heartbeat.
+     */
+    private boolean maybeCompleteLeaveInProgress() {
+        if (leaveGroupInProgress.isPresent()) {
+            leaveGroupInProgress.get().complete(null);
+            leaveGroupInProgress = Optional.empty();
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -523,8 +549,8 @@ public class MembershipManagerImpl implements MembershipManager {
     public void transitionToFenced() {
         if (state == MemberState.PREPARE_LEAVING) {
             log.info("Member {} with epoch {} got fenced but it is already preparing to leave " +
-                    "the group, so it will stop sending heartbeat and won't attempt to rejoin.",
-                memberId, memberEpoch);
+                    "the group, so it will stop sending heartbeat and won't attempt to send the " +
+                    "leave request or rejoin.", memberId, memberEpoch);
             // Briefly transition to LEAVING to ensure all required actions are applied even
             // though there is no need to send a leave group heartbeat (ex. clear epoch and
             // notify epoch listeners). Then transition to UNSUBSCRIBED, ensuring that the member
@@ -532,12 +558,15 @@ public class MembershipManagerImpl implements MembershipManager {
             // sending heartbeats while it completes the ongoing leaving operation.
             transitionToSendingLeaveGroup(false);
             transitionTo(MemberState.UNSUBSCRIBED);
+            maybeCompleteLeaveInProgress();
             return;
         }
 
         if (state == MemberState.LEAVING) {
-            log.debug("Member {} with epoch {} got fenced but it is already leaving the group " +
-                    "with state {}, so it won't attempt to rejoin.", memberId, memberEpoch, state);
+            log.debug("Member {} with epoch {} got fenced before sending leave group heartbeat. " +
+                    "It will not send the leave request and won't attempt to rejoin.", memberId, memberEpoch);
+            transitionTo(MemberState.UNSUBSCRIBED);
+            maybeCompleteLeaveInProgress();
             return;
         }
         if (state == MemberState.UNSUBSCRIBED) {
@@ -584,6 +613,14 @@ public class MembershipManagerImpl implements MembershipManager {
         if (previousState == MemberState.UNSUBSCRIBED) {
             log.debug("Member {} with epoch {} got fatal error from the broker but it already " +
                     "left the group, so onPartitionsLost callback won't be triggered.", memberId, memberEpoch);
+            return;
+        }
+
+        if (previousState == MemberState.LEAVING || previousState == MemberState.PREPARE_LEAVING) {
+            log.info("Member {} with epoch {} was leaving the group with state {} when it got a " +
+                "fatal error from the broker. It will discard the ongoing leave and remain in " +
+                "fatal state.", memberId, memberEpoch, previousState);
+            maybeCompleteLeaveInProgress();
             return;
         }
 
@@ -799,7 +836,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public void onHeartbeatRequestSent() {
+    public void onHeartbeatRequestGenerated() {
         MemberState state = state();
         if (state == MemberState.ACKNOWLEDGING) {
             if (targetAssignmentReconciled()) {
@@ -812,13 +849,13 @@ public class MembershipManagerImpl implements MembershipManager {
             }
         } else if (state == MemberState.LEAVING) {
             if (isPollTimerExpired) {
-                log.debug("Member {} sent heartbeat to leave due to expired poll timer. It will " +
+                log.debug("Member {} with epoch {} generated the  heartbeat to leave due to expired poll timer. It will " +
                     "remain stale (no heartbeat) until it rejoins the group on the next consumer " +
-                    "poll.", memberId);
+                    "poll.", memberId, memberEpoch);
                 transitionToStale();
             } else {
-                log.debug("Member {} sent heartbeat to leave group.", memberId);
-                transitionToUnsubscribed();
+                log.debug("Member {} with epoch {} generated the heartbeat to leave the group.", memberId, memberEpoch);
+                transitionTo(MemberState.UNSUBSCRIBED);
             }
         }
     }
@@ -829,16 +866,12 @@ public class MembershipManagerImpl implements MembershipManager {
     @Override
     public void onHeartbeatRequestSkipped() {
         if (state == MemberState.LEAVING) {
-            log.debug("Heartbeat for leaving group could not be sent. Member {} with epoch {} will transition to {}.",
-                    memberId, memberEpoch, MemberState.UNSUBSCRIBED);
-            transitionToUnsubscribed();
+            log.warn("Heartbeat to leave group cannot be sent (most probably due to coordinator " +
+                    "not known/available). Member {} with epoch {} will transition to {}.",
+                memberId, memberEpoch, MemberState.UNSUBSCRIBED);
+            transitionTo(MemberState.UNSUBSCRIBED);
+            maybeCompleteLeaveInProgress();
         }
-    }
-
-    private void transitionToUnsubscribed() {
-        transitionTo(MemberState.UNSUBSCRIBED);
-        leaveGroupInProgress.get().complete(null);
-        leaveGroupInProgress = Optional.empty();
     }
 
     /**
@@ -1128,7 +1161,7 @@ public class MembershipManagerImpl implements MembershipManager {
      *     <li>Try to find topic names in the metadata cache</li>
      *     <li>For topics not found in metadata, try to find names in the local topic names cache
      *     (contains topic id and names currently assigned and resolved)</li>
-     *     <li>If there are topics that are not in metadata cache or in the local cached
+     *     <li>If there are topics that are not in metadata cache or in the local cache
      *     of topic names assigned to this member, request a metadata update, and continue
      *     resolving names as the cache is updated.
      *     </li>
