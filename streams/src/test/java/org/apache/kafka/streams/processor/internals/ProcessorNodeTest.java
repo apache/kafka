@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -25,7 +29,13 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.errors.ErrorHandlerContext;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.internals.FailedProcessingException;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -34,34 +44,108 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.quality.Strictness;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
+@ExtendWith(MockitoExtension.class)
 public class ProcessorNodeTest {
+    private static final String TOPIC = "topic";
+    private static final int PARTITION = 0;
+    private static final Long OFFSET = 0L;
+    private static final Long TIMESTAMP = 0L;
+    private static final TaskId TASK_ID = new TaskId(0, 0);
+    private static final String NAME = "name";
+    private static final String KEY = "key";
+    private static final String VALUE = "value";
 
     @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
         final ProcessorNode<Object, Object, Object, Object> node =
-            new ProcessorNode<>("name", new ExceptionalProcessor(), Collections.emptySet());
+            new ProcessorNode<>(NAME, new ExceptionalProcessor(), Collections.emptySet());
         assertThrows(StreamsException.class, () -> node.init(null));
     }
 
     @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() {
         final ProcessorNode<Object, Object, Object, Object> node =
-            new ProcessorNode<>("name", new ExceptionalProcessor(), Collections.emptySet());
+            new ProcessorNode<>(NAME, new ExceptionalProcessor(), Collections.emptySet());
         assertThrows(StreamsException.class, () -> node.init(null));
+    }
+
+    @Test
+    public void shouldThrowFailedProcessingExceptionWhenProcessingExceptionHandlerRepliesWithFail() {
+        final ProcessorNode<Object, Object, Object, Object> node =
+            new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
+
+        final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
+        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL, internalProcessorContext));
+
+        final FailedProcessingException failedProcessingException = assertThrows(FailedProcessingException.class,
+            () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
+
+        assertTrue(failedProcessingException.getCause() instanceof RuntimeException);
+        assertEquals("Processing exception should be caught and handled by the processing exception handler.",
+            failedProcessingException.getCause().getMessage());
+    }
+
+    @Test
+    public void shouldNotThrowFailedProcessingExceptionWhenProcessingExceptionHandlerRepliesWithContinue() {
+        final ProcessorNode<Object, Object, Object, Object> node =
+            new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
+
+        final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
+        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.CONTINUE, internalProcessorContext));
+
+        assertDoesNotThrow(() -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "FailedProcessingException,java.lang.RuntimeException,Fail processing",
+        "TaskCorruptedException,org.apache.kafka.streams.processor.internals.ProcessorNodeTest$IgnoredInternalExceptionsProcessor$1,Invalid offset",
+        "TaskMigratedException,java.lang.RuntimeException,Task migrated cause"
+    })
+    public void shouldNotHandleInternalExceptionsThrownDuringProcessing(final String ignoredExceptionName,
+                                                                        final Class<?> ignoredExceptionCause,
+                                                                        final String ignoredExceptionCauseMessage) {
+        final ProcessingExceptionHandler processingExceptionHandler = mock(ProcessingExceptionHandler.class);
+
+        final ProcessorNode<Object, Object, Object, Object> node =
+            new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
+
+        final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
+        node.init(internalProcessorContext, processingExceptionHandler);
+
+        final RuntimeException runtimeException = assertThrows(RuntimeException.class,
+            () -> node.process(new Record<>(ignoredExceptionName, VALUE, TIMESTAMP)));
+
+        assertEquals(ignoredExceptionCause, runtimeException.getCause().getClass());
+        assertEquals(ignoredExceptionCauseMessage, runtimeException.getCause().getMessage());
+        verify(processingExceptionHandler, never()).handle(any(), any(), any());
     }
 
     private static class ExceptionalProcessor implements Processor<Object, Object, Object, Object> {
@@ -87,6 +171,32 @@ public class ProcessorNodeTest {
         }
     }
 
+    private static class IgnoredInternalExceptionsProcessor implements Processor<Object, Object, Object, Object> {
+        @Override
+        public void process(final Record<Object, Object> record) {
+            if (record.key().equals("FailedProcessingException")) {
+                throw new FailedProcessingException(new RuntimeException("Fail processing"));
+            }
+
+            if (record.key().equals("TaskCorruptedException")) {
+                final Set<TaskId> tasksIds = new HashSet<>();
+                tasksIds.add(new TaskId(0, 0));
+                throw new TaskCorruptedException(tasksIds, new InvalidOffsetException("Invalid offset") {
+                    @Override
+                    public Set<TopicPartition> partitions() {
+                        return new HashSet<>(Collections.singletonList(new TopicPartition("topic", 0)));
+                    }
+                });
+            }
+
+            if (record.key().equals("TaskMigratedException")) {
+                throw new TaskMigratedException("TaskMigratedException", new RuntimeException("Task migrated cause"));
+            }
+
+            throw new RuntimeException("Processing exception should be caught and handled by the processing exception handler.");
+        }
+    }
+
     @Test
     public void testMetricsWithBuiltInMetricsVersionLatest() {
         final Metrics metrics = new Metrics();
@@ -94,7 +204,7 @@ public class ProcessorNodeTest {
             new StreamsMetricsImpl(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
         final InternalMockProcessorContext<Object, Object> context = new InternalMockProcessorContext<>(streamsMetrics);
         final ProcessorNode<Object, Object, Object, Object> node =
-            new ProcessorNode<>("name", new NoOpProcessor(), Collections.emptySet());
+            new ProcessorNode<>(NAME, new NoOpProcessor(), Collections.emptySet());
         node.init(context);
 
         final String threadId = Thread.currentThread().getName();
@@ -138,7 +248,7 @@ public class ProcessorNodeTest {
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
 
-            final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
+            final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput(KEY, VALUE));
             final String msg = se.getMessage();
             assertTrue(msg.contains("ClassCastException"), "Error about class cast with serdes");
             assertTrue(msg.contains("Serdes"), "Error about class cast with serdes");
@@ -155,8 +265,8 @@ public class ProcessorNodeTest {
         final Topology topology = builder.build();
 
         final StreamsException se = assertThrows(StreamsException.class, () -> new TopologyTestDriver(topology));
-        assertThat(se.getMessage(), containsString("Failed to initialize key serdes for source node"));
-        assertThat(se.getCause().getMessage(), containsString("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
+        assertTrue(se.getMessage().contains("Failed to initialize key serdes for source node"));
+        assertTrue(se.getCause().getMessage().contains("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
     }
 
     private static class ClassCastProcessor extends ExceptionalProcessor {
@@ -182,11 +292,66 @@ public class ProcessorNodeTest {
         node.init(context);
         final StreamsException se = assertThrows(
             StreamsException.class,
-            () -> node.process(new Record<>("aKey", "aValue", 0))
+            () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP))
         );
-        assertThat(se.getCause(), instanceOf(ClassCastException.class));
-        assertThat(se.getMessage(), containsString("default Serdes"));
-        assertThat(se.getMessage(), containsString("input types"));
-        assertThat(se.getMessage(), containsString("pname"));
+        assertTrue(se.getCause() instanceof ClassCastException);
+        assertTrue(se.getMessage().contains("default Serdes"));
+        assertTrue(se.getMessage().contains("input types"));
+        assertTrue(se.getMessage().contains("pname"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private InternalProcessorContext<Object, Object> mockInternalProcessorContext() {
+        final InternalProcessorContext<Object, Object> internalProcessorContext = mock(InternalProcessorContext.class, withSettings().strictness(Strictness.LENIENT));
+
+        when(internalProcessorContext.taskId()).thenReturn(TASK_ID);
+        when(internalProcessorContext.metrics()).thenReturn(new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime()));
+        when(internalProcessorContext.topic()).thenReturn(TOPIC);
+        when(internalProcessorContext.partition()).thenReturn(PARTITION);
+        when(internalProcessorContext.offset()).thenReturn(OFFSET);
+        when(internalProcessorContext.recordContext()).thenReturn(
+            new ProcessorRecordContext(
+                TIMESTAMP,
+                OFFSET,
+                PARTITION,
+                TOPIC,
+                new RecordHeaders(),
+                new ConsumerRecord<>(TOPIC, PARTITION, OFFSET, KEY.getBytes(), VALUE.getBytes())));
+        when(internalProcessorContext.currentNode()).thenReturn(new ProcessorNode<>(NAME));
+
+        return internalProcessorContext;
+    }
+
+    public static class ProcessingExceptionHandlerMock implements ProcessingExceptionHandler {
+        private final ProcessingExceptionHandler.ProcessingHandlerResponse response;
+        private final InternalProcessorContext<Object, Object> internalProcessorContext;
+
+        public ProcessingExceptionHandlerMock(final ProcessingExceptionHandler.ProcessingHandlerResponse response,
+                                              final InternalProcessorContext<Object, Object> internalProcessorContext) {
+            this.response = response;
+            this.internalProcessorContext = internalProcessorContext;
+        }
+
+        @Override
+        public ProcessingExceptionHandler.ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+            assertEquals(internalProcessorContext.topic(), context.topic());
+            assertEquals(internalProcessorContext.partition(), context.partition());
+            assertEquals(internalProcessorContext.offset(), context.offset());
+            assertArrayEquals(internalProcessorContext.recordContext().rawRecord().key(), context.sourceRawKey());
+            assertArrayEquals(internalProcessorContext.recordContext().rawRecord().value(), context.sourceRawValue());
+            assertEquals(internalProcessorContext.currentNode().name(), context.processorNodeId());
+            assertEquals(internalProcessorContext.taskId(), context.taskId());
+            assertEquals(KEY, record.key());
+            assertEquals(VALUE, record.value());
+            assertTrue(exception instanceof RuntimeException);
+            assertEquals("Processing exception should be caught and handled by the processing exception handler.", exception.getMessage());
+
+            return response;
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            // No-op
+        }
     }
 }
