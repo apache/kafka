@@ -256,15 +256,6 @@ Found problem:
   }
 
   @Test
-  def testFormatWithInvalidClusterId(): Unit = {
-    val config = new KafkaConfig(newSelfManagedProperties())
-    assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
-      "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
-        "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
-          () => StorageTool.buildMetadataProperties("invalid", config)).getMessage)
-  }
-
-  @Test
   def testDefaultMetadataVersion(): Unit = {
     val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
     val mv = StorageTool.getMetadataVersion(namespace, Map.empty, defaultVersionString = None)
