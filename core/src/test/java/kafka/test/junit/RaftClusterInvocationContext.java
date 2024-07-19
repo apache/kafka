@@ -17,12 +17,10 @@
 
 package kafka.test.junit;
 
-import kafka.log.UnifiedLog;
 import kafka.network.SocketServer;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
-import kafka.server.checkpoints.OffsetCheckpointFile;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.Type;
@@ -31,7 +29,6 @@ import kafka.testkit.TestKitNodes;
 import kafka.zk.EmbeddedZookeeper;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
@@ -39,14 +36,12 @@ import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -60,10 +55,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import scala.collection.JavaConverters;
 import scala.compat.java8.OptionConverters;
 
 /**
@@ -238,57 +231,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 throw new AssertionError("Failed while waiting for brokers to become ready", e);
             }
         }
-
-        @Override
-        @SuppressWarnings("deprecation")
-        public void verifyTopicDeletion(String topic, int partions) throws InterruptedException {
-            List<TopicPartition> topicPartitions = IntStream.range(0, partions).mapToObj(i -> new TopicPartition(topic, i)).collect(Collectors.toList());
-            TestUtils.waitForCondition(
-                () ->
-                    brokers().values().stream().allMatch(broker ->
-                        topicPartitions.stream().allMatch(tp ->
-                            broker.replicaManager().onlinePartition(tp).isEmpty())
-                    ), "Replica manager's should have deleted all of this topic's partitions"
-            );
-
-            TestUtils.waitForCondition(
-                () ->
-                    brokers().values().stream().allMatch(broker ->
-                        topicPartitions.stream().allMatch(tp ->
-                            broker.replicaManager().onlinePartition(tp).isEmpty())
-                    ), "Replica logs not deleted after delete topic is complete"
-            );
-
-
-            TestUtils.waitForCondition(() -> brokers().values().stream().allMatch(broker ->
-                topicPartitions.stream().allMatch(tp ->
-                        JavaConverters.seqAsJavaList(broker.logManager().liveLogDirs()).stream()
-                                .map(logDir -> JavaConverters.mapAsJavaMap(new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null).read()))
-                                .collect(Collectors.toList())
-                                .stream()
-                                .noneMatch(checkpointsPerLogDir -> checkpointsPerLogDir.containsKey(tp))
-                )
-            ), "Cleaner offset for deleted partition should have been removed");
-
-            TestUtils.waitForCondition(() -> brokers().values().stream().allMatch(
-                broker -> broker.config().logDirs().forall(
-                        logDir -> topicPartitions.stream().noneMatch(
-                            tp -> new File(logDir, tp.topic() + "-" + tp.partition()).exists()))),
-                "Failed to soft-delete the data to a delete directory"
-            );
-
-            TestUtils.waitForCondition(() -> brokers().values().stream().allMatch(
-                broker -> broker.config().logDirs().forall(
-                    logDir -> topicPartitions.stream().noneMatch(
-                        tp -> Arrays.asList(new File(logDir).list()).stream().allMatch(
-                            partitionDirectoryName -> partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&
-                                partitionDirectoryName.endsWith(UnifiedLog.DeleteDirSuffix())
-                        )
-                    )
-                )
-            ), "Failed to hard-delete the delete directory");
-        }
-
 
         @Override
         public Map<Integer, KafkaBroker> brokers() {
