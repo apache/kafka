@@ -78,6 +78,10 @@ public enum Features {
         return defaultValue(MetadataVersion.LATEST_PRODUCTION);
     }
 
+    public short minimumProduction() {
+        return featureVersions[0].featureLevel();
+    }
+
     public short latestTesting() {
         return featureVersions[featureVersions.length - 1].featureLevel();
     }

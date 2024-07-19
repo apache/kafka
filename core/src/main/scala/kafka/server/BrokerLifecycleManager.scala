@@ -381,12 +381,10 @@ class BrokerLifecycleManager(
   private def sendBrokerRegistration(): Unit = {
     val features = new BrokerRegistrationRequestData.FeatureCollection()
     _supportedFeatures.asScala.foreach {
-      // Do not include features with the range 0-0.
-      case (name, range) if range.max() > 0 => features.add(new BrokerRegistrationRequestData.Feature().
+      case (name, range) => features.add(new BrokerRegistrationRequestData.Feature().
         setName(name).
         setMinSupportedVersion(range.min()).
         setMaxSupportedVersion(range.max()))
-      case _ =>
     }
     val sortedLogDirs = new util.ArrayList[Uuid]
     logDirs.foreach(sortedLogDirs.add)

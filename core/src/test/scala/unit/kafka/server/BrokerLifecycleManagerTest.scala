@@ -24,14 +24,12 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.{BrokerHeartbeatResponseData, BrokerRegistrationResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
-import org.apache.kafka.metadata.{BrokerState, VersionRange}
+import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.common.Features
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test, Timeout}
 
-import java.util
 import java.util.concurrent.{CompletableFuture, Future}
 import scala.jdk.CollectionConverters._
 
@@ -98,27 +96,6 @@ class BrokerLifecycleManagerTest {
     TestUtils.retry(10000) {
       context.poll()
       assertEquals(1000L, manager.brokerEpoch)
-    }
-  }
-
-  @Test
-  def testFeatureRangeMaxZeroNotIncludedInRegistration(): Unit = {
-    val context = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", isZkBroker = false, Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
-    val controllerNode = new Node(3000, "localhost", 8021)
-    context.controllerNodeProvider.node.set(controllerNode)
-
-    val features = new util.HashMap[String, VersionRange]()
-    features.put(Features.TEST_VERSION.featureName(), VersionRange.of(0, 0))
-    features.put(Features.KRAFT_VERSION.featureName(), VersionRange.of(0, 1))
-
-    manager.start(() => context.highestMetadataOffset.get(),
-      context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      features, OptionalLong.of(10L))
-    TestUtils.retry(60000) {
-      assertEquals(1, context.mockChannelManager.unsentQueue.size)
-      // Only the feature with a range that is not 0-0 is included.
-      assertEquals(1, context.mockChannelManager.unsentQueue.getFirst.request.build().asInstanceOf[BrokerRegistrationRequest].data().features().size())
     }
   }
 

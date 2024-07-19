@@ -26,6 +26,8 @@ import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -59,7 +61,7 @@ public class QuorumFeaturesTest {
             MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         for (Features feature : Features.PRODUCTION_FEATURES) {
             expectedFeatures.put(feature.featureName(), VersionRange.of(
-                0,
+                feature.minimumProduction(),
                 feature.defaultValue(MetadataVersion.LATEST_PRODUCTION)
             ));
         }
@@ -74,11 +76,20 @@ public class QuorumFeaturesTest {
             MetadataVersion.latestTesting().featureLevel()));
         for (Features feature : Features.PRODUCTION_FEATURES) {
             expectedFeatures.put(feature.featureName(), VersionRange.of(
-                0,
+                feature.minimumProduction(),
                 feature.defaultValue(MetadataVersion.latestTesting())
             ));
         }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void ensureDefaultSupportedFeaturesRangeNotZeroZero(boolean unstableVersionsEnabled) {
+        Map<String, VersionRange> quorumFeatures = QuorumFeatures.defaultFeatureMap(unstableVersionsEnabled);
+        for (VersionRange range : quorumFeatures.values()) {
+            assertFalse(range.min() == 0 && range.max() == 0);
+        }
     }
 
     @Test
