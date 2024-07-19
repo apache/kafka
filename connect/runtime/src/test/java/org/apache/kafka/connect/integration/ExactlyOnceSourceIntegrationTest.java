@@ -122,6 +122,7 @@ public class ExactlyOnceSourceIntegrationTest {
 
     private static final int CONSUME_RECORDS_TIMEOUT_MS = 60_000;
     private static final int SOURCE_TASK_PRODUCE_TIMEOUT_MS = 30_000;
+    private static final int ACL_PROPAGATION_TIMEOUT_MS = 30_000;
     private static final int DEFAULT_NUM_WORKERS = 3;
 
     // Tests require that a minimum but not unreasonably large number of records are sourced.
@@ -719,8 +720,9 @@ public class ExactlyOnceSourceIntegrationTest {
                     }
                     return false;
                 },
-                30_000,
-                "Connector was not able to start in time"
+                ACL_PROPAGATION_TIMEOUT_MS,
+                "Connector was not able to start in time, "
+                        + "or ACL updates were not propagated across the Kafka cluster soon enough"
         );
 
         // Also verify that the connector's tasks have been able to start successfully
