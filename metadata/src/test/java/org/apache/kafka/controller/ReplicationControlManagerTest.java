@@ -306,7 +306,7 @@ public class ReplicationControlManagerTest {
                     setPartitionIndex(i).setBrokerIds(Replicas.toList(replicas[i])));
             }
             configs.forEach((key, value) -> topic.configs().add(
-                    new CreateTopicsRequestData.CreateableTopicConfig()
+                    new CreateTopicsRequestData.CreatableTopicConfig()
                             .setName(key)
                             .setValue(value)
                     )
@@ -689,10 +689,10 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokers(0, 1, 2);
         ctx.unfenceBrokers(0, 1, 2);
 
-        CreateTopicsRequestData.CreateableTopicConfigCollection validConfigs =
-            new CreateTopicsRequestData.CreateableTopicConfigCollection();
+        CreateTopicsRequestData.CreatableTopicConfigCollection validConfigs =
+            new CreateTopicsRequestData.CreatableTopicConfigCollection();
         validConfigs.add(
-            new CreateTopicsRequestData.CreateableTopicConfig()
+            new CreateTopicsRequestData.CreatableTopicConfig()
                 .setName("foo")
                 .setValue("notNull")
         );
@@ -723,10 +723,10 @@ public class ReplicationControlManagerTest {
             ctx.configurationControl.getConfigs(new ConfigResource(ConfigResource.Type.TOPIC, "foo")).get("foo")
         );
 
-        CreateTopicsRequestData.CreateableTopicConfigCollection invalidConfigs =
-            new CreateTopicsRequestData.CreateableTopicConfigCollection();
+        CreateTopicsRequestData.CreatableTopicConfigCollection invalidConfigs =
+            new CreateTopicsRequestData.CreatableTopicConfigCollection();
         invalidConfigs.add(
-            new CreateTopicsRequestData.CreateableTopicConfig()
+            new CreateTopicsRequestData.CreatableTopicConfig()
                 .setName("foo")
                 .setValue(null)
         );
@@ -1335,12 +1335,12 @@ public class ReplicationControlManagerTest {
     private void assertCreatedTopicConfigs(
         ReplicationControlTestContext ctx,
         String topic,
-        CreateTopicsRequestData.CreateableTopicConfigCollection requestConfigs
+        CreateTopicsRequestData.CreatableTopicConfigCollection requestConfigs
     ) {
         Map<String, String> configs = ctx.configurationControl.getConfigs(
             new ConfigResource(ConfigResource.Type.TOPIC, topic));
         assertEquals(requestConfigs.size(), configs.size());
-        for (CreateTopicsRequestData.CreateableTopicConfig requestConfig : requestConfigs) {
+        for (CreateTopicsRequestData.CreatableTopicConfig requestConfig : requestConfigs) {
             String value = configs.get(requestConfig.name());
             assertEquals(requestConfig.value(), value);
         }
@@ -1360,11 +1360,11 @@ public class ReplicationControlManagerTest {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
         ReplicationControlManager replicationControl = ctx.replicationControl;
         CreateTopicsRequestData request = new CreateTopicsRequestData();
-        CreateTopicsRequestData.CreateableTopicConfigCollection requestConfigs =
-            new CreateTopicsRequestData.CreateableTopicConfigCollection();
-        requestConfigs.add(new CreateTopicsRequestData.CreateableTopicConfig().
+        CreateTopicsRequestData.CreatableTopicConfigCollection requestConfigs =
+            new CreateTopicsRequestData.CreatableTopicConfigCollection();
+        requestConfigs.add(new CreateTopicsRequestData.CreatableTopicConfig().
             setName("cleanup.policy").setValue("compact"));
-        requestConfigs.add(new CreateTopicsRequestData.CreateableTopicConfig().
+        requestConfigs.add(new CreateTopicsRequestData.CreatableTopicConfig().
             setName("min.cleanable.dirty.ratio").setValue("0.1"));
         request.topics().add(new CreatableTopic().setName("foo").
             setNumPartitions(3).setReplicationFactor((short) 2).
