@@ -101,7 +101,7 @@ public class ConnectAssertions {
      */
     protected Optional<Boolean> checkWorkersUp(int numWorkers, BiFunction<Integer, Integer, Boolean> comp) {
         try {
-            int numUp = connect.activeWorkers().size();
+            int numUp = connect.healthyWorkers().size();
             return Optional.of(comp.apply(numUp, numWorkers));
         } catch (Exception e) {
             log.error("Could not check active workers.", e);

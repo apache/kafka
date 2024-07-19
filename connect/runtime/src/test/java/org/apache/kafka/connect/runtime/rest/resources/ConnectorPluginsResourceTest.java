@@ -39,7 +39,6 @@ import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
-import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
@@ -88,6 +87,8 @@ import java.util.stream.Stream;
 import javax.ws.rs.BadRequestException;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS;
+import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -216,7 +217,10 @@ public class ConnectorPluginsResourceTest {
         doReturn(HEADER_CONVERTER_PLUGINS).when(plugins).headerConverters();
         doReturn(TRANSFORMATION_PLUGINS).when(plugins).transformations();
         doReturn(PREDICATE_PLUGINS).when(plugins).predicates();
-        RestRequestTimeout requestTimeout = () -> RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
+        RestRequestTimeout requestTimeout = RestRequestTimeout.constant(
+                DEFAULT_REST_REQUEST_TIMEOUT_MS,
+                DEFAULT_HEALTH_CHECK_TIMEOUT_MS
+        );
         connectorPluginsResource = new ConnectorPluginsResource(herder, requestTimeout);
     }
 
