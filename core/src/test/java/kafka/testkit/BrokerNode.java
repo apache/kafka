@@ -17,7 +17,6 @@
 
 package kafka.testkit;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
@@ -42,7 +41,7 @@ public class BrokerNode implements TestKitNode {
     public static class Builder {
         private int id = -1;
         private String baseDirectory;
-        private Uuid clusterId;
+        private String clusterId;
         private int numLogDirectories = 1;
         private Map<String, String> propertyOverrides = Collections.emptyMap();
         private boolean combined;
@@ -63,7 +62,7 @@ public class BrokerNode implements TestKitNode {
             return this;
         }
 
-        public Builder setClusterId(Uuid clusterId) {
+        public Builder setClusterId(String clusterId) {
             this.clusterId = clusterId;
             return this;
         }
@@ -113,7 +112,7 @@ public class BrokerNode implements TestKitNode {
             for (String logDir : logDataDirectories) {
                 copier.setLogDirProps(logDir, new MetaProperties.Builder().
                     setVersion(MetaPropertiesVersion.V1).
-                    setClusterId(clusterId.toString()).
+                    setClusterId(clusterId).
                     setNodeId(id).
                     setDirectoryId(copier.generateValidDirectoryId()).
                     build());

@@ -113,7 +113,7 @@ public final class RaftClientTestContext {
     private int appendLingerMs;
 
     private final QuorumStateStore quorumStateStore;
-    final Uuid clusterId;
+    final String clusterId;
     private final OptionalInt localId;
     public final Uuid localDirectoryId;
     public final KRaftVersion kraftVersion;
@@ -150,7 +150,7 @@ public final class RaftClientTestContext {
         private final MockableRandom random = new MockableRandom(1L);
         private final LogContext logContext = new LogContext();
         private final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID, logContext);
-        private final Uuid clusterId = Uuid.randomUuid();
+        private final String clusterId = Uuid.randomUuid().toString();
         private final OptionalInt localId;
         private KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_0;
         private final Uuid localDirectoryId;
@@ -382,7 +382,7 @@ public final class RaftClientTestContext {
                 time,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
-                clusterId.toString(),
+                clusterId,
                 bootstrapServers,
                 localListeners,
                 logContext,
@@ -429,7 +429,7 @@ public final class RaftClientTestContext {
 
     @SuppressWarnings("ParameterNumber")
     private RaftClientTestContext(
-        Uuid clusterId,
+        String clusterId,
         OptionalInt localId,
         Uuid localDirectoryId,
         KRaftVersion kraftVersion,
@@ -1174,7 +1174,7 @@ public final class RaftClientTestContext {
         List<ReplicaKey> preferredCandidates
     ) {
         return endEpochRequest(
-            clusterId.toString(),
+            clusterId,
             epoch,
             leaderId,
             preferredCandidates
@@ -1197,7 +1197,7 @@ public final class RaftClientTestContext {
     }
 
     BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
-        return beginEpochRequest(clusterId.toString(), epoch, leaderId);
+        return beginEpochRequest(clusterId, epoch, leaderId);
     }
 
     BeginQuorumEpochRequestData beginEpochRequest(String clusterId, int epoch, int leaderId) {
@@ -1244,7 +1244,7 @@ public final class RaftClientTestContext {
         long lastEpochOffset
     ) {
         return voteRequest(
-            clusterId.toString(),
+            clusterId,
             epoch,
             candidateKey,
             lastEpoch,
@@ -1404,7 +1404,7 @@ public final class RaftClientTestContext {
     ) {
         return fetchRequest(
             epoch,
-            clusterId.toString(),
+            clusterId,
             replicaKey,
             fetchOffset,
             lastFetchedEpoch,

@@ -536,7 +536,7 @@ public class RaftEventSimulationTest {
         final Random random;
         final AtomicInteger correlationIdCounter = new AtomicInteger();
         final MockTime time = new MockTime();
-        final Uuid clusterId = Uuid.randomUuid();
+        final String clusterId = Uuid.randomUuid().toString();
         final Map<Integer, Node> voters = new HashMap<>();
         final Map<Integer, PersistentState> nodes = new HashMap<>();
         final Map<Integer, RaftNode> running = new HashMap<>();
@@ -788,7 +788,7 @@ public class RaftEventSimulationTest {
                 time,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
-                clusterId.toString(),
+                clusterId,
                 Collections.emptyList(),
                 endpointsFromId(nodeId, channel.listenerName()),
                 logContext,

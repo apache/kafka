@@ -29,13 +29,13 @@ public class BrokerNodeTest {
         Assertions.assertEquals("You must set the node id.",
                 Assertions.assertThrows(IllegalArgumentException.class, () -> BrokerNode.builder()
                         .setBaseDirectory("foo")
-                        .setClusterId(Uuid.randomUuid())
+                        .setClusterId(Uuid.randomUuid().toString())
                         .build()).getMessage());
 
         Assertions.assertEquals("The value of numLogDirectories should be at least 1.",
                 Assertions.assertThrows(IllegalArgumentException.class, () -> BrokerNode.builder()
                         .setBaseDirectory("foo")
-                        .setClusterId(Uuid.randomUuid())
+                        .setClusterId(Uuid.randomUuid().toString())
                         .setId(0)
                         .setNumLogDirectories(0)
                         .build()).getMessage());

@@ -40,7 +40,7 @@ public class TestKitNodes {
 
     public static class Builder {
         private boolean combined;
-        private Uuid clusterId;
+        private String clusterId;
         private int numControllerNodes;
         private int numBrokerNodes;
         private int numDisksPerBroker = 1;
@@ -48,7 +48,7 @@ public class TestKitNodes {
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
             fromVersion(MetadataVersion.latestTesting(), "testkit");
 
-        public Builder setClusterId(Uuid clusterId) {
+        public Builder setClusterId(String clusterId) {
             this.clusterId = clusterId;
             return this;
         }
@@ -103,7 +103,7 @@ public class TestKitNodes {
 
             String baseDirectory = TestUtils.tempDirectory().getAbsolutePath();
             if (clusterId == null) {
-                clusterId = Uuid.randomUuid();
+                clusterId = Uuid.randomUuid().toString();
             }
 
             int controllerId = combined ? BROKER_ID_OFFSET : BROKER_ID_OFFSET + CONTROLLER_ID_OFFSET;
@@ -162,14 +162,14 @@ public class TestKitNodes {
     }
 
     private final String baseDirectory;
-    private final Uuid clusterId;
+    private final String clusterId;
     private final BootstrapMetadata bootstrapMetadata;
     private final SortedMap<Integer, ControllerNode> controllerNodes;
     private final SortedMap<Integer, BrokerNode> brokerNodes;
 
     private TestKitNodes(
         String baseDirectory,
-        Uuid clusterId,
+        String clusterId,
         BootstrapMetadata bootstrapMetadata,
         SortedMap<Integer, ControllerNode> controllerNodes,
         SortedMap<Integer, BrokerNode> brokerNodes
@@ -189,7 +189,7 @@ public class TestKitNodes {
         return baseDirectory;
     }
 
-    public Uuid clusterId() {
+    public String clusterId() {
         return clusterId;
     }
 
