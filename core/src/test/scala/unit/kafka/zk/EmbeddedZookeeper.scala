@@ -53,10 +53,12 @@ class EmbeddedZookeeper extends Closeable with Logging {
     // Also shuts down ZooKeeperServer
     CoreUtils.swallow(factory.shutdown(), this)
 
-    val sessionTracker: SessionTrackerImpl = zookeeper.getSessionTracker.asInstanceOf[SessionTrackerImpl]
-    while (sessionTracker.isAlive) {
-      // wait sessionTracker close.
-      Thread.sleep(100)
+    zookeeper.getSessionTracker match {
+      case tracker: SessionTrackerImpl =>
+        while (tracker.isAlive) {
+          Thread.sleep(100)
+        }
+      case _ =>
     }
 
     def isDown(): Boolean = {
