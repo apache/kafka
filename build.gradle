@@ -588,6 +588,8 @@ subprojects {
       from "$rootDir/LICENSE"
       from "$rootDir/NOTICE"
       from sourceSets.test.output
+      // The junit-platform.properties is a junit file that should be excluded from testJar
+      // issue url: https://issues.apache.org/jira/browse/KAFKA-17121
       exclude 'junit-platform.properties'
     }
 
