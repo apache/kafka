@@ -376,7 +376,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     logger.info(
                         "Setting the next offset of {} to {} since there are no snapshots",
                         listenerContext.listenerName(),
-                        listenerContext.SMALLEST_LOG_OFFSET
+                        ListenerContext.SMALLEST_LOG_OFFSET
                     );
                     listenerContext.resetOffsetToSmallestLogOffset();
                 } else if (nextExpectedOffset < log.startOffset()) {

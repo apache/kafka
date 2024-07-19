@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
-import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.Endpoints;
@@ -354,9 +353,7 @@ public final class AddVoterHandler {
     }
 
     private ApiVersionsRequestData buildApiVersionsRequest() {
-        return new ApiVersionsRequestData()
-            .setClientSoftwareName(ApiVersionsRequest.Builder.DEFAULT_CLIENT_SOFTWARE_NAME)
-            .setClientSoftwareVersion(AppInfoParser.getVersion());
+        return new ApiVersionsRequest.Builder().build().data();
     }
 
     private boolean isOperationPending(LeaderState<?> leaderState, long currentTimeMs) {

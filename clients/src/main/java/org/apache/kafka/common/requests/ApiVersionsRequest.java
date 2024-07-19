@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
 public class ApiVersionsRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<ApiVersionsRequest> {
-        public static final String DEFAULT_CLIENT_SOFTWARE_NAME = "apache-kafka-java";
+        private static final String DEFAULT_CLIENT_SOFTWARE_NAME = "apache-kafka-java";
 
         private static final ApiVersionsRequestData DATA = new ApiVersionsRequestData()
             .setClientSoftwareName(DEFAULT_CLIENT_SOFTWARE_NAME)
