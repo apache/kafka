@@ -51,9 +51,9 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
         }.logger(RemoteStorageThreadPool.class);
 
         metricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
-                () -> RemoteStorageThreadPool.this.getQueue().size());
+                () -> getQueue().size());
         metricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
-                () -> 1 - (double) RemoteStorageThreadPool.this.getActiveCount() / (double) RemoteStorageThreadPool.this.getCorePoolSize());
+                () -> 1 - (double) getActiveCount() / (double) getCorePoolSize());
     }
 
     @Override

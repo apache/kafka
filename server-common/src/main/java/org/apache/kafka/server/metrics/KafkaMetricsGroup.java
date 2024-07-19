@@ -72,12 +72,7 @@ public class KafkaMetricsGroup {
     }
 
     public <T> Gauge<T> newGauge(String name, Supplier<T> metric, Map<String, String> tags) {
-        return KafkaYammerMetrics.defaultRegistry().newGauge(metricName(name, tags), new Gauge<T>() {
-            @Override
-            public T value() {
-                return metric.get();
-            }
-        });
+        return newGauge(metricName(name, tags), metric);
     }
 
     public <T> Gauge<T> newGauge(String name, Supplier<T> metric) {
