@@ -1173,21 +1173,6 @@ public class StickyAssignorTest {
         return res;
     }
 
-    private int getAllStandbyTaskCount(GroupAssignment result, String... memberIds) {
-        int size = 0;
-        for (String memberId : memberIds) {
-            final MemberAssignment testMember = result.members().get(memberId);
-            assertNotNull(testMember);
-            assertNotNull(testMember.standbyTasks());
-            if(testMember.standbyTasks().size() != 0) {
-                for (Map.Entry<String, Set<Integer>> entry : testMember.standbyTasks().entrySet()) {
-                    size += entry.getValue().size();
-                }
-            }
-        }
-        return size;
-    }
-
     private List<Integer> getAllTaskIds(GroupAssignment result, String... memberIds) {
         List<Integer> res = new ArrayList<>();
         res.addAll(getAllActiveTaskIds(result, memberIds));
@@ -1280,16 +1265,4 @@ public class StickyAssignorTest {
             return statefulTasks.get(subtopologyId);
         }
     }
-
-//    private void assertActiveTaskTopicGroupIdsEvenlyDistributed(GroupAssignment result) {
-//        for (final Map.Entry<String, MemberAssignment> clientStateEntry : result.members().entrySet()) {
-//            final List<Integer> topicGroupIds = new ArrayList<>();
-//            final Set<TaskId> activeTasks = clientStateEntry.getValue().activeTasks();
-//            for (final TaskId activeTask : activeTasks) {
-//                topicGroupIds.add(activeTask.subtopology());
-//            }
-//            Collections.sort(topicGroupIds);
-//            assertThat(topicGroupIds, equalTo(expectedTopicGroupIds));
-//        }
-//    }
 }
