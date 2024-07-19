@@ -628,7 +628,6 @@ public class EmbeddedKafkaCluster {
     }
 
     private void addDefaultBrokerPropsIfAbsent(Properties brokerConfig, int numBrokers) {
-        brokerConfig.putIfAbsent(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "true");
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0");
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, String.valueOf(numBrokers));
         brokerConfig.putIfAbsent(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false");
