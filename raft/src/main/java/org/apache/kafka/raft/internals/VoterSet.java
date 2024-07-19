@@ -321,7 +321,7 @@ public final class VoterSet {
             }
         }
 
-        Endpoints listeners() {
+        public Endpoints listeners() {
             return listeners;
         }
 

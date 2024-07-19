@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
@@ -37,7 +36,6 @@ import org.apache.kafka.server.common.KRaftVersion;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -110,7 +108,7 @@ public class LeaderState<T> implements EpochState {
             boolean hasAcknowledgedLeader = voterNode.isVoter(localReplicaKey);
             this.voterStates.put(
                 voterNode.voterKey().id(),
-                new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader)
+                new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, Optional.of(voterNode.listeners()))
             );
         }
         this.grantingVoters = Collections.unmodifiableSet(new HashSet<>(grantingVoters));
@@ -341,6 +339,19 @@ public class LeaderState<T> implements EpochState {
         return endpoints;
     }
 
+    int localId() {
+        return localReplicaKey.id();
+    }
+
+    Map<Integer, ReplicaState> voterStates() {
+        return voterStates;
+    }
+
+    Map<ReplicaKey, ReplicaState> observerStates(final long currentTimeMs) {
+        clearInactiveObservers(currentTimeMs);
+        return observerStates;
+    }
+
     public Set<Integer> grantingVoters() {
         return this.grantingVoters;
     }
@@ -559,58 +570,6 @@ public class LeaderState<T> implements EpochState {
         return Optional.ofNullable(state);
     }
 
-    public DescribeQuorumResponseData.PartitionData describeQuorum(long currentTimeMs) {
-        clearInactiveObservers(currentTimeMs);
-
-        return new DescribeQuorumResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
-            .setLeaderId(localReplicaKey.id())
-            .setLeaderEpoch(epoch)
-            .setHighWatermark(highWatermark.map(LogOffsetMetadata::offset).orElse(-1L))
-            .setCurrentVoters(describeReplicaStates(voterStates.values(), currentTimeMs))
-            .setObservers(describeReplicaStates(observerStates.values(), currentTimeMs));
-    }
-
-    public DescribeQuorumResponseData.NodeCollection nodes(long currentTimeMs) {
-        clearInactiveObservers(currentTimeMs);
-
-        // KAFKA-16953 will add support for including the node listeners in the node collection
-        return new DescribeQuorumResponseData.NodeCollection();
-    }
-
-    private List<DescribeQuorumResponseData.ReplicaState> describeReplicaStates(
-        Collection<ReplicaState> states,
-        long currentTimeMs
-    ) {
-        return states
-            .stream()
-            .map(replicaState -> describeReplicaState(replicaState, currentTimeMs))
-            .collect(Collectors.toList());
-    }
-
-    private DescribeQuorumResponseData.ReplicaState describeReplicaState(
-        ReplicaState replicaState,
-        long currentTimeMs
-    ) {
-        final long lastCaughtUpTimestamp;
-        final long lastFetchTimestamp;
-        if (replicaState.matchesKey(localReplicaKey)) {
-            lastCaughtUpTimestamp = currentTimeMs;
-            lastFetchTimestamp = currentTimeMs;
-        } else {
-            lastCaughtUpTimestamp = replicaState.lastCaughtUpTimestamp;
-            lastFetchTimestamp = replicaState.lastFetchTimestamp;
-        }
-
-        // KAFKA-16953 will add support for the replica directory id
-        return new DescribeQuorumResponseData.ReplicaState()
-            .setReplicaId(replicaState.replicaKey.id())
-            .setLogEndOffset(replicaState.endOffset.map(LogOffsetMetadata::offset).orElse(-1L))
-            .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
-            .setLastFetchTimestamp(lastFetchTimestamp);
-
-    }
-
     /**
      * Clear observer states that have not been active for a while and are not the leader.
      */
@@ -633,7 +592,7 @@ public class LeaderState<T> implements EpochState {
         // Compute the new voter states map
         for (VoterSet.VoterNode voterNode : lastVoterSet.voterNodes()) {
             ReplicaState state = getReplicaState(voterNode.voterKey())
-                .orElse(new ReplicaState(voterNode.voterKey(), false));
+                .orElse(new ReplicaState(voterNode.voterKey(), false, Optional.of(voterNode.listeners())));
 
             // Remove the voter from the previous data structures
             oldVoterStates.remove(voterNode.voterKey().id());
@@ -647,12 +606,14 @@ public class LeaderState<T> implements EpochState {
 
         // Move any of the remaining old voters to observerStates
         for (ReplicaState replicaStateEntry : oldVoterStates.values()) {
+            replicaStateEntry.listeners = Optional.empty();
             observerStates.putIfAbsent(replicaStateEntry.replicaKey, replicaStateEntry);
         }
     }
 
-    private static class ReplicaState implements Comparable<ReplicaState> {
+    static class ReplicaState implements Comparable<ReplicaState> {
         ReplicaKey replicaKey;
+        Optional<Endpoints> listeners;
         Optional<LogOffsetMetadata> endOffset;
         long lastFetchTimestamp;
         long lastFetchLeaderLogEndOffset;
@@ -660,7 +621,12 @@ public class LeaderState<T> implements EpochState {
         boolean hasAcknowledgedLeader;
 
         public ReplicaState(ReplicaKey replicaKey, boolean hasAcknowledgedLeader) {
+            this(replicaKey, hasAcknowledgedLeader, Optional.empty());
+        }
+
+        public ReplicaState(ReplicaKey replicaKey, boolean hasAcknowledgedLeader, Optional<Endpoints> listeners) {
             this.replicaKey = replicaKey;
+            this.listeners = listeners;
             this.endOffset = Optional.empty();
             this.lastFetchTimestamp = -1;
             this.lastFetchLeaderLogEndOffset = -1;

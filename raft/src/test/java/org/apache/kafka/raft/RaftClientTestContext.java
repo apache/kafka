@@ -649,18 +649,42 @@ public final class RaftClientTestContext {
         List<ReplicaState> voterStates,
         List<ReplicaState> observerStates
     ) {
+        short apiVersion = (short) (kip853Rpc ? 2 : 1);
+        assertSentDescribeQuorumResponse(leaderId, leaderEpoch, highWatermark, voterStates, observerStates, apiVersion, Errors.NONE);
+    }
+
+    void assertSentDescribeQuorumResponse(
+        int leaderId,
+        int leaderEpoch,
+        long highWatermark,
+        List<ReplicaState> voterStates,
+        List<ReplicaState> observerStates,
+        short apiVersion,
+        Errors error
+    ) {
         DescribeQuorumResponseData response = collectDescribeQuorumResponse();
 
         DescribeQuorumResponseData.PartitionData partitionData = new DescribeQuorumResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(error.code())
             .setLeaderId(leaderId)
             .setLeaderEpoch(leaderEpoch)
             .setHighWatermark(highWatermark)
             .setCurrentVoters(voterStates)
             .setObservers(observerStates);
 
-        // KAFKA-16953 will add support for including the node listeners in the node collection
-        DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection();
+        if (!error.equals(Errors.NONE)) {
+            partitionData.setErrorMessage(error.message());
+        }
+
+        DescribeQuorumResponseData.NodeCollection nodes = null;
+        if (apiVersion >= 2) {
+            nodes = new DescribeQuorumResponseData.NodeCollection(voterStates.size());
+            for (ReplicaState voterState : voterStates) {
+                nodes.add(new DescribeQuorumResponseData.Node()
+                    .setNodeId(voterState.replicaId())
+                    .setListeners(startingVoters.listeners(voterState.replicaId()).toDescribeQuorumResponseListeners()));
+            }
+        }
 
         DescribeQuorumResponseData expectedResponse = DescribeQuorumResponse.singletonResponse(
             metadataPartition,
