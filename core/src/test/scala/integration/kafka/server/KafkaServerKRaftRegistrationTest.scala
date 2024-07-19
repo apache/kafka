@@ -22,7 +22,6 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
-import org.apache.kafka.common.Uuid
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.MetadataVersion
@@ -60,7 +59,7 @@ class KafkaServerKRaftRegistrationTest {
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
-        setClusterId(Uuid.fromString(clusterId)).
+        setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -102,7 +101,7 @@ class KafkaServerKRaftRegistrationTest {
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
-        setClusterId(Uuid.fromString(clusterId)).
+        setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")

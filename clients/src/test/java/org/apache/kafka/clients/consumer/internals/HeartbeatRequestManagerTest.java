@@ -55,27 +55,39 @@ import org.mockito.ArgumentCaptor;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_MAX_POLL_INTERVAL_MS;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
 
 public class HeartbeatRequestManagerTest {
     private static final String DEFAULT_GROUP_ID = "groupId";
@@ -320,7 +332,7 @@ public class HeartbeatRequestManagerTest {
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, result.timeUntilNextPollMs);
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         // Membership manager updated (to transition out of the heartbeating state)
-        verify(membershipManager).onHeartbeatRequestSent();
+        verify(membershipManager).onHeartbeatRequestGenerated();
     }
 
     @Test
@@ -331,6 +343,8 @@ public class HeartbeatRequestManagerTest {
         assertEquals(1, result.unsentRequests.size());
         // Mimic network timeout
         result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new TimeoutException("timeout"));
+        verify(membershipManager).onHeartbeatFailure(true);
+        verify(backgroundEventHandler, never()).add(any());
 
         // Assure the manager will backoff on timeout
         time.sleep(DEFAULT_RETRY_BACKOFF_MS - 1);
@@ -350,6 +364,7 @@ public class HeartbeatRequestManagerTest {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
         result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new KafkaException("fatal"));
+        verify(membershipManager).onHeartbeatFailure(false);
         verify(membershipManager).transitionToFatal();
         verify(backgroundEventHandler).add(any());
     }
@@ -514,6 +529,10 @@ public class HeartbeatRequestManagerTest {
                 break;
         }
 
+        if (error != Errors.NONE) {
+            verify(membershipManager).onHeartbeatFailure(false);
+        }
+
         if (!isFatal) {
             // Make sure a next heartbeat is sent for all non-fatal errors (to retry or rejoin)
             time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
@@ -628,7 +647,8 @@ public class HeartbeatRequestManagerTest {
         assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
         verify(membershipManager).transitionToSendingLeaveGroup(true);
         verify(heartbeatState).reset();
-        verify(membershipManager).onHeartbeatRequestSent();
+        verify(heartbeatRequestState).reset();
+        verify(membershipManager).onHeartbeatRequestGenerated();
 
         when(membershipManager.state()).thenReturn(MemberState.STALE);
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
