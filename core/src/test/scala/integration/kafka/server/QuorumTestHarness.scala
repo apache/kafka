@@ -50,7 +50,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
 import scala.compat.java8.OptionConverters._
-import scala.jdk.CollectionConverters.SeqHasAsJava
+import scala.jdk.CollectionConverters._
 
 trait QuorumImplementation {
   def createBroker(
