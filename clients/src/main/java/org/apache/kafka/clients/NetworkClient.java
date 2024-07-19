@@ -1161,13 +1161,19 @@ public class NetworkClient implements KafkaClient {
         }
 
         List<InetSocketAddress> tryResolveAddresses() {
+            timer.update(time.milliseconds());
+
             do {
-                timer.update(time.milliseconds());
+                if (timer.isExpired())
+                    break;
+
                 List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers, clientDnsLookup);
                 if (!addresses.isEmpty()) {
                     timer.reset(dnsResolutionTimeoutMs);
                     return addresses;
                 }
+
+                timer.update(time.milliseconds());
 
             } while (timer.notExpired());
 

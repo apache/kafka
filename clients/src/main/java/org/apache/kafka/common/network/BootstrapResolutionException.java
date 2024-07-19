@@ -18,6 +18,12 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
 
+/**
+ * Indicates that the {@link org.apache.kafka.clients.NetworkClient} was unable to resolve a DNS address within
+ * the time specified by {@link org.apache.kafka.clients.CommonClientConfigs#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG}
+ *
+ * @see org.apache.kafka.clients.CommonClientConfigs
+ */
 public class BootstrapResolutionException extends KafkaException {
     public BootstrapResolutionException(String message) {
         super(message);

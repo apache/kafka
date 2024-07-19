@@ -110,14 +110,15 @@ public class NetworkClientTest {
 
     private static ArrayList<InetAddress> initialAddresses;
     private static ArrayList<InetAddress> newAddresses;
-    private static List<String> bootstrapAddresses = new ArrayList<>(Arrays.asList(
+    private final static long bootstrapResolveTimeoutMs = CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS + 8000;
+    private final static List<String> bootstrapAddresses = new ArrayList<>(Arrays.asList(
             "127.0.0.1:8000",
             "127.0.0.2:8000"));
-    private static NetworkClient.BootstrapConfiguration bootstrapConfiguration =
+    private final static NetworkClient.BootstrapConfiguration bootstrapConfiguration =
             new NetworkClient.BootstrapConfiguration(
                     bootstrapAddresses,
                     ClientDnsLookup.USE_ALL_DNS_IPS,
-                    10 * 1000);
+                    bootstrapResolveTimeoutMs);
 
     static {
         try {
@@ -1388,7 +1389,7 @@ public class NetworkClientTest {
 
     @Test
     public void testBootstrapTimeoutThrowsException() {
-        assertThrows(BootstrapResolutionException.class, () -> client.ensureBootstrapped(10 * 1000));
+        assertThrows(BootstrapResolutionException.class, () -> client.ensureBootstrapped(130 * 1000));
     }
 
     @Test
