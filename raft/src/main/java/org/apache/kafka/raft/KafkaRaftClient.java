@@ -362,16 +362,23 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 // Send snapshot to the listener, if there is a snapshot for the partition,
                 // and it is a new listener or
-                // the listener is trying to read an offset for which there isn't a segment in the log.
+                // the listener is trying to read an offset for which there isn't a segment in the
+                // log.
                 if (nextExpectedOffset < highWatermark &&
-                    ((nextExpectedOffset == ListenerContext.STARTING_NEXT_OFFSET || nextExpectedOffset < log.startOffset())
-                     && latestSnapshot().isPresent())
+                    (nextExpectedOffset == ListenerContext.STARTING_NEXT_OFFSET ||
+                     nextExpectedOffset < log.startOffset()) &&
+                    latestSnapshot().isPresent()
                 ) {
                     listenerContext.fireHandleSnapshot(latestSnapshot().get());
                 } else if (nextExpectedOffset == ListenerContext.STARTING_NEXT_OFFSET) {
-                    // Reset the next offset to 0 since it is a new listener context and there is no
-                    // bootstraping checkpoint
-                    listenerContext.resetOffsetToLogStart();
+                    // Reset the next offset to 0 since it is a new listener context and there are
+                    // no checkpoint
+                    logger.info(
+                        "Setting the next offset of {} to {} since there are no snapshots",
+                        listenerContext.listenerName(),
+                        listenerContext.SMALLEST_LOG_OFFSET
+                    );
+                    listenerContext.resetOffsetToSmallestLogOffset();
                 } else if (nextExpectedOffset < log.startOffset()) {
                     throw new IllegalStateException(
                         String.format(
@@ -3280,6 +3287,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private final class ListenerContext implements CloseListener<BatchReader<T>> {
         private static final long STARTING_NEXT_OFFSET = -1;
+        private static final long SMALLEST_LOG_OFFSET = 0;
         private final RaftClient.Listener<T> listener;
         // This field is used only by the Raft IO thread
         private LeaderAndEpoch lastFiredLeaderChange = LeaderAndEpoch.UNKNOWN;
@@ -3304,10 +3312,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         /**
          * Sets the nextOffset to zero.
          *
-         * This is done when the partition is empty. No log and no bootstraping snapshot.
+         * This is done for new listeners when the partition is empty. No log and no snapshot.
          */
-        private synchronized void resetOffsetToLogStart() {
-            nextOffset = 0;
+        private synchronized void resetOffsetToSmallestLogOffset() {
+            nextOffset = SMALLEST_LOG_OFFSET;
         }
 
         /**
