@@ -82,12 +82,13 @@ public class Sanitizer {
     }
 
     /**
-     * Quote `name` using {@link ObjectName#quote(String)} if `name` contains
+     * Replace  characters  `:` in Quote `name`with %3A ,
+     * then Quote `name` using {@link ObjectName#quote(String)} if `name` contains
      * characters that are not safe for use in JMX. User principals that are
      * already sanitized using {@link #sanitize(String)} will not be quoted
      * since they are safe for JMX.
      */
     public static String jmxSanitize(String name) {
-        return MBEAN_PATTERN.matcher(name).matches() ? name : ObjectName.quote(name);
+        return MBEAN_PATTERN.matcher(name).matches() ? name : ObjectName.quote(name.replaceAll(":","%3A"));
     }
 }
