@@ -53,6 +53,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager.ValidationResult;
 
+import org.apache.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -886,7 +887,7 @@ public class InternalTopicManagerTest {
         topicConfigMap.put("internal-topic", internalTopicConfigII);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(InternalTopicManager.class)) {
-            appender.setClassLoggerToDebug(InternalTopicManager.class);
+            appender.setClassLogger(InternalTopicManager.class, Level.DEBUG);
             internalTopicManager.makeReady(topicConfigMap);
 
             assertThat(
