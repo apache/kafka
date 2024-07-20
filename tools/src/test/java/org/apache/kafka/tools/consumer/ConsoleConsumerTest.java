@@ -18,7 +18,6 @@ package org.apache.kafka.tools.consumer;
 
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -51,7 +50,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.ByteArrayOutputStream;
@@ -107,7 +105,7 @@ public class ConsoleConsumerTest {
         ConsoleConsumer.messageCount = 0;
     }
 
-    @Test
+    @ClusterTest
     public void shouldThrowTimeoutExceptionWhenTimeoutIsReached() throws IOException {
         final Time time = new MockTime();
         final int timeoutMs = 1000;
@@ -134,7 +132,7 @@ public class ConsoleConsumerTest {
         assertThrows(TimeoutException.class, consumer::receive);
     }
 
-    @Test
+    @ClusterTest
     public void shouldResetUnConsumedOffsetsBeforeExit() throws IOException {
         String topic = "test";
         int maxMessages = 123;
@@ -179,7 +177,7 @@ public class ConsoleConsumerTest {
         consumer.cleanup();
     }
 
-    @Test
+    @ClusterTest
     public void shouldLimitReadsToMaxMessageLimit() {
         ConsoleConsumer.ConsumerWrapper consumer = mock(ConsoleConsumer.ConsumerWrapper.class);
         MessageFormatter formatter = mock(MessageFormatter.class);
@@ -196,7 +194,7 @@ public class ConsoleConsumerTest {
         consumer.cleanup();
     }
 
-    @Test
+    @ClusterTest
     public void shouldStopWhenOutputCheckErrorFails() {
         ConsoleConsumer.ConsumerWrapper consumer = mock(ConsoleConsumer.ConsumerWrapper.class);
         MessageFormatter formatter = mock(MessageFormatter.class);
@@ -217,7 +215,7 @@ public class ConsoleConsumerTest {
         consumer.cleanup();
     }
 
-    @Test
+    @ClusterTest
     @SuppressWarnings("unchecked")
     public void shouldSeekWhenOffsetIsSet() throws IOException {
         Consumer<byte[], byte[]> mockConsumer = mock(Consumer.class);
@@ -271,7 +269,7 @@ public class ConsoleConsumerTest {
         reset(mockConsumer);
     }
 
-    @Test
+    @ClusterTest
     @SuppressWarnings("unchecked")
     public void shouldWorkWithoutTopicOption() throws IOException {
         Consumer<byte[], byte[]> mockConsumer = mock(Consumer.class);
@@ -291,7 +289,7 @@ public class ConsoleConsumerTest {
         consumer.cleanup();
     }
 
-    @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, brokers = 3)
+    @ClusterTest(brokers = 3)
     public void testTransactionLogMessageFormatter() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
 
