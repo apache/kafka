@@ -71,7 +71,7 @@ else
 // Java versions.
 // We always use the `inline` strategy.
 String mockitoArtifactName
-if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
+if (mockitoVersion == "5.10.0")
   mockitoArtifactName = "mockito-core"
 else
   mockitoArtifactName = "mockito-inline"
