@@ -362,6 +362,7 @@
     <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
     <allow pkg="org.apache.kafka.server.util"/>
+    <allow pkg="org.apache.log4j"/>
 
     <allow pkg="org.apache.kafka.streams"/>
 
@@ -472,6 +473,7 @@
     <!-- for testing -->
     <allow pkg="org.apache.kafka.coordinator.group" />
     <allow pkg="org.apache.kafka.network" />
+    <allow pkg="org.apache.log4j" />
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />

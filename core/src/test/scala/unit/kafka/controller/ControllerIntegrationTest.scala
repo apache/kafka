@@ -23,7 +23,7 @@ import java.util.stream.{Stream => JStream}
 import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
 import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
-import kafka.utils.{LogCaptureAppender, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk._
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.message.{AlterPartitionRequestData, AlterPartitionResponseData}
@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AlterPartitionRequest
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
+import org.apache.kafka.common.utils.LogCaptureAppender
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.network.SocketServerConfigs
@@ -1853,7 +1854,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   private def testControllerMove(fun: () => Unit): Unit = {
     val controller = getController().kafkaController
     val appender = LogCaptureAppender.createAndRegister()
-    val previousLevel = LogCaptureAppender.setClassLoggerLevel(controller.getClass, Level.INFO)
+    appender.setClassLogger(controller.getClass, Level.INFO)
 
     try {
       TestUtils.waitUntilTrue(() => {
@@ -1881,14 +1882,12 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       TestUtils.waitUntilTrue(() => !controller.isActive, "Controller fails to resign")
 
       // Expect to capture the ControllerMovedException in the log of ControllerEventThread
-      val event = appender.getMessages.find(e => e.getLevel == Level.INFO
-        && e.getThrowableInformation != null
-        && e.getThrowableInformation.getThrowable.getClass.getName.equals(classOf[ControllerMovedException].getName))
-      assertTrue(event.isDefined)
-
+      assertNotEquals(0, appender.getEvents.stream()
+        .filter(e => e.getLevel == Level.INFO.toString)
+        .filter(_.getThrowableClassName.filter(_ == classOf[ControllerMovedException].getName).isPresent)
+        .count())
     } finally {
-      LogCaptureAppender.unregister(appender)
-      LogCaptureAppender.setClassLoggerLevel(controller.eventManager.thread.getClass, previousLevel)
+      appender.close()
     }
   }
 

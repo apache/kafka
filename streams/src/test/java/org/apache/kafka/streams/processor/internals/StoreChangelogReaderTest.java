@@ -45,6 +45,7 @@ import org.apache.kafka.test.MockStandbyUpdateListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
 
+import org.apache.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -1354,7 +1355,7 @@ public class StoreChangelogReaderTest {
     @Test
     public void shouldNotThrowOnUnknownRevokedPartition() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StoreChangelogReader.class)) {
-            appender.setClassLoggerToDebug(StoreChangelogReader.class);
+            appender.setClassLogger(StoreChangelogReader.class, Level.DEBUG);
             changelogReader.unregister(Collections.singletonList(new TopicPartition("unknown", 0)));
 
             assertThat(
