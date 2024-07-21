@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class KafkaMetricsGroup {
@@ -70,16 +71,21 @@ public class KafkaMetricsGroup {
         return new MetricName(group, typeName, name, scope, nameBuilder.toString());
     }
 
-    public final <T> Gauge<T> newGauge(String name, Gauge<T> metric, Map<String, String> tags) {
-        return KafkaYammerMetrics.defaultRegistry().newGauge(metricName(name, tags), metric);
+    public <T> Gauge<T> newGauge(String name, Supplier<T> metric, Map<String, String> tags) {
+        return newGauge(metricName(name, tags), metric);
     }
 
-    public final <T> Gauge<T> newGauge(String name, Gauge<T> metric) {
+    public <T> Gauge<T> newGauge(String name, Supplier<T> metric) {
         return newGauge(name, metric, Collections.emptyMap());
     }
 
-    public final <T> Gauge<T> newGauge(MetricName metricName, Gauge<T> metric) {
-        return KafkaYammerMetrics.defaultRegistry().newGauge(metricName, metric);
+    public <T> Gauge<T> newGauge(MetricName name, Supplier<T> metric) {
+        return KafkaYammerMetrics.defaultRegistry().newGauge(name, new Gauge<T>() {
+            @Override
+            public T value() {
+                return metric.get();
+            }
+        });
     }
 
     public final Meter newMeter(String name, String eventType,
