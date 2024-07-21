@@ -311,8 +311,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   /** ********* General Configuration ***********/
   val brokerIdGenerationEnable: Boolean = getBoolean(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG)
   val maxReservedBrokerId: Int = getInt(ServerConfigs.RESERVED_BROKER_MAX_ID_CONFIG)
-  var brokerId: Int = getInt(ServerConfigs.BROKER_ID_CONFIG)
-  val nodeId: Int = getInt(KRaftConfigs.NODE_ID_CONFIG)
+  private[server] var _brokerId: Int = getInt(ServerConfigs.BROKER_ID_CONFIG)
+  def brokerId: Int = _brokerId
+  private[server] var _nodeId: Int = getInt(KRaftConfigs.NODE_ID_CONFIG)
+  def nodeId: Int = _nodeId
   val initialRegistrationTimeoutMs: Int = getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG)
   val brokerHeartbeatIntervalMs: Int = getInt(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG)
   val brokerSessionTimeoutMs: Int = getInt(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG)
