@@ -32,7 +32,6 @@ import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.test.TestUtils;
-import scala.collection.JavaConverters;
 
 import java.io.File;
 import java.util.Arrays;
@@ -46,6 +45,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import scala.collection.JavaConverters;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
