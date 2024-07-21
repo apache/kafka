@@ -71,8 +71,8 @@ public class StandardAuthorizerData {
     /**
      * The principal entry used in ACLs that match any principal.
      */
-    public static final String WILDCARD_PRINCIPAL = "User:*";
-    public static final KafkaPrincipal WILDCARD_KAFKA_PRINCIPAL = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "*");
+    public static final String WILDCARD_PRINCIPAL = KafkaPrincipal.USER_TYPE + ":" + WILDCARD;
+    public static final KafkaPrincipal WILDCARD_KAFKA_PRINCIPAL = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, WILDCARD);
 
     /**
      * The logger to use.
@@ -490,7 +490,7 @@ public class StandardAuthorizerData {
                                           String host,
                                           StandardAcl acl) {
         // Check if the principal matches. If it doesn't, return no result (null).
-        if (!matchingPrincipals.contains(acl.kafkaPrincipal())) {
+        if (!acl.matchAtLeastOnePrincipal(matchingPrincipals)) {
             return null;
         }
         // Check if the host matches. If it doesn't, return no result (null).
