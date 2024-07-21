@@ -18,7 +18,6 @@ package kafka.admin;
 
 import kafka.admin.AclCommand.AclCommandOptions;
 import kafka.security.authorizer.AclAuthorizer;
-import kafka.server.KafkaConfig;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
@@ -26,11 +25,8 @@ import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
-import kafka.test.junit.RaftClusterInvocationContext;
 import kafka.test.junit.ZkClusterInvocationContext;
-import kafka.testkit.KafkaClusterTestKit;
 import kafka.utils.Exit;
-import kafka.utils.LogCaptureAppender;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
@@ -39,14 +35,15 @@ import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.server.authorizer.Authorizer;
 
 import org.apache.log4j.Level;
-import org.apache.log4j.spi.LoggingEvent;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,7 +60,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -72,7 +68,6 @@ import java.util.stream.Collectors;
 import javax.management.InstanceAlreadyExistsException;
 
 import scala.Console;
-import scala.Option;
 import scala.collection.JavaConverters;
 
 import static org.apache.kafka.common.acl.AccessControlEntryFilter.ANY;
@@ -94,15 +89,12 @@ import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.common.resource.PatternType.PREFIXED;
 import static org.apache.kafka.common.resource.ResourceType.CLUSTER;
 import static org.apache.kafka.common.resource.ResourceType.DELEGATION_TOKEN;
-import static org.apache.kafka.common.resource.ResourceType.GROUP;
-import static org.apache.kafka.common.resource.ResourceType.TOPIC;
 import static org.apache.kafka.common.resource.ResourceType.TRANSACTIONAL_ID;
 import static org.apache.kafka.common.resource.ResourceType.USER;
 import static org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST;
 import static org.apache.kafka.server.config.ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -123,10 +115,14 @@ public class AclCommandTest {
     private static final String BOOTSTRAP_SERVER = "--bootstrap-server";
     private static final String COMMAND_CONFIG = "--command-config";
     private static final String CONSUMER = "--consumer";
+    private static final String IDEMPOTENT = "--idempotent";
+    private static final String GROUP = "--group";
     private static final String LIST = "--list";
     private static final String REMOVE = "--remove";
     private static final String PRODUCER = "--producer";
     private static final String OPERATION = "--operation";
+    private static final String TOPIC = "--topic";
+    private static final String RESOURCE_PATTERN_TYPE = "--resource-pattern-type";
     private static final String ZOOKEEPER_CONNECT = "zookeeper.connect=localhost:2181";
     private static final KafkaPrincipal PRINCIPAL = SecurityUtils.parseKafkaPrincipal("User:test2");
     private static final Set<KafkaPrincipal> USERS = new HashSet<>(Arrays.asList(
@@ -140,12 +136,12 @@ public class AclCommandTest {
 
     private static final ResourcePattern CLUSTER_RESOURCE = new ResourcePattern(CLUSTER, Resource.CLUSTER_NAME, LITERAL);
     private static final Set<ResourcePattern> TOPIC_RESOURCES = new HashSet<>(Arrays.asList(
-            new ResourcePattern(TOPIC, "test-1", LITERAL),
-            new ResourcePattern(TOPIC, "test-2", LITERAL)
+            new ResourcePattern(ResourceType.TOPIC, "test-1", LITERAL),
+            new ResourcePattern(ResourceType.TOPIC, "test-2", LITERAL)
     ));
     private static final Set<ResourcePattern> GROUP_RESOURCES = new HashSet<>(Arrays.asList(
-            new ResourcePattern(GROUP, "testGroup-1", LITERAL),
-            new ResourcePattern(GROUP, "testGroup-2", LITERAL)
+            new ResourcePattern(ResourceType.GROUP, "testGroup-1", LITERAL),
+            new ResourcePattern(ResourceType.GROUP, "testGroup-2", LITERAL)
     ));
     private static final Set<ResourcePattern> TRANSACTIONAL_ID_RESOURCES = new HashSet<>(Arrays.asList(
             new ResourcePattern(TRANSACTIONAL_ID, "t0", LITERAL),
@@ -161,9 +157,9 @@ public class AclCommandTest {
     ));
 
     private static final Map<Set<ResourcePattern>, List<String>> RESOURCE_TO_COMMAND = new HashMap<Set<ResourcePattern>, List<String>>() {{
-            put(TOPIC_RESOURCES, Arrays.asList("--topic", "test-1", "--topic", "test-2"));
+            put(TOPIC_RESOURCES, Arrays.asList(TOPIC, "test-1", TOPIC, "test-2"));
             put(Collections.singleton(CLUSTER_RESOURCE), Collections.singletonList("--cluster"));
-            put(GROUP_RESOURCES, Arrays.asList("--group", "testGroup-1", "--group", "testGroup-2"));
+            put(GROUP_RESOURCES, Arrays.asList(GROUP, "testGroup-1", GROUP, "testGroup-2"));
             put(TRANSACTIONAL_ID_RESOURCES, Arrays.asList("--transactional-id", "t0", "--transactional-id", "t1"));
             put(TOKEN_RESOURCES, Arrays.asList("--delegation-token", "token1", "--delegation-token", "token2"));
             put(USER_RESOURCES, Arrays.asList("--user-principal", "User:test-user1", "--user-principal", "User:test-user2"));
@@ -208,7 +204,7 @@ public class AclCommandTest {
     private static final Map<List<String>, Map<Set<ResourcePattern>, Set<AccessControlEntry>>> CMD_TO_RESOURCES_TO_ACL =
             new HashMap<List<String>, Map<Set<ResourcePattern>, Set<AccessControlEntry>>>() {{
                 put(Collections.singletonList(PRODUCER), producerResourceToAcls(false));
-                put(Arrays.asList(PRODUCER, "--idempotent"), producerResourceToAcls(true));
+                put(Arrays.asList(PRODUCER, IDEMPOTENT), producerResourceToAcls(true));
                 put(Collections.singletonList(CONSUMER), CONSUMER_RESOURCE_TO_ACLS);
                 put(Arrays.asList(PRODUCER, CONSUMER),
                         CONSUMER_RESOURCE_TO_ACLS.entrySet().stream().map(entry -> {
@@ -217,7 +213,7 @@ public class AclCommandTest {
                                     .getOrDefault(entry.getKey(), Collections.emptySet()));
                             return new SimpleEntry<>(entry.getKey(), value);
                         }).collect(Collectors.toMap(Entry::getKey, Entry::getValue)));
-                put(Arrays.asList(PRODUCER, "--idempotent", CONSUMER),
+                put(Arrays.asList(PRODUCER, IDEMPOTENT, CONSUMER),
                         CONSUMER_RESOURCE_TO_ACLS.entrySet().stream().map(entry -> {
                             Set<AccessControlEntry> value = new HashSet<>(entry.getValue());
                             value.addAll(producerResourceToAcls(true)
@@ -264,17 +260,16 @@ public class AclCommandTest {
     })
     public void testAclCliWithClientId(ClusterInstance cluster) {
         LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        Level previousLevel = LogCaptureAppender.setClassLoggerLevel(AppInfoParser.class, Level.WARN);
+        appender.setClassLogger(AppInfoParser.class, Level.WARN);
         try {
             testAclCli(cluster, adminArgs(cluster.bootstrapServers(), Optional.of(TestUtils.tempFile("client.id=my-client"))));
         } finally {
-            LogCaptureAppender.setClassLoggerLevel(AppInfoParser.class, previousLevel);
-            LogCaptureAppender.unregister(appender);
+            appender.close();
         }
-        Option<LoggingEvent> warning = appender.getMessages().find(e -> e.getLevel() == Level.WARN &&
-                e.getThrowableInformation() != null &&
-                e.getThrowableInformation().getThrowable().getClass().getName().equals(InstanceAlreadyExistsException.class.getName()));
-        assertFalse(warning.isDefined(), "There should be no warnings about multiple registration of mbeans");
+        assertEquals(0, appender.getEvents().stream()
+                .filter(e -> e.getLevel().equals(Level.WARN.toString()))
+                .filter(e -> e.getThrowableClassName().filter(name -> name.equals(InstanceAlreadyExistsException.class.getName())).isPresent())
+                .count(), "There should be no warnings about multiple registration of mbeans");
     }
 
     @ClusterTest(types = {Type.ZK})
@@ -375,7 +370,7 @@ public class AclCommandTest {
     @Test
     public void testUseIdempotentOptWithoutProducerOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, "--idempotent"),
+                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, IDEMPOTENT),
                 "The --idempotent option is only available if --producer is set"
         );
     }
@@ -386,7 +381,7 @@ public class AclCommandTest {
                 Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER),
                 "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified."
         );
-        checkNotThrow(Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, "--topic", "test-topic", "--group", "test-group"));
+        checkNotThrow(Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, TOPIC, "test-topic", GROUP, "test-group"));
     }
 
     @Test
@@ -400,7 +395,7 @@ public class AclCommandTest {
                 "Option \"[producer]\" can't be used with option \"[operation]\""
         );
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, OPERATION, "--topic", "test-topic", "--group", "test-group"),
+                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, OPERATION, TOPIC, "test-topic", GROUP, "test-group"),
                 "Option \"[consumer]\" can't be used with option \"[operation]\""
         );
     }
@@ -436,8 +431,8 @@ public class AclCommandTest {
     }
 
     private void testAclsOnPrefixedResources(ClusterInstance cluster, List<String> cmdArgs) {
-        List<String> cmd = Arrays.asList("--allow-principal", PRINCIPAL.toString(), "--producer", "--topic", "Test-",
-                "--resource-pattern-type", "Prefixed");
+        List<String> cmd = Arrays.asList("--allow-principal", PRINCIPAL.toString(), PRODUCER, TOPIC, "Test-",
+                RESOURCE_PATTERN_TYPE, "Prefixed");
 
         List<String> args = new ArrayList<>(cmdArgs);
         args.addAll(cmd);
@@ -451,7 +446,7 @@ public class AclCommandTest {
             TestUtils.waitAndVerifyAcls(
                     asScalaSet(new HashSet<>(Arrays.asList(writeAcl, describeAcl, createAcl))),
                     authorizer,
-                    new ResourcePattern(TOPIC, "Test-", PREFIXED),
+                    new ResourcePattern(ResourceType.TOPIC, "Test-", PREFIXED),
                     ANY
             );
         });
@@ -472,7 +467,7 @@ public class AclCommandTest {
             TestUtils.waitAndVerifyAcls(
                     asScalaSet(Collections.emptySet()),
                     authorizer,
-                    new ResourcePattern(TOPIC, "Test-", PREFIXED),
+                    new ResourcePattern(ResourceType.TOPIC, "Test-", PREFIXED),
                     ANY
             );
         });
@@ -570,16 +565,16 @@ public class AclCommandTest {
         try {
             Arrays.stream(PatternType.values()).sequential().forEach(patternType -> {
                 List<String> addCmd = new ArrayList<>(cmdArgs);
-                addCmd.addAll(Arrays.asList("--allow-principal", PRINCIPAL.toString(), "--producer", "--topic", "Test",
-                        ADD, "--resource-pattern-type", patternType.toString()));
+                addCmd.addAll(Arrays.asList("--allow-principal", PRINCIPAL.toString(), PRODUCER, TOPIC, "Test",
+                        ADD, RESOURCE_PATTERN_TYPE, patternType.toString()));
                 verifyPatternType(addCmd, patternType.isSpecific());
 
                 List<String> listCmd = new ArrayList<>(cmdArgs);
-                listCmd.addAll(Arrays.asList("--topic", "Test", LIST, "--resource-pattern-type", patternType.toString()));
+                listCmd.addAll(Arrays.asList(TOPIC, "Test", LIST, RESOURCE_PATTERN_TYPE, patternType.toString()));
                 verifyPatternType(listCmd, patternType != PatternType.UNKNOWN);
 
                 List<String> removeCmd = new ArrayList<>(cmdArgs);
-                removeCmd.addAll(Arrays.asList("--topic", "Test", "--force", REMOVE, "--resource-pattern-type", patternType.toString()));
+                removeCmd.addAll(Arrays.asList(TOPIC, "Test", "--force", REMOVE, RESOURCE_PATTERN_TYPE, patternType.toString()));
                 verifyPatternType(removeCmd, patternType != PatternType.UNKNOWN);
             });
         } finally {
@@ -638,19 +633,17 @@ public class AclCommandTest {
     private void withAuthorizer(ClusterInstance cluster, Consumer<Authorizer> consumer) {
         if (cluster.isKRaftTest()) {
             List<Authorizer> allAuthorizers = new ArrayList<>();
-            allAuthorizers.addAll(asKraftCluster(cluster).brokers().values().stream()
+            allAuthorizers.addAll(cluster.brokers().values().stream()
                     .map(server -> server.authorizer().get()).collect(Collectors.toList()));
-            allAuthorizers.addAll(asKraftCluster(cluster).controllers().values().stream()
+            allAuthorizers.addAll(cluster.controllers().values().stream()
                     .map(server -> server.authorizer().get()).collect(Collectors.toList()));
             allAuthorizers.forEach(consumer);
         } else {
-            Properties props = new Properties();
-            props.putAll(cluster.config().serverProperties());
-            props.put("zookeeper.connect", zkConnect(cluster));
-            try (AclAuthorizer auth = new AclAuthorizer()) {
-                auth.configure(KafkaConfig.fromProps(props, false).originals());
-                consumer.accept(auth);
-            }
+            consumer.accept(cluster.brokers().values().stream()
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("No broker found"))
+                    .authorizer().get()
+            );
         }
     }
 
@@ -690,10 +683,6 @@ public class AclCommandTest {
 
     private String zkConnect(ClusterInstance cluster) {
         return ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
-    }
-
-    private KafkaClusterTestKit asKraftCluster(ClusterInstance cluster) {
-        return ((RaftClusterInvocationContext.RaftClusterInstance) cluster).getUnderlying();
     }
 
     private List<String> zkArgs(ClusterInstance cluster) {
