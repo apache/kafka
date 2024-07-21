@@ -61,9 +61,9 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     s"Tracking byte-rate for $replicationType")
 
   /**
-    * Update the quota
+    * Update the quota of metrics instance
     *
-    * @param quota
+    * @param quota         The quota of metrics we want to update.
     */
   def updateQuota(quota: Quota): Unit = {
     inWriteLock(lock) {
@@ -79,7 +79,8 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   /**
     * Check if the quota is currently exceeded
     *
-    * @return
+    * @return false : if the quota is currently exceeded.
+   *          true  : if we violated our quota for any metric that has a configured quota
     */
   override def isQuotaExceeded: Boolean = {
     try {
@@ -97,7 +98,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * Is the passed partition throttled by this ReplicationQuotaManager
     *
     * @param topicPartition the partition to check
-    * @return
+    * @return false if the partition doesn't exist otherwise return false
     */
   override def isThrottled(topicPartition: TopicPartition): Boolean = {
     val partitions = throttledPartitions.get(topicPartition.topic)
@@ -110,7 +111,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * Add the passed value to the throttled rate. This method ignores the quota with
     * the value being added to the rate even if the quota is exceeded
     *
-    * @param value
+    * @param value a assigned value that we want to record
     */
   def record(value: Long): Unit = {
     sensor().record(value.toDouble, time.milliseconds(), false)
@@ -120,9 +121,8 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * Update the set of throttled partitions for this QuotaManager. The partitions passed, for
     * any single topic, will replace any previous
     *
-    * @param topic
+    * @param topic the target topic to mark
     * @param partitions the set of throttled partitions
-    * @return
     */
   def markThrottled(topic: String, partitions: Seq[Int]): Unit = {
     throttledPartitions.put(topic, partitions)
@@ -131,8 +131,8 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   /**
     * Mark all replicas for this topic as throttled
     *
-    * @param topic
-    * @return
+    * @param topic the target topic to mark.
+    *
     */
   def markThrottled(topic: String): Unit = {
     markThrottled(topic, AllReplicas)
@@ -141,8 +141,8 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   /**
     * Remove list of throttled replicas for a certain topic
     *
-    * @param topic
-    * @return
+    * @param topic the target topic to remove.
+    * @return the previous partitions associated with key, or null if there was no mapping for key.
     */
   def removeThrottle(topic: String): Unit = {
     throttledPartitions.remove(topic)
@@ -151,7 +151,8 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   /**
     * Returns the bound of the configured quota
     *
-    * @return
+    * @return bounded value if the configured quota is defined otherwise return the max value of long.
+    *
     */
   def upperBound: Long = {
     inReadLock(lock) {
@@ -161,6 +162,12 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
         Long.MaxValue
     }
   }
+
+  /**
+   * get the bound of the configured quota
+   *
+   * @return new configuration value of quota metric.
+   */
 
   private def getQuotaMetricConfig(quota: Quota): MetricConfig = {
     new MetricConfig()
