@@ -22,7 +22,6 @@ import org.apache.kafka.common.errors.AuthorizationException;
 
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -91,13 +90,11 @@ public class ProducerPerformanceTest {
     public void testReadProps() throws Exception {
         List<String> producerProps = Collections.singletonList("bootstrap.servers=localhost:9000");
         String producerConfig = createTempFile("acks=1").getAbsolutePath();
-        String transactionalId = "1234";
-        boolean transactionsEnabled = true;
 
-        Properties prop = ProducerPerformance.readProps(producerProps, producerConfig, transactionalId, transactionsEnabled);
+        Properties prop = ProducerPerformance.readProps(producerProps, producerConfig);
 
         assertNotNull(prop);
-        assertEquals(6, prop.size());
+        assertEquals(5, prop.size());
     }
 
     @Test
@@ -113,6 +110,77 @@ public class ProducerPerformanceTest {
             "--producer-props", "bootstrap.servers=localhost:9000"};
         producerPerformanceSpy.start(args);
         verify(producerMock, times(5)).send(any(), any());
+        verify(producerMock, times(1)).close();
+    }
+
+    @Test
+    public void testTransactionEnabledBySetId() throws IOException {
+        doReturn(null).when(producerMock).send(any(), any());
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--transactional-id", "foobar",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        producerPerformanceSpy.start(args);
+        verify(producerMock, times(1)).beginTransaction();
+        verify(producerMock, times(1)).commitTransaction();
+        verify(producerMock, times(1)).close();
+    }
+
+    @Test
+    public void testTransactionEnabledBySetIdThroughProducerProps() throws IOException {
+        doReturn(null).when(producerMock).send(any(), any());
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000", "transactional.id=foobar"};
+        producerPerformanceSpy.start(args);
+        verify(producerMock, times(1)).beginTransaction();
+        verify(producerMock, times(1)).commitTransaction();
+        verify(producerMock, times(1)).close();
+    }
+
+    @Test
+    public void testTransactionEnabledBySetIdThroughProducerFile() throws IOException {
+        doReturn(null).when(producerMock).send(any(), any());
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+
+        File configFile = createTempFile("transactional.id=foobar");
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--producer.config", configFile.toPath().toString()};
+        producerPerformanceSpy.start(args);
+        verify(producerMock, times(1)).beginTransaction();
+        verify(producerMock, times(1)).commitTransaction();
+        verify(producerMock, times(1)).close();
+    }
+
+    @Test
+    public void testTransactionEnabledBySetDurationMs() throws IOException {
+        doReturn(null).when(producerMock).send(any(), any());
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--transaction-duration-ms", "1000",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        producerPerformanceSpy.start(args);
+        verify(producerMock, times(1)).beginTransaction();
+        verify(producerMock, times(1)).commitTransaction();
         verify(producerMock, times(1)).close();
     }
 
@@ -265,7 +333,7 @@ public class ProducerPerformanceTest {
     public void testClientIdOverride()  throws Exception {
         List<String> producerProps = Collections.singletonList("client.id=producer-1");
 
-        Properties prop = ProducerPerformance.readProps(producerProps, null, "1234", true);
+        Properties prop = ProducerPerformance.readProps(producerProps, null);
 
         assertNotNull(prop);
         assertEquals("producer-1", prop.getProperty("client.id"));
@@ -275,7 +343,7 @@ public class ProducerPerformanceTest {
     public void testDefaultClientId() throws Exception {
         List<String> producerProps = Collections.singletonList("acks=1");
 
-        Properties prop = ProducerPerformance.readProps(producerProps, null, "1234", true);
+        Properties prop = ProducerPerformance.readProps(producerProps, null);
 
         assertNotNull(prop);
         assertEquals("perf-producer-client", prop.getProperty("client.id"));

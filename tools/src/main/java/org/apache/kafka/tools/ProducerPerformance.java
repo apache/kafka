@@ -39,6 +39,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.SplittableRandom;
 
@@ -47,11 +48,14 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
 public class ProducerPerformance {
 
+    public static final String DEFAULT_TRANSACTION_ID = "performance-producer-default-transactional-id";
+    public static final Long DEFAULT_TRANSACTION_DURATION_MS = 3000L;
+
     public static void main(String[] args) throws Exception {
         ProducerPerformance perf = new ProducerPerformance();
         perf.start(args);
     }
-    
+
     void start(String[] args) throws IOException {
         ArgumentParser parser = argParser();
 
@@ -69,8 +73,7 @@ public class ProducerPerformance {
             String payloadFilePath = res.getString("payloadFile");
             String transactionalId = res.getString("transactionalId");
             boolean shouldPrintMetrics = res.getBoolean("printMetrics");
-            long transactionDurationMs = res.getLong("transactionDurationMs");
-            boolean transactionsEnabled =  0 < transactionDurationMs;
+            Long transactionDurationMs = res.getLong("transactionDurationMs");
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
             String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
@@ -81,7 +84,22 @@ public class ProducerPerformance {
 
             List<byte[]> payloadByteList = readPayloadFile(payloadFilePath, payloadDelimiter);
 
-            Properties props = readProps(producerProps, producerConfig, transactionalId, transactionsEnabled);
+            Properties props = readProps(producerProps, producerConfig);
+            boolean transactionsEnabled = transactionDurationMs != null
+                    || transactionalId != null
+                    || props.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+            if (transactionsEnabled && transactionDurationMs == null) {
+                transactionDurationMs = DEFAULT_TRANSACTION_DURATION_MS;
+            }
+            if (transactionsEnabled && transactionDurationMs <= 0) {
+                throw new ArgumentParserException("--transaction-duration-ms should > 0", parser);
+            }
+            if (transactionsEnabled) {
+                Optional<String> txIdInProps =
+                        Optional.ofNullable(props.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG)).map(Object::toString);
+                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, Optional.ofNullable(transactionalId).orElse(
+                        txIdInProps.orElse(DEFAULT_TRANSACTION_ID)));
+            }
 
             KafkaProducer<byte[], byte[]> producer = createKafkaProducer(props);
 
@@ -185,8 +203,7 @@ public class ProducerPerformance {
         return payload;
     }
     
-    static Properties readProps(List<String> producerProps, String producerConfig, String transactionalId,
-            boolean transactionsEnabled) throws IOException {
+    static Properties readProps(List<String> producerProps, String producerConfig) throws IOException {
         Properties props = new Properties();
         if (producerConfig != null) {
             props.putAll(Utils.loadProps(producerConfig));
@@ -201,7 +218,6 @@ public class ProducerPerformance {
 
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        if (transactionsEnabled) props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
         if (props.getProperty(ProducerConfig.CLIENT_ID_CONFIG) == null) {
             props.put(ProducerConfig.CLIENT_ID_CONFIG, "perf-producer-client");
         }
@@ -330,8 +346,7 @@ public class ProducerPerformance {
                .type(String.class)
                .metavar("TRANSACTIONAL-ID")
                .dest("transactionalId")
-               .setDefault("performance-producer-default-transactional-id")
-               .help("The transactionalId to use if transaction-duration-ms is > 0. Useful when testing the performance of concurrent transactions.");
+               .help("The transactional id to use. This config take precedence over transactional.id via --producer.config or --producer-props");
 
         parser.addArgument("--transaction-duration-ms")
                .action(store())
@@ -339,9 +354,7 @@ public class ProducerPerformance {
                .type(Long.class)
                .metavar("TRANSACTION-DURATION")
                .dest("transactionDurationMs")
-               .setDefault(0L)
-               .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. Transactions are only enabled if this value is positive.");
-
+               .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. The value should > 0.");
 
         return parser;
     }
