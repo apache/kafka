@@ -49,6 +49,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.ByteBuffer;
@@ -108,26 +109,6 @@ public class LogValidatorTest {
     }
 
     @Test
-    public void testOnlyOneBatch() {
-        checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V0, Compression.gzip().build(), Compression.gzip().build());
-        checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V1, Compression.gzip().build(), Compression.gzip().build());
-        checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, Compression.gzip().build(), Compression.gzip().build());
-        checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V0, Compression.gzip().build(), Compression.NONE);
-        checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V1, Compression.gzip().build(), Compression.NONE);
-        checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, Compression.gzip().build(), Compression.NONE);
-        checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, Compression.NONE, Compression.NONE);
-        checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, Compression.NONE, Compression.gzip().build());
-    }
-
-    @Test
-    public void testAllowMultiBatch() {
-        checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V0, Compression.NONE, Compression.NONE);
-        checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V1, Compression.NONE, Compression.NONE);
-        checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V0, Compression.NONE, Compression.gzip().build());
-        checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V1, Compression.NONE, Compression.gzip().build());
-    }
-
-    @Test
     public void testValidationOfBatchesWithNonSequentialInnerOffsets() {
         Arrays.stream(RecordVersion.values()).forEach(version -> {
             int numRecords = 20;
@@ -149,54 +130,32 @@ public class LogValidatorTest {
         });
     }
 
-    @Test
-    public void testMisMatchMagic() {
-        Compression compress = Compression.gzip().build();
-        checkMismatchMagic(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, compress);
-        checkMismatchMagic(RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V0, compress);
-    }
-
-    @Test
-    void testUncompressedBatchWithoutRecordsNotAllowed() {
-        testBatchWithoutRecordsNotAllowed(CompressionType.NONE, Compression.NONE);
-    }
-
-    @Test
-    void testRecompressedBatchWithoutRecordsNotAllowed() {
-        testBatchWithoutRecordsNotAllowed(CompressionType.NONE, Compression.gzip().build());
-    }
-
-    private void checkOnlyOneBatch(Byte magic, Compression sourceCompression,
-                                   Compression targetCompression) {
+    @ParameterizedTest
+    @CsvSource({
+            "0,gzip,none", "1,gzip,none", "2,gzip,none",
+            "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
+            "2,none,none", "2,none,gzip"
+    })
+    public void checkOnlyOneBatch(Byte magic, String sourceCompression,
+                                   String targetCompression) {
         assertThrows(InvalidRecordException.class,
-                () -> validateMessages(createTwoBatchedRecords(magic, sourceCompression),
-                        magic, sourceCompression.type(), targetCompression)
+                () -> validateMessages(createTwoBatchedRecords(magic, Compression.of(sourceCompression).build()),
+                        magic, CompressionType.forName(sourceCompression), Compression.of(targetCompression).build())
         );
     }
 
-    @Test
-    public void testLogAppendTimeNonCompressedV0() {
-        checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V0);
-    }
-
-    @Test
-    public void testLogAppendTimeNonCompressedV1() {
-        checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V1);
-    }
-
-    @Test
-    public void testLogAppendTimeNonCompressedV2() {
-        checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V2);
-    }
-
-
-    private void testBatchWithoutRecordsNotAllowed(CompressionType sourceCompression, Compression targetCompression) {
+    @ParameterizedTest
+    @CsvSource({"gzip, gzip", "none, gzip", "gzip,none", "none,none"})
+    public void testBatchWithoutRecordsNotAllowed(String sourceCompressionName, String targetCompressionName) {
         long offset = 1234567;
         long producerId = 1324L;
         short producerEpoch = 10;
         int baseSequence = 984;
         boolean isTransactional = true;
         int partitionLeaderEpoch = 40;
+        CompressionType sourceCompression = CompressionType.forName(sourceCompressionName);
+        Compression targetCompression = Compression.of(targetCompressionName).build();
+
 
         ByteBuffer buffer = ByteBuffer.allocate(DefaultRecordBatch.RECORD_BATCH_OVERHEAD);
         DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.CURRENT_MAGIC_VALUE, producerId, producerEpoch,
@@ -224,38 +183,16 @@ public class LogValidatorTest {
         ));
     }
 
-    private void checkMismatchMagic(byte batchMagic, byte recordMagic, Compression compression) {
+    @ParameterizedTest
+    @CsvSource({"0,1,gzip", "1,0,gzip"})
+    public void checkMismatchMagic(byte batchMagic, byte recordMagic, String compressionName) {
+        Compression compression = Compression.of(compressionName).build();
         assertThrows(RecordValidationException.class,
-                () -> validateMessages(recordsWithInvalidInnerMagic(batchMagic, recordMagic, compression), batchMagic, compression.type(), compression));
+                () -> validateMessages(recordsWithInvalidInnerMagic(batchMagic, recordMagic, compression
+                        ), batchMagic, compression.type(), compression));
 
         assertTrue(metricsRecorder.recordInvalidMagicCount > 0);
     }
-
-    @Test
-    void testNonCompressedV2() {
-        checkNonCompressed(RecordBatch.MAGIC_VALUE_V2);
-    }
-
-    @Test
-    void testRecompressionV1() {
-        checkRecompression(RecordBatch.MAGIC_VALUE_V1);
-    }
-
-    @Test
-    void testRecompressionV2() {
-        checkRecompression(RecordBatch.MAGIC_VALUE_V2);
-    }
-
-    @Test
-    void testCreateTimeUpConversionV0ToV1() {
-        checkCreateTimeUpConversionFromV0(RecordBatch.MAGIC_VALUE_V1);
-    }
-
-    @Test
-    void testCreateTimeUpConversionV0ToV2() {
-        checkCreateTimeUpConversionFromV0(RecordBatch.MAGIC_VALUE_V2);
-    }
-
     @Test
     public void testCreateTimeUpConversionV1ToV2() {
         long timestamp = System.currentTimeMillis();
@@ -308,7 +245,9 @@ public class LogValidatorTest {
         );
     }
 
-    private void checkCreateTimeUpConversionFromV0(byte toMagic) {
+    @ParameterizedTest
+    @CsvSource({"1", "2"})
+    public void checkCreateTimeUpConversionFromV0(byte toMagic) {
         Compression compression = Compression.gzip().build();
         MemoryRecords records = createRecords(RecordBatch.MAGIC_VALUE_V0, RecordBatch.NO_TIMESTAMP, compression);
         LogValidator logValidator = new LogValidator(records,
@@ -349,7 +288,9 @@ public class LogValidatorTest {
         verifyRecordValidationStats(validatedResults.recordValidationStats, 3, records, true);
     }
 
-    private void checkRecompression(byte magic) {
+    @ParameterizedTest
+    @CsvSource({"1", "2"})
+    public void checkRecompression(byte magic) {
         long now = System.currentTimeMillis();
         // Set the timestamp of seq(1) (i.e. offset 1) as the max timestamp
         List<Long> timestampSeq = Arrays.asList(now - 1, now + 1, now);
@@ -486,8 +427,11 @@ public class LogValidatorTest {
         return builder.build();
     }
 
-    private void checkAllowMultiBatch(Byte magic, Compression sourceCompression, Compression targetCompression) {
-        validateMessages(createTwoBatchedRecords(magic,  sourceCompression), magic, sourceCompression.type(), targetCompression);
+    @ParameterizedTest
+    @CsvSource({"0,none,none", "1,none,none", "0,none,gzip", "1,none,gzip"})
+    public void checkAllowMultiBatch(Byte magic, String sourceCompression, String targetCompression) {
+        validateMessages(createTwoBatchedRecords(magic,  Compression.of(sourceCompression).build()), magic,
+                CompressionType.forName(sourceCompression), Compression.of(targetCompression).build());
     }
 
 
@@ -535,12 +479,9 @@ public class LogValidatorTest {
         return createRecords(records, magicValue, timestamp, codec);
     }
 
-    @Test
-    void testCompressedV1() {
-        checkCompressed(RecordBatch.MAGIC_VALUE_V1);
-    }
-
-    private void checkCompressed(byte magic) {
+    @ParameterizedTest
+    @CsvSource({"1", "2"})
+    public void checkCompressed(byte magic) {
         long now = System.currentTimeMillis();
         // set the timestamp of seq(1) (i.e. offset 1) as the max timestamp
         List<Long> timestampSeq = Arrays.asList(now - 1, now + 1, now);
@@ -649,25 +590,6 @@ public class LogValidatorTest {
     }
 
     @Test
-    void testLogAppendTimeWithRecompressionV1() {
-        checkLogAppendTimeWithRecompression(RecordBatch.MAGIC_VALUE_V1);
-    }
-
-    @Test
-    void testLogAppendTimeWithRecompressionV2() {
-        checkLogAppendTimeWithRecompression(RecordBatch.MAGIC_VALUE_V2);
-    }
-
-    @Test
-    void testLogAppendTimeWithoutRecompressionV1() {
-        checkLogAppendTimeWithoutRecompression(RecordBatch.MAGIC_VALUE_V1);
-    }
-
-    @Test
-    void testCompressedV2() {
-        checkCompressed(RecordBatch.MAGIC_VALUE_V2);
-    }
-    @Test
     void testInvalidOffsetRangeAndRecordCount() {
         // The batch to be written contains 3 records, so the correct lastOffsetDelta is 2
         validateRecordBatchWithCountOverrides(2, 3);
@@ -684,11 +606,6 @@ public class LogValidatorTest {
         // Count and offset range are consistent, but do not match the actual number of records
         assertInvalidBatchCountOverrides(5, 6);
         assertInvalidBatchCountOverrides(1, 2);
-    }
-
-    @Test
-    void testLogAppendTimeWithoutRecompressionV2() {
-        checkLogAppendTimeWithoutRecompression(RecordBatch.MAGIC_VALUE_V2);
     }
 
     @Test
@@ -782,17 +699,16 @@ public class LogValidatorTest {
         );
     }
 
-    @Test
-    public void testInvalidChecksum() {
-        checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V0, Compression.gzip().build(), CompressionType.GZIP);
-        checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V1, Compression.gzip().build(), CompressionType.GZIP);
-        checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V0, Compression.lz4().build(), CompressionType.LZ4);
-        checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V1, Compression.lz4().build(), CompressionType.LZ4);
-        checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V0, Compression.snappy().build(), CompressionType.SNAPPY);
-        checkInvalidChecksum(RecordBatch.MAGIC_VALUE_V1, Compression.snappy().build(), CompressionType.SNAPPY);
-    }
+    @ParameterizedTest
+    @CsvSource({
+            "0,gzip,gzip", "1,gzip,gzip",
+            "0,lz4,lz4", "1,lz4,lz4",
+            "0,snappy,snappy", "1,snappy,snappy",
+    })
+    public void checkInvalidChecksum(byte magic, String compressionName, String typeName) {
+        Compression compression = Compression.of(compressionName).build();
+        CompressionType type = CompressionType.forName(typeName);
 
-    private void checkInvalidChecksum(byte magic, Compression compression, CompressionType type) {
         LegacyRecord record = LegacyRecord.create(magic, 0L, null, "hello".getBytes());
         ByteBuffer buf = record.buffer();
 
@@ -1655,16 +1571,6 @@ public class LogValidatorTest {
     }
 
     @Test
-    void testNonCompressedV1() {
-        checkNonCompressed(RecordBatch.MAGIC_VALUE_V1);
-    }
-
-    @Test
-    void testCompressedBatchWithoutRecordsNotAllowed()  {
-        testBatchWithoutRecordsNotAllowed(CompressionType.GZIP, Compression.gzip().build());
-    }
-
-    @Test
     public void testZStdCompressedWithUnavailableIBPVersion() {
         // The timestamps should be overwritten
         MemoryRecords records = createRecords(RecordBatch.MAGIC_VALUE_V2, 1234L, Compression.NONE);
@@ -1921,7 +1827,9 @@ public class LogValidatorTest {
         assertEquals(recordsLz4Min, result.validatedRecords);
     }
 
-    private void checkNonCompressed(byte magic) {
+    @ParameterizedTest
+    @CsvSource({"1", "2"})
+    public void checkNonCompressed(byte magic) {
         long now = System.currentTimeMillis();
         // set the timestamp of seq(1) (i.e. offset 1) as the max timestamp
         long[] timestampSeq = new long[]{now - 1, now + 1, now};
@@ -2045,7 +1953,9 @@ public class LogValidatorTest {
         );
     }
 
-    private void checkLogAppendTimeWithoutRecompression(byte magic) {
+    @ParameterizedTest
+    @CsvSource({"1", "2"})
+    public void checkLogAppendTimeWithoutRecompression(byte magic) {
         Compression compression = Compression.gzip().build();
         MockTime mockTime = new MockTime();
         MemoryRecords records = createRecords(magic, 1234L, compression);
@@ -2087,7 +1997,9 @@ public class LogValidatorTest {
         verifyRecordValidationStats(validatedResults.recordValidationStats, 0, records, true);
     }
 
-    private void checkLogAppendTimeWithRecompression(byte targetMagic) {
+    @ParameterizedTest
+    @CsvSource({"1", "2"})
+    public void checkLogAppendTimeWithRecompression(byte targetMagic) {
         Compression compression = Compression.gzip().build();
         MockTime mockTime = new MockTime();
         // The timestamps should be overwritten
@@ -2129,7 +2041,9 @@ public class LogValidatorTest {
         verifyRecordValidationStats(stats, 3, records, true);
     }
 
-    private void checkLogAppendTimeNonCompressed(byte magic) {
+    @ParameterizedTest
+    @CsvSource({"0", "1", "2"})
+    public void checkLogAppendTimeNonCompressed(byte magic) {
         MockTime mockTime = new MockTime();
         // The timestamps should be overwritten
         MemoryRecords records = createRecords(magic, 1234L, Compression.NONE);
