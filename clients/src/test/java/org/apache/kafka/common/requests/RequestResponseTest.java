@@ -98,7 +98,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
@@ -2875,7 +2875,7 @@ public class RequestResponseTest {
         topic2.assignments().add(new CreatableReplicaAssignment()
             .setPartitionIndex(1)
             .setBrokerIds(asList(2, 3, 4)));
-        topic2.configs().add(new CreateableTopicConfig()
+        topic2.configs().add(new CreatableTopicConfig()
             .setName("config1").setValue("value1"));
 
         return new CreateTopicsRequest.Builder(data).build(version);

@@ -52,7 +52,6 @@ public class FetchRequest extends AbstractRequest {
 
     private final FetchRequestData data;
     private volatile LinkedHashMap<TopicIdPartition, PartitionData> fetchData = null;
-    private volatile List<TopicIdPartition> toForget = null;
 
     // This is an immutable read-only structures derived from FetchRequestData
     private final FetchMetadata metadata;
@@ -434,26 +433,17 @@ public class FetchRequest extends AbstractRequest {
     // For versions < 13, builds the forgotten topics list using only the FetchRequestData.
     // For versions 13+, builds the forgotten topics list using both the FetchRequestData and a mapping of topic IDs to names.
     public List<TopicIdPartition> forgottenTopics(Map<Uuid, String> topicNames) {
-        if (toForget == null) {
-            synchronized (this) {
-                if (toForget == null) {
-                    // Assigning the lazy-initialized `toForget` in the last step
-                    // to avoid other threads accessing a half-initialized object.
-                    final List<TopicIdPartition> toForgetTmp = new ArrayList<>();
-                    data.forgottenTopicsData().forEach(forgottenTopic -> {
-                        String name;
-                        if (version() < 13) {
-                            name = forgottenTopic.topic(); // can't be null
-                        } else {
-                            name = topicNames.get(forgottenTopic.topicId());
-                        }
-                        // Topic name may be null here if the topic name was unable to be resolved using the topicNames map.
-                        forgottenTopic.partitions().forEach(partitionId -> toForgetTmp.add(new TopicIdPartition(forgottenTopic.topicId(), new TopicPartition(name, partitionId))));
-                    });
-                    toForget = toForgetTmp;
-                }
+        final List<TopicIdPartition> toForget = new ArrayList<>();
+        data.forgottenTopicsData().forEach(forgottenTopic -> {
+            String name;
+            if (version() < 13) {
+                name = forgottenTopic.topic(); // can't be null
+            } else {
+                name = topicNames.get(forgottenTopic.topicId());
             }
-        }
+            // Topic name may be null here if the topic name was unable to be resolved using the topicNames map.
+            forgottenTopic.partitions().forEach(partitionId -> toForget.add(new TopicIdPartition(forgottenTopic.topicId(), new TopicPartition(name, partitionId))));
+        });
         return toForget;
     }
 

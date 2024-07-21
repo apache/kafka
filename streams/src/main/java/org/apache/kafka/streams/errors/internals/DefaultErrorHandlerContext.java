@@ -20,6 +20,9 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.processor.TaskId;
 
+/**
+ * Default implementation of {@link ErrorHandlerContext} that provides access to the metadata of the record that caused the error.
+ */
 public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     private final String topic;
     private final int partition;
