@@ -135,6 +135,5 @@
     <allow pkg="kafka.test"/>
     <allow pkg="kafka.test.annotation"/>
     <allow pkg="kafka.test.junit"/>
-    <allow pkg="kafka.testkit"/>
   </subpackage>
 </import-control>
