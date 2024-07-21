@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log;
 
 import kafka.log.UnifiedLog;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -41,6 +42,7 @@ import org.apache.kafka.storage.internals.log.TxnMetadata;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.storage.internals.log.VerificationStateEntry;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
