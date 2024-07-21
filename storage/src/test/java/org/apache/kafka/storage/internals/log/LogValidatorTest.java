@@ -763,15 +763,17 @@ public class LogValidatorTest {
         return Stream.of(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)
                 .flatMap(magicValue -> Arrays.stream(CompressionType.values()).flatMap(source ->
                         Arrays.stream(CompressionType.values()).map(target ->
-                                Arguments.of(magicValue, Compression.of(source).build(), target))));
+                                Arguments.of(magicValue, source.name, target.name))));
     }
 
     @ParameterizedTest
     @MethodSource("testInvalidSequenceArguments")
-    public void checkInvalidSequence(byte magic, Compression compression, CompressionType type) {
+    public void checkInvalidSequence(byte magic, String compressionName, String typeName) {
         long producerId = 1234;
         short producerEpoch = 0;
         int baseSequence = 0;
+        Compression compression = Compression.of(compressionName).build();
+        CompressionType type = CompressionType.forName(typeName);
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, compression,
