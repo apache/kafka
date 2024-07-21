@@ -63,6 +63,7 @@
             <allow pkg="org.apache.kafka.storage"/>
             <allow pkg="org.apache.kafka.server.util"/>
             <allow pkg="org.apache.kafka.coordinator.transaction"/>
+            <allow pkg="kafka.log"/>
             <subpackage name="remote">
                 <allow pkg="scala.collection" />
                 <subpackage name="storage">
