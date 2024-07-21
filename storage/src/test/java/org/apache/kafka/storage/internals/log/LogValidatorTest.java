@@ -136,7 +136,10 @@ public class LogValidatorTest {
     @CsvSource({
             "0,gzip,none", "1,gzip,none", "2,gzip,none",
             "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
-            "2,none,none", "2,none,gzip"
+            "0,snappy,gzip", "1,snappy,gzip", "2,snappy,gzip",
+            "0,lz4,gzip", "1,lz4,gzip", "2,lz4,gzip",
+            "2,none,none", "2,none,gzip",
+            "2,zstd,gzip",
     })
     public void checkOnlyOneBatch(Byte magic, String sourceCompression,
                                    String targetCompression) {
@@ -146,8 +149,15 @@ public class LogValidatorTest {
         );
     }
 
+
+    private static Stream<Arguments> testAllCompression() {
+        return Arrays.stream(CompressionType.values()).flatMap(source ->
+                        Arrays.stream(CompressionType.values()).map(target ->
+                                Arguments.of(source.name, target.name)));
+    }
+
     @ParameterizedTest
-    @CsvSource({"gzip, gzip", "none, gzip", "gzip,none", "none,none"})
+    @MethodSource("testAllCompression")
     public void testBatchWithoutRecordsNotAllowed(String sourceCompressionName, String targetCompressionName) {
         long offset = 1234567;
         long producerId = 1324L;
