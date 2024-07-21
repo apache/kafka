@@ -148,6 +148,9 @@ From KafkaConfig.scala
   val LeaderImbalancePerBrokerPercentageProp = "leader.imbalance.per.broker.percentage"
   val LeaderImbalanceCheckIntervalSecondsProp = "leader.imbalance.check.interval.seconds"
   val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
+  val UncleanRecoveryStrategy = "unclean.recovery.strategy"
+  val UncleanRecoveryManagerEnabled = "unclean.recovery.manager.enabled"
+  val UncleanRecoveryManagerTimeoutMs = "unclean.recovery.timeout.ms"
   val InterBrokerSecurityProtocolProp = "security.inter.broker.protocol"
   val InterBrokerProtocolVersionProp = "inter.broker.protocol.version"
   /** ********* Controlled shutdown configuration ***********/

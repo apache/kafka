@@ -141,6 +141,7 @@ import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.PartitionReassignmentReplicas.isReassignmentInProgress;
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
+import static org.apache.kafka.controller.QuorumController.UncleanRecoveryStrategyFlag;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
@@ -166,6 +167,13 @@ public class ReplicationControlManager {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private FeatureControlManager featureControl = null;
         private boolean eligibleLeaderReplicasEnabled = false;
+
+        private UncleanRecoveryStrategyFlag uncleanRecoveryStrategy = UncleanRecoveryStrategyFlag.NONE;
+
+        private boolean uncleanRecoveryManagerEnabled = false;
+
+        private int uncleanRecoveryTimeoutMs = 60000;
+
 
         Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
             this.snapshotRegistry = snapshotRegistry;
@@ -196,6 +204,22 @@ public class ReplicationControlManager {
             this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
             return this;
         }
+
+        Builder setUncleanRecoveryStrategy(UncleanRecoveryStrategyFlag uncleanRecoveryStrategy) {
+            this.uncleanRecoveryStrategy = uncleanRecoveryStrategy;
+            return this;
+        }
+
+        Builder setUncleanRecoveryManagerEnabled(boolean uncleanRecoveryManagerEnabled) {
+            this.uncleanRecoveryManagerEnabled = uncleanRecoveryManagerEnabled;
+            return this;
+        }
+
+        Builder setUncleanRecoveryTimeoutMs(int uncleanRecoveryTimeoutMs) {
+            this.uncleanRecoveryTimeoutMs = uncleanRecoveryTimeoutMs;
+            return this;
+        }
+
 
         Builder setMaxElectionsPerImbalance(int maxElectionsPerImbalance) {
             this.maxElectionsPerImbalance = maxElectionsPerImbalance;
@@ -240,6 +264,9 @@ public class ReplicationControlManager {
                 defaultMinIsr,
                 maxElectionsPerImbalance,
                 eligibleLeaderReplicasEnabled,
+                uncleanRecoveryStrategy,
+                uncleanRecoveryManagerEnabled,
+                uncleanRecoveryTimeoutMs,
                 configurationControl,
                 clusterControl,
                 createTopicPolicy,
@@ -320,6 +347,12 @@ public class ReplicationControlManager {
      * True if eligible leader replicas is enabled.
      */
     private final boolean eligibleLeaderReplicasEnabled;
+
+    private final UncleanRecoveryStrategyFlag uncleanRecoveryStrategy;
+
+    private final boolean uncleanRecoveryManagerEnabled;
+
+    private final int uncleanRecoveryTimeoutMs;
 
     /**
      * Maximum number of leader elections to perform during one partition leader balancing operation.
@@ -412,6 +445,9 @@ public class ReplicationControlManager {
         int defaultMinIsr,
         int maxElectionsPerImbalance,
         boolean eligibleLeaderReplicasEnabled,
+        UncleanRecoveryStrategyFlag uncleanRecoveryStrategy,
+        boolean uncleanRecoveryManagerEnabled,
+        int uncleanRecoveryTimeoutMs,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
@@ -424,6 +460,9 @@ public class ReplicationControlManager {
         this.defaultMinIsr = defaultMinIsr;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
         this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
+        this.uncleanRecoveryStrategy = uncleanRecoveryStrategy;
+        this.uncleanRecoveryManagerEnabled = uncleanRecoveryManagerEnabled;
+        this.uncleanRecoveryTimeoutMs = uncleanRecoveryTimeoutMs;
         this.configurationControl = configurationControl;
         this.createTopicPolicy = createTopicPolicy;
         this.featureControl = featureControl;

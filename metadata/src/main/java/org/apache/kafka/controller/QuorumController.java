@@ -219,6 +219,9 @@ public final class QuorumController implements Controller {
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
         private boolean zkMigrationEnabled = false;
         private boolean eligibleLeaderReplicasEnabled = false;
+        private UncleanRecoveryStrategyFlag uncleanRecoveryStrategy = UncleanRecoveryStrategyFlag.NONE;
+        private boolean uncleanRecoveryManagerEnabled = false;
+        private int uncleanRecoveryTimeoutMs = 60000;
         private DelegationTokenCache tokenCache;
         private String tokenSecretKeyString;
         private long delegationTokenMaxLifeMs;
@@ -354,6 +357,22 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setUncleanRecoveryStrategy(UncleanRecoveryStrategyFlag uncleanRecoveryStrategy) {
+            this.uncleanRecoveryStrategy = uncleanRecoveryStrategy;
+            return this;
+        }
+
+        public Builder setUncleanRecoveryManagerEnabled(boolean uncleanRecoveryManagerEnabled) {
+            this.uncleanRecoveryManagerEnabled = uncleanRecoveryManagerEnabled;
+            return this;
+        }
+
+        public Builder setUncleanRecoveryTimeoutMs(int uncleanRecoveryTimeoutMs) {
+            this.uncleanRecoveryTimeoutMs = uncleanRecoveryTimeoutMs;
+            return this;
+        }
+
+
         public Builder setDelegationTokenCache(DelegationTokenCache tokenCache) {
             this.tokenCache = tokenCache;
             return this;
@@ -436,7 +455,10 @@ public final class QuorumController implements Controller {
                     delegationTokenMaxLifeMs,
                     delegationTokenExpiryTimeMs,
                     delegationTokenExpiryCheckIntervalMs,
-                    eligibleLeaderReplicasEnabled
+                    eligibleLeaderReplicasEnabled,
+                    uncleanRecoveryStrategy,
+                    uncleanRecoveryManagerEnabled,
+                    uncleanRecoveryTimeoutMs
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -682,6 +704,12 @@ public final class QuorumController implements Controller {
             queue.append(event);
         }
         return event.future();
+    }
+
+    public enum UncleanRecoveryStrategyFlag {
+        NONE,
+        BALANCED,
+        AGGRESSIVE
     }
 
     enum ControllerOperationFlag {
@@ -1759,6 +1787,12 @@ public final class QuorumController implements Controller {
 
     private final boolean eligibleLeaderReplicasEnabled;
 
+    private final UncleanRecoveryStrategyFlag uncleanRecoveryStrategy;
+
+    private final boolean uncleanRecoveryManagerEnabled;
+
+    private final int uncleanRecoveryTimeoutMs;
+
     /**
      * The maximum number of records per batch to allow.
      */
@@ -1800,7 +1834,10 @@ public final class QuorumController implements Controller {
         long delegationTokenMaxLifeMs,
         long delegationTokenExpiryTimeMs,
         long delegationTokenExpiryCheckIntervalMs,
-        boolean eligibleLeaderReplicasEnabled
+        boolean eligibleLeaderReplicasEnabled,
+        UncleanRecoveryStrategyFlag uncleanRecoveryStrategy,
+        boolean uncleanRecoveryManagerEnabled,
+        int uncleanRecoveryTimeoutMs
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1872,6 +1909,9 @@ public final class QuorumController implements Controller {
             setDefaultNumPartitions(defaultNumPartitions).
             setDefaultMinIsr(defaultMinIsr).
             setEligibleLeaderReplicasEnabled(eligibleLeaderReplicasEnabled).
+            setUncleanRecoveryStrategy(uncleanRecoveryStrategy).
+            setUncleanRecoveryManagerEnabled(uncleanRecoveryManagerEnabled).
+            setUncleanRecoveryTimeoutMs(uncleanRecoveryTimeoutMs).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
@@ -1906,6 +1946,9 @@ public final class QuorumController implements Controller {
         this.zkMigrationEnabled = zkMigrationEnabled;
         this.recordRedactor = new RecordRedactor(configSchema);
         this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
+        this.uncleanRecoveryStrategy = uncleanRecoveryStrategy;
+        this.uncleanRecoveryManagerEnabled = uncleanRecoveryManagerEnabled;
+        this.uncleanRecoveryTimeoutMs = uncleanRecoveryTimeoutMs;
 
         log.info("Creating new QuorumController with clusterId {}.{}{}",
             clusterId, zkMigrationEnabled ? " ZK migration mode is enabled." : "",

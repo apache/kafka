@@ -28,12 +28,14 @@ import org.apache.kafka.common.config.ConfigDef.ValidList;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.controller.QuorumController;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.MetadataVersionValidator;
 import org.apache.kafka.server.config.QuotaConfigs;
@@ -68,6 +70,9 @@ import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
+
+import static org.apache.kafka.controller.QuorumController.UncleanRecoveryStrategyFlag;
+
 
 public class LogConfig extends AbstractConfig {
 
@@ -177,6 +182,9 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_MAX_COMPACTION_LAG_MS = Long.MAX_VALUE;
     public static final double DEFAULT_MIN_CLEANABLE_DIRTY_RATIO = 0.5;
     public static final boolean DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE = false;
+    public static final UncleanRecoveryStrategyFlag DEFAULT_UNCLEAN_RECOVERY_STRATEGY = UncleanRecoveryStrategyFlag.NONE;
+    public static final boolean DEFAULT_UNCLEAN_RECOVERY_MANAGER_ENABLED = false;
+    public static final int DEFAULT_UNCLEAN_RECOVERY_TIMEOUT_MS = 60000;
     public static final String DEFAULT_COMPRESSION_TYPE = BrokerCompressionType.PRODUCER.name;
     public static final boolean DEFAULT_PREALLOCATE = false;
     @Deprecated
@@ -292,6 +300,12 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.CLEANUP_POLICY_DELETE), MEDIUM, TopicConfig.CLEANUP_POLICY_DOC)
                 .define(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE,
                         MEDIUM, TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
+                .define(TopicConfig.UNCLEAN_RECOVERY_STRATEGY_CONFIG, STRING, DEFAULT_UNCLEAN_RECOVERY_STRATEGY, MEDIUM,
+                        TopicConfig.UNCLEAN_RECOVERY_STRATEGY_DOC)
+                .define(TopicConfig.UNCLEAN_RECOVERY_MANAGER_ENABLED_CONFIG, BOOLEAN, DEFAULT_UNCLEAN_RECOVERY_MANAGER_ENABLED, MEDIUM,
+                        TopicConfig.UNCLEAN_RECOVERY_MANAGER_ENABLED_DOC)
+                .define(TopicConfig.UNCLEAN_RECOVERY_TIMEOUT_MS_CONFIG, INT,DEFAULT_UNCLEAN_RECOVERY_TIMEOUT_MS, MEDIUM,
+                        TopicConfig.UNCLEAN_RECOVERY_TIMEOUT_MS_DOC)
                 .define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, INT, ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT, atLeast(1), MEDIUM,
                         TopicConfig.MIN_IN_SYNC_REPLICAS_DOC)
                 .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names().toArray(new String[0])),
@@ -353,6 +367,9 @@ public class LogConfig extends AbstractConfig {
     public final boolean compact;
     public final boolean delete;
     public final boolean uncleanLeaderElectionEnable;
+    public final UncleanRecoveryStrategyFlag uncleanRecoveryStrategy;
+    public final boolean uncleanRecoveryManagerEnabled;
+    public final int uncleanRecoveryTimeoutMs;
     public final int minInSyncReplicas;
     public final BrokerCompressionType compressionType;
     public final Optional<Compression> compression;
@@ -411,6 +428,9 @@ public class LogConfig extends AbstractConfig {
                 .collect(Collectors.toList())
                 .contains(TopicConfig.CLEANUP_POLICY_DELETE);
         this.uncleanLeaderElectionEnable = getBoolean(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
+        this.uncleanRecoveryStrategy = UncleanRecoveryStrategyFlag.valueOf(TopicConfig.UNCLEAN_RECOVERY_STRATEGY_CONFIG);
+        this.uncleanRecoveryManagerEnabled = getBoolean(TopicConfig.UNCLEAN_RECOVERY_MANAGER_ENABLED_CONFIG);
+        this.uncleanRecoveryTimeoutMs = getInt(TopicConfig.UNCLEAN_RECOVERY_TIMEOUT_MS_CONFIG);
         this.minInSyncReplicas = getInt(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
         this.compressionType = BrokerCompressionType.forName(getString(TopicConfig.COMPRESSION_TYPE_CONFIG));
         this.compression = getCompression();
@@ -719,6 +739,9 @@ public class LogConfig extends AbstractConfig {
                 ", compact=" + compact +
                 ", delete=" + delete +
                 ", uncleanLeaderElectionEnable=" + uncleanLeaderElectionEnable +
+                ", uncleanRecoveryStrategy=" + uncleanRecoveryStrategy +
+                ", uncleanRecoveryManagerEnabled=" + uncleanRecoveryManagerEnabled +
+                ", uncleanRecoveryTimeoutMs=" + uncleanRecoveryTimeoutMs +
                 ", minInSyncReplicas=" + minInSyncReplicas +
                 ", compressionType='" + compressionType + '\'' +
                 ", preallocate=" + preallocate +
