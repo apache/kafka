@@ -801,21 +801,17 @@ public class LogValidatorTest {
         assertTrue(metricsRecorder.recordInvalidSequenceCount > 0);
     }
 
-    @Test
-    public void testNoKeyCompactedTopic() {
-        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V0, Compression.gzip().build(), CompressionType.GZIP);
-        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V1, Compression.gzip().build(), CompressionType.GZIP);
-        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V2, Compression.gzip().build(), CompressionType.GZIP);
-        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V0, Compression.lz4().build(), CompressionType.LZ4);
-        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V1, Compression.lz4().build(), CompressionType.LZ4);
-        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V2, Compression.lz4().build(), CompressionType.LZ4);
-        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V0, Compression.snappy().build(), CompressionType.SNAPPY);
-        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V1, Compression.snappy().build(), CompressionType.SNAPPY);
-        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V2, Compression.snappy().build(), CompressionType.SNAPPY);
-        checkNoKeyCompactedTopic(RecordBatch.MAGIC_VALUE_V2, Compression.zstd().build(), CompressionType.ZSTD);
-    }
+    @ParameterizedTest
+    @CsvSource({
+            "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
+            "0,lz4,lz4", "1,lz4,lz4", "2,lz4,lz4",
+            "0,snappy,snappy", "1,snappy,snappy", "2,snappy,snappy",
+            "2,zstd,zstd"
+    })
+    public void checkNoKeyCompactedTopic(byte magic, String compressionName, String typeName) {
+        Compression codec = Compression.of(compressionName).build();
+        CompressionType type = CompressionType.forName(typeName);
 
-    void checkNoKeyCompactedTopic(byte magic, Compression codec, CompressionType type) {
         MemoryRecords records = createRecords(magic, RecordBatch.NO_TIMESTAMP, codec);
         Assertions.assertThrows(RecordValidationException.class, () -> new LogValidator(
                 records,
