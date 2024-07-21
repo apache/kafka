@@ -98,6 +98,7 @@ public class ProducerStateManagerTest {
     private final MockTime time = new MockTime();
 
     private final short epoch = 0;
+    private final int defaultSequence = 0;
 
     @BeforeEach
     public void setUp() throws IOException {
@@ -115,7 +116,7 @@ public class ProducerStateManagerTest {
     public void testBasicIdMapping() {
 
         // First entry for id 0 added
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, 0L, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, 0L, false);
         // Second entry for id 0 added
         appendClientEntry(stateManager, producerId, epoch, 1, 0L, 1L, false);
 
@@ -127,10 +128,10 @@ public class ProducerStateManagerTest {
                 () -> appendClientEntry(stateManager, producerId, epoch, 5, 0L, 2L, false));
 
         // Change epoch
-        appendClientEntry(stateManager, producerId, (short) (epoch + 1), 0, 0L, 3L, false);
+        appendClientEntry(stateManager, producerId, (short) (epoch + 1), defaultSequence, 0L, 3L, false);
         // Incorrect epoch
         assertThrows(InvalidProducerEpochException.class,
-                () -> appendClientEntry(stateManager, producerId, epoch, 0, 0L, 4L, false));
+                () -> appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, 4L, false));
     }
 
     @Test
@@ -146,14 +147,14 @@ public class ProducerStateManagerTest {
 
         // Fencing should continue to work even if the marker is the only thing left
         assertThrows(InvalidProducerEpochException.class,
-                () -> appendClientEntry(stateManager, producerId, (short) 0, 0, 0L, 4L, false));
+                () -> appendClientEntry(stateManager, producerId, (short) 0, defaultSequence, 0L, 4L, false));
         // If the transaction marker is the only thing left in the log, then an attempt to write using a
         // non-zero sequence number should cause an OutOfOrderSequenceException, so that the producer can reset its state
         assertThrows(OutOfOrderSequenceException.class,
                 () -> appendClientEntry(stateManager, producerId, producerEpoch, 17, 0L, 4L, false));
 
         // The broker should accept the request if the sequence number is reset to 0
-        appendClientEntry(stateManager, producerId, producerEpoch, 0, 39L, 4L, false);
+        appendClientEntry(stateManager, producerId, producerEpoch, defaultSequence, 39L, 4L, false);
 
         ProducerStateEntry secondEntry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
         assertEquals(producerEpoch, secondEntry.producerEpoch());
@@ -166,8 +167,8 @@ public class ProducerStateManagerTest {
         short epoch = 15;
         int sequence = Integer.MAX_VALUE;
         long offset = 735L;
+        
         appendReplicationEntry(stateManager, epoch, sequence, offset);
-
         appendClientEntry(stateManager, producerId, epoch, 0, offset + 500, false);
 
         ProducerStateEntry lastEntry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
@@ -229,8 +230,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testControlRecordBumpsProducerEpoch() {
-        short producerEpoch = 0;
-        appendClientEntry(stateManager, producerId, producerEpoch, 0, 0L, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, false);
 
         short bumpedProducerEpoch = 1;
         appendEndTxnMarker(stateManager, producerId, bumpedProducerEpoch, ControlRecordType.ABORT, 1L);
@@ -244,20 +244,19 @@ public class ProducerStateManagerTest {
 
         // should be able to append with the new epoch if we start at sequence 0
         appendClientEntry(stateManager, producerId, bumpedProducerEpoch, 0, 2L, false);
-        assertEquals(0L, getLastEntryOrElseThrownByProducerId(stateManager, producerId).firstSeq());
+        assertEquals(defaultSequence, getLastEntryOrElseThrownByProducerId(stateManager, producerId).firstSeq());
     }
 
     @Test
     public void testTxnFirstOffsetMetadataCached() {
-        short producerEpoch = 0;
         long offset = 992342L;
-        int seq = 0;
         ProducerAppendInfo appendInfo = new ProducerAppendInfo(partition, producerId,
                 ProducerStateEntry.empty(producerId), AppendOrigin.CLIENT,
-                stateManager.maybeCreateVerificationStateEntry(producerId, seq, producerEpoch));
+                stateManager.maybeCreateVerificationStateEntry(producerId, defaultSequence, epoch));
 
         LogOffsetMetadata firstOffsetMetadata = new LogOffsetMetadata(offset, 990000L, 234224);
-        appendInfo.appendDataBatch(producerEpoch, seq, seq, time.milliseconds(), firstOffsetMetadata, offset, true);
+        appendInfo.appendDataBatch(epoch, defaultSequence, defaultSequence, 
+                time.milliseconds(), firstOffsetMetadata, offset, true);
         stateManager.update(appendInfo);
 
         assertEquals(Optional.of(firstOffsetMetadata), stateManager.firstUnstableOffset());
@@ -271,11 +270,11 @@ public class ProducerStateManagerTest {
         short epoch2 = 9;
 
         // Start two transactions with a delay between them
-        appendClientEntry(stateManager, producerId1, epoch1, 0, 100, true);
+        appendClientEntry(stateManager, producerId1, epoch1, defaultSequence, 100, true);
         assertFalse(stateManager.hasLateTransaction(time.milliseconds()));
 
         time.sleep(500);
-        appendClientEntry(stateManager, producerId2, epoch2, 0, 150, true);
+        appendClientEntry(stateManager, producerId2, epoch2, defaultSequence, 150, true);
         assertFalse(stateManager.hasLateTransaction(time.milliseconds()));
 
         // Only the first transaction is late
@@ -303,11 +302,11 @@ public class ProducerStateManagerTest {
         short epoch2 = 9;
 
         // Start two transactions with a delay between them
-        appendClientEntry(stateManager, producerId1, epoch1, 0, 100, true);
+        appendClientEntry(stateManager, producerId1, epoch1, defaultSequence, 100, true);
         assertFalse(stateManager.hasLateTransaction(time.milliseconds()));
 
         time.sleep(500);
-        appendClientEntry(stateManager, producerId2, epoch2, 0, 150, true);
+        appendClientEntry(stateManager, producerId2, epoch2, defaultSequence, 150, true);
         assertFalse(stateManager.hasLateTransaction(time.milliseconds()));
 
         // Take a snapshot and reload the state
@@ -328,7 +327,7 @@ public class ProducerStateManagerTest {
         short epoch = 2;
 
         // Start one transaction and sleep until it is late
-        appendClientEntry(stateManager, producerId, epoch, 0, 100, true);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 100, true);
         assertFalse(stateManager.hasLateTransaction(time.milliseconds()));
         time.sleep(lateTransactionTimeoutMs + 1);
         assertTrue(stateManager.hasLateTransaction(time.milliseconds()));
@@ -344,7 +343,7 @@ public class ProducerStateManagerTest {
         short epoch = 2;
 
         // Start one transaction and sleep until it is late
-        appendClientEntry(stateManager, producerId, epoch, 0, 100, true);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 100, true);
         assertFalse(stateManager.hasLateTransaction(time.milliseconds()));
         time.sleep(lateTransactionTimeoutMs + 1);
         assertTrue(stateManager.hasLateTransaction(time.milliseconds()));
@@ -356,10 +355,8 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testPrepareUpdateDoesNotMutate() {
-        short producerEpoch = 0;
-
         ProducerAppendInfo appendInfo = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
-        appendInfo.appendDataBatch(producerEpoch, 0, 5, time.milliseconds(),
+        appendInfo.appendDataBatch(epoch, 0, 5, time.milliseconds(),
                 new LogOffsetMetadata(15L), 20L, false);
         assertEquals(Optional.empty(), stateManager.lastEntry(producerId));
         stateManager.update(appendInfo);
@@ -367,7 +364,7 @@ public class ProducerStateManagerTest {
         getLastEntryOrElseThrownByProducerId(stateManager, producerId);
 
         ProducerAppendInfo nextAppendInfo = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
-        nextAppendInfo.appendDataBatch(producerEpoch, 6, 10, time.milliseconds(),
+        nextAppendInfo.appendDataBatch(epoch, 6, 10, time.milliseconds(),
                 new LogOffsetMetadata(26L), 30L, false);
 
         ProducerStateEntry lastEntry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
@@ -385,36 +382,23 @@ public class ProducerStateManagerTest {
 
     @Test
     public void updateProducerTransactionState() {
-        short producerEpoch = 0;
         int coordinatorEpoch = 15;
         long offset = 9L;
-        appendClientEntry(stateManager, producerId, producerEpoch, 0, offset, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, offset, false);
 
         ProducerAppendInfo appendInfo = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
-        appendInfo.appendDataBatch(producerEpoch, 1, 5, time.milliseconds(),
+        appendInfo.appendDataBatch(epoch, 1, 5, time.milliseconds(),
                 new LogOffsetMetadata(16L), 20L, true);
-        ProducerStateEntry lastEntry = appendInfo.toEntry();
-        assertEquals(producerEpoch, lastEntry.producerEpoch());
-        assertEquals(1, lastEntry.firstSeq());
-        assertEquals(5, lastEntry.lastSeq());
-        assertEquals(16L, lastEntry.firstDataOffset());
-        assertEquals(20L, lastEntry.lastDataOffset());
-        assertEquals(OptionalLong.of(16L), lastEntry.currentTxnFirstOffset());
-        assertTxnMetadataEquals(singletonList(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions());
+        verifyLastEntryWithTxnData(appendInfo.toEntry(), 1, 5,
+                16L, 20L, OptionalLong.of(16), appendInfo);
 
-        appendInfo.appendDataBatch(producerEpoch, 6, 10, time.milliseconds(),
+        appendInfo.appendDataBatch(epoch, 6, 10, time.milliseconds(),
                 new LogOffsetMetadata(26L), 30L, true);
-        lastEntry = appendInfo.toEntry();
-        assertEquals(producerEpoch, lastEntry.producerEpoch());
-        assertEquals(1, lastEntry.firstSeq());
-        assertEquals(10, lastEntry.lastSeq());
-        assertEquals(16L, lastEntry.firstDataOffset());
-        assertEquals(30L, lastEntry.lastDataOffset());
-        assertEquals(OptionalLong.of(16L), lastEntry.currentTxnFirstOffset());
-        assertTxnMetadataEquals(singletonList(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions());
+        verifyLastEntryWithTxnData(appendInfo.toEntry(), 1, 10,
+                16L, 30L, OptionalLong.of(16), appendInfo);
 
         EndTransactionMarker endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch);
-        CompletedTxn completedTxn = appendInfo.appendEndTxnMarker(endTxnMarker, producerEpoch, 40L, time.milliseconds())
+        CompletedTxn completedTxn = appendInfo.appendEndTxnMarker(endTxnMarker, epoch, 40L, time.milliseconds())
                 .orElseThrow(() -> new RuntimeException("The transaction should be completed"));
 
         assertEquals(producerId, completedTxn.producerId);
@@ -422,22 +406,17 @@ public class ProducerStateManagerTest {
         assertEquals(40L, completedTxn.lastOffset);
         assertFalse(completedTxn.isAborted);
 
-        lastEntry = appendInfo.toEntry();
-        assertEquals(producerEpoch, lastEntry.producerEpoch());
+        ProducerStateEntry lastEntry = appendInfo.toEntry();
         // verify that appending the transaction marker doesn't affect the metadata of the cached record batches.
-        assertEquals(1, lastEntry.firstSeq());
-        assertEquals(10, lastEntry.lastSeq());
-        assertEquals(16L, lastEntry.firstDataOffset());
-        assertEquals(30L, lastEntry.lastDataOffset());
-        assertEquals(coordinatorEpoch, lastEntry.coordinatorEpoch());
+        verifyLastEntryWithTxnData(lastEntry, 1, 10,
+                16L, 30L, OptionalLong.empty(), appendInfo);
         assertEquals(OptionalLong.empty(), lastEntry.currentTxnFirstOffset());
-        assertTxnMetadataEquals(singletonList(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions());
     }
 
     @Test
     public void testOutOfSequenceAfterControlRecordEpochBump() {
 
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, true);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, true);
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, true);
 
         short bumpedEpoch = 1;
@@ -451,7 +430,7 @@ public class ProducerStateManagerTest {
                 () -> appendClientEntry(stateManager, producerId, (short) (bumpedEpoch + 1), 2, 2L, true));
 
         // Append with the bumped epoch should be fine if starting from sequence 0
-        appendClientEntry(stateManager, producerId, bumpedEpoch, 0, 0L, true);
+        appendClientEntry(stateManager, producerId, bumpedEpoch, defaultSequence, 0L, true);
         ProducerStateEntry lastEntry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
         assertEquals(bumpedEpoch, lastEntry.producerEpoch());
         assertEquals(0, lastEntry.lastSeq());
@@ -459,17 +438,14 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testNonTransactionalAppendWithOngoingTransaction() {
-
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, true);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, true);
         assertThrows(InvalidTxnStateException.class,
                 () -> appendClientEntry(stateManager, producerId, epoch, 1, 1L, false));
     }
 
     @Test
     public void testTruncateAndReloadRemovesOutOfRangeSnapshots() throws IOException {
-
-
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, false);
         stateManager.takeSnapshot();
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, false);
         stateManager.takeSnapshot();
@@ -488,8 +464,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testTakeSnapshot() throws IOException {
-
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, 0L, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, 0L, false);
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, 1L, false);
 
         // Take snapshot
@@ -509,7 +484,6 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testRecoverFromSnapshotUnfinishedTransaction() throws IOException {
-
         appendClientEntry(stateManager, producerId, epoch, 0, 0L, true);
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, true);
 
@@ -532,7 +506,6 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testRecoverFromSnapshotFinishedTransaction() throws IOException {
-
         appendClientEntry(stateManager, producerId, epoch, 0, 0L, true);
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, true);
         appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.ABORT, 2L);
@@ -553,7 +526,6 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testRecoverFromSnapshotEmptyTransaction() throws IOException {
-
         long appendTimestamp = time.milliseconds();
         appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.ABORT, 0L, 0, appendTimestamp);
         stateManager.takeSnapshot();
@@ -569,8 +541,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testProducerStateAfterFencingAbortMarker() {
-
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, true);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, true);
         appendEndTxnMarker(stateManager, producerId, (short) (epoch + 1), ControlRecordType.ABORT, 1L);
 
         ProducerStateEntry lastEntry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
@@ -585,8 +556,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testRemoveExpiredPidsOnReload() throws IOException {
-
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, 0, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, 0, false);
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, 1, false);
 
         stateManager.takeSnapshot();
@@ -605,8 +575,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testAcceptAppendWithoutProducerStateOnReplica() throws IOException {
-
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, 0, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, 0, false);
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, 1, false);
 
         stateManager.takeSnapshot();
@@ -628,7 +597,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testAcceptAppendWithSequenceGapsOnReplica() {
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, 0, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, 0, false);
         int outOfOrderSequence = 3;
 
         // First we ensure that we raise an OutOfOrderSequenceException is raised when to append comes from a client.
@@ -647,7 +616,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testDeleteSnapshotsBefore() throws IOException {
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, false);
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, false);
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
@@ -669,7 +638,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testTruncateFullyAndStartAt() throws IOException {
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, false);
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, false);
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
@@ -723,9 +692,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testFirstUnstableOffsetAfterTruncation() throws IOException {
-        int sequence = 0;
-
-        appendClientEntry(stateManager, producerId, epoch, sequence, 99, true);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 99, true);
         assertEquals(99L, stateManager.firstUnstableOffset()
                 .map(offset -> offset.messageOffset)
                 .orElseThrow(() -> new RuntimeException("First unstable offset should be present")));
@@ -736,7 +703,7 @@ public class ProducerStateManagerTest {
         assertEquals(Optional.empty(), stateManager.firstUnstableOffset().map(offset -> offset.messageOffset));
         stateManager.takeSnapshot();
 
-        appendClientEntry(stateManager, producerId, epoch, sequence + 1, 106, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence + 1, 106, false);
         stateManager.truncateAndReload(0L, 106, time.milliseconds());
         assertEquals(Optional.empty(), stateManager.firstUnstableOffset().map(offset -> offset.messageOffset));
 
@@ -751,8 +718,8 @@ public class ProducerStateManagerTest {
         long pid1 = 1L;
         long pid2 = 2L;
 
-        appendClientEntry(stateManager, pid1, epoch, 0, 0L, false);
-        appendClientEntry(stateManager, pid2, epoch, 0, 1L, false);
+        appendClientEntry(stateManager, pid1, epoch, defaultSequence, 0L, false);
+        appendClientEntry(stateManager, pid2, epoch, defaultSequence, 1L, false);
         stateManager.takeSnapshot();
         assertEquals(2, stateManager.activeProducers().size());
 
@@ -770,7 +737,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testSkipSnapshotIfOffsetUnchanged() throws IOException {
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, 0L, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, 0L, false);
 
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
@@ -785,29 +752,27 @@ public class ProducerStateManagerTest {
     @Test
     public void testPidExpirationTimeout() {
         short epoch = 5;
-        int sequence = 37;
-        appendClientEntry(stateManager, producerId, epoch, sequence, 1L, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 1L, false);
         time.sleep(producerStateManagerConfig.producerIdExpirationMs() + 1);
         stateManager.removeExpiredProducers(time.milliseconds());
-        appendClientEntry(stateManager, producerId, epoch, sequence + 1, 2L, false);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence + 1, 2L, false);
         assertEquals(1, stateManager.activeProducers().size());
-        assertEquals(sequence + 1, stateManager.activeProducers().values().iterator().next().lastSeq());
+        assertEquals(defaultSequence + 1, stateManager.activeProducers().values().iterator().next().lastSeq());
         assertEquals(3L, stateManager.mapEndOffset());
     }
 
     @Test
     public void testFirstUnstableOffset() {
         short epoch = 5;
-        int sequence = 0;
 
         assertEquals(OptionalLong.empty(), stateManager.firstUndecidedOffset());
 
-        appendClientEntry(stateManager, producerId, epoch, sequence, 99, true);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 99, true);
         assertEquals(OptionalLong.of(99L), stateManager.firstUndecidedOffset());
         assertEquals(Optional.of(99L), stateManager.firstUnstableOffset().map(x -> x.messageOffset));
 
         long anotherPid = 2L;
-        appendClientEntry(stateManager, anotherPid, epoch, sequence, 105, true);
+        appendClientEntry(stateManager, anotherPid, epoch, defaultSequence, 105, true);
         assertEquals(OptionalLong.of(99L), stateManager.firstUndecidedOffset());
         assertEquals(Optional.of(99L), stateManager.firstUnstableOffset().map(x -> x.messageOffset));
 
@@ -832,9 +797,8 @@ public class ProducerStateManagerTest {
     @Test
     public void testProducersWithOngoingTransactionsDontExpire() {
         short epoch = 5;
-        int sequence = 0;
-
-        appendClientEntry(stateManager, producerId, epoch, sequence, 99, true);
+        
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 99, true);
         assertEquals(OptionalLong.of(99L), stateManager.firstUndecidedOffset());
 
         time.sleep(producerStateManagerConfig.producerIdExpirationMs() + 1);
@@ -862,11 +826,10 @@ public class ProducerStateManagerTest {
     @Test
     public void testOldEpochForControlRecord() {
         short epoch = 5;
-        int sequence = 0;
 
         assertFalse(stateManager.firstUndecidedOffset().isPresent());
 
-        appendClientEntry(stateManager, producerId, epoch, sequence, 99, true);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 99, true);
         assertThrows(InvalidProducerEpochException.class,
                 () -> appendEndTxnMarker(stateManager, producerId, (short) 3,
                         ControlRecordType.COMMIT, 100));
@@ -875,9 +838,8 @@ public class ProducerStateManagerTest {
     @Test
     public void testCoordinatorFencing() {
         short epoch = 5;
-        int sequence = 0;
 
-        appendClientEntry(stateManager, producerId, epoch, sequence, 99, true);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 99, true);
         appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, 100, 1, time.milliseconds());
 
         ProducerStateEntry lastEntry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
@@ -897,7 +859,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testCoordinatorFencedAfterReload() throws IOException {
-        appendClientEntry(stateManager, producerId, epoch, 0, 99, true);
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 99, true);
         appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, 100, 1, time.milliseconds());
         stateManager.takeSnapshot();
 
@@ -1050,7 +1012,7 @@ public class ProducerStateManagerTest {
 
 
         // Add the transactional data and clear the entry.
-        appendClientEntry(stateManager, producerId, (short) 0, 0, 0, true);
+        appendClientEntry(stateManager, producerId, (short) 0, defaultSequence, 0, true);
         stateManager.clearVerificationStateEntry(producerId);
         assertNull(stateManager.verificationStateEntry(producerId));
     }
@@ -1146,7 +1108,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testSkipEmptyTransactions() {
-        AtomicInteger seq = new AtomicInteger(0);
+        AtomicInteger seq = new AtomicInteger(defaultSequence);
 
         // Start one transaction in a separate append
         ProducerAppendInfo firstAppend = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
@@ -1161,6 +1123,7 @@ public class ProducerStateManagerTest {
         // incomplete transaction
         ProducerAppendInfo secondAppend = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
         Optional<CompletedTxn> firstCompletedTxn = appendEndTransaction(ControlRecordType.COMMIT, 21, secondAppend);
+        assertTrue(firstCompletedTxn.isPresent());
         assertEquals(Optional.of(new CompletedTxn(producerId, 16L, 21, false)), firstCompletedTxn);
         assertFalse(appendEndTransaction(ControlRecordType.COMMIT, 22, secondAppend).isPresent());
         assertFalse(appendEndTransaction(ControlRecordType.ABORT, 23, secondAppend).isPresent());
@@ -1256,6 +1219,22 @@ public class ProducerStateManagerTest {
     private ProducerStateEntry getLastEntryOrElseThrownByProducerId(ProducerStateManager stateManger, long producerId) {
         return stateManger.lastEntry(producerId)
                 .orElseThrow(() -> new RuntimeException("This producerId:" + producerId + " should have last entry"));
+    }
+
+    private void verifyLastEntryWithTxnData(ProducerStateEntry lastEntry,
+                                            int expectedFirstSeq,
+                                            long expectedLastSeq,
+                                            long expectedFirstDataOffset,
+                                            long expectedLastDataOffset,
+                                            OptionalLong expectedCurrentTxnFirstOffset,
+                                            ProducerAppendInfo appendInfo) {
+        assertEquals(epoch, lastEntry.producerEpoch());
+        assertEquals(expectedFirstSeq, lastEntry.firstSeq());
+        assertEquals(expectedLastSeq, lastEntry.lastSeq());
+        assertEquals(expectedFirstDataOffset, lastEntry.firstDataOffset());
+        assertEquals(expectedLastDataOffset, lastEntry.lastDataOffset());
+        assertEquals(expectedCurrentTxnFirstOffset, lastEntry.currentTxnFirstOffset());
+        assertTxnMetadataEquals(singletonList(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions());
     }
 
     private void assertTxnMetadataEquals(List<TxnMetadata> expected, List<TxnMetadata> actual) {
