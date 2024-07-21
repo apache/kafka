@@ -24,6 +24,7 @@ import org.apache.kafka.timeline.TimelineHashMap;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.metadata.Replicas.NONE;
@@ -42,10 +43,10 @@ public class BrokersToElrs {
     /**
      * Update our records of a partition's ELR.
      *
-     * @param topicId       The topic ID of the partition.
-     * @param partitionId   The partition ID of the partition.
-     * @param prevElr       The previous ELR, or null if the partition is new.
-     * @param nextElr       The new ELR, or null if the partition is being removed.
+     * @param topicId     The topic ID of the partition.
+     * @param partitionId The partition ID of the partition.
+     * @param prevElr     The previous ELR, or null if the partition is new.
+     * @param nextElr     The new ELR, or null if the partition is being removed.
      */
 
     void update(Uuid topicId, int partitionId, int[] prevElr, int[] nextElr) {
@@ -156,6 +157,14 @@ public class BrokersToElrs {
         Map<Uuid, int[]> topicMap = elrMembers.get(brokerId);
         if (topicMap == null) {
             topicMap = Collections.emptyMap();
+        }
+        return new BrokersToIsrs.PartitionsOnReplicaIterator(topicMap, false);
+    }
+
+    BrokersToIsrs.PartitionsOnReplicaIterator partitionsWithElr() {
+        Map<Uuid, int[]> topicMap = new HashMap<>();
+        for (Map<Uuid, int[]> map : elrMembers.values()) {
+            topicMap.putAll(map);
         }
         return new BrokersToIsrs.PartitionsOnReplicaIterator(topicMap, false);
     }

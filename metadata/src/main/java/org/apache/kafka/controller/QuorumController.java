@@ -1829,6 +1829,7 @@ public final class QuorumController implements Controller {
             setValidator(configurationValidator).
             setStaticConfig(staticConfig).
             setNodeId(nodeId).
+            setMinIsrConfigUpdatePartitionHandler(this::maybeTriggerMinIsrConfigUpdate).
             build();
         this.clientQuotaControlManager = new ClientQuotaControlManager.Builder().
             setLogContext(logContext).
@@ -2354,5 +2355,9 @@ public final class QuorumController implements Controller {
 
     void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {
         replicationControl.handleBrokerUncleanShutdown(brokerId, records);
+    }
+    
+    List<ApiMessageAndVersion> maybeTriggerMinIsrConfigUpdate(List<String> topicNames, Function<String, String> getTopicMinIsrConfig) {
+        return replicationControl.getPartitionElrUpdatesForConfigChanges(topicNames, getTopicMinIsrConfig);
     }
 }

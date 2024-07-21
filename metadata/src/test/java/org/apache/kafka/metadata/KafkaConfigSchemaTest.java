@@ -162,9 +162,28 @@ public class KafkaConfigSchemaTest {
         expected.put("xyz", new ConfigEntry("xyz", "thedefault",
             ConfigEntry.ConfigSource.DEFAULT_CONFIG, true, false, emptyList(),
             ConfigEntry.ConfigType.PASSWORD, "xyz doc"));
-        assertEquals(expected, SCHEMA.resolveEffectiveTopicConfigs(staticNodeConfig,
-            dynamicClusterConfigs,
-            dynamicNodeConfigs,
-            dynamicTopicConfigs));
+        assertEquals(expected, SCHEMA.resolveEffectiveTopicConfigs(
+            new KafkaConfigSchema.OrderedConfigResolver(staticNodeConfig),
+            new KafkaConfigSchema.OrderedConfigResolver(dynamicClusterConfigs),
+            new KafkaConfigSchema.OrderedConfigResolver(dynamicNodeConfigs),
+            new KafkaConfigSchema.OrderedConfigResolver(dynamicTopicConfigs)));
+    }
+
+    @Test
+    public void testOrderedConfigResolver() {
+        Map<String, String> configMap1 = new HashMap<>();
+        configMap1.put("foo", "1");
+        KafkaConfigSchema.OrderedConfigResolver resolver = new KafkaConfigSchema.OrderedConfigResolver(configMap1);
+        assertTrue(resolver.containsKey("foo"));
+        assertEquals("1", resolver.get("foo"));
+
+        Map<String, String> configMap2 = new HashMap<>();
+        configMap2.put("bar", "2");
+        configMap2.put("foo", "2");
+        resolver = new KafkaConfigSchema.OrderedConfigResolver(Arrays.asList(configMap1, configMap2));
+        assertTrue(resolver.containsKey("foo"));
+        assertEquals("1", resolver.get("foo"));
+        assertTrue(resolver.containsKey("bar"));
+        assertEquals("2", resolver.get("bar"));
     }
 }

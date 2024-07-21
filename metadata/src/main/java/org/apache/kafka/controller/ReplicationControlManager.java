@@ -120,6 +120,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.IntPredicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -1082,7 +1083,7 @@ public class ReplicationControlManager {
                     partitionId,
                     new LeaderAcceptor(clusterControl, partition),
                     featureControl.metadataVersion(),
-                    getTopicEffectiveMinIsr(topic.name)
+                    getTopicEffectiveMinIsr(topic.name, null)
                 )
                     .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
                     .setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -1305,7 +1306,7 @@ public class ReplicationControlManager {
             throw new RuntimeException("Can't find broker registration for broker " + brokerId);
         }
         generateLeaderAndIsrUpdates("handleBrokerFenced", brokerId, NO_LEADER, NO_LEADER, records,
-            brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
+            brokersToIsrs.partitionsWithBrokerInIsr(brokerId), null);
         if (featureControl.metadataVersion().isBrokerRegistrationChangeRecordSupported()) {
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
                     setBrokerId(brokerId).setBrokerEpoch(brokerRegistration.epoch()).
@@ -1331,9 +1332,9 @@ public class ReplicationControlManager {
     void handleBrokerUnregistered(int brokerId, long brokerEpoch,
                                   List<ApiMessageAndVersion> records) {
         generateLeaderAndIsrUpdates("handleBrokerUnregistered", brokerId, NO_LEADER, NO_LEADER, records,
-            brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
+            brokersToIsrs.partitionsWithBrokerInIsr(brokerId), null);
         generateLeaderAndIsrUpdates("handleBrokerUnregistered", brokerId, NO_LEADER, NO_LEADER, records,
-            brokersToElrs.partitionsWithBrokerInElr(brokerId));
+            brokersToElrs.partitionsWithBrokerInElr(brokerId), null);
         records.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
             setBrokerId(brokerId).setBrokerEpoch(brokerEpoch),
             (short) 0));
@@ -1361,7 +1362,7 @@ public class ReplicationControlManager {
                 setEpoch(brokerEpoch), (short) 0));
         }
         generateLeaderAndIsrUpdates("handleBrokerUnfenced", NO_LEADER, brokerId, NO_LEADER, records,
-            brokersToIsrs.partitionsWithNoLeader());
+            brokersToIsrs.partitionsWithNoLeader(), null);
     }
 
     /**
@@ -1384,7 +1385,7 @@ public class ReplicationControlManager {
                 (short) 1));
         }
         generateLeaderAndIsrUpdates("enterControlledShutdown[" + brokerId + "]",
-            brokerId, NO_LEADER, NO_LEADER, records, brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
+            brokerId, NO_LEADER, NO_LEADER, records, brokersToIsrs.partitionsWithBrokerInIsr(brokerId), null);
     }
 
     /**
@@ -1396,9 +1397,9 @@ public class ReplicationControlManager {
     void handleBrokerUncleanShutdown(int brokerId, List<ApiMessageAndVersion> records) {
         if (!featureControl.metadataVersion().isElrSupported()) return;
         generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
-            brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
+            brokersToIsrs.partitionsWithBrokerInIsr(brokerId), null);
         generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
-            brokersToElrs.partitionsWithBrokerInElr(brokerId));
+            brokersToElrs.partitionsWithBrokerInElr(brokerId), null);
     }
 
     /**
@@ -1428,7 +1429,7 @@ public class ReplicationControlManager {
                         Collections.emptyIterator() : parts.iterator();
                 generateLeaderAndIsrUpdates(
                         "handleDirectoriesOffline[" + brokerId + ":" + newOfflineDir + "]",
-                        brokerId, NO_LEADER, NO_LEADER, records, iterator);
+                        brokerId, NO_LEADER, NO_LEADER, records, iterator, null);
             }
             List<Uuid> newOnlineDirs = registration.directoryDifference(offlineDirs);
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
@@ -1528,7 +1529,7 @@ public class ReplicationControlManager {
             partitionId,
             new LeaderAcceptor(clusterControl, partition),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topic)
+            getTopicEffectiveMinIsr(topic, null)
         )
             .setElection(election)
             .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
@@ -1670,7 +1671,7 @@ public class ReplicationControlManager {
                 topicPartition.partitionId(),
                 new LeaderAcceptor(clusterControl, partition),
                 featureControl.metadataVersion(),
-                getTopicEffectiveMinIsr(topic.name)
+                getTopicEffectiveMinIsr(topic.name, null)
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
                 .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
@@ -1856,7 +1857,8 @@ public class ReplicationControlManager {
                                      int brokerToAdd,
                                      int brokerWithUncleanShutdown,
                                      List<ApiMessageAndVersion> records,
-                                     Iterator<TopicIdPartition> iterator) {
+                                     Iterator<TopicIdPartition> iterator,
+                                     Function<String, String> getTopicMinIsrConfig) {
         int oldSize = records.size();
 
         // If the caller passed a valid broker ID for brokerToAdd, rather than passing
@@ -1897,7 +1899,7 @@ public class ReplicationControlManager {
                 topicIdPart.partitionId(),
                 new LeaderAcceptor(clusterControl, partition, isAcceptableLeader),
                 featureControl.metadataVersion(),
-                getTopicEffectiveMinIsr(topic.name)
+                getTopicEffectiveMinIsr(topic.name, getTopicMinIsrConfig)
             );
             builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
             builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -2016,7 +2018,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topicName)
+            getTopicEffectiveMinIsr(topicName, null)
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -2078,7 +2080,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString())
+            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString(), null)
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -2115,6 +2117,29 @@ public class ReplicationControlManager {
             }
         }
         return response;
+    }
+
+    List<ApiMessageAndVersion> getPartitionElrUpdatesForConfigChanges(
+        List<String> topicNames,
+        Function<String, String> getTopicMinIsrConfig
+    ) {
+        if (!isElrEnabled()) return Collections.emptyList();
+
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        if (!topicNames.isEmpty()) {
+            topicNames.forEach(topic -> {
+                Uuid topicId = getTopicId(topic);
+                TopicControlInfo topicInfo = getTopic(topicId);
+                generateLeaderAndIsrUpdates("handleMinIsrUpdate", NO_LEADER, NO_LEADER, NO_LEADER, records,
+                    topicInfo.parts.keySet().stream().map(partitionId -> new TopicIdPartition(topicId, partitionId)).iterator(),
+                    getTopicMinIsrConfig);
+            });
+        } else {
+            generateLeaderAndIsrUpdates("handleMinIsrUpdate", NO_LEADER, NO_LEADER, NO_LEADER, records,
+                brokersToElrs.partitionsWithElr(),
+                getTopicMinIsrConfig);
+        }
+        return records;
     }
 
     ControllerResult<AssignReplicasToDirsResponseData> handleAssignReplicasToDirs(AssignReplicasToDirsRequestData request) {
@@ -2162,7 +2187,7 @@ public class ReplicationControlManager {
                                     partitionIndex,
                                     new LeaderAcceptor(clusterControl, partitionRegistration),
                                     featureControl.metadataVersion(),
-                                    getTopicEffectiveMinIsr(topicName)
+                                    getTopicEffectiveMinIsr(topicName, null)
                             )
                                     .setDirectory(brokerId, dirId)
                                     .setDefaultDirProvider(clusterDescriber)
@@ -2187,7 +2212,7 @@ public class ReplicationControlManager {
             response.directories().add(resDir);
         }
         if (!leaderAndIsrUpdates.isEmpty()) {
-            generateLeaderAndIsrUpdates("offline-dir-assignment", brokerId, NO_LEADER, NO_LEADER, records, leaderAndIsrUpdates.iterator());
+            generateLeaderAndIsrUpdates("offline-dir-assignment", brokerId, NO_LEADER, NO_LEADER, records, leaderAndIsrUpdates.iterator(), null);
         }
         return ControllerResult.of(records, response);
     }
@@ -2225,9 +2250,14 @@ public class ReplicationControlManager {
     }
 
     // Visible to test.
-    int getTopicEffectiveMinIsr(String topicName) {
+    int getTopicEffectiveMinIsr(String topicName, Function<String, String> getTopicMinIsrConfig) {
         int currentMinIsr = defaultMinIsr;
-        String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG);
+        String minIsrConfig;
+        if (getTopicMinIsrConfig == null) {
+            minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG);
+        } else {
+            minIsrConfig = getTopicMinIsrConfig.apply(topicName);
+        }
         if (minIsrConfig != null) {
             currentMinIsr = Integer.parseInt(minIsrConfig);
         } else {

@@ -22,12 +22,15 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.KafkaConfigSchema.OrderedConfigResolver;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
@@ -38,6 +41,7 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,6 +53,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
 import static org.apache.kafka.common.protocol.Errors.INVALID_CONFIG;
@@ -67,6 +72,7 @@ public class ConfigurationControlManager {
     private final TimelineHashMap<ConfigResource, TimelineHashMap<String, String>> configData;
     private final Map<String, Object> staticConfig;
     private final ConfigResource currentController;
+    private final MinIsrConfigUpdatePartitionHandler minIsrConfigUpdatePartitionHandler;
 
     static class Builder {
         private LogContext logContext = null;
@@ -76,6 +82,7 @@ public class ConfigurationControlManager {
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator validator = ConfigurationValidator.NO_OP;
         private Map<String, Object> staticConfig = Collections.emptyMap();
+        private MinIsrConfigUpdatePartitionHandler minIsrConfigUpdatePartitionHandler;
         private int nodeId = 0;
 
         Builder setLogContext(LogContext logContext) {
@@ -118,9 +125,19 @@ public class ConfigurationControlManager {
             return this;
         }
 
+        Builder setMinIsrConfigUpdatePartitionHandler(
+            MinIsrConfigUpdatePartitionHandler minIsrConfigUpdatePartitionHandler
+        ) {
+            this.minIsrConfigUpdatePartitionHandler = minIsrConfigUpdatePartitionHandler;
+            return this;
+        }
+
         ConfigurationControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
+            if (minIsrConfigUpdatePartitionHandler == null) {
+                throw new RuntimeException("You must specify MinIsrConfigUpdatePartitionHandler");
+            }
             return new ConfigurationControlManager(
                 logContext,
                 snapshotRegistry,
@@ -129,7 +146,8 @@ public class ConfigurationControlManager {
                 alterConfigPolicy,
                 validator,
                 staticConfig,
-                nodeId);
+                nodeId,
+                minIsrConfigUpdatePartitionHandler);
         }
     }
 
@@ -140,7 +158,9 @@ public class ConfigurationControlManager {
             Optional<AlterConfigPolicy> alterConfigPolicy,
             ConfigurationValidator validator,
             Map<String, Object> staticConfig,
-            int nodeId) {
+            int nodeId,
+            MinIsrConfigUpdatePartitionHandler minIsrConfigUpdatePartitionHandler
+    ) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
         this.configSchema = configSchema;
@@ -150,6 +170,7 @@ public class ConfigurationControlManager {
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticConfig = Collections.unmodifiableMap(new HashMap<>(staticConfig));
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
+        this.minIsrConfigUpdatePartitionHandler = minIsrConfigUpdatePartitionHandler;
     }
 
     SnapshotRegistry snapshotRegistry() {
@@ -261,6 +282,7 @@ public class ConfigurationControlManager {
         if (error.isFailure()) {
             return error;
         }
+        maybeTriggerPartitionUpdateOnMinIsrChange(newRecords);
         outputRecords.addAll(newRecords);
         return ApiError.NONE;
     }
@@ -307,6 +329,54 @@ public class ConfigurationControlManager {
             return apiError;
         }
         return ApiError.NONE;
+    }
+
+    void maybeTriggerPartitionUpdateOnMinIsrChange(List<ApiMessageAndVersion> records) {
+        List<ConfigRecord> minIsrRecords = new ArrayList<>();
+        Map<String, String> topicToMinIsrValueMap = new HashMap<>();
+        Map<String, String> configRemovedTopicMap = new HashMap<>();
+        records.forEach(record -> {
+            if (MetadataRecordType.fromId(record.message().apiKey()) == MetadataRecordType.CONFIG_RECORD) {
+                ConfigRecord configRecord = (ConfigRecord) record.message();
+                if (configRecord.name().equals(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)) {
+                    minIsrRecords.add(configRecord);
+                    if (Type.forId(configRecord.resourceType()) == Type.TOPIC) {
+                        if (configRecord.value() != null) topicToMinIsrValueMap.put(configRecord.resourceName(), configRecord.value());
+                        else configRemovedTopicMap.put(configRecord.resourceName(), configRecord.value());
+                    }
+                }
+            }
+        });
+
+        if (minIsrRecords.isEmpty()) return;
+        if (topicToMinIsrValueMap.size() == minIsrRecords.size()) {
+            // If all the min isr config updates are on the topic level, we can trigger a simpler update just on the
+            // updated topics.
+            records.addAll(minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(
+                new ArrayList<>(topicToMinIsrValueMap.keySet()),
+                topicName -> topicToMinIsrValueMap.get(topicName))
+            );
+            return;
+        }
+
+        // Because it may require multiple layer look up for the min ISR config value. Build a config data copy and apply
+        // the config updates to it. Use this config copy for the min ISR look up.
+        Map<ConfigResource, Map<String, String>> pendingConfigData = new HashMap<>();
+
+        for (ConfigRecord record : minIsrRecords) {
+            replayForPendingConfig(record, pendingConfigData);
+        }
+
+        ArrayList<String> topicList = new ArrayList<>();
+        // If all the updates are on the Topic level, we can avoid perform a full scan of the partitions.
+        if (configRemovedTopicMap.size() + topicToMinIsrValueMap.size() == minIsrRecords.size()) {
+            topicList.addAll(configRemovedTopicMap.keySet());
+            topicList.addAll(topicToMinIsrValueMap.keySet());
+        }
+        records.addAll(minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(
+            topicList,
+            topicName -> getTopicConfigWithPendingChange(topicName, TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, pendingConfigData))
+        );
     }
 
     /**
@@ -376,6 +446,7 @@ public class ConfigurationControlManager {
         }
         outputRecords.addAll(recordsExplicitlyAltered);
         outputRecords.addAll(recordsImplicitlyDeleted);
+        maybeTriggerPartitionUpdateOnMinIsrChange(outputRecords);
         outputResults.put(configResource, ApiError.NONE);
     }
 
@@ -426,6 +497,35 @@ public class ConfigurationControlManager {
         }
     }
 
+    /**
+     * Apply a configuration record to the given config data. Note that, it will store null for the config to be removed.
+     *
+     * @param record                 The ConfigRecord.
+     * @param localConfigData        The config data is going to be updated.
+     */
+    public void replayForPendingConfig(
+        ConfigRecord record,
+        Map<ConfigResource, Map<String, String>> localConfigData
+    ) {
+        Type type = Type.forId(record.resourceType());
+        ConfigResource configResource = new ConfigResource(type, record.resourceName());
+        Map<String, String> configs = localConfigData.get(configResource);
+        if (configs == null) {
+            configs = new HashMap<>();
+            localConfigData.put(configResource, configs);
+        }
+
+        // If the record removes a config, we keep an empty value here to indicate the value is removed.
+        if (record.value() == null) {
+            configs.put(record.name(), null);
+        } else {
+            configs.put(record.name(), record.value());
+        }
+        if (configs.isEmpty()) {
+            localConfigData.remove(configResource);
+        }
+    }
+
     // VisibleForTesting
     Map<String, String> getConfigs(ConfigResource configResource) {
         Map<String, String> map = configData.get(configResource);
@@ -453,6 +553,37 @@ public class ConfigurationControlManager {
             return effectiveConfigMap.get(configKey).value();
         }
         return map.get(configKey);
+    }
+
+    /**
+     * Get the config value for the give topic and give config key. Also, it will search the configs in the pending
+     * config data first.
+     * If the config value is not found, return null.
+     *
+     * @param topicName            The topic name for the config.
+     * @param configKey            The key for the config.
+     * @param pendingConfigData    The configs which is going to be applied. It should have the higher priority than
+     *                             the current configs.
+     */
+    String getTopicConfigWithPendingChange(
+        String topicName,
+        String configKey,
+        Map<ConfigResource, Map<String, String>> pendingConfigData
+    ) throws NoSuchElementException {
+        Map<String, String> pendingTopicConfigs =
+            pendingConfigData.getOrDefault(new ConfigResource(Type.TOPIC, topicName), Collections.emptyMap());
+        Map<String, String> currentTopicConfigs = configData.get(new ConfigResource(Type.TOPIC, topicName));
+        if (currentTopicConfigs == null) currentTopicConfigs = Collections.emptyMap();
+        OrderedConfigResolver configResolver = new OrderedConfigResolver(Arrays.asList(pendingTopicConfigs, currentTopicConfigs));
+
+        if (!configResolver.containsKey(configKey)) {
+            Map<String, ConfigEntry> effectiveConfigMap = computeEffectiveTopicConfigsWithPendingChange(pendingConfigData);
+            if (!effectiveConfigMap.containsKey(configKey)) {
+                return null;
+            }
+            return effectiveConfigMap.get(configKey).value();
+        }
+        return (String) configResolver.get(configKey);
     }
 
     public Map<ConfigResource, ResultOrError<Map<String, String>>> describeConfigs(
@@ -500,9 +631,26 @@ public class ConfigurationControlManager {
         return false; // TODO: support configuring unclean leader election.
     }
 
+    Map<String, ConfigEntry> computeEffectiveTopicConfigsWithPendingChange(
+        Map<ConfigResource, Map<String, String>> pendingConfigData
+    ) {
+        Map<String, String> pendingClusterConfig =
+            pendingConfigData.containsKey(DEFAULT_NODE) ? pendingConfigData.get(DEFAULT_NODE) : Collections.emptyMap();
+        Map<String, String> pendingControllerConfig =
+            pendingConfigData.containsKey(currentController) ? pendingConfigData.get(currentController) : Collections.emptyMap();
+        return configSchema.resolveEffectiveTopicConfigs(
+            new OrderedConfigResolver(staticConfig),
+            new OrderedConfigResolver(Arrays.asList(pendingClusterConfig, clusterConfig())),
+            new OrderedConfigResolver(Arrays.asList(pendingControllerConfig, currentControllerConfig())),
+            new OrderedConfigResolver(Collections.emptyMap()));
+    }
+
     Map<String, ConfigEntry> computeEffectiveTopicConfigs(Map<String, String> creationConfigs) {
-        return configSchema.resolveEffectiveTopicConfigs(staticConfig, clusterConfig(),
-            currentControllerConfig(), creationConfigs);
+        return configSchema.resolveEffectiveTopicConfigs(
+            new OrderedConfigResolver(staticConfig),
+            new OrderedConfigResolver(clusterConfig()),
+            new OrderedConfigResolver(currentControllerConfig()),
+            new OrderedConfigResolver(creationConfigs));
     }
 
     Map<String, String> clusterConfig() {
@@ -513,5 +661,10 @@ public class ConfigurationControlManager {
     Map<String, String> currentControllerConfig() {
         Map<String, String> result = configData.get(currentController);
         return (result == null) ? Collections.emptyMap() : result;
+    }
+
+    @FunctionalInterface
+    interface MinIsrConfigUpdatePartitionHandler {
+        List<ApiMessageAndVersion> addRecordsForMinIsrUpdate(List<String> topicNames, Function<String, String> getTopicMinIsrConfig);
     }
 }

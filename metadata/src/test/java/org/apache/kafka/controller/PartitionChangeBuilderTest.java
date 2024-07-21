@@ -1300,4 +1300,47 @@ public class PartitionChangeBuilderTest {
         // No change to the partition.
         assertEquals(Optional.empty(), builder.build());
     }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testEligibleLeaderReplicas_OnMinIsrConfigChange(boolean lastKnownLeaderEnabled) {
+        short version = 1;
+        PartitionRegistration partition = new PartitionRegistration.Builder()
+            .setReplicas(new int[] {1, 2, 3, 4})
+            .setDirectories(new Uuid[]{
+                Uuid.fromString("zANDdMukTEqefOvHpmniMg"),
+                Uuid.fromString("Ui2Eq8rbRiuW7m7uiPTRyg"),
+                Uuid.fromString("MhgJOZrrTsKNcGM0XKK4aA"),
+                Uuid.fromString("Y25PaCAmRfyGIKxAThhBAw")
+            })
+            .setIsr(new int[] {1, 2})
+            .setElr(new int[] {3})
+            .setLastKnownElr(new int[] {4})
+            .setLeader(1)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+            .setLeaderEpoch(100)
+            .setPartitionEpoch(200)
+            .build();
+        Uuid topicId = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
+
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, metadataVersionForPartitionChangeRecordVersion(version), 2)
+            .setElection(Election.PREFERRED)
+            .setEligibleLeaderReplicasEnabled(true)
+            .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
+            .setUseLastKnownLeaderInBalancedRecovery(lastKnownLeaderEnabled);
+
+        builder.setTargetIsr(Arrays.asList(1, 2));
+
+        ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(
+            new PartitionChangeRecord()
+                .setTopicId(topicId)
+                .setPartitionId(0)
+                .setLeader(-2)
+                .setEligibleLeaderReplicas(Collections.emptyList())
+                .setLastKnownElr(Collections.emptyList())
+                .setLeaderRecoveryState(LeaderRecoveryState.NO_CHANGE),
+            version
+        );
+        assertEquals(Optional.of(expectedRecord), builder.build());
+    }
 }

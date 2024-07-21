@@ -215,6 +215,9 @@ public class ReplicationControlManagerTest {
         final ClusterControlManager clusterControl;
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
+            setMinIsrConfigUpdatePartitionHandler((t, f) -> {
+                return Collections.emptyList();
+            }).
             build();
         final ReplicationControlManager replicationControl;
 
@@ -1077,7 +1080,46 @@ public class ReplicationControlManagerTest {
         TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
         assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
         ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "5");
-        assertEquals(3, replicationControl.getTopicEffectiveMinIsr("foo"));
+        assertEquals(3, replicationControl.getTopicEffectiveMinIsr("foo", null));
+    }
+
+    @Test
+    public void testEligibleLeaderReplicas_OnMinIsrConfigChange() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setIsElrEnabled(true).build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3);
+        ctx.unfenceBrokers(0, 1, 2, 3);
+        CreatableTopicResult createTopicResult = ctx.createTestTopic("foo",
+                new int[][] {new int[] {0, 1, 2, 3}});
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
+        assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
+        ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3");
+
+        ctx.fenceBrokers(Utils.mkSet(2, 3));
+
+        PartitionRegistration partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
+        assertTrue(Arrays.equals(new int[]{3}, partition.elr), partition.toString());
+        assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
+
+        // Update all topics.
+        List<ApiMessageAndVersion> records = replicationControl.getPartitionElrUpdatesForConfigChanges(
+            Arrays.asList("foo"),
+            topic -> {
+                return "2";
+            });
+        assertEquals(1, records.size());
+        PartitionChangeRecord partitionChangeRecord = (PartitionChangeRecord) records.get(0).message();
+        assertEquals(null, partitionChangeRecord.isr());
+        assertEquals(0, partitionChangeRecord.eligibleLeaderReplicas().size());
+
+        // Update all topics with larger MinIsr.
+        records = replicationControl.getPartitionElrUpdatesForConfigChanges(
+            Arrays.asList("foo"),
+            topic -> {
+                return "4";
+            });
+        assertTrue(records.isEmpty());
     }
 
     @Test
