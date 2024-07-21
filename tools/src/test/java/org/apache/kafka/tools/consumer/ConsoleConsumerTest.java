@@ -301,24 +301,30 @@ public class ConsoleConsumerTest {
             };
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(transactionLogMessageFormatter);
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            PrintStream output = new PrintStream(out);
-            ConsoleConsumer.process(1, options.formatter(),
-                    new ConsoleConsumer.ConsumerWrapper(options, createConsumer(cluster)), output, true);
-            JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
-            JsonNode keyNode = jsonNode.get("key");
             
-            TransactionLogKey logKey =
-                    TransactionLogKeyJsonConverter.read(keyNode.get("data"), TransactionLogKey.HIGHEST_SUPPORTED_VERSION);
-            assertNotNull(logKey);
-            assertEquals(transactionId, logKey.transactionalId());
-            
-            JsonNode valueNode = jsonNode.get("value");
-            TransactionLogValue logValue =
-                    TransactionLogValueJsonConverter.read(valueNode.get("data"), TransactionLogValue.HIGHEST_SUPPORTED_VERSION);
-            assertNotNull(logValue);
-            assertEquals(0, logValue.producerId());
-            assertEquals(0, logValue.transactionStatus());
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+                 PrintStream output = new PrintStream(out)) {
+
+                ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createConsumer(cluster));
+                ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
+                
+                JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
+                JsonNode keyNode = jsonNode.get("key");
+
+                TransactionLogKey logKey =
+                        TransactionLogKeyJsonConverter.read(keyNode.get("data"), TransactionLogKey.HIGHEST_SUPPORTED_VERSION);
+                assertNotNull(logKey);
+                assertEquals(transactionId, logKey.transactionalId());
+
+                JsonNode valueNode = jsonNode.get("value");
+                TransactionLogValue logValue =
+                        TransactionLogValueJsonConverter.read(valueNode.get("data"), TransactionLogValue.HIGHEST_SUPPORTED_VERSION);
+                assertNotNull(logValue);
+                assertEquals(0, logValue.producerId());
+                assertEquals(0, logValue.transactionStatus());
+                
+                consumerWrapper.cleanup();
+            }
         }
     }
 
