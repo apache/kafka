@@ -43,12 +43,7 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
                                    int maxPendingTasks) {
         super(numThreads, numThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(maxPendingTasks),
                 new RemoteStorageThreadFactory(threadNamePrefix));
-        logger = new LogContext() {
-            @Override
-            public String logPrefix() {
-                return "[" + Thread.currentThread().getName() + "]";
-            }
-        }.logger(RemoteStorageThreadPool.class);
+        logger = new LogContext("[" + Thread.currentThread().getName() + "]").logger(RemoteStorageThreadPool.class);
 
         metricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
                 () -> getQueue().size());
