@@ -2714,6 +2714,56 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, Collections.emptyList(), null, null),
       topicConfigs.get(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG))
   }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testAlterReassignmentsWithBootstrapControllers(quorum: String): Unit = {
+    client = Admin.create(createConfig)
+    val assignments = new util.HashMap[Integer, util.List[Integer]]
+    assignments.put(0, util.Arrays.asList(0, 1, 2))
+    assignments.put(1, util.Arrays.asList(1, 2, 0))
+    assignments.put(2, util.Arrays.asList(2, 1, 0))
+    val createTopicResult = client.createTopics(Collections.singletonList(new NewTopic("foo", assignments)))
+    createTopicResult.all().get()
+    waitForTopics(client, Seq("foo"), Seq())
+
+    val reassignments = new util.HashMap[TopicPartition, Optional[NewPartitionReassignment]]
+    reassignments.put(new TopicPartition("foo", 0),
+      Optional.of(new NewPartitionReassignment(util.Arrays.asList(2, 1, 0))))
+    reassignments.put(new TopicPartition("foo", 1),
+      Optional.of(new NewPartitionReassignment(util.Arrays.asList(0, 1, 2))))
+    reassignments.put(new TopicPartition("foo", 2),
+      Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 2))))
+    val config = createConfig
+    config.remove(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG)
+    config.put(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, TestUtils.plaintextBootstrapControllers(controllerServers))
+    val adminWithBootstrapControllers = Admin.create(config)
+    try {
+      adminWithBootstrapControllers.alterPartitionReassignments(reassignments).all().get()
+      TestUtils.waitUntilTrue(
+        () => adminWithBootstrapControllers.listPartitionReassignments().reassignments().get().isEmpty,
+        "The reassignment never completed.")
+    } finally {
+      adminWithBootstrapControllers.close()
+    }
+
+    var currentMapping: Seq[Seq[Int]] = Seq()
+    val expectedMapping = Seq(Seq(2, 1, 0), Seq(0, 1, 2), Seq(1, 2))
+    TestUtils.waitUntilTrue(() => {
+      val topicInfoMap = client.describeTopics(Collections.singleton("foo")).allTopicNames().get()
+      if (topicInfoMap.containsKey("foo")) {
+        currentMapping = translatePartitionInfoToSeq(topicInfoMap.get("foo").partitions())
+        expectedMapping.equals(currentMapping)
+      } else {
+        false
+      }
+    }, "Timed out waiting for replica assignments for topic foo. " +
+      s"Wanted: $expectedMapping. Got: $currentMapping")
+  }
+
+  private def translatePartitionInfoToSeq(partitions: util.List[TopicPartitionInfo]): Seq[Seq[Int]] = {
+    partitions.asScala.map(partition => partition.replicas().asScala.map(_.id()).toSeq).toSeq
+  }
 }
 
 object PlaintextAdminIntegrationTest {
