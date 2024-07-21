@@ -49,8 +49,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -65,6 +66,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -590,22 +592,23 @@ public class LogValidatorTest {
     }
 
     @Test
-    void testInvalidOffsetRangeAndRecordCount() {
+    void testRecordBatchWithCountOverrides() {
         // The batch to be written contains 3 records, so the correct lastOffsetDelta is 2
         validateRecordBatchWithCountOverrides(2, 3);
+    }
 
+    @ParameterizedTest
+    @CsvSource({"0,3", "15,3", "-3,3"})
+    void testInconsistentCountAndOffset(int lastOffsetDelta, int count) {
         // Count and offset range are inconsistent or invalid
-        assertInvalidBatchCountOverrides(0, 3);
-        assertInvalidBatchCountOverrides(15, 3);
-        assertInvalidBatchCountOverrides(-3, 3);
-        assertInvalidBatchCountOverrides(2, -3);
-        assertInvalidBatchCountOverrides(2, 6);
-        assertInvalidBatchCountOverrides(2, 0);
-        assertInvalidBatchCountOverrides(-3, -2);
+        assertInvalidBatchCountOverrides(lastOffsetDelta, count);
+    }
 
+    @ParameterizedTest
+    @CsvSource({"5,6", "1,2"})
+    void testUnmatchedNumberOfRecords(int lastOffsetDelta, int count) {
         // Count and offset range are consistent, but do not match the actual number of records
-        assertInvalidBatchCountOverrides(5, 6);
-        assertInvalidBatchCountOverrides(1, 2);
+        assertInvalidBatchCountOverrides(lastOffsetDelta, count);
     }
 
     @Test
@@ -746,35 +749,16 @@ public class LogValidatorTest {
         assertTrue(metricsRecorder.recordInvalidChecksumsCount > 0);
     }
 
-    @ParameterizedTest
-    @EnumSource(CompressionType.class)
-    public void testInvalidSequenceV0(CompressionType type) {
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V0, Compression.gzip().build(), type);
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V0, Compression.lz4().build(), type);
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V0, Compression.snappy().build(), type);
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V0, Compression.zstd().build(), type);
+    private static Stream<Arguments> testInvalidSequenceArguments() {
+        return Stream.of(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)
+                .flatMap(magicValue -> Arrays.stream(CompressionType.values()).flatMap(source ->
+                        Arrays.stream(CompressionType.values()).map(target ->
+                                Arguments.of(magicValue, Compression.of(source).build(), target))));
     }
 
     @ParameterizedTest
-    @EnumSource(CompressionType.class)
-    public void testInvalidSequenceV1(CompressionType type) {
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V1, Compression.gzip().build(), type);
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V1, Compression.lz4().build(), type);
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V1, Compression.snappy().build(), type);
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V1, Compression.zstd().build(), type);
-    }
-
-    @ParameterizedTest
-    @EnumSource(CompressionType.class)
-    public void testInvalidSequenceV2(CompressionType type) {
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.gzip().build(), type);
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.lz4().build(), type);
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.snappy().build(), type);
-        checkInvalidSequence(RecordBatch.MAGIC_VALUE_V2, Compression.zstd().build(), type);
-    }
-
-
-    private void checkInvalidSequence(byte magic, Compression compression, CompressionType type) {
+    @MethodSource("testInvalidSequenceArguments")
+    public void checkInvalidSequence(byte magic, Compression compression, CompressionType type) {
         long producerId = 1234;
         short producerEpoch = 0;
         int baseSequence = 0;
