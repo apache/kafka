@@ -19,7 +19,7 @@ package kafka.admin
 import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.authorizer.AclAuthorizer
 import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
-import kafka.utils.{Exit, LogCaptureAppender, Logging, TestUtils}
+import kafka.utils.{Exit, Logging, TestUtils}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
@@ -28,7 +28,7 @@ import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.{AppInfoParser, SecurityUtils}
+import org.apache.kafka.common.utils.{AppInfoParser, LogCaptureAppender, SecurityUtils}
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.server.authorizer.Authorizer
@@ -217,17 +217,16 @@ class AclCommandTest extends QuorumTestHarness with Logging {
     createServer(Some(adminClientConfig))
 
     val appender = LogCaptureAppender.createAndRegister()
-    val previousLevel = LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], Level.WARN)
+    appender.setClassLogger(classOf[AppInfoParser], Level.WARN)
     try {
       testAclCli(adminArgs)
     } finally {
-      LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], previousLevel)
-      LogCaptureAppender.unregister(appender)
+      appender.close()
     }
-    val warning = appender.getMessages.find(e => e.getLevel == Level.WARN &&
-      e.getThrowableInformation != null &&
-      e.getThrowableInformation.getThrowable.getClass.getName == classOf[InstanceAlreadyExistsException].getName)
-    assertFalse(warning.isDefined, "There should be no warnings about multiple registration of mbeans")
+    assertEquals(0, appender.getEvents.stream()
+      .filter(e => e.getLevel == Level.WARN.toString)
+      .filter(_.getThrowableClassName.filter(_ ==classOf[InstanceAlreadyExistsException].getName).isPresent)
+      .count(), "There should be no warnings about multiple registration of mbeans")
   }
 
   private def testProducerConsumerCli(cmdArgs: Array[String]): Unit = {

@@ -38,6 +38,7 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 
+import org.apache.log4j.Level;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
@@ -579,7 +580,7 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
             assertThat(group.readyToProcess(0L), is(true));
             assertThat(
                 appender.getEvents(),
@@ -622,7 +623,7 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(true));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
             assertThat(group.readyToProcess(0L), is(true));
             assertThat(
                 appender.getEvents(),
@@ -656,7 +657,7 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
                 appender.getEvents(),
@@ -697,7 +698,7 @@ public class PartitionGroupTest {
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
                 appender.getEvents(),
@@ -732,7 +733,7 @@ public class PartitionGroupTest {
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
                 appender.getEvents(),
@@ -744,7 +745,7 @@ public class PartitionGroupTest {
         }
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
             assertThat(group.readyToProcess(1L), is(true));
             assertThat(
                 appender.getEvents(),
@@ -763,7 +764,7 @@ public class PartitionGroupTest {
         }
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
             assertThat(group.readyToProcess(2L), is(true));
             assertThat(
                 appender.getEvents(),
@@ -784,7 +785,7 @@ public class PartitionGroupTest {
 
     private void hasNoFetchedLag(final PartitionGroup group, final TopicPartition partition) {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
             assertFalse(group.readyToProcess(0L));
             assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
                 equalTo(String.format("[test] Waiting to fetch data for %s", partition)))));
@@ -793,7 +794,7 @@ public class PartitionGroupTest {
 
     private void hasZeroFetchedLag(final PartitionGroup group, final TopicPartition partition) {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
             assertFalse(group.readyToProcess(0L));
             assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
                 startsWith(String.format("[test] Lag for %s is currently 0 and current time is %d. "
@@ -804,7 +805,7 @@ public class PartitionGroupTest {
     @SuppressWarnings("SameParameterValue")
     private void hasNonZeroFetchedLag(final PartitionGroup group, final TopicPartition partition, final long lag) {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
             assertFalse(group.readyToProcess(0L));
             assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
                 equalTo(String.format("[test] Lag for %s is currently %d, but no data is buffered locally. "
