@@ -36,8 +36,6 @@ import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 
-import com.yammer.metrics.core.Gauge;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,16 +104,7 @@ public class AssignmentsManager {
                 "broker-" + brokerId + "-directory-assignments-manager-",
                 new ShutdownEvent());
         channelManager.start();
-        this.metricsGroup.newGauge(QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME, new Gauge<Integer>() {
-            @Override
-            public Integer value() {
-                return getMapSize(inflight) + getMapSize(pending);
-            }
-
-            private int getMapSize(Map<TopicIdPartition, AssignmentEvent> map) {
-                return map == null ? 0 : map.size();
-            }
-        });
+        this.metricsGroup.newGauge(QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME, () -> getMapSize(inflight) + getMapSize(pending));
         if (dirIdToPath == null) dirIdToPath = id -> Optional.empty();
         this.dirIdToPath = dirIdToPath;
         if (topicIdToName == null) topicIdToName = id -> Optional.empty();
@@ -491,5 +480,9 @@ public class AssignmentsManager {
                 .setBrokerId(brokerId)
                 .setBrokerEpoch(brokerEpoch)
                 .setDirectories(new ArrayList<>(directoryMap.values()));
+    }
+
+    private static int getMapSize(Map<TopicIdPartition, AssignmentEvent> map) {
+        return map == null ? 0 : map.size();
     }
 }

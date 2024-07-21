@@ -82,7 +82,6 @@ import org.apache.kafka.storage.internals.log.RemoteStorageThreadPool;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.storage.internals.log.TxnIndexSearchResult;
 
-import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Timer;
 
 import org.slf4j.Logger;
@@ -253,12 +252,7 @@ public class RemoteLogManager implements Closeable {
         followerThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize(),
             "RLMFollowerScheduledThreadPool", "kafka-rlm-follower-thread-pool-");
 
-        metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC, new Gauge<Double>() {
-            @Override
-            public Double value() {
-                return rlmCopyThreadPool.getIdlePercent();
-            }
-        });
+        metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC, rlmCopyThreadPool::getIdlePercent);
         remoteReadTimer = metricsGroup.newTimer(REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC,
                 TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
 
