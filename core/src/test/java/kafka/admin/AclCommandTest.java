@@ -44,7 +44,6 @@ import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.server.authorizer.Authorizer;
 
 import org.apache.log4j.Level;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -104,7 +103,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = AclCommandTest.ACL_AUTHORIZER)
 })
 @ExtendWith(ClusterTestExtensions.class)
-@Tag("integration")
 public class AclCommandTest {
     public static final String ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer";
     private static final String STANDARD_AUTHORIZER = "org.apache.kafka.metadata.authorizer.StandardAuthorizer";
