@@ -21,8 +21,6 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 
-import com.yammer.metrics.core.Gauge;
-
 import org.slf4j.Logger;
 
 import java.util.concurrent.LinkedBlockingQueue;
@@ -39,30 +37,18 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
     private final Logger logger;
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
+    @SuppressWarnings("this-escape")
     public RemoteStorageThreadPool(String threadNamePrefix,
                                    int numThreads,
                                    int maxPendingTasks) {
         super(numThreads, numThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(maxPendingTasks),
                 new RemoteStorageThreadFactory(threadNamePrefix));
-        logger = new LogContext() {
-            @Override
-            public String logPrefix() {
-                return "[" + Thread.currentThread().getName() + "]";
-            }
-        }.logger(RemoteStorageThreadPool.class);
+        logger = new LogContext("[" + Thread.currentThread().getName() + "]").logger(RemoteStorageThreadPool.class);
 
-        metricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(), new Gauge<Integer>() {
-            @Override
-            public Integer value() {
-                return RemoteStorageThreadPool.this.getQueue().size();
-            }
-        });
-        metricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(), new Gauge<Double>() {
-            @Override
-            public Double value() {
-                return 1 - (double) RemoteStorageThreadPool.this.getActiveCount() / (double) RemoteStorageThreadPool.this.getCorePoolSize();
-            }
-        });
+        metricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
+                () -> getQueue().size());
+        metricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
+                () -> 1 - (double) getActiveCount() / (double) getCorePoolSize());
     }
 
     @Override
