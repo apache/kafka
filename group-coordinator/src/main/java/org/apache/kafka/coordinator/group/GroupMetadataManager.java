@@ -1436,7 +1436,7 @@ public class GroupMetadataManager {
         if (member.memberEpoch() != LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             // The new member can't join.
             log.info("[GroupId {}] Static member {} with instance id {} cannot join the group because the instance id is" +
-                " is owned by member {}.", groupId, receivedMemberId, receivedInstanceId, member.memberId());
+                    " is owned by member {}.", groupId, receivedMemberId, receivedInstanceId, member.memberId());
             throw Errors.UNRELEASED_INSTANCE_ID.exception("Static member " + receivedMemberId + " with instance id "
                 + receivedInstanceId + " cannot join the group because the instance id is owned by " + member.memberId() + " member.");
         }
@@ -2249,7 +2249,7 @@ public class GroupMetadataManager {
                 replaceMember(records, group, existingStaticMemberOrNull, newMember);
 
                 log.info("[GroupId {}] Static member with instance id {} re-joins the consumer group " +
-                        "using the {} protocol. Created a new member {} to replace the existing member {}.",
+                    "using the {} protocol. Created a new member {} to replace the existing member {}.",
                     group.groupId(), instanceId, useClassicProtocol ? "classic" : "consumer", memberId, existingStaticMemberOrNull.memberId());
 
                 return newMember;
@@ -2395,7 +2395,7 @@ public class GroupMetadataManager {
             records.add(newCurrentAssignmentRecord(groupId, updatedMember));
 
             log.info("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
-                    + "assignedPartitions={} and revokedPartitions={}.",
+                     + "assignedPartitions={} and revokedPartitions={}.",
                 groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
                 assignmentToString(updatedMember.assignedPartitions()), assignmentToString(updatedMember.partitionsPendingRevocation()));
 
@@ -4978,7 +4978,7 @@ public class GroupMetadataManager {
                 appendFuture.whenComplete((__, t) -> {
                     if (t != null) {
                         log.warn("Failed to persist metadata for group {} static member {} with " +
-                                "group instance id {} due to {}. Reverting to old member id {}.",
+                            "group instance id {} due to {}. Reverting to old member id {}.",
                             group.groupId(), newMemberId, groupInstanceId, t.getMessage(), oldMemberId);
 
                         // Failed to persist the member id of the given static member, revert the update of the static member in the group.
@@ -5120,7 +5120,7 @@ public class GroupMetadataManager {
             // If this is the leader, then we can attempt to persist state and transition to stable
             if (group.isLeader(memberId)) {
                 log.info("Assignment received from leader {} for group {} for generation {}. " +
-                        "The group has {} members, {} of which are static.",
+                    "The group has {} members, {} of which are static.",
                     memberId, groupId, group.generationId(), group.numMembers(), group.allStaticMemberIds().size());
 
                 // Fill all members with corresponding member assignment. If the member assignment
@@ -5296,7 +5296,7 @@ public class GroupMetadataManager {
             if (request.generationId() != group.generationId()) {
                 return Optional.of(Errors.ILLEGAL_GENERATION);
             } else if (isProtocolInconsistent(request.protocolType(), group.protocolType().orElse(null)) ||
-                isProtocolInconsistent(request.protocolName(), group.protocolName().orElse(null))) {
+                        isProtocolInconsistent(request.protocolName(), group.protocolName().orElse(null))) {
                 return Optional.of(Errors.INCONSISTENT_GROUP_PROTOCOL);
             } else {
                 return Optional.empty();
