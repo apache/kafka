@@ -878,7 +878,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       "kafka-scheduler-", mayReceiveDuplicates = false)
     verifyThreadPoolResize(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, config.numRecoveryThreadsPerDataDir,
       "", mayReceiveDuplicates = false)
-    verifyThreadPoolResize(ServerConfigs.NUM_NETWORK_THREADS_CONFIG, config.numNetworkThreads,
+    verifyThreadPoolResize(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG, config.numNetworkThreads,
       networkThreadPrefix, mayReceiveDuplicates = true)
     verifyThreads("data-plane-kafka-socket-acceptor-", config.listeners.size)
 
