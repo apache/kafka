@@ -1214,9 +1214,9 @@ $ bin/kafka-acls.sh \
   </p>
 
 
-  <h3 class="anchor-heading"><a id="config" class="anchor-link"></a><a href="#config">6.5 Kafka Configuration</a></h3>
+  <h3 class="anchor-heading"><a id="config" class="anchor-link"></a><a href="#config">6.5 Important Configs</a></h3>
 
-  <h4 class="anchor-heading"><a id="clientconfig" class="anchor-link"></a><a href="#clientconfig">Important Client Configurations</a></h4>
+  <h4 class="anchor-heading"><a id="clientconfig" class="anchor-link"></a><a href="#clientconfig">Important Client Config</a></h4>
 
   The most important producer configurations are:
   <ul>
@@ -1228,7 +1228,7 @@ $ bin/kafka-acls.sh \
   <p>
   All configurations are documented in the <a href="#configuration">configuration</a> section.
   <p>
-  <h4 class="anchor-heading"><a id="prodconfig" class="anchor-link"></a><a href="#prodconfig">A Production Server Config</a></h4>
+  <h4 class="anchor-heading"><a id="prodconfig" class="anchor-link"></a><a href="#prodconfig">Production Server Config</a></h4>
   Here is an example production server configuration:
   <pre><code class="language-text"># ZooKeeper
 zookeeper.connect=[list of ZooKeeper servers]
@@ -1247,7 +1247,168 @@ queued.max.requests=[number of concurrent requests]</code></pre>
 
   Our client configuration varies a fair amount between different use cases.
 
-  <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.6 Java Version</a></h3>
+  <h3 class="anchor-heading">
+    <a id="config_providers" class="anchor-link"></a>
+    <a href="#config_providers">6.6 Configuration Providers</a>
+  </h3>
+  
+  <p>
+    Use configuration providers to load configuration data from external sources. This might include sensitive information, such as passwords, API keys, or other credentials.
+  </p>
+  <p>
+    These configurations can be stored securely and dynamically retrieved as needed. Configuration providers are primarily used with Kafka Connect. For example, you can use providers to supply the credentials for Kafka Connect connectors.
+  </p>
+  
+  <p>You have the following options:</p>
+  <ul>
+    <li>
+      Use a custom provider by creating a Java class implementing the
+      <code>ConfigProvider</code> interface and packaging it into a JAR file.
+    </li>
+    <li>Use a built-in provider:</li>
+    <ul>
+      <li><code>DirectoryConfigProvider</code></li>
+      <li><code>EnvVarConfigProvider</code></li>
+      <li><code>FileConfigProvider</code></li>
+    </ul>
+  </ul>
+  
+  <p>
+    To use a configuration provider, specify it in your configuration file using the <code>config.providers</code> property. 
+  </p>
+  <p>
+    Each provider can have its own set of parameters, which are passed in a specific format.
+  </p>
+  
+  <h4 class="anchor-heading">
+    <a id="common_provider_params" class="anchor-link"></a>
+    <a href="#common_provider_params">Common Parameters</a>
+  </h4>
+  
+  <p>All configuration providers share a common way of passing parameters.</p>
+  <p>
+    You specify a comma-separated list of aliases and the fully-specified class that implements the configuration provider:
+  </p>
+  <pre><code>config.providers=provider1,provider2
+config.providers.provider1.class=com.example.Provider1
+config.providers.provider2.class=com.example.Provider2</code></pre>
+  <p>
+    Pass additional parameters to each provider as <code>config.providers.&lt;provider_alias&gt;.&lt;parameter_key&gt;=&lt;parameter_value&gt;</code>:
+  </p>
+  <pre><code>config.providers.provider1.param1=value1
+config.providers.provider1.param2=value2</code></pre>
+  
+  <h4 class="anchor-heading">
+    <a id="config_provider" class="anchor-link"></a>
+    <a href="#config_provider">ConfigProvider</a>
+  </h4>
+  
+  <p>
+    The <code>ConfigProvider</code> is a base interface for all configuration providers. Custom implementations of this interface can retrieve configuration data from various sources. You can then package and deploy the implementation as a JAR file and reference the provider's class in your configuration.
+  </p>
+  
+  <p><b>Example custom provider configuration</b></p>
+  <pre><code>config.providers=customProvider
+config.providers.customProvider.class=com.example.customProvider
+config.providers.customProvider.param1=value1
+config.providers.customProvider.param2=value2</code></pre>
+  
+  <h4 class="anchor-heading">
+    <a id="directory_config_provider" class="anchor-link"></a>
+    <a href="#directory_config_provider">DirectoryConfigProvider</a>
+  </h4>
+  
+  <p>
+    The <code>DirectoryConfigProvider</code> retrieves configuration data from files stored in a specified directory.
+  </p>
+  <p>
+    Each file represents a key, and its content is the value. You specify the path to the directory where the configuration files are stored using the <code>dir</code> parameter. This provider is useful for loading multiple configuration files and for organizing configuration data into separate files.
+  </p>
+  
+  <p><b>Example <code>DirectoryConfigProvider</code> configuration</b></p>
+  <pre><code>config.providers=dirProvider
+config.providers.dirProvider.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider
+config.providers.dirProvider.param.dir=/path/to/config/directory</code></pre>
+  
+  <h4 class="anchor-heading">
+    <a id="env_var_config_provider" class="anchor-link"></a>
+    <a href="#env_var_config_provider">EnvVarConfigProvider</a>
+  </h4>
+  
+  <p>The <code>EnvVarConfigProvider</code> retrieves configuration data from environment variables.</p>
+  <p>No specific parameters are required, as it reads directly from the specified environment variables.</p>
+  <p>
+    This provider is useful for configuring applications running in containers, for example, to load certificates or JAAS configuration from environment variables mapped from secrets.
+  </p>
+  
+  <p><b>Example <code>EnvVarConfigProvider</code> configuration</b></p>
+  <pre><code>config.providers=envVarProvider
+config.providers.envVarProvider.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider</code></pre>
+  
+  <h4 class="anchor-heading">
+    <a id="file_config_provider" class="anchor-link"></a>
+    <a href="#file_config_provider">FileConfigProvider</a>
+  </h4>
+  
+  <p>The <code>FileConfigProvider</code> retrieves configuration data from a single properties file.</p>
+  <p>You specify the path to the properties file using the <code>file</code> parameter.</p>
+  <p>This provider is useful for loading configuration data from mounted files.</p>
+  
+  <p><b>Example <code>FileConfigProvider</code> configuration</b></p>
+  <pre><code>config.providers=fileProvider
+config.providers.fileProvider.class=org.apache.kafka.common.config.provider.FileConfigProvider
+config.providers.fileProvider.param.file=/path/to/config.properties</code></pre>
+  
+  <h4 class="anchor-heading">
+    <a id="ref_config_provider" class="anchor-link"></a>
+    <a href="#ref_config_provider">Referencing configuration providers</a>
+  </h4>
+  <p>
+    To reference a property value supplied by a configuration provider, use the correct placeholder syntax:
+  </p>
+  <dl>
+    <dt><b><code>DirectoryConfigProvider</code></b></dt>
+    <dd>
+      <p><code>${dirProvider:&lt;path_to_file&gt;:&lt;file_name&gt;}</code></p>
+    </dd>
+    <dt><code><b>EnvVarConfigProvider</code></b></dt>
+    <dd>
+      <p><code>${envVarProvider:&lt;enVar_name&gt;}</code></p>
+    </dd>
+    
+    <dt><b><code>FileConfigProvider</code></b></dt>
+    <dd>
+      <p><code>${fileProvider:&lt;path_and_filename&gt;:&lt;property&gt;}</code></p>
+    </dd>
+  </dl>
+  <p>
+    Here’s an example that uses a file configuration provider with Kafka Connect to provide authentication credentials to a database for a connector.
+  </p>
+  <p>
+    First, create a <code>connector.properties</code> configuration file with the following credentials:
+  </p>
+  <p><b>Example configuration file</b></p>
+<pre><code>dbUsername=my-username
+dbPassword=my-password</code></pre>
+  <p><em>NOTE: Ensure the appropriate permissions are set for securely accessing the properties file.
+    For additional security, consider encrypting sensitive information using a secret and implementing decryption in your application at runtime.
+  </em></p>
+  <p>
+    Specify a <code>FileConfigProvider</code> in the Kafka Connect configuration:
+  </p>
+  
+  <p><b>Example Kafka Connect configuration with an <code>FileConfigProvider</code></b></p>
+  <pre><code>config.providers=fileProvider
+config.providers.fileProvider.class=org.apache.kafka.common.config.provider.FileConfigProvider
+config.providers.fileProvider.config.path=/path/to/connector-properties</code></pre>
+  
+  <p>Next, reference the properties from the file in the connector configuration.</p>
+  <p><b>Example connector configuration referencing file properties</b></p>
+  <pre><code>database.user=${file:/path/to/connector.properties:dbUsername}
+database.password=${file:/path/to/connector.properties:dbPassword}</code></pre>
+  <p>The configuration provider reads and extracts the values from the properties file.</p>
+  
+    <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.6 Java Version</a></h3>
 
   Java 8, Java 11, and Java 17 are supported.
   <p>
