@@ -492,11 +492,6 @@ public class HeartbeatRequestManager implements RequestManager {
                     ", heartbeatIntervalMs=" + heartbeatIntervalMs;
         }
 
-        // Visible for testing
-        Timer heartbeatTimer() {
-            return heartbeatTimer;
-        }
-
         /**
          * Check if a heartbeat request should be sent on the current time. A heartbeat should be
          * sent if the heartbeat timer has expired, backoff has expired, and there is no request
