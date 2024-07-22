@@ -61,7 +61,7 @@ public class WorkerConfig extends AbstractConfig {
     public static final String BOOTSTRAP_SERVERS_DOC = 
                 "A list of host/port pairs used to establish the initial connection to the Kafka cluster. "
                         + "Clients use this list to bootstrap and discover the full set of Kafka brokers. "
-                        + "While the order of servers in the list does not matter—clients randomly select an entry to start with—include more than one server to ensure resilience if any servers are down. "
+                        + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
                         + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
                         + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
     public static final String BOOTSTRAP_SERVERS_DEFAULT = "localhost:9092";
