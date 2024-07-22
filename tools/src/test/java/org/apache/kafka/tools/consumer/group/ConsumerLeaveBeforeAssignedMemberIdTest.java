@@ -43,25 +43,38 @@ import java.util.concurrent.Future;
 public class ConsumerLeaveBeforeAssignedMemberIdTest {
 
     @ClusterTest(serverProperties = {
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-        @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic, consumer"),
-        @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic, consumer"),
+            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "session.timeout.ms", value = "8")
     })
     public void reproduce(ClusterInstance cluster) throws ExecutionException, InterruptedException {
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        Future<KafkaConsumer<String, String>> consumerFuture = executor.submit(() -> {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        Future<KafkaConsumer<String, String>> future1 = executor.submit(() -> {
             KafkaConsumer<String, String> consumer = newConsumer(cluster);
-            consumer.subscribe(Collections.singleton("topic")); // not be assigned memberId yet
-            consumer.poll(Duration.ofMillis(100000));
-            Thread.sleep(1000);
-            consumer.close();
-            Thread.sleep(10000);
+            consumer.subscribe(Collections.singleton("topic"));
+            consumer.poll(Duration.ofMillis(150));
+            while (consumer.groupMetadata().memberId().isEmpty()) {
+
+            }
             return consumer;
         });
-        consumerFuture.get();
 
-        System.out.println();
+        Future<KafkaConsumer<String, String>> future2 = executor.submit(() -> {
+            KafkaConsumer<String, String> consumer = newConsumer(cluster);
+            consumer.subscribe(Collections.singleton("topic"));
+            consumer.poll(Duration.ofMillis(150));
+            consumer.close();
+            return consumer;
+        });
+
+        while (!future2.isDone()) {
+
+        }
+
+        Thread.sleep(20000);
     }
 
     private KafkaConsumer<String, String> newConsumer(ClusterInstance cluster) {
@@ -71,6 +84,7 @@ public class ConsumerLeaveBeforeAssignedMemberIdTest {
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
         configs.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
+//        configs.put(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG, "2000");
         return new KafkaConsumer<>(configs);
     }
 }
