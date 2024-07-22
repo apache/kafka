@@ -23,57 +23,77 @@ import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
 @ExtendWith(value = ClusterTestExtensions.class)
 @ClusterTestDefaults(types = {Type.KRAFT})
 public class ConsumerLeaveBeforeAssignedMemberIdTest {
+    private static final String GROUP_ID = "group-id";
+    public static final String TOPIC = "topic";
 
     @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic, consumer"),
-            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
-            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+        @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic, consumer"),
+        @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+        @ClusterConfigProperty(key = "num.partitions", value = "2"),
+        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
     })
     public void reproduce(ClusterInstance cluster) throws ExecutionException, InterruptedException {
-        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Admin adminClient = cluster.createAdminClient();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        AtomicBoolean running = new AtomicBoolean(true);
 
-        Future<KafkaConsumer<String, String>> future1 = executor.submit(() -> {
+        Set<String> topics = Collections.singleton(TOPIC);
+        Future<KafkaConsumer<String, String>> consumerFuture = executor.submit(() -> {
             KafkaConsumer<String, String> consumer = newConsumer(cluster);
-            consumer.subscribe(Collections.singleton("topic"));
-            consumer.poll(Duration.ofMillis(150));
-            while (consumer.groupMetadata().memberId().isEmpty()) {
-                // make sure the consumer be assigned memberId
+            consumer.subscribe(topics);
+            while (running.get()) {
+                consumer.poll(Duration.ofMillis(150));
             }
             return consumer;
         });
 
-        Future<KafkaConsumer<String, String>> future2 = executor.submit(() -> {
-            KafkaConsumer<String, String> consumer = newConsumer(cluster);
-            consumer.subscribe(Collections.singleton("topic"));
-            consumer.poll(Duration.ofMillis(150));
-            consumer.close();
-            return consumer;
-        });
+        KafkaConsumer<String, String> consumer = newConsumer(cluster);
+        consumer.subscribe(topics);
+        consumer.poll(Duration.ofMillis(130));
+        consumer.close();
 
-        while (!future2.isDone()) {
+        TestUtils.waitForCondition(() -> {
+            while (!getGroupState(adminClient).equals(ConsumerGroupState.STABLE)) {
+            }
+            return true;
+        }, "Wait until group state is STABLE");
+        running.set(false);
+        KafkaConsumer<String, String> consumerInBackground = consumerFuture.get();
+        Assertions.assertEquals(2, consumerInBackground.assignment().size());
+        consumerInBackground.close();
+    }
 
-        }
-
-        Thread.sleep(20000);
+    private static ConsumerGroupState getGroupState(Admin adminClient) throws InterruptedException, ExecutionException {
+        return adminClient.describeConsumerGroups(Collections.singleton(GROUP_ID))
+            .describedGroups()
+            .get(GROUP_ID)
+            .get()
+            .state();
     }
 
     private KafkaConsumer<String, String> newConsumer(ClusterInstance cluster) {
@@ -82,7 +102,7 @@ public class ConsumerLeaveBeforeAssignedMemberIdTest {
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
-        configs.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, GROUP_ID);
         return new KafkaConsumer<>(configs);
     }
 }
