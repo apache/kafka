@@ -50,6 +50,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 
 trait QuorumImplementation {
   def createBroker(
@@ -103,7 +104,7 @@ class KRaftQuorumImplementation(
   ): KafkaBroker = {
     val metaPropertiesEnsemble = {
       val loader = new MetaPropertiesEnsemble.Loader()
-      config.logDirs.foreach(loader.addLogDir)
+        .addLogDirs(config.logDirs.asJava)
       loader.addMetadataLogDir(config.metadataLogDir)
       val ensemble = loader.load()
       val copier = new MetaPropertiesEnsemble.Copier(ensemble)

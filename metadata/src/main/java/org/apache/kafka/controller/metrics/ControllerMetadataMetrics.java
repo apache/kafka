@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * All of these except MetadataErrorCount are managed by ControllerMetadataMetricsPublisher.
  *
  * IMPORTANT: Metrics which are managed by the QuorumController class itself should go in
- * @link{org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
+ * {@link org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
  */
 public final class ControllerMetadataMetrics implements AutoCloseable {
     private static final MetricName FENCED_BROKER_COUNT = getMetricName(

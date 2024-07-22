@@ -62,6 +62,6 @@ public class StandardAclRecordIteratorTest {
         iterator.next();
         iterator.next();
         iterator.next();
-        assertThrows(NoSuchElementException.class, () -> iterator.next());
+        assertThrows(NoSuchElementException.class, iterator::next);
     }
 }

@@ -494,7 +494,7 @@ object StorageTool extends Logging {
       throw new TerseFailure("No log directories found in the configuration.")
     }
     val loader = new MetaPropertiesEnsemble.Loader()
-    directories.foreach(loader.addLogDir)
+      .addLogDirs(directories.asJava)
     val metaPropertiesEnsemble = loader.load()
     metaPropertiesEnsemble.verify(metaProperties.clusterId(), metaProperties.nodeId(),
       util.EnumSet.noneOf(classOf[VerificationFlag]))

@@ -246,15 +246,15 @@ public class ActivationRecordsGeneratorTest {
 
         assertEquals(
             "Should not have ZK migrations enabled on a cluster that was created in KRaft mode.",
-            assertThrows(RuntimeException.class, () -> {
+            assertThrows(RuntimeException.class, () ->
                 ActivationRecordsGenerator.recordsForNonEmptyLog(
                     logMsg -> fail(),
                     -1L,
                     true,
                     buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.empty()),
                     MetadataVersion.IBP_3_4_IV0
-                );
-            }).getMessage()
+                )
+            ).getMessage()
         );
 
         result = ActivationRecordsGenerator.recordsForNonEmptyLog(

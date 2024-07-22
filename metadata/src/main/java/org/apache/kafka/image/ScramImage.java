@@ -63,7 +63,7 @@ public final class ScramImage {
             StringBuilder scramImageString = new StringBuilder("ScramImage({");
             for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
                 if (!mechanismEntry.getValue().isEmpty()) {
-                    scramImageString.append(mechanismEntry.getKey() + ":");
+                    scramImageString.append(mechanismEntry.getKey()).append(":");
                     List<String> users = new ArrayList<>(mechanismEntry.getValue().keySet());
                     scramImageString.append(String.join(", ", users));
                     scramImageString.append("},{");

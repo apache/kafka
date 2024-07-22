@@ -100,8 +100,6 @@ public final class MetaPropertiesTest {
         Properties props2 = metaProperties.toProperties();
         assertEquals(props, props2);
         MetaProperties metaProperties2 = new MetaProperties.Builder(props2).build();
-        System.out.println("metaProperties = " + metaProperties.toString());
-        System.out.println("metaProperties2 = " + metaProperties2.toString());
         assertEquals(metaProperties, metaProperties2);
         assertEquals(metaProperties.hashCode(), metaProperties2.hashCode());
         assertEquals(metaProperties.toString(), metaProperties2.toString());

@@ -518,7 +518,7 @@ public class TopicsImageTest {
         assertFalse(map.containsKey("baz"));
         assertNull(map.get("baz"));
         HashSet<Uuid> uuids = new HashSet<>();
-        map.values().iterator().forEachRemaining(u -> uuids.add(u));
+        map.values().iterator().forEachRemaining(uuids::add);
         HashSet<Uuid> expectedUuids = new HashSet<>(Arrays.asList(
             Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA"),
             Uuid.fromString("f62ptyETTjet8SL5ZeREiw")));
@@ -537,7 +537,7 @@ public class TopicsImageTest {
         assertFalse(map.containsKey(BAZ_UUID));
         assertNull(map.get(BAZ_UUID));
         HashSet<String> names = new HashSet<>();
-        map.values().iterator().forEachRemaining(n -> names.add(n));
+        map.values().iterator().forEachRemaining(names::add);
         HashSet<String> expectedNames = new HashSet<>(Arrays.asList("foo", "bar"));
         assertEquals(expectedNames, names);
         assertThrows(UnsupportedOperationException.class, () -> map.remove(FOO_UUID));

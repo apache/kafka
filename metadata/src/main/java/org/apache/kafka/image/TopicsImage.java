@@ -104,7 +104,7 @@ public final class TopicsImage {
      * Like TopicsImage itself, this map is immutable.
      */
     public Map<String, Uuid> topicNameToIdView() {
-        return new TranslatedValueMapView<>(topicsByName, image -> image.id());
+        return new TranslatedValueMapView<>(topicsByName, TopicImage::id);
     }
 
     /**
@@ -113,7 +113,7 @@ public final class TopicsImage {
      * Like TopicsImage itself, this map is immutable.
      */
     public Map<Uuid, String> topicIdToNameView() {
-        return new TranslatedValueMapView<>(topicsById, image -> image.name());
+        return new TranslatedValueMapView<>(topicsById, TopicImage::name);
     }
 
     @Override

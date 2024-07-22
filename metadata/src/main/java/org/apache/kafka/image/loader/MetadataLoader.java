@@ -73,7 +73,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         private String threadNamePrefix = "";
         private Time time = Time.SYSTEM;
         private LogContext logContext = null;
-        private FaultHandler faultHandler = (m, e) -> new FaultHandlerException(m, e);
+        private FaultHandler faultHandler = FaultHandlerException::new;
         private MetadataLoaderMetrics metrics = null;
         private Supplier<OptionalLong> highWaterMarkAccessor = null;
 

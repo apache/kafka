@@ -77,10 +77,10 @@ public class BootstrapMetadataTest {
                 BootstrapMetadata.fromRecords(SAMPLE_RECORDS1, "baz").copyWithOnlyVersion());
     }
 
-    static final List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = unmodifiableList(Collections.singletonList(
+    static final List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = Collections.singletonList(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(FEATURE_NAME).
-                setFeatureLevel(IBP_3_0_IV1.featureLevel()), (short) 0)));
+                setFeatureLevel(IBP_3_0_IV1.featureLevel()), (short) 0));
 
     @Test
     public void testFromRecordsListWithOldMetadataVersion() {

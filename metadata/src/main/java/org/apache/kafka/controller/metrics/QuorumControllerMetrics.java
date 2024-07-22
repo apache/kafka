@@ -87,7 +87,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private Consumer<Long> newHistogram(MetricName name, boolean biased) {
         if (registry.isPresent()) {
             Histogram histogram = registry.get().newHistogram(name, biased);
-            return e -> histogram.update(e);
+            return histogram::update;
         } else {
             return __ -> { };
         }

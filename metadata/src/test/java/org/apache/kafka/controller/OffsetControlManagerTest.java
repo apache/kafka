@@ -100,9 +100,7 @@ public class OffsetControlManagerTest {
     public void testDeactivateFailsIfNotActive() {
         OffsetControlManager offsetControl = new OffsetControlManager.Builder().build();
         assertEquals("Can't deactivate inactive OffsetControlManager.",
-            assertThrows(RuntimeException.class,
-                () -> offsetControl.deactivate()).
-                    getMessage());
+            assertThrows(RuntimeException.class, offsetControl::deactivate).getMessage());
     }
 
     private static Batch<ApiMessageAndVersion> newFakeBatch(
