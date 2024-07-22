@@ -1674,7 +1674,7 @@ public class GroupMetadataManager {
     private CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
         String groupId,
         String memberId,
-        String temporayId,
+        String temporaryId,
         int memberEpoch,
         String instanceId,
         String rackId,
@@ -1696,8 +1696,8 @@ public class GroupMetadataManager {
         // Get or create the member.
         if (memberId.isEmpty()) {
             memberId = Uuid.randomUuid().toString();
-            temporaryIdToMemberId.put(temporayId, memberId);
-        } else temporaryIdToMemberId.remove(temporayId);
+            temporaryIdToMemberId.put(temporaryId, memberId);
+        } else temporaryIdToMemberId.remove(temporaryId);
 
         final ConsumerGroupMember member;
         if (instanceId == null) {
