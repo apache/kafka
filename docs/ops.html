@@ -1255,21 +1255,18 @@ queued.max.requests=[number of concurrent requests]</code></pre>
   <p>
     Use configuration providers to load configuration data from external sources. This might include sensitive information, such as passwords, API keys, or other credentials.
   </p>
-  <p>
-    These configurations can be stored securely and dynamically retrieved as needed. Configuration providers are primarily used with Kafka Connect. For example, you can use providers to supply the credentials for Kafka Connect connectors.
-  </p>
   
   <p>You have the following options:</p>
   <ul>
     <li>
       Use a custom provider by creating a Java class implementing the
-      <code>ConfigProvider</code> interface and packaging it into a JAR file.
+      <a href="/{{version}}/javadoc/org/apache/kafka/common/config/provider/ConfigProvider.html"><code>ConfigProvider</code></a> interface and packaging it into a JAR file.
     </li>
     <li>Use a built-in provider:</li>
     <ul>
-      <li><code>DirectoryConfigProvider</code></li>
-      <li><code>EnvVarConfigProvider</code></li>
-      <li><code>FileConfigProvider</code></li>
+      <li><a href="/{{version}}/javadoc/org/apache/kafka/common/config/provider/DirectoryConfigProvider.html"><code>DirectoryConfigProvider</code></a></li>
+      <li><a href="/{{version}}/javadoc/org/apache/kafka/common/config/provider/EnvVarConfigProvider.html"><code>EnvVarConfigProvider</code></a></li>
+      <li><a href="/{{version}}/javadoc/org/apache/kafka/common/config/provider/FileConfigProvider.html"><code>FileConfigProvider</code></a></li>
     </ul>
   </ul>
   
@@ -1385,7 +1382,7 @@ config.providers.fileProvider.param.file=/path/to/config.properties</code></pre>
     Here’s an example that uses a file configuration provider with Kafka Connect to provide authentication credentials to a database for a connector.
   </p>
   <p>
-    First, create a <code>connector.properties</code> configuration file with the following credentials:
+    First, create a <code>connector-credentials.properties</code> configuration file with the following credentials:
   </p>
   <p><b>Example configuration file</b></p>
 <pre><code>dbUsername=my-username
@@ -1404,11 +1401,11 @@ config.providers.fileProvider.config.path=/path/to/connector-properties</code></
   
   <p>Next, reference the properties from the file in the connector configuration.</p>
   <p><b>Example connector configuration referencing file properties</b></p>
-  <pre><code>database.user=${file:/path/to/connector.properties:dbUsername}
-database.password=${file:/path/to/connector.properties:dbPassword}</code></pre>
+  <pre><code>database.user=${fileProvider:/path/to/connector-credentials.properties:dbUsername}
+database.password=${fileProvider:/path/to/connector-credentials.properties:dbPassword}</code></pre>
   <p>The configuration provider reads and extracts the values from the properties file.</p>
   
-    <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.6 Java Version</a></h3>
+    <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.7 Java Version</a></h3>
 
   Java 8, Java 11, and Java 17 are supported.
   <p>
@@ -1436,7 +1433,7 @@ database.password=${file:/path/to/connector.properties:dbPassword}</code></pre>
 
   All of the brokers in that cluster have a 90% GC pause time of about 21ms with less than 1 young GC per second.
 
-  <h3 class="anchor-heading"><a id="hwandos" class="anchor-link"></a><a href="#hwandos">6.7 Hardware and OS</a></h3>
+  <h3 class="anchor-heading"><a id="hwandos" class="anchor-link"></a><a href="#hwandos">6.8 Hardware and OS</a></h3>
   We are using dual quad-core Intel Xeon machines with 24GB of memory.
   <p>
   You need sufficient memory to buffer active readers and writers. You can do a back-of-the-envelope estimate of memory needs by assuming you want to be able to buffer for 30 seconds and compute your memory need as write_throughput*30.
@@ -1542,7 +1539,7 @@ NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   
 
   <pre><code class="language-bash">$ bin/kafka-server-start.sh server_properties</code></pre>
 
-  <h3 class="anchor-heading"><a id="monitoring" class="anchor-link"></a><a href="#monitoring">6.8 Monitoring</a></h3>
+  <h3 class="anchor-heading"><a id="monitoring" class="anchor-link"></a><a href="#monitoring">6.9 Monitoring</a></h3>
 
   Kafka uses Yammer Metrics for metrics reporting in the server. The Java clients use Kafka Metrics, a built-in metrics registry that minimizes transitive dependencies pulled into client applications. Both expose metrics via JMX and can be configured to report stats using pluggable stats reporters to hook up to your monitoring system.
   <p>
@@ -3892,7 +3889,7 @@ customized state stores; for built-in state stores, currently we have:
   </ul>
   Overall, we try to keep the ZooKeeper system as small as will handle the load (plus standard growth capacity planning) and as simple as possible. We try not to do anything fancy with the configuration or application layout as compared to the official release as well as keep it as self contained as possible. For these reasons, we tend to skip the OS packaged versions, since it has a tendency to try to put things in the OS standard hierarchy, which can be 'messy', for want of a better way to word it.
 
-  <h3 class="anchor-heading"><a id="kraft" class="anchor-link"></a><a href="#kraft">6.10 KRaft</a></h3>
+  <h3 class="anchor-heading"><a id="kraft" class="anchor-link"></a><a href="#kraft">6.11 KRaft</a></h3>
 
   <h4 class="anchor-heading"><a id="kraft_config" class="anchor-link"></a><a href="#kraft_config">Configuration</a></h4>
 
@@ -4349,7 +4346,7 @@ listeners=CONTROLLER://:9093
  </table>
 
 
-<h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#kraft">6.11 Tiered Storage</a></h3>
+<h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#kraft">6.12 Tiered Storage</a></h3>
 
 <h4 class="anchor-heading"><a id="tiered_storage_overview" class="anchor-link"></a><a href="#tiered_storage_overview">Tiered Storage Overview</a></h4>
 
