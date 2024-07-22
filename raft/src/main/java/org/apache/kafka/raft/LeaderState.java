@@ -108,7 +108,7 @@ public class LeaderState<T> implements EpochState {
             boolean hasAcknowledgedLeader = voterNode.isVoter(localReplicaKey);
             this.voterStates.put(
                 voterNode.voterKey().id(),
-                new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, Optional.of(voterNode.listeners()))
+                new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, voterNode.listeners())
             );
         }
         this.grantingVoters = Collections.unmodifiableSet(new HashSet<>(grantingVoters));
@@ -337,10 +337,6 @@ public class LeaderState<T> implements EpochState {
     @Override
     public Endpoints leaderEndpoints() {
         return endpoints;
-    }
-
-    int localId() {
-        return localReplicaKey.id();
     }
 
     Map<Integer, ReplicaState> voterStates() {
@@ -592,7 +588,7 @@ public class LeaderState<T> implements EpochState {
         // Compute the new voter states map
         for (VoterSet.VoterNode voterNode : lastVoterSet.voterNodes()) {
             ReplicaState state = getReplicaState(voterNode.voterKey())
-                .orElse(new ReplicaState(voterNode.voterKey(), false, Optional.of(voterNode.listeners())));
+                .orElse(new ReplicaState(voterNode.voterKey(), false, voterNode.listeners()));
 
             // Remove the voter from the previous data structures
             oldVoterStates.remove(voterNode.voterKey().id());
@@ -606,14 +602,14 @@ public class LeaderState<T> implements EpochState {
 
         // Move any of the remaining old voters to observerStates
         for (ReplicaState replicaStateEntry : oldVoterStates.values()) {
-            replicaStateEntry.listeners = Optional.empty();
+            replicaStateEntry.listeners = Endpoints.empty();
             observerStates.putIfAbsent(replicaStateEntry.replicaKey, replicaStateEntry);
         }
     }
 
     static class ReplicaState implements Comparable<ReplicaState> {
         ReplicaKey replicaKey;
-        Optional<Endpoints> listeners;
+        Endpoints listeners;
         Optional<LogOffsetMetadata> endOffset;
         long lastFetchTimestamp;
         long lastFetchLeaderLogEndOffset;
@@ -621,10 +617,10 @@ public class LeaderState<T> implements EpochState {
         boolean hasAcknowledgedLeader;
 
         public ReplicaState(ReplicaKey replicaKey, boolean hasAcknowledgedLeader) {
-            this(replicaKey, hasAcknowledgedLeader, Optional.empty());
+            this(replicaKey, hasAcknowledgedLeader, Endpoints.empty());
         }
 
-        public ReplicaState(ReplicaKey replicaKey, boolean hasAcknowledgedLeader, Optional<Endpoints> listeners) {
+        public ReplicaState(ReplicaKey replicaKey, boolean hasAcknowledgedLeader, Endpoints listeners) {
             this.replicaKey = replicaKey;
             this.listeners = listeners;
             this.endOffset = Optional.empty();

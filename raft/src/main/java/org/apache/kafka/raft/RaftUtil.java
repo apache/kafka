@@ -508,8 +508,7 @@ public class RaftUtil {
                 nodes.add(
                     new DescribeQuorumResponseData.Node()
                         .setNodeId(voter.replicaKey.id())
-                        .setListeners(voter.listeners.map(Endpoints::toDescribeQuorumResponseListeners)
-                            .orElse(new DescribeQuorumResponseData.ListenerCollection(0)))
+                        .setListeners(voter.listeners.toDescribeQuorumResponseListeners())
                 );
             }
             response.setNodes(nodes);

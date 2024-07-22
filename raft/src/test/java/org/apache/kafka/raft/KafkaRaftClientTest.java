@@ -2775,7 +2775,7 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, local.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
             .withStaticVoters(voters)
-            .withKip853Rpc(true);
+            .withKip853Rpc(withKip853Rpc);
 
         if (withKip853Rpc) {
             builder.withBootstrapSnapshot(Optional.of(voterSet));

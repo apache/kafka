@@ -649,7 +649,7 @@ public final class RaftClientTestContext {
         List<ReplicaState> voterStates,
         List<ReplicaState> observerStates
     ) {
-        short apiVersion = (short) (kip853Rpc ? 2 : 1);
+        short apiVersion = describeQuorumRpcVersion();
         assertSentDescribeQuorumResponse(leaderId, leaderEpoch, highWatermark, voterStates, observerStates, apiVersion, Errors.NONE);
     }
 
@@ -676,7 +676,7 @@ public final class RaftClientTestContext {
             partitionData.setErrorMessage(error.message());
         }
 
-        DescribeQuorumResponseData.NodeCollection nodes = null;
+        DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection(0);
         if (apiVersion >= 2) {
             nodes = new DescribeQuorumResponseData.NodeCollection(voterStates.size());
             for (ReplicaState voterState : voterStates) {
