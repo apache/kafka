@@ -20,7 +20,6 @@ import kafka.log.remote.quota.RLMQuotaManager;
 import kafka.server.BrokerTopicStats;
 
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
@@ -28,13 +27,14 @@ import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import com.yammer.metrics.core.Timer;
 
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
 public class RemoteLogReader implements Callable<Void> {
-    private final Logger logger;
+    private final Logger logger = LoggerFactory.getLogger(RemoteLogReader.class);
     private final RemoteStorageFetchInfo fetchInfo;
     private final RemoteLogManager rlm;
     private final BrokerTopicStats brokerTopicStats;
@@ -56,7 +56,6 @@ public class RemoteLogReader implements Callable<Void> {
         this.brokerTopicStats.allTopicsStats().remoteFetchRequestRate().mark();
         this.quotaManager = quotaManager;
         this.remoteReadTimer = remoteReadTimer;
-        logger = new LogContext("[" + Thread.currentThread().getName() + "]").logger(RemoteLogReader.class);
     }
 
     @Override
