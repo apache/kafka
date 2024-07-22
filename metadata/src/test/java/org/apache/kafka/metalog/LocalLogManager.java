@@ -492,7 +492,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
      * An offset that the log manager will not read beyond. This exists only for testing
      * purposes.
      */
-    private long maxReadOffset = Long.MAX_VALUE;
+    private long maxReadOffset;
 
     /**
      * The listener objects attached to this local log manager.
@@ -854,9 +854,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     public List<RaftClient.Listener<ApiMessageAndVersion>> listeners() {
         final CompletableFuture<List<RaftClient.Listener<ApiMessageAndVersion>>> future = new CompletableFuture<>();
-        eventQueue.append(() -> {
-            future.complete(listeners.values().stream().map(l -> l.listener).collect(Collectors.toList()));
-        });
+        eventQueue.append(() ->
+            future.complete(listeners.values().stream().map(l -> l.listener).collect(Collectors.toList()))
+        );
         try {
             return future.get();
         } catch (ExecutionException | InterruptedException e) {

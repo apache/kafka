@@ -73,7 +73,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         registry.ifPresent(r -> r.newGauge(CURRENT_METADATA_VERSION, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return Integer.valueOf(currentMetadataVersion().featureLevel());
+                return (int) currentMetadataVersion().featureLevel();
             }
         }));
         registry.ifPresent(r -> r.newGauge(CURRENT_CONTROLLER_ID, new Gauge<Integer>() {
