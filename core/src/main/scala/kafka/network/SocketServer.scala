@@ -44,8 +44,7 @@ import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestContext, Req
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
-import org.apache.kafka.network.quota.{BrokerQuotaEntity, ConnectionQuotaEntity, IpQuotaEntity, ListenerQuotaEntity}
-import org.apache.kafka.network.{ConnectionThrottledException, SocketServerConfigs, TooManyConnectionsException}
+import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledException, SocketServerConfigs, TooManyConnectionsException}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.config.QuotaConfigs
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -1403,7 +1402,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   @volatile private var defaultConnectionRatePerIp = QuotaConfigs.IP_CONNECTION_RATE_DEFAULT.intValue()
   private val connectionRatePerIp = new ConcurrentHashMap[InetAddress, Int]()
   // sensor that tracks broker-wide connection creation rate and limit (quota)
-  private val brokerConnectionRateSensor = getOrCreateConnectionRateQuotaSensor(config.maxConnectionCreationRate, new BrokerQuotaEntity())
+  private val brokerConnectionRateSensor = getOrCreateConnectionRateQuotaSensor(config.maxConnectionCreationRate, ConnectionQuotaEntity.brokerQuotaEntity())
   private val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(config.quotaWindowSizeSeconds.toLong)
 
   def inc(listenerName: ListenerName, address: InetAddress, acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter): Unit = {
@@ -1441,7 +1440,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private[network] def updateBrokerMaxConnectionRate(maxConnectionRate: Int): Unit = {
     // if there is a connection waiting on the rate throttle delay, we will let it wait the original delay even if
     // the rate limit increases, because it is just one connection per listener and the code is simpler that way
-    updateConnectionRateQuota(maxConnectionRate, new BrokerQuotaEntity())
+    updateConnectionRateQuota(maxConnectionRate, ConnectionQuotaEntity.brokerQuotaEntity())
   }
 
   /**
@@ -1456,7 +1455,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     def isIpConnectionRateMetric(metricName: MetricName) = {
       metricName.name == ConnectionQuotaEntity.CONNECTION_RATE_METRIC_NAME &&
       metricName.group == MetricsGroup &&
-      metricName.tags.containsKey(IpQuotaEntity.IP_METRIC_TAG)
+      metricName.tags.containsKey(ConnectionQuotaEntity.IP_METRIC_TAG)
     }
 
     def shouldUpdateQuota(metric: KafkaMetric, quotaLimit: Int) = {
@@ -1476,7 +1475,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
               connectionRatePerIp.remove(address)
           }
         }
-        updateConnectionRateQuota(connectionRateForIp(address), new IpQuotaEntity(address))
+        updateConnectionRateQuota(connectionRateForIp(address), ConnectionQuotaEntity.ipQuotaEntity(address))
       case None =>
         // synchronize on counts to ensure reading an IP connection rate quota and creating a quota config is atomic
         counts.synchronized {
@@ -1485,7 +1484,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
         info(s"Updated default max IP connection rate to $defaultConnectionRatePerIp")
         metrics.metrics.forEach { (metricName, metric) =>
           if (isIpConnectionRateMetric(metricName)) {
-            val quota = connectionRateForIp(InetAddress.getByName(metricName.tags.get(IpQuotaEntity.IP_METRIC_TAG)))
+            val quota = connectionRateForIp(InetAddress.getByName(metricName.tags.get(ConnectionQuotaEntity.IP_METRIC_TAG)))
             if (shouldUpdateQuota(metric, quota)) {
               debug(s"Updating existing connection rate quota config for ${metricName.tags} to $quota")
               metric.config(rateQuotaMetricConfig(quota))
@@ -1660,7 +1659,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     val connectionRateQuota = connectionRateForIp(address)
     val quotaEnabled = connectionRateQuota != QuotaConfigs.IP_CONNECTION_RATE_DEFAULT
     if (quotaEnabled) {
-      val sensor = getOrCreateConnectionRateQuotaSensor(connectionRateQuota, new IpQuotaEntity(address))
+      val sensor = getOrCreateConnectionRateQuotaSensor(connectionRateQuota, ConnectionQuotaEntity.ipQuotaEntity(address))
       val timeMs = time.milliseconds
       val throttleMs = recordAndGetThrottleTimeMs(sensor, timeMs)
       if (throttleMs > 0) {
@@ -1742,9 +1741,9 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
 
   class ListenerConnectionQuota(lock: Object, listener: ListenerName) extends ListenerReconfigurable with AutoCloseable {
     @volatile private var _maxConnections = Int.MaxValue
-    private[network] val connectionRateSensor = getOrCreateConnectionRateQuotaSensor(Int.MaxValue, new ListenerQuotaEntity(listener.value))
-    private[network] val listenerConnectionRateThrottleSensor = createConnectionRateThrottleSensor(ListenerQuotaEntity.LISTENER_THROTTLE_PREFIX)
-    private[network] val ipConnectionRateThrottleSensor = createConnectionRateThrottleSensor(IpQuotaEntity.IP_THROTTLE_PREFIX)
+    private[network] val connectionRateSensor = getOrCreateConnectionRateQuotaSensor(Int.MaxValue, ConnectionQuotaEntity.listenerQuotaEntity(listener.value))
+    private[network] val listenerConnectionRateThrottleSensor = createConnectionRateThrottleSensor(ConnectionQuotaEntity.LISTENER_THROTTLE_PREFIX)
+    private[network] val ipConnectionRateThrottleSensor = createConnectionRateThrottleSensor(ConnectionQuotaEntity.IP_THROTTLE_PREFIX)
 
     def maxConnections: Int = _maxConnections
 
@@ -1752,7 +1751,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
 
     override def configure(configs: util.Map[String, _]): Unit = {
       _maxConnections = maxConnections(configs)
-      updateConnectionRateQuota(maxConnectionCreationRate(configs), new ListenerQuotaEntity(listener.value))
+      updateConnectionRateQuota(maxConnectionCreationRate(configs), ConnectionQuotaEntity.listenerQuotaEntity(listener.value))
     }
 
     override def reconfigurableConfigs(): util.Set[String] = {
@@ -1772,7 +1771,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     override def reconfigure(configs: util.Map[String, _]): Unit = {
       lock.synchronized {
         _maxConnections = maxConnections(configs)
-        updateConnectionRateQuota(maxConnectionCreationRate(configs), new ListenerQuotaEntity(listener.value))
+        updateConnectionRateQuota(maxConnectionCreationRate(configs), ConnectionQuotaEntity.listenerQuotaEntity(listener.value))
         lock.notifyAll()
       }
     }
