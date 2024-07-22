@@ -160,10 +160,7 @@ public final class TopicDelta {
                     }
                     topicIds.putIfAbsent(name(), id());
                 }
-            } else if (
-                entry.getValue().leader != brokerId &&
-                Replicas.contains(entry.getValue().replicas, brokerId)
-            ) {
+            } else {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
                 if (prevPartition == null || prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
                     followers.put(
