@@ -56,12 +56,7 @@ public class RemoteLogReader implements Callable<Void> {
         this.brokerTopicStats.allTopicsStats().remoteFetchRequestRate().mark();
         this.quotaManager = quotaManager;
         this.remoteReadTimer = remoteReadTimer;
-        logger = new LogContext() {
-            @Override
-            public String logPrefix() {
-                return "[" + Thread.currentThread().getName() + "]";
-            }
-        }.logger(RemoteLogReader.class);
+        logger = new LogContext("[" + Thread.currentThread().getName() + "]").logger(RemoteLogReader.class);
     }
 
     @Override
