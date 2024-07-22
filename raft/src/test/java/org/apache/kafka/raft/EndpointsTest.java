@@ -1,0 +1,489 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.raft;
+
+import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
+import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
+import org.apache.kafka.common.message.EndQuorumEpochRequestData;
+import org.apache.kafka.common.message.EndQuorumEpochResponseData;
+import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.message.FetchSnapshotResponseData;
+import org.apache.kafka.common.message.VoteResponseData;
+import org.apache.kafka.common.message.VotersRecord;
+import org.apache.kafka.common.network.ListenerName;
+
+import org.junit.jupiter.api.Test;
+
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+
+final class EndpointsTest {
+    @Test
+    void testAddressWithValidEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        endpointMap.put(
+                ListenerName.normalised("listener"),
+                InetSocketAddress.createUnresolved("localhost", 9092)
+        );
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        Optional<InetSocketAddress> address = endpoints.address(ListenerName.normalised("listener"));
+
+        assertEquals(Optional.of(InetSocketAddress.createUnresolved("localhost", 9092)), address);
+    }
+
+    @Test
+    void testAddressWithEmptyEndpoint() {
+        Endpoints endpoints = Endpoints.empty();
+
+        Optional<InetSocketAddress> address = endpoints.address(ListenerName.normalised("nonExistentListener"));
+
+        assertEquals(Optional.empty(), address);
+    }
+
+    @Test
+    void testVotersRecordEndpointsWithEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        endpointMap.put(
+                ListenerName.normalised("listener"),
+                InetSocketAddress.createUnresolved("localhost", 9092)
+        );
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+        Iterator<VotersRecord.Endpoint> iterator = endpoints.votersRecordEndpoints();
+
+        VotersRecord.Endpoint endpoint = iterator.next();
+
+        assertEquals(ListenerName.normalised("listener").value(), endpoint.name());
+        assertEquals("localhost", endpoint.host());
+        assertEquals(9092, endpoint.port());
+    }
+
+    @Test
+    void testVotersRecordEndpointsWithEmptyEndpoint() {
+        Endpoints endpoints = Endpoints.empty();
+
+        Iterator<VotersRecord.Endpoint> iterator = endpoints.votersRecordEndpoints();
+
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    void testSizeWithOneEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        endpointMap.put(
+                ListenerName.normalised("listener"),
+                InetSocketAddress.createUnresolved("localhost", 9092)
+        );
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        int size = endpoints.size();
+
+        assertEquals(1, size);
+    }
+
+    @Test
+    void testSizeWithEmptyEndpoint() {
+        Endpoints endpoints = Endpoints.empty();
+
+        int size = endpoints.size();
+
+        assertEquals(0, size);
+    }
+
+    @Test
+    void testIsEmptyWithEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        endpointMap.put(
+                ListenerName.normalised("listener"),
+                InetSocketAddress.createUnresolved("localhost", 9092)
+        );
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        assertFalse(endpoints.isEmpty());
+    }
+
+    @Test
+    void testIsEmptyWithEmptyEndpoint() {
+        Endpoints endpoints = Endpoints.empty();
+
+        assertEquals(0, endpoints.size());
+    }
+
+    @Test
+    void testEqualsAndHashCodeWithSameEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        endpointMap.put(
+                ListenerName.normalised("listener"),
+                InetSocketAddress.createUnresolved("localhost", 9092)
+        );
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        Endpoints sameEndpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        assertEquals(endpoints, sameEndpoints);
+        assertEquals(endpoints.hashCode(), sameEndpoints.hashCode());
+    }
+
+    @Test
+    void testEqualsAndHashCodeWithDifferentEndpoints() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        endpointMap.put(
+                ListenerName.normalised("listener"),
+                InetSocketAddress.createUnresolved("localhost", 9092)
+        );
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        Map<ListenerName, InetSocketAddress> anotherEndpointMap = new HashMap<>();
+        anotherEndpointMap.put(
+                ListenerName.normalised("another"),
+                InetSocketAddress.createUnresolved("localhost", 9093)
+        );
+        Endpoints differentEndpoints = Endpoints.fromInetSocketAddresses(anotherEndpointMap);
+
+        assertNotEquals(endpoints, differentEndpoints);
+        assertNotEquals(endpoints.hashCode(), differentEndpoints.hashCode());
+    }
+
+    @Test
+    void testToString() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        ListenerName listener = ListenerName.normalised("listener");
+        ListenerName listener1 = ListenerName.normalised("listener1");
+        InetSocketAddress address = InetSocketAddress.createUnresolved("localhost", 9092);
+        InetSocketAddress address1 = InetSocketAddress.createUnresolved("localhost", 9093);
+        endpointMap.put(listener, address);
+        endpointMap.put(listener1, address1);
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        String expectedString = String.format(
+                "Endpoints(endpoints={%s=%s, %s=%s})",
+                listener,
+                address,
+                listener1,
+                address1
+        );
+
+        assertEquals(expectedString, endpoints.toString());
+    }
+
+    @Test
+    void testToBeginQuorumEpochRequestWithEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        endpointMap.put(
+                ListenerName.normalised("listener"),
+                InetSocketAddress.createUnresolved("localhost", 9092)
+        );
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        BeginQuorumEpochRequestData.LeaderEndpointCollection leaderEndpoints = endpoints.toBeginQuorumEpochRequest();
+
+        assertEquals(1, leaderEndpoints.size());
+
+        Iterator<BeginQuorumEpochRequestData.LeaderEndpoint> iterator = leaderEndpoints.iterator();
+        BeginQuorumEpochRequestData.LeaderEndpoint endpoint = iterator.next();
+        assertEquals(ListenerName.normalised("listener").value(), endpoint.name());
+        assertEquals("localhost", endpoint.host());
+        assertEquals(9092, endpoint.port());
+    }
+
+    @Test
+    void testToBeginQuorumEpochRequestWithEmptyEndpoint() {
+        Endpoints endpoints = Endpoints.empty();
+
+        BeginQuorumEpochRequestData.LeaderEndpointCollection leaderEndpoints = endpoints.toBeginQuorumEpochRequest();
+
+        assertEquals(0, leaderEndpoints.size());
+    }
+
+    @Test
+    void testEmpty() {
+        Endpoints emptyEndpoints = Endpoints.empty();
+
+        assertEquals(Endpoints.fromInetSocketAddresses(Collections.emptyMap()), emptyEndpoints);
+    }
+
+    @Test
+    void testFromInetSocketAddressesWithEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        endpointMap.put(
+                ListenerName.normalised("listener"),
+                InetSocketAddress.createUnresolved("localhost", 9092)
+        );
+
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        assertEquals(1, endpoints.size());
+    }
+
+    @Test
+    void testFromVotersRecordEndpointsWithEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        endpointMap.put(
+                ListenerName.normalised("listener"),
+                InetSocketAddress.createUnresolved("localhost", 9092)
+        );
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        List<VotersRecord.Endpoint> votersEndpoints = new ArrayList<>();
+        votersEndpoints.add(
+                new VotersRecord.Endpoint()
+                        .setName("listener")
+                        .setHost("localhost")
+                        .setPort(9092)
+        );
+
+        Endpoints createdEndpoints = Endpoints.fromVotersRecordEndpoints(votersEndpoints);
+
+        assertEquals(endpoints, createdEndpoints);
+    }
+
+    @Test
+    void testFromVotersRecordEndpointsWithEmptyEndpoint() {
+        List<VotersRecord.Endpoint> votersEndpoints = new ArrayList<>();
+
+        Endpoints createdEndpoints = Endpoints.fromVotersRecordEndpoints(votersEndpoints);
+
+        assertEquals(Endpoints.empty(), createdEndpoints);
+    }
+
+    @Test
+    void testFromBeginQuorumEpochRequestWithEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        endpointMap.put(
+                ListenerName.normalised("listener"),
+                InetSocketAddress.createUnresolved("localhost", 9092)
+        );
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        BeginQuorumEpochRequestData.LeaderEndpointCollection leaderEndpoints = new BeginQuorumEpochRequestData.LeaderEndpointCollection();
+        leaderEndpoints.add(
+                new BeginQuorumEpochRequestData.LeaderEndpoint()
+                        .setName("listener")
+                        .setHost("localhost")
+                        .setPort(9092)
+        );
+
+        Endpoints createdEndpoints = Endpoints.fromBeginQuorumEpochRequest(leaderEndpoints);
+
+        assertEquals(endpoints, createdEndpoints);
+    }
+
+    @Test
+    void testFromBeginQuorumEpochRequestWithEmptyEndpoint() {
+        BeginQuorumEpochRequestData.LeaderEndpointCollection leaderEndpoints = new BeginQuorumEpochRequestData.LeaderEndpointCollection();
+
+        Endpoints createdEndpoints = Endpoints.fromBeginQuorumEpochRequest(leaderEndpoints);
+
+        assertEquals(Endpoints.empty(), createdEndpoints);
+    }
+
+    @Test
+    void testFromBeginQuorumEpochResponseWithEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        ListenerName listener = ListenerName.normalised("listener");
+        InetSocketAddress address = InetSocketAddress.createUnresolved("localhost", 9092);
+        endpointMap.put(listener, address);
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        BeginQuorumEpochResponseData.NodeEndpointCollection nodeEndpointCollection = new BeginQuorumEpochResponseData.NodeEndpointCollection();
+        nodeEndpointCollection.add(
+                new BeginQuorumEpochResponseData.NodeEndpoint()
+                        .setNodeId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+        );
+
+
+        Endpoints createdEndpoints = Endpoints.fromBeginQuorumEpochResponse(listener, 1, nodeEndpointCollection);
+
+        assertEquals(endpoints, createdEndpoints);
+    }
+
+    @Test
+    void testFromBeginQuorumEpochResponseWithEmptyEndpoint() {
+        BeginQuorumEpochResponseData.NodeEndpointCollection nodeEndpointCollection = new BeginQuorumEpochResponseData.NodeEndpointCollection();
+
+        Endpoints createdEndpoints = Endpoints.fromBeginQuorumEpochResponse(ListenerName.normalised("nonExistListener"), 1, nodeEndpointCollection);
+
+        assertEquals(Endpoints.empty(), createdEndpoints);
+    }
+
+    @Test
+    void testFromEndQuorumEpochRequestWithEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        ListenerName listener = ListenerName.normalised("listener");
+        InetSocketAddress address = InetSocketAddress.createUnresolved("localhost", 9092);
+        endpointMap.put(listener, address);
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        EndQuorumEpochRequestData.LeaderEndpointCollection leaderEndpoints = new EndQuorumEpochRequestData.LeaderEndpointCollection();
+        leaderEndpoints.add(
+                new EndQuorumEpochRequestData.LeaderEndpoint()
+                        .setName("listener")
+                        .setHost("localhost")
+                        .setPort(9092)
+        );
+
+
+        Endpoints createdEndpoints = Endpoints.fromEndQuorumEpochRequest(leaderEndpoints);
+
+        assertEquals(endpoints, createdEndpoints);
+    }
+
+    @Test
+    void testFromEndQuorumEpochRequestWithEmptyEndpoint() {
+        EndQuorumEpochRequestData.LeaderEndpointCollection leaderEndpoints = new EndQuorumEpochRequestData.LeaderEndpointCollection();
+
+        Endpoints createdEndpoints = Endpoints.fromEndQuorumEpochRequest(leaderEndpoints);
+
+        assertEquals(Endpoints.empty(), createdEndpoints);
+    }
+
+    @Test
+    void testFromEndQuorumEpochResponseWithEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        ListenerName listener = ListenerName.normalised("listener");
+        InetSocketAddress address = InetSocketAddress.createUnresolved("localhost", 9092);
+        endpointMap.put(listener, address);
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        EndQuorumEpochResponseData.NodeEndpointCollection nodeEndpointCollection = new EndQuorumEpochResponseData.NodeEndpointCollection();
+        nodeEndpointCollection.add(
+                new EndQuorumEpochResponseData.NodeEndpoint()
+                        .setNodeId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+        );
+
+
+        Endpoints createdEndpoints = Endpoints.fromEndQuorumEpochResponse(listener, 1, nodeEndpointCollection);
+
+        assertEquals(endpoints, createdEndpoints);
+    }
+
+    @Test
+    void testFromEndQuorumEpochResponseWithEmptyEndpoint() {
+        EndQuorumEpochResponseData.NodeEndpointCollection nodeEndpointCollection = new EndQuorumEpochResponseData.NodeEndpointCollection();
+
+        Endpoints createdEndpoints = Endpoints.fromEndQuorumEpochResponse(ListenerName.normalised("nonExistListener"), 1, nodeEndpointCollection);
+
+        assertEquals(Endpoints.empty(), createdEndpoints);
+    }
+
+    @Test
+    void testFromVoteResponseWithEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        ListenerName listener = ListenerName.normalised("listener");
+        InetSocketAddress address = InetSocketAddress.createUnresolved("localhost", 9092);
+        endpointMap.put(listener, address);
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        VoteResponseData.NodeEndpointCollection nodeEndpointCollection = new VoteResponseData.NodeEndpointCollection();
+        nodeEndpointCollection.add(
+                new VoteResponseData.NodeEndpoint()
+                        .setNodeId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+        );
+
+
+        Endpoints createdEndpoints = Endpoints.fromVoteResponse(listener, 1, nodeEndpointCollection);
+
+        assertEquals(endpoints, createdEndpoints);
+    }
+
+    @Test
+    void testFromVoteResponseWithEmptyEndpoint() {
+        VoteResponseData.NodeEndpointCollection nodeEndpointCollection = new VoteResponseData.NodeEndpointCollection();
+
+        Endpoints createdEndpoints = Endpoints.fromVoteResponse(ListenerName.normalised("nonExistListener"), 1, nodeEndpointCollection);
+
+        assertEquals(Endpoints.empty(), createdEndpoints);
+    }
+
+    @Test
+    void testFromFetchResponseWithEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        ListenerName listener = ListenerName.normalised("listener");
+        InetSocketAddress address = InetSocketAddress.createUnresolved("localhost", 9092);
+        endpointMap.put(listener, address);
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        FetchResponseData.NodeEndpointCollection nodeEndpointCollection = new FetchResponseData.NodeEndpointCollection();
+        nodeEndpointCollection.add(
+                new FetchResponseData.NodeEndpoint()
+                        .setNodeId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+        );
+
+
+        Endpoints createdEndpoints = Endpoints.fromFetchResponse(listener, 1, nodeEndpointCollection);
+
+        assertEquals(endpoints, createdEndpoints);
+    }
+
+    @Test
+    void testFromFetchResponseWithEmptyEndpoint() {
+        FetchResponseData.NodeEndpointCollection nodeEndpointCollection = new FetchResponseData.NodeEndpointCollection();
+
+        Endpoints createdEndpoints = Endpoints.fromFetchResponse(ListenerName.normalised("nonExistListener"), 1, nodeEndpointCollection);
+
+        assertEquals(Endpoints.empty(), createdEndpoints);
+    }
+
+    @Test
+    void testFromFetchSnapshotResponseWithEndpoint() {
+        Map<ListenerName, InetSocketAddress> endpointMap = new HashMap<>();
+        ListenerName listener = ListenerName.normalised("listener");
+        InetSocketAddress address = InetSocketAddress.createUnresolved("localhost", 9092);
+        endpointMap.put(listener, address);
+        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
+
+        FetchSnapshotResponseData.NodeEndpointCollection nodeEndpointCollection = new FetchSnapshotResponseData.NodeEndpointCollection();
+        nodeEndpointCollection.add(
+                new FetchSnapshotResponseData.NodeEndpoint()
+                        .setNodeId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+        );
+
+
+        Endpoints createdEndpoints = Endpoints.fromFetchSnapshotResponse(listener, 1, nodeEndpointCollection);
+
+        assertEquals(endpoints, createdEndpoints);
+    }
+
+    @Test
+    void testFromFetchSnapshotResponseWithEmptyEndpoint() {
+        FetchSnapshotResponseData.NodeEndpointCollection nodeEndpointCollection = new FetchSnapshotResponseData.NodeEndpointCollection();
+
+        Endpoints createdEndpoints = Endpoints.fromFetchSnapshotResponse(ListenerName.normalised("nonExistListener"), 1, nodeEndpointCollection);
+
+        assertEquals(Endpoints.empty(), createdEndpoints);
+    }
+}
