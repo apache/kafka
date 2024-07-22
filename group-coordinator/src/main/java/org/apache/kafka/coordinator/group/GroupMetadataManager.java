@@ -4259,7 +4259,6 @@ public class GroupMetadataManager {
 
             case MESSAGE_TOO_LARGE:
             case RECORD_LIST_TOO_LARGE:
-            case INVALID_FETCH_SIZE:
                 return UNKNOWN_SERVER_ERROR;
 
             default:

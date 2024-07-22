@@ -301,8 +301,7 @@ class GroupMetadataManager(brokerId: Int,
                 Errors.REBALANCE_IN_PROGRESS
 
               case Errors.MESSAGE_TOO_LARGE
-                   | Errors.RECORD_LIST_TOO_LARGE
-                   | Errors.INVALID_FETCH_SIZE =>
+                   | Errors.RECORD_LIST_TOO_LARGE =>
 
                 error(s"Appending metadata message for group ${group.groupId} generation $generationId failed due to " +
                   s"${status.error.exceptionName}, returning UNKNOWN error code to the client")
@@ -1303,8 +1302,7 @@ object GroupMetadataManager {
         Errors.NOT_COORDINATOR
 
       case Errors.MESSAGE_TOO_LARGE
-           | Errors.RECORD_LIST_TOO_LARGE
-           | Errors.INVALID_FETCH_SIZE =>
+           | Errors.RECORD_LIST_TOO_LARGE =>
         Errors.INVALID_COMMIT_OFFSET_SIZE
 
       // We may see INVALID_TXN_STATE or INVALID_PID_MAPPING here due to transaction verification.

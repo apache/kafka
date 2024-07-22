@@ -58,7 +58,6 @@ import org.apache.kafka.common.errors.IneligibleReplicaException;
 import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidFetchSessionEpochException;
-import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
@@ -177,8 +176,6 @@ public enum Errors {
             CorruptRecordException::new),
     UNKNOWN_TOPIC_OR_PARTITION(3, "This server does not host this topic-partition.",
             UnknownTopicOrPartitionException::new),
-    INVALID_FETCH_SIZE(4, "The requested fetch size is invalid.",
-            InvalidFetchSizeException::new),
     LEADER_NOT_AVAILABLE(5, "There is no leader for this topic-partition as we are in the middle of a leadership election.",
             LeaderNotAvailableException::new),
     NOT_LEADER_OR_FOLLOWER(6, "For requests intended only for the leader, this error indicates that the broker is not the current leader. " +

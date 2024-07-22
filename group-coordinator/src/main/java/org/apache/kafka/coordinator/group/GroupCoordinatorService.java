@@ -1152,7 +1152,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
             case MESSAGE_TOO_LARGE:
             case RECORD_LIST_TOO_LARGE:
-            case INVALID_FETCH_SIZE:
                 return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
 
             default:
