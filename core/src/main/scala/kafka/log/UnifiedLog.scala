@@ -117,6 +117,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
+  val FLAG_TO_SET_LOCAL_LOG_START_OFFSET: Int = -2
+
   this.logIdent = s"[UnifiedLog partition=$topicPartition, dir=$parentDir] "
 
   /* A lock that guards all modifications to the log */
@@ -183,11 +185,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   def updateLogStartOffsetFromRemoteTier(remoteLogStartOffset: Long): Unit = {
-    if (!remoteLogEnabled()) {
-      error("Ignoring the call as the remote log storage is disabled")
-      return
+//    if (!remoteLogEnabled()) {
+//      error("Ignoring the call as the remote log storage is disabled")
+//      return
+//    }
+    if (remoteLogStartOffset == FLAG_TO_SET_LOCAL_LOG_START_OFFSET) {
+      maybeIncrementLogStartOffset(localLogStartOffset(), LogStartOffsetIncrementReason.SegmentDeletion)
     }
-    maybeIncrementLogStartOffset(remoteLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
   }
 
   def remoteLogEnabled(): Boolean = {
@@ -1990,6 +1994,8 @@ object UnifiedLog extends Logging {
         || Topic.CLUSTER_METADATA_TOPIC_NAME.equals(topic)) &&
       config.remoteStorageEnable()
   }
+
+
 
   def apply(dir: File,
             config: LogConfig,

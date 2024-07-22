@@ -26,7 +26,7 @@ import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.server.config.{ReplicationConfigs, QuotaConfigs, ZooKeeperInternals}
+import org.apache.kafka.server.config.{QuotaConfigs, ReplicationConfigs, ZooKeeperInternals}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
@@ -69,24 +69,46 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
 
     val logs = logManager.logsByTopic(topic)
     val wasRemoteLogEnabledBeforeUpdate = logs.exists(_.remoteLogEnabled())
+    var oldLogPolicy = logs.head.config.remoteLogDisablePolicy()
+    if (oldLogPolicy == null)
+      oldLogPolicy = "retain"
 
     logManager.updateTopicConfig(topic, props, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
-    maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
+    maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate, oldLogPolicy)
   }
 
   private[server] def maybeBootstrapRemoteLogComponents(topic: String,
                                                         logs: Seq[UnifiedLog],
-                                                        wasRemoteLogEnabledBeforeUpdate: Boolean): Unit = {
+                                                        wasRemoteLogEnabledBeforeUpdate: Boolean,
+                                                        oldLogPolicy: String): Unit = {
     val isRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
+    var newRemoteLogPolicy = logs.head.config.remoteLogDisablePolicy()
+    if (newRemoteLogPolicy == null)
+      newRemoteLogPolicy = "retain"
+
+
+
+    val (leaderPartitions, followerPartitions) =
+      logs.flatMap(log => replicaManager.onlinePartition(log.topicPartition)).partition(_.isLeader)
     // Topic configs gets updated incrementally. This check is added to prevent redundant updates.
     if (!wasRemoteLogEnabledBeforeUpdate && isRemoteLogEnabled) {
-      val (leaderPartitions, followerPartitions) =
-        logs.flatMap(log => replicaManager.onlinePartition(log.topicPartition)).partition(_.isLeader)
       val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
       replicaManager.remoteLogManager.foreach(rlm =>
         rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
-    } else if (wasRemoteLogEnabledBeforeUpdate && !isRemoteLogEnabled) {
-      warn(s"Disabling remote log on the topic: $topic is not supported.")
+    }
+
+    // When there's a configRecord related to topic, we'll invoke updateLogConfig and enter here.
+    // So, here, we can check if the tiered storage is enabled or disabled, or remote log policy change or not, then do stopPartitions
+    // for each partition.
+    if (wasRemoteLogEnabledBeforeUpdate != isRemoteLogEnabled || !oldLogPolicy.equals(newRemoteLogPolicy)) {
+      val stopPartitions: java.util.HashSet[StopPartition] = new java.util.HashSet[StopPartition]()
+      leaderPartitions.toSet.asJava.stream().forEach(partition => {
+        // only delete remote logs when remoteLog Policy is "delete"
+        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false, deleteRemoteLog = newRemoteLogPolicy.equals("delete")))
+      })
+
+      replicaManager.remoteLogManager.foreach(rlm => rlm.stopPartitions(stopPartitions, (tp, e) => {}, newRemoteLogPolicy))
+
     }
   }
 

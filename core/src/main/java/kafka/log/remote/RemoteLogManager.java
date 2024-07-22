@@ -139,6 +139,8 @@ import scala.Option;
 import scala.collection.JavaConverters;
 
 import static kafka.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS;
+import static org.apache.kafka.common.config.TopicConfig.REMOTE_LOG_DISABLE_POLICY_DELETE;
+import static org.apache.kafka.common.config.TopicConfig.REMOTE_LOG_DISABLE_POLICY_RETAIN;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
@@ -156,6 +158,7 @@ public class RemoteLogManager implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
     private static final String REMOTE_LOG_READER_THREAD_NAME_PREFIX = "remote-log-reader";
+    public static final long FLAG_TO_SET_LOCAL_LOG_START_OFFSET = -2;
     private final RemoteLogManagerConfig rlmConfig;
     private final int brokerId;
     private final String logDir;
@@ -461,6 +464,12 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
+    public void stopPartitions(Set<StopPartition> stopPartitions,
+                               BiConsumer<TopicPartition, Throwable> errorHandler) {
+        // null means remoteLogDisablePolicy is not applied
+        stopPartitions(stopPartitions, errorHandler, null);
+    }
+
     /**
      * Stop the remote-log-manager task for the given partitions. And, calls the
      * {@link RemoteLogMetadataManager#onStopPartitions(Set)} when {@link StopPartition#deleteLocalLog()} is true.
@@ -470,7 +479,8 @@ public class RemoteLogManager implements Closeable {
      * @param errorHandler   callback to handle any errors while stopping the partitions.
      */
     public void stopPartitions(Set<StopPartition> stopPartitions,
-                               BiConsumer<TopicPartition, Throwable> errorHandler) {
+                               BiConsumer<TopicPartition, Throwable> errorHandler,
+                               String remoteLogDisablePolicy) {
         LOGGER.debug("Stop partitions: {}", stopPartitions);
         for (StopPartition stopPartition: stopPartitions) {
             TopicPartition tp = stopPartition.topicPartition();
@@ -482,19 +492,29 @@ public class RemoteLogManager implements Closeable {
                         task.cancel();
                         return null;
                     });
-                    leaderExpirationRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
-                        LOGGER.info("Cancelling the expiration RLM task for tpId: {}", tpId);
-                        task.cancel();
-                        return null;
-                    });
                     followerRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
                         LOGGER.info("Cancelling the follower RLM task for tpId: {}", tpId);
                         task.cancel();
                         return null;
                     });
 
+                    // here, we have to handle retain and delete separately.
+                    // If "retain" is set, we should not cancel expiration task
+                    if (!REMOTE_LOG_DISABLE_POLICY_RETAIN.equals(remoteLogDisablePolicy)) {
+                        leaderExpirationRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
+                            LOGGER.info("Cancelling the expiration RLM task for tpId: {}", tpId);
+                            task.cancel();
+                            return null;
+                        });
+                    } else if (REMOTE_LOG_DISABLE_POLICY_DELETE.equals(remoteLogDisablePolicy)) {
+                        // update start offset to local log start offset
+                        // we use unused "-2" as the flag to set local log start offset
+                        updateRemoteLogStartOffset.accept(tp, FLAG_TO_SET_LOCAL_LOG_START_OFFSET);
+                    }
+
                     removeRemoteTopicPartitionMetrics(tpId);
 
+                    // we already set it correctly, just apply it.
                     if (stopPartition.deleteRemoteLog()) {
                         LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
                         deleteRemoteLogPartition(tpId);
