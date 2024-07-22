@@ -482,37 +482,6 @@ object StorageTool extends Logging {
     BootstrapMetadata.fromRecords(metadataRecords, source)
   }
 
-
-  def buildMetadataProperties(
-    clusterIdStr: String,
-    config: KafkaConfig
-  ): MetaProperties = {
-    val effectiveClusterId = try {
-      Uuid.fromString(clusterIdStr)
-    } catch {
-      case e: Throwable => throw new TerseFailure(s"Cluster ID string $clusterIdStr " +
-        s"does not appear to be a valid UUID: ${e.getMessage}")
-    }
-    if (config.nodeId < 0) {
-      throw new TerseFailure(s"The node.id must be set to a non-negative integer. We saw ${config.nodeId}")
-    }
-    new MetaProperties.Builder().
-      setClusterId(effectiveClusterId.toString).
-      setNodeId(config.nodeId).
-      build()
-  }
-
-  def formatCommand(
-    stream: PrintStream,
-    directories: Seq[String],
-    metaProperties: MetaProperties,
-    metadataVersion: MetadataVersion,
-    ignoreFormatted: Boolean
-  ): Int = {
-    val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, None, "format command")
-    formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted)
-  }
-
   def formatCommand(
     stream: PrintStream,
     directories: Seq[String],
@@ -525,7 +494,7 @@ object StorageTool extends Logging {
       throw new TerseFailure("No log directories found in the configuration.")
     }
     val loader = new MetaPropertiesEnsemble.Loader()
-    directories.foreach(loader.addLogDir)
+      .addLogDirs(directories.asJava)
     val metaPropertiesEnsemble = loader.load()
     metaPropertiesEnsemble.verify(metaProperties.clusterId(), metaProperties.nodeId(),
       util.EnumSet.noneOf(classOf[VerificationFlag]))

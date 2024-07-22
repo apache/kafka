@@ -24,6 +24,7 @@ import java.util.{Optional, OptionalInt}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.ConcurrentHashMap
+import java.util.function.Supplier
 import com.yammer.metrics.core.Gauge
 import kafka.common.OffsetAndMetadata
 import kafka.coordinator.group.GroupMetadataManager.maybeConvertOffsetCommitError
@@ -126,9 +127,9 @@ class GroupMetadataManager(brokerId: Int,
 
   this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
 
-  private def recreateGauge[T](name: String, gauge: Gauge[T]): Gauge[T] = {
+  private def recreateGauge[T](name: String, metric: Supplier[T]): Gauge[T] = {
     metricsGroup.removeMetric(name)
-    metricsGroup.newGauge(name, gauge)
+    metricsGroup.newGauge(name, metric)
   }
 
   recreateGauge("NumOffsets",
