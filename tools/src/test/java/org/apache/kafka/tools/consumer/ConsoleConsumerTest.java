@@ -49,7 +49,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -88,8 +87,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(value = ClusterTestExtensions.class)
-@Tag("integration")
+@ExtendWith(ClusterTestExtensions.class)
 public class ConsoleConsumerTest {
 
     private final String topic = "test-topic";
@@ -301,11 +299,10 @@ public class ConsoleConsumerTest {
             };
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(transactionLogMessageFormatter);
+            ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createConsumer(cluster));
             
             try (ByteArrayOutputStream out = new ByteArrayOutputStream();
                  PrintStream output = new PrintStream(out)) {
-
-                ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createConsumer(cluster));
                 ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
                 
                 JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
@@ -322,7 +319,7 @@ public class ConsoleConsumerTest {
                 assertNotNull(logValue);
                 assertEquals(0, logValue.producerId());
                 assertEquals(0, logValue.transactionStatus());
-                
+            } finally {
                 consumerWrapper.cleanup();
             }
         }
