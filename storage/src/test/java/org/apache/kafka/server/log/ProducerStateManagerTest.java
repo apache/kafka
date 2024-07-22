@@ -30,6 +30,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
+import org.apache.kafka.storage.internals.log.BatchMetadata;
 import org.apache.kafka.storage.internals.log.CompletedTxn;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
@@ -58,6 +59,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +80,7 @@ import static org.apache.kafka.storage.internals.log.ProducerStateManager.LATE_T
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -1144,6 +1147,23 @@ public class ProducerStateManagerTest {
         assertEquals(Optional.of(new LogOffsetMetadata(30L)), stateManager.firstUnstableOffset());
     }
 
+    @Test
+    public void testReadWriteSnapshot() throws IOException {
+        Map<Long, ProducerStateEntry> expectedEntryMap = new HashMap<>();
+        expectedEntryMap.put(1L, new ProducerStateEntry(1L, (short) 2, 3,
+                RecordBatch.NO_TIMESTAMP,
+                OptionalLong.of(100L),
+                Optional.of(new BatchMetadata(1, 2L, 3, RecordBatch.NO_TIMESTAMP))));
+        expectedEntryMap.put(11L, new ProducerStateEntry(11L, (short) 12, 13,
+                123456L,
+                OptionalLong.empty(),
+                Optional.empty()));
+
+        File file = new File(logDir, "testReadWriteSnapshot");
+        ProducerStateManager.writeSnapshot(file, expectedEntryMap, true);
+        assertEntries(expectedEntryMap, ProducerStateManager.readSnapshot(file));
+    }
+
     private void appendEntry(ProducerStateManager stateManager,
                              long producerId,
                              short producerEpoch,
@@ -1330,5 +1350,24 @@ public class ProducerStateManagerTest {
         appendInfo.appendDataBatch(epoch, seq.get(), seq.addAndGet(count),
                 time.milliseconds(), new LogOffsetMetadata(startOffset), endOffset, true);
         seq.incrementAndGet();
+    }
+
+    private void assertEntries(Map<Long, ProducerStateEntry> expected, List<ProducerStateEntry> actual) {
+        Map<Long, ProducerStateEntry> actualEntryMap =
+                actual.stream().collect(Collectors.toMap(ProducerStateEntry::producerId, p -> p));
+        assertEquals(expected.keySet(), actualEntryMap.keySet());
+        expected.forEach((producerId, expectedEntry) -> {
+            ProducerStateEntry actualEntry = actualEntryMap.get(producerId);
+            assertProducerStateEntry(expectedEntry, actualEntry);
+        });
+    }
+
+    private void assertProducerStateEntry(ProducerStateEntry expected, ProducerStateEntry actual) {
+        assertEquals(expected.producerId(), actual.producerId());
+        assertEquals(expected.producerEpoch(), actual.producerEpoch());
+        assertEquals(expected.coordinatorEpoch(), actual.coordinatorEpoch());
+        assertEquals(expected.lastTimestamp(), actual.lastTimestamp());
+        assertEquals(expected.currentTxnFirstOffset(), actual.currentTxnFirstOffset());
+        assertIterableEquals(expected.batchMetadata(), actual.batchMetadata());
     }
 }
