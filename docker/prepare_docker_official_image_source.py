@@ -34,6 +34,7 @@ Usage:
 from datetime import date
 import argparse
 from distutils.dir_util import copy_tree
+from common import get_gpg_key
 import os
 import shutil
 import re
@@ -45,6 +46,8 @@ def remove_args_and_hardcode_values(file_path, kafka_version, kafka_url):
     filedata = filedata.replace("ARG kafka_url", f"ENV kafka_url {kafka_url}")
     filedata = filedata.replace(
         "ARG build_date", f"ENV build_date {str(date.today())}")
+    filedata = filedata.replace(
+        "ARG GPG_KEY", f"ENV GPG_KEY {get_gpg_key(kafka_version)}")
     original_comment = re.compile(r"# Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments")
     updated_comment = f"# Get Kafka from https://archive.apache.org/dist/kafka, url passed as env var, for version {kafka_version}"
     filedata = original_comment.sub(updated_comment, filedata)

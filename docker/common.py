@@ -19,7 +19,30 @@ import subprocess
 import tempfile
 import os
 from distutils.dir_util import copy_tree
+from version_keys import version_keys
 import shutil
+import sys
+import re
+
+def get_gpg_key(kafka_version):
+    """
+    Retrieves the GPG key for the specified kafka version, if it exists, from docker/version_keys.py.
+    """
+    gpg_key = version_keys.get(kafka_version)
+    if gpg_key is not None:
+        return gpg_key
+    else:
+        print(f"No GPG Key data exists for kafka version {kafka_version}.")
+        print("Please ensure an entry corresponding to it exists under docker/version_keys.py")
+        sys.exit(1)
+
+def get_kafka_version_from_url(kafka_url):
+    match = re.search("\d+\.\d+\.\d+", kafka_url)
+    if match:
+        return match.group(0)
+    else:
+        print(f"No pattern found matching x.x.x in {kafka_url}. No version number extracted")
+        sys.exit(1)
 
 def execute(command):
     if subprocess.run(command).returncode != 0:
