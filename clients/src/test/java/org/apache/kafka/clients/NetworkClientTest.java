@@ -1162,9 +1162,6 @@ public class NetworkClientTest {
                 BOOTSTRAP_CONFIGURATION, time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
                 MetadataRecoveryStrategy.NONE);
 
-        // Assuming the client has already been bootstrapped
-        client.ensureBootstrapped();
-
         // First connection attempt should fail
         client.ready(node, time.milliseconds());
         time.sleep(connectionSetupTimeoutMaxMsTest);
@@ -1220,7 +1217,7 @@ public class NetworkClientTest {
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
-        //time.sleep(connectionSetupTimeoutMaxMsTest);
+        time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
         assertNull(client.telemetryConnectedNode());

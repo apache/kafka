@@ -593,6 +593,7 @@ public class NetworkClient implements KafkaClient {
     public List<ClientResponse> poll(long timeout, long now) {
         ensureActive();
         if (!this.isBootstrapped() && !isBootstrapDisabled()) {
+            bootstrapState.timer.update(time.milliseconds());
             bootstrapState.timer.reset(bootstrapState.dnsResolutionTimeoutMs);
         }
         ensureBootstrapped();
