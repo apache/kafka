@@ -623,13 +623,12 @@ public class ProducerStateManager {
         ProducerSnapshot producerSnapshot;
         try {
             version = byteBuffer.getShort();
+            if (version < ProducerSnapshot.LOWEST_SUPPORTED_VERSION || version > ProducerSnapshot.HIGHEST_SUPPORTED_VERSION)
+                throw new CorruptSnapshotException("Snapshot contained an unknown file version " + version);
             producerSnapshot = new ProducerSnapshot(new ByteBufferAccessor(byteBuffer), version);
         } catch (Exception e) {
             throw new CorruptSnapshotException("Snapshot failed schema validation: " + e.getMessage());
         }
-
-        if (version < ProducerSnapshot.LOWEST_SUPPORTED_VERSION || version > ProducerSnapshot.HIGHEST_SUPPORTED_VERSION)
-            throw new CorruptSnapshotException("Snapshot contained an unknown file version " + version);
 
         long crc = producerSnapshot.crc();
         long computedCrc = Crc32C.compute(buffer, PRODUCER_ENTRIES_OFFSET, buffer.length - PRODUCER_ENTRIES_OFFSET);
@@ -661,20 +660,19 @@ public class ProducerStateManager {
     // visible for testing
     public static void writeSnapshot(File file, Map<Long, ProducerStateEntry> entries, boolean sync) throws IOException {
         ProducerSnapshot producerSnapshot = new ProducerSnapshot();
-        producerSnapshot.setCrc(0L); // we'll fill this after writing the entries
         List<ProducerSnapshot.ProducerEntry> producerEntries = new ArrayList<>(entries.size());
         for (Map.Entry<Long, ProducerStateEntry> producerIdEntry : entries.entrySet()) {
             Long producerId = producerIdEntry.getKey();
             ProducerStateEntry entry = producerIdEntry.getValue();
-            ProducerSnapshot.ProducerEntry producerEntry = new ProducerSnapshot.ProducerEntry();
-            producerEntry.setProducerId(producerId);
-            producerEntry.setEpoch(entry.producerEpoch());
-            producerEntry.setLastSequence(entry.lastSeq());
-            producerEntry.setLastOffset(entry.lastDataOffset());
-            producerEntry.setOffsetDelta(entry.lastOffsetDelta());
-            producerEntry.setTimestamp(entry.lastTimestamp());
-            producerEntry.setCoordinatorEpoch(entry.coordinatorEpoch());
-            producerEntry.setCurrentTxnFirstOffset(entry.currentTxnFirstOffset().orElse(-1L));
+            ProducerSnapshot.ProducerEntry producerEntry = new ProducerSnapshot.ProducerEntry()
+                    .setProducerId(producerId)
+                    .setEpoch(entry.producerEpoch())
+                    .setLastSequence(entry.lastSeq())
+                    .setLastOffset(entry.lastDataOffset())
+                    .setOffsetDelta(entry.lastOffsetDelta())
+                    .setTimestamp(entry.lastTimestamp())
+                    .setCoordinatorEpoch(entry.coordinatorEpoch())
+                    .setCurrentTxnFirstOffset(entry.currentTxnFirstOffset().orElse(-1L));
             producerEntries.add(producerEntry);
         }
 
