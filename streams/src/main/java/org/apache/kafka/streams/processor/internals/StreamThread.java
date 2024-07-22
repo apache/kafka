@@ -352,6 +352,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private volatile KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> producerInstanceIdFuture = new KafkaFutureImpl<>();
     private volatile KafkaFutureImpl<Uuid> threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
 
+    private final PunctuateRatioSlidingWindow punctuateRatioSlidingWindow; // window size of 30 seconds
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -643,6 +644,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.processingMode = processingMode(config);
         this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
         this.processingThreadsEnabled = InternalConfig.getProcessingThreadsEnabled(config.originals());
+
+        this.punctuateRatioSlidingWindow = new PunctuateRatioSlidingWindow(30000, time);
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -1024,7 +1027,9 @@ public class StreamThread extends Thread implements ProcessingThread {
                 final long punctuateLatency = advanceNowAndComputeLatency();
                 totalPunctuateLatency += punctuateLatency;
                 if (punctuated > 0) {
-                    punctuateSensor.record(punctuateLatency / (double) punctuated, now);
+                    double punctuateRatio = (double) punctuateLatency / (double) punctuated;
+                    punctuateSensor.record(punctuateRatio, now);
+                    punctuateRatioSlidingWindow.update(punctuateRatio);
                 }
 
                 log.debug("{} punctuators ran.", punctuated);
@@ -1065,7 +1070,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final long runOnceLatency = now - startMs;
         processRecordsSensor.record(totalProcessed, now);
         processRatioSensor.record((double) totalProcessLatency / runOnceLatency, now);
-        punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency, now);
+        punctuateRatioSensor.record(punctuateRatioSlidingWindow.getAverageRatio(), now);
         pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
         commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
 
