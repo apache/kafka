@@ -526,10 +526,10 @@ public class KafkaAdminClient extends AdminClient {
         HostResolver hostResolver
     ) {
         Metrics metrics = null;
-        NetworkClient.BootstrapConfiguration bootstrapConfig = null;
         NetworkClient networkClient = null;
-        ChannelBuilder channelBuilder = null;
-        Selector selector = null;
+        NetworkClient.BootstrapConfiguration bootstrapConfig;
+        ChannelBuilder channelBuilder;
+        Selector selector;
         List<String> bootstrapAddresses = new ArrayList<>();
         Time time = Time.SYSTEM;
         String clientId = generateClientId(config);

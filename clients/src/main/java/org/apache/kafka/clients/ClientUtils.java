@@ -219,7 +219,7 @@ public final class ClientUtils {
                                                     ClientTelemetrySender clientTelemetrySender) {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
-        NetworkClient.BootstrapConfiguration bootstrapConfig = null;
+        NetworkClient.BootstrapConfiguration bootstrapConfig;
 
         try {
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);

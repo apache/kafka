@@ -592,10 +592,12 @@ public class NetworkClient implements KafkaClient {
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
         ensureActive();
-        if (!this.isBootstrapped() && !isBootstrapDisabled()) {
+
+        if (!this.isBootstrapped() && !this.isBootstrapDisabled()) {
             bootstrapState.timer.update(time.milliseconds());
             bootstrapState.timer.reset(bootstrapState.dnsResolutionTimeoutMs);
         }
+
         ensureBootstrapped();
 
         if (!abortedSends.isEmpty()) {
@@ -1127,7 +1129,7 @@ public class NetworkClient implements KafkaClient {
         public final List<String> bootstrapServers;
         public final ClientDnsLookup clientDnsLookup;
         public final long bootstrapResolveTimeoutMs;
-        private boolean bootstrapDisabled;
+        private final boolean bootstrapDisabled;
 
         public BootstrapConfiguration(final List<String> bootstrapServers,
                                       final ClientDnsLookup clientDnsLookup,

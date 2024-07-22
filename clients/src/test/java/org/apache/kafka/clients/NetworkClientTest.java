@@ -100,8 +100,6 @@ public class NetworkClientTest {
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
     protected final long connectionSetupTimeoutMsTest = 5 * 1000;
     protected final long connectionSetupTimeoutMaxMsTest = 127 * 1000;
-    private final int reconnectBackoffExpBase = ClusterConnectionStates.RECONNECT_BACKOFF_EXP_BASE;
-    private final double reconnectBackoffJitter = ClusterConnectionStates.RECONNECT_BACKOFF_JITTER;
     private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
     private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
     private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
@@ -214,7 +212,7 @@ public class NetworkClientTest {
     @Test
     public void testDnsLookupFailure() {
         /* Fail cleanly when the node has a bad hostname */
-        assertFalse(client.ready(new Node(1234, "badhost", 1234), time.milliseconds()));
+        assertFalse(client.ready(new Node(1234, "badHost", 1234), time.milliseconds()));
     }
 
     @Test
@@ -732,11 +730,11 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()), "The client should be ready");
 
-        // leastloadednode should be our single node
+        // leastLoadedNode should be our single node
         leastLoadedNode = client.leastLoadedNode(time.milliseconds());
         assertTrue(leastLoadedNode.hasNodeAvailableOrConnectionReady());
         Node leastNode = leastLoadedNode.node();
-        assertEquals(leastNode.id(), node.id(), "There should be one leastloadednode");
+        assertEquals(leastNode.id(), node.id(), "There should be one leastLoadedNode");
 
         // sleep for longer than reconnect backoff
         time.sleep(reconnectBackoffMsTest);
@@ -748,7 +746,7 @@ public class NetworkClientTest {
         assertFalse(client.ready(node, time.milliseconds()), "After we forced the disconnection the client is no longer ready.");
         leastLoadedNode = client.leastLoadedNode(time.milliseconds());
         assertFalse(leastLoadedNode.hasNodeAvailableOrConnectionReady());
-        assertNull(leastLoadedNode.node(), "There should be NO leastloadednode");
+        assertNull(leastLoadedNode.node(), "There should be NO leastLoadedNode");
     }
 
     @Test
@@ -850,7 +848,7 @@ public class NetworkClientTest {
         sendThrottledProduceResponse(correlationId, 100, PRODUCE.latestVersion());
         client.poll(1, time.milliseconds());
 
-        // leastloadednode should return null since the node is throttled
+        // leastLoadedNode should return null since the node is throttled
         assertNull(client.leastLoadedNode(time.milliseconds()).node());
     }
 
@@ -965,6 +963,7 @@ public class NetworkClientTest {
     @Test
     public void testServerDisconnectAfterInternalApiVersionRequest() throws Exception {
         final long numIterations = 5;
+        int reconnectBackoffExpBase = ClusterConnectionStates.RECONNECT_BACKOFF_EXP_BASE;
         double reconnectBackoffMaxExp = Math.log(reconnectBackoffMaxMsTest / (double) Math.max(reconnectBackoffMsTest, 1))
             / Math.log(reconnectBackoffExpBase);
         for (int i = 0; i < numIterations; i++) {
@@ -980,6 +979,7 @@ public class NetworkClientTest {
             long expectedBackoff = Math.round(Math.pow(reconnectBackoffExpBase, Math.min(i, reconnectBackoffMaxExp))
                 * reconnectBackoffMsTest);
             long delay = client.connectionDelay(node, time.milliseconds());
+            double reconnectBackoffJitter = ClusterConnectionStates.RECONNECT_BACKOFF_JITTER;
             assertEquals(expectedBackoff, delay, reconnectBackoffJitter * expectedBackoff);
             if (i == numIterations - 1) {
                 break;
@@ -1390,12 +1390,13 @@ public class NetworkClientTest {
 
     @Test
     public void testBootstrapTimeoutThrowsException() {
-        assertThrows(BootstrapResolutionException.class, () -> client.ensureBootstrapped(130 * 1000));
+        // 120 * 1000 is the default bootstrapTimeOutMs
+        assertThrows(BootstrapResolutionException.class, () -> client.ensureBootstrapped(120 * 1000));
     }
 
     @Test
-    public void testBootstrapTimeoutThrowsExceptionNah() {
-        time.sleep(10 * 1000 - 1);
+    public void testNoBootstrapTimeoutEdgeCase() {
+        time.sleep(120 * 1000 - 1);
         assertDoesNotThrow(() -> client.ensureBootstrapped());
     }
 
