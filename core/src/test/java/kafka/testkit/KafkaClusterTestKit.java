@@ -295,8 +295,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 }
             } catch (Exception e) {
                 if (executorService != null) {
-                    executorService.shutdownNow();
-                    executorService.awaitTermination(5, TimeUnit.MINUTES);
+                    ThreadUtils.shutdownExecutorServiceQuietly(executorService, 5, TimeUnit.MINUTES);
                 }
                 for (BrokerServer brokerServer : brokers.values()) {
                     brokerServer.shutdown();
@@ -638,8 +637,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             throw e;
         } finally {
-            executorService.shutdownNow();
-            executorService.awaitTermination(5, TimeUnit.MINUTES);
+            ThreadUtils.shutdownExecutorServiceQuietly(executorService, 5, TimeUnit.MINUTES);
         }
         faultHandlerFactory.fatalFaultHandler().maybeRethrowFirstException();
         faultHandlerFactory.nonFatalFaultHandler().maybeRethrowFirstException();
