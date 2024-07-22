@@ -100,22 +100,25 @@ pipeline {
   
   stages {
     stage('Build') {
-      stage('PowerPC') {
-        agent { label 'ppc64le' }
-        tools {
-          jdk 'jdk_21_latest'
-        }
-        options {
-          timeout(time: 8, unit: 'HOURS')
-          timestamps()
-        }
-        environment {
-          SCALA_VERSION=2.13
-        }
-        steps {
-          doValidation()
-          doTest(env)
-          echo 'Skipping Kafka Streams archetype test for PowerPC build'
+      parallel {
+
+        stage('PowerPC') {
+          agent { label 'ppc64le' }
+          tools {
+            jdk 'jdk_21_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS')
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for PowerPC build'
+          }
         }
       }
     }
