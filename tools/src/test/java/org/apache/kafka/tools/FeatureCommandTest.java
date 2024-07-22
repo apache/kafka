@@ -26,7 +26,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 
 import net.sourceforge.argparse4j.inf.Namespace;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 

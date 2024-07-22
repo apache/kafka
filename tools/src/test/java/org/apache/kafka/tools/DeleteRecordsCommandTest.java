@@ -33,7 +33,6 @@ import org.apache.kafka.server.common.AdminOperationException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 

@@ -40,7 +40,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.IOException;
