@@ -16,7 +16,7 @@ package kafka.api
 
 import kafka.api.GroupedUserPrincipalBuilder._
 import kafka.api.GroupedUserQuotaCallback._
-import kafka.security.JaasTestUtils
+import kafka.security.{JaasModule, JaasTestUtils}
 import kafka.server._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
@@ -71,7 +71,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     super.setUp(testInfo)
 
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG,
-      new JaasTestUtils.ScramLoginModule(JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD).toString)
+      JaasModule.scramLoginModule(JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD).toString)
     producerWithoutQuota = createProducer()
   }
 
@@ -189,7 +189,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
       config.put(key.toString, value)
     }
     config.put(SaslConfigs.SASL_JAAS_CONFIG,
-      new JaasTestUtils.ScramLoginModule(JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD).toString)
+      JaasModule.scramLoginModule(JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD).toString)
     val adminClient = Admin.create(config)
     adminClients += adminClient
     adminClient
@@ -222,12 +222,12 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
     producerConfig.put(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
 
-    producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, new JaasTestUtils.ScramLoginModule(user, password).toString)
+    producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, JaasModule.scramLoginModule(user, password).toString)
 
     consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, consumerClientId)
     consumerConfig.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
     consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, s"$user-group")
-    consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, new JaasTestUtils.ScramLoginModule(user, password).toString)
+    consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, JaasModule.scramLoginModule(user, password).toString)
 
     GroupedUser(user, userGroup, topic, servers(leader), producerClientId, consumerClientId,
       createProducer(), createConsumer(), adminClient)

@@ -40,255 +40,6 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModul
 import static org.apache.kafka.common.security.plain.internals.PlainSaslServer.PLAIN_MECHANISM;
 
 public class JaasTestUtils {
-
-    public static class Krb5LoginModule implements JaasModule {
-        private final boolean useKeyTab;
-        private final boolean storeKey;
-        private final String keyTab;
-        private final String principal;
-        private final boolean debug;
-        private final Optional<String> serviceName;
-        private final boolean isIbmSecurity;
-
-        public Krb5LoginModule(boolean useKeyTab, boolean storeKey, String keyTab, String principal, boolean debug, Optional<String> serviceName, boolean isIbmSecurity) {
-            this.useKeyTab = useKeyTab;
-            this.storeKey = storeKey;
-            this.keyTab = keyTab;
-            this.principal = principal;
-            this.debug = debug;
-            this.serviceName = serviceName;
-            this.isIbmSecurity = isIbmSecurity;
-        }
-
-        @Override
-        public String name() {
-            return isIbmSecurity ? "com.ibm.security.auth.module.Krb5LoginModule" : "com.sun.security.auth.module.Krb5LoginModule";
-        }
-
-        @Override
-        public Map<String, String> entries() {
-            if (isIbmSecurity) {
-                Map<String, String> map = new HashMap<>();
-                map.put("principal", principal);
-                map.put("credsType", "both");
-                if (useKeyTab) {
-                    map.put("useKeytab", "file:" + keyTab);
-                }
-                return map;
-            } else {
-                Map<String, String> map = new HashMap<>();
-                map.put("useKeyTab", Boolean.toString(useKeyTab));
-                map.put("storeKey", Boolean.toString(storeKey));
-                map.put("keyTab", keyTab);
-                map.put("principal", principal);
-                serviceName.ifPresent(s -> map.put("serviceName", s));
-                return map;
-            }
-        }
-
-        @Override
-        public boolean debug() {
-            return debug;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("%s required\n  debug=%b\n  %s;\n",
-                    name(),
-                    debug,
-                    entries()
-                            .entrySet()
-                            .stream()
-                            .map(e -> e.getKey() + "=\"" + e.getValue() + "\"").reduce((e1, e2) -> e1 + "\n  " + e2)
-                            .orElse(""));
-        }
-    }
-
-    public static class PlainLoginModule implements JaasModule {
-        private final String username;
-        private final String password;
-        private final boolean debug;
-        private final Map<String, String> validUsers;
-
-        public PlainLoginModule(String username, String password) {
-            this(username, password, false, Collections.emptyMap());
-        }
-
-        public PlainLoginModule(String username, String password, boolean debug, Map<String, String> validUsers) {
-            this.username = username;
-            this.password = password;
-            this.debug = debug;
-            this.validUsers = validUsers;
-        }
-
-        @Override
-        public String name() {
-            return "org.apache.kafka.common.security.plain.PlainLoginModule";
-        }
-
-        @Override
-        public Map<String, String> entries() {
-            Map<String, String> map = new HashMap<>();
-            map.put("username", username);
-            map.put("password", password);
-            validUsers.forEach((user, pass) -> map.put("user_" + user, pass));
-            return map;
-        }
-
-        @Override
-        public boolean debug() {
-            return debug;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("%s required\n  debug=%b\n  %s;\n",
-                    name(),
-                    debug,
-                    entries()
-                            .entrySet()
-                            .stream()
-                            .map(e -> e.getKey() + "=\"" + e.getValue() + "\"").reduce((e1, e2) -> e1 + "\n  " + e2)
-                            .orElse(""));
-        }
-    }
-
-    public static class ZkDigestModule implements JaasModule {
-        private final boolean debug;
-        private final Map<String, String> entries;
-
-        public ZkDigestModule(boolean debug, Map<String, String> entries) {
-            this.debug = debug;
-            this.entries = entries;
-        }
-
-        @Override
-        public String name() {
-            return "org.apache.zookeeper.server.auth.DigestLoginModule";
-        }
-
-        @Override
-        public Map<String, String> entries() {
-            return entries;
-        }
-
-        @Override
-        public boolean debug() {
-            return debug;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("%s required\n  debug=%b\n  %s;\n",
-                    name(),
-                    debug,
-                    entries()
-                            .entrySet()
-                            .stream()
-                            .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
-                            .reduce((e1, e2) -> e1 + "\n  " + e2)
-                            .orElse(""));
-        }
-    }
-
-    public static class ScramLoginModule implements JaasModule {
-        private final String username;
-        private final String password;
-        private final boolean debug;
-        private final Map<String, String> tokenProps;
-
-        public ScramLoginModule(String username, String password) {
-            this(username, password, false, Collections.emptyMap());
-        }
-
-        public ScramLoginModule(String username, String password, boolean debug, Map<String, String> tokenProps) {
-            this.username = username;
-            this.password = password;
-            this.debug = debug;
-            this.tokenProps = tokenProps;
-        }
-
-        @Override
-        public String name() {
-            return "org.apache.kafka.common.security.scram.ScramLoginModule";
-        }
-
-        @Override
-        public Map<String, String> entries() {
-            Map<String, String> map = new HashMap<>();
-            map.put("username", username);
-            map.put("password", password);
-            map.putAll(tokenProps);
-            return map;
-        }
-
-        @Override
-        public boolean debug() {
-            return debug;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("%s required\n  debug=%b\n  %s;\n",
-                    name(),
-                    debug,
-                    entries()
-                            .entrySet()
-                            .stream()
-                            .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
-                            .reduce((e1, e2) -> e1 + "\n  " + e2)
-                            .orElse(""));
-        }
-    }
-
-    public static class OAuthBearerLoginModule implements JaasModule {
-        private final String username;
-        private final boolean debug;
-
-        public OAuthBearerLoginModule(String username, boolean debug) {
-            this.username = username;
-            this.debug = debug;
-        }
-
-        @Override
-        public String name() {
-            return "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule";
-        }
-
-        @Override
-        public Map<String, String> entries() {
-            Map<String, String> map = new HashMap<>();
-            map.put("unsecuredLoginStringClaim_sub", username);
-            return map;
-        }
-
-        @Override
-        public boolean debug() {
-            return debug;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("%s required\n  debug=%b\n  %s;\n",
-                    name(),
-                    debug,
-                    entries()
-                            .entrySet()
-                            .stream()
-                            .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
-                            .reduce((e1, e2) -> e1 + "\n  " + e2)
-                            .orElse(""));
-        }
-    }
-
-    public interface JaasModule {
-        String name();
-
-        boolean debug();
-
-        Map<String, String> entries();
-    }
-
     public static class JaasSection {
         private final String contextName;
         private final List<JaasModule> modules;
@@ -369,7 +120,7 @@ public class JaasTestUtils {
         if (ScramMechanism.fromMechanismName(mechanism) == ScramMechanism.UNKNOWN) {
             throw new IllegalArgumentException("Unsupported SCRAM mechanism " + mechanism);
         }
-        return new ScramLoginModule(scramUser, scramPassword, false, new HashMap<>()).toString();
+        return JaasModule.scramLoginModule(scramUser, scramPassword, false, new HashMap<>()).toString();
     }
 
     public static String clientLoginModule(String mechanism, Optional<File> keytabLocation, String serviceName) {
@@ -391,19 +142,19 @@ public class JaasTestUtils {
     public static String tokenClientLoginModule(String tokenId, String password) {
         Map<String, String> tokenProps = new HashMap<>();
         tokenProps.put("tokenauth", "true");
-        return new ScramLoginModule(tokenId, password, false, tokenProps).toString();
+        return JaasModule.scramLoginModule(tokenId, password, false, tokenProps).toString();
     }
 
     public static List<JaasSection> zkSections() {
         Map<String, String> zkServerEntries = new HashMap<>();
         zkServerEntries.put("user_super", ZK_USER_SUPER_PASSWD);
         zkServerEntries.put("user_" + ZK_USER, ZK_USER_PASSWORD);
-        JaasSection zkServerSection = new JaasSection(ZK_SERVER_CONTEXT_NAME, Collections.singletonList(new ZkDigestModule(false, zkServerEntries)));
+        JaasSection zkServerSection = new JaasSection(ZK_SERVER_CONTEXT_NAME, Collections.singletonList(JaasModule.zkDigestModule(false, zkServerEntries)));
 
         Map<String, String> zkClientEntries = new HashMap<>();
         zkClientEntries.put("username", ZK_USER);
         zkClientEntries.put("password", ZK_USER_PASSWORD);
-        JaasSection zkClientSection = new JaasSection(ZK_CLIENT_CONTEXT_NAME, Collections.singletonList(new ZkDigestModule(false, zkClientEntries)));
+        JaasSection zkClientSection = new JaasSection(ZK_CLIENT_CONTEXT_NAME, Collections.singletonList(JaasModule.zkDigestModule(false, zkClientEntries)));
 
         return Arrays.asList(zkServerSection, zkClientSection);
     }
@@ -413,7 +164,7 @@ public class JaasTestUtils {
         for (String mechanism : mechanisms) {
             switch (mechanism) {
                 case GSSAPI_MECHANISM:
-                    modules.add(new Krb5LoginModule(
+                    modules.add(JaasModule.krb5LoginModule(
                             true,
                             true,
                             keytabLocation.orElseThrow(() -> new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath(),
@@ -428,14 +179,14 @@ public class JaasTestUtils {
                     validUsers.put(KAFKA_PLAIN_ADMIN, KAFKA_PLAIN_ADMIN_PASSWORD);
                     validUsers.put(KAFKA_PLAIN_USER, KAFKA_PLAIN_PASSWORD);
                     validUsers.put(KAFKA_PLAIN_USER_2, KAFKA_PLAIN_PASSWORD_2);
-                    modules.add(new PlainLoginModule(KAFKA_PLAIN_ADMIN, KAFKA_PLAIN_ADMIN_PASSWORD, false, validUsers));
+                    modules.add(JaasModule.plainLoginModule(KAFKA_PLAIN_ADMIN, KAFKA_PLAIN_ADMIN_PASSWORD, false, validUsers));
                     break;
                 case OAUTHBEARER_MECHANISM:
-                    modules.add(new OAuthBearerLoginModule(KAFKA_OAUTH_BEARER_ADMIN, false));
+                    modules.add(JaasModule.oAuthBearerLoginModule(KAFKA_OAUTH_BEARER_ADMIN, false));
                     break;
                 default:
                     if (ScramMechanism.fromMechanismName(mechanism) != ScramMechanism.UNKNOWN) {
-                        modules.add(new ScramLoginModule(KAFKA_SCRAM_ADMIN, KAFKA_SCRAM_ADMIN_PASSWORD, false, new HashMap<>()));
+                        modules.add(JaasModule.scramLoginModule(KAFKA_SCRAM_ADMIN, KAFKA_SCRAM_ADMIN_PASSWORD, false, new HashMap<>()));
                     } else {
                         throw new IllegalArgumentException("Unsupported server mechanism " + mechanism);
                     }
@@ -448,7 +199,7 @@ public class JaasTestUtils {
     private static JaasModule kafkaClientModule(String mechanism, Optional<File> keytabLocation, String clientPrincipal, String plainUser, String plainPassword, String scramUser, String scramPassword, String oauthBearerUser, String serviceName) {
         switch (mechanism) {
             case GSSAPI_MECHANISM:
-                return new Krb5LoginModule(
+                return JaasModule.krb5LoginModule(
                         true,
                         true,
                         keytabLocation.orElseThrow(() -> new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath(),
@@ -458,12 +209,12 @@ public class JaasTestUtils {
                         IS_IBM_SECURITY
                 );
             case PLAIN_MECHANISM:
-                return new PlainLoginModule(plainUser, plainPassword, false, new HashMap<>());
+                return JaasModule.plainLoginModule(plainUser, plainPassword, false, new HashMap<>());
             case OAUTHBEARER_MECHANISM:
-                return new OAuthBearerLoginModule(oauthBearerUser, false);
+                return JaasModule.oAuthBearerLoginModule(oauthBearerUser, false);
             default:
                 if (ScramMechanism.fromMechanismName(mechanism) != ScramMechanism.UNKNOWN) {
-                    return new ScramLoginModule(scramUser, scramPassword, false, new HashMap<>());
+                    return JaasModule.scramLoginModule(scramUser, scramPassword, false, new HashMap<>());
                 } else {
                     throw new IllegalArgumentException("Unsupported client mechanism " + mechanism);
                 }

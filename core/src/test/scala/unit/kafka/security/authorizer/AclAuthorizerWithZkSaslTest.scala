@@ -17,9 +17,9 @@
 package kafka.security.authorizer
 
 import kafka.api.SaslSetup
-import kafka.security.JaasTestUtils
+import kafka.security.{JaasModule, JaasTestUtils}
 import kafka.server.{KafkaConfig, QuorumTestHarness}
-import kafka.security.JaasTestUtils.{JaasModule, JaasSection}
+import kafka.security.JaasTestUtils.JaasSection
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import kafka.zookeeper.ZooKeeperClient

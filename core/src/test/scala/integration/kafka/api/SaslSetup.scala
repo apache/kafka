@@ -17,8 +17,8 @@
 
 package kafka.api
 
-import kafka.security.JaasTestUtils
-import kafka.security.JaasTestUtils.{JaasSection, Krb5LoginModule, ZkDigestModule}
+import kafka.security.{JaasModule, JaasTestUtils}
+import kafka.security.JaasTestUtils.JaasSection
 
 import java.io.File
 import java.util
@@ -69,7 +69,7 @@ trait SaslSetup {
 
     val hasKerberos = jaasSections.exists { section =>
       section.getModules.asScala.exists {
-        case _: Krb5LoginModule => true
+        case _: JaasModule => true
         case _ => false
       }
     }
@@ -82,7 +82,7 @@ trait SaslSetup {
 
     val hasZk = jaasSections.exists { section =>
       section.getModules.asScala.exists {
-        case _: ZkDigestModule => true
+        case _: JaasModule => true
         case _ => false
       }
     }

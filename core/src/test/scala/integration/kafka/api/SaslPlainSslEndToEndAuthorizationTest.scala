@@ -16,6 +16,7 @@
   */
 package kafka.api
 
+import kafka.security.JaasModule
 import kafka.security.JaasTestUtils._
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.isAclSecure
@@ -131,8 +132,8 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
                             kafkaClientSaslMechanism: Option[String],
                             mode: SaslSetupMode,
                             kafkaServerEntryName: String): Seq[JaasSection] = {
-    val brokerLogin = new PlainLoginModule(KAFKA_PLAIN_ADMIN, "") // Password provided by callback handler
-    val clientLogin = new PlainLoginModule(KAFKA_PLAIN_USER_2, KAFKA_PLAIN_PASSWORD_2)
+    val brokerLogin = JaasModule.plainLoginModule(KAFKA_PLAIN_ADMIN, "") // Password provided by callback handler
+    val clientLogin = JaasModule.plainLoginModule(KAFKA_PLAIN_USER_2, KAFKA_PLAIN_PASSWORD_2)
     Seq(new JaasSection(kafkaServerEntryName, Collections.singletonList(brokerLogin)),
       new JaasSection(KAFKA_CLIENT_CONTEXT_NAME, Collections.singletonList(clientLogin))) ++ zkSections.asScala
   }
