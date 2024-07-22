@@ -46,8 +46,7 @@ public class ConsumerLeaveBeforeAssignedMemberIdTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
             @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic, consumer"),
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
-            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-            @ClusterConfigProperty(key = "session.timeout.ms", value = "8")
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
     })
     public void reproduce(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -57,7 +56,7 @@ public class ConsumerLeaveBeforeAssignedMemberIdTest {
             consumer.subscribe(Collections.singleton("topic"));
             consumer.poll(Duration.ofMillis(150));
             while (consumer.groupMetadata().memberId().isEmpty()) {
-
+                // make sure the consumer be assigned memberId
             }
             return consumer;
         });
@@ -84,7 +83,6 @@ public class ConsumerLeaveBeforeAssignedMemberIdTest {
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
         configs.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
-//        configs.put(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG, "2000");
         return new KafkaConsumer<>(configs);
     }
 }

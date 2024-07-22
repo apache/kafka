@@ -3829,6 +3829,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, consumerGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
+      System.err.println("KafkaApis handle heartbeat request")
       groupCoordinator.consumerGroupHeartbeat(
         request.context,
         consumerGroupHeartbeatRequest.data,
@@ -3836,6 +3837,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, consumerGroupHeartbeatRequest.getErrorResponse(exception))
         } else {
+          System.err.println("KafkaApis response memberId: " + response.memberId())
+          System.err.println("KafkaApis response errMessage: " + response.errorMessage())
           requestHelper.sendMaybeThrottle(request, new ConsumerGroupHeartbeatResponse(response))
         }
       }

@@ -122,6 +122,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -488,6 +489,11 @@ public class GroupMetadataManager {
      */
     private final ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy;
 
+    /**
+     * The map managed the mapping relation between temporaryId and memberId
+     */
+    private final Map<String, String> temporaryIdToMemberId;
+
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -538,6 +544,7 @@ public class GroupMetadataManager {
         this.shareGroupSessionTimeoutMs = shareGroupSessionTimeoutMs;
         this.shareGroupHeartbeatIntervalMs = shareGroupHeartbeatIntervalMs;
         this.shareGroupMetadataRefreshIntervalMs = shareGroupMetadataRefreshIntervalMs;
+        this.temporaryIdToMemberId = new ConcurrentHashMap<>();
     }
 
     /**
@@ -1199,6 +1206,7 @@ public class GroupMetadataManager {
         String error
     ) throws InvalidRequestException {
         if (value != null && value.trim().isEmpty()) {
+            System.err.println("HB Invalid when leave");
             throw new InvalidRequestException(error);
         }
     }
@@ -1251,7 +1259,17 @@ public class GroupMetadataManager {
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
 
         if (request.memberEpoch() > 0 || request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH) {
-            throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
+            String memberId = request.memberId();
+            if (memberId == null || memberId.isEmpty()) {
+                System.err.println("no memberId");
+                String temporaryId = request.temporaryId();
+                if (temporaryIdToMemberId.containsKey(temporaryId)) {
+                    System.err.println("check tempId");
+                    String memberIdInCache = temporaryIdToMemberId.get(temporaryId);
+                    throwIfEmptyString(memberIdInCache, "MemberId can't be empty.");
+                    request.setMemberId(memberIdInCache);
+                } else throw new InvalidRequestException("MemberId can't be empty.");
+            }
         } else if (request.memberEpoch() == 0) {
             if (request.rebalanceTimeoutMs() == -1) {
                 throw new InvalidRequestException("RebalanceTimeoutMs must be provided in first request.");
@@ -1656,6 +1674,7 @@ public class GroupMetadataManager {
     private CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
         String groupId,
         String memberId,
+        String temporayId,
         int memberEpoch,
         String instanceId,
         String rackId,
@@ -1675,7 +1694,11 @@ public class GroupMetadataManager {
         throwIfConsumerGroupIsFull(group, memberId);
 
         // Get or create the member.
-        if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
+        if (memberId.isEmpty()) {
+            memberId = Uuid.randomUuid().toString();
+            temporaryIdToMemberId.put(temporayId, memberId);
+        } else temporaryIdToMemberId.remove(temporayId);
+
         final ConsumerGroupMember member;
         if (instanceId == null) {
             member = getOrMaybeSubscribeDynamicConsumerGroupMember(
@@ -3125,6 +3148,7 @@ public class GroupMetadataManager {
             return consumerGroupHeartbeat(
                 request.groupId(),
                 request.memberId(),
+                request.temporaryId(),
                 request.memberEpoch(),
                 request.instanceId(),
                 request.rackId(),

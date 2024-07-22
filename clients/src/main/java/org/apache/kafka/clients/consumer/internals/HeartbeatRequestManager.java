@@ -117,7 +117,6 @@ public class HeartbeatRequestManager implements RequestManager {
      * Holding the heartbeat sensor to measure heartbeat timing and response latency
      */
     private final HeartbeatMetricsManager metricsManager;
-
     public HeartbeatRequestManager(
         final LogContext logContext,
         final Time time,
@@ -282,7 +281,7 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final boolean ignoreResponse) {
-        System.err.println("nin123");
+        System.err.println("Consumer make HB request");
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new ConsumerGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
             coordinatorRequestManager.coordinator());
@@ -535,6 +534,9 @@ public class HeartbeatRequestManager implements RequestManager {
         private final int rebalanceTimeoutMs;
         private final SentFields sentFields;
 
+        private final String temporaryId;
+
+
         public HeartbeatState(
             final SubscriptionState subscriptions,
             final MembershipManager membershipManager,
@@ -543,6 +545,7 @@ public class HeartbeatRequestManager implements RequestManager {
             this.membershipManager = membershipManager;
             this.rebalanceTimeoutMs = rebalanceTimeoutMs;
             this.sentFields = new SentFields();
+            this.temporaryId = Uuid.randomUuid().toString();
         }
 
 
@@ -557,7 +560,12 @@ public class HeartbeatRequestManager implements RequestManager {
             data.setGroupId(membershipManager.groupId());
 
             // MemberId - always sent, empty until it has been received from the coordinator
-            data.setMemberId(membershipManager.memberId());
+            String memberId = membershipManager.memberId();
+            System.err.println("HB from Consumer with memberId: " + memberId);
+            data.setMemberId(memberId);
+
+            System.err.println("Consumer temporaryId: " + temporaryId);
+            data.setTemporaryId(temporaryId);
 
             // MemberEpoch - always sent
             data.setMemberEpoch(membershipManager.memberEpoch());
