@@ -1,3 +1,4 @@
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
@@ -117,6 +118,7 @@ public class HeartbeatRequestManager implements RequestManager {
      * Holding the heartbeat sensor to measure heartbeat timing and response latency
      */
     private final HeartbeatMetricsManager metricsManager;
+
     public HeartbeatRequestManager(
         final LogContext logContext,
         final Time time,
@@ -211,8 +213,8 @@ public class HeartbeatRequestManager implements RequestManager {
 
         // Case 1: The member is leaving
         boolean heartbeatNow = membershipManager.state() == MemberState.LEAVING ||
-                // Case 2: The member state indicates it should send a heartbeat without waiting for the interval, and there is no heartbeat request currently in-flight
-                (membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight());
+            // Case 2: The member state indicates it should send a heartbeat without waiting for the interval, and there is no heartbeat request currently in-flight
+            (membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight());
 
         if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
@@ -263,7 +265,7 @@ public class HeartbeatRequestManager implements RequestManager {
         pollTimer.update(pollMs);
         if (pollTimer.isExpired()) {
             logger.warn("Time between subsequent calls to poll() was longer than the configured " +
-                "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
+                    "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
                 pollTimer.isExpiredBy(), membershipManager.memberId());
             membershipManager.maybeRejoinStaleMember();
         }
@@ -355,8 +357,8 @@ public class HeartbeatRequestManager implements RequestManager {
             case NOT_COORDINATOR:
                 // the manager should retry immediately when the coordinator node becomes available again
                 message = String.format("GroupHeartbeatRequest failed because the group coordinator %s is incorrect. " +
-                                "Will attempt to find the coordinator again and retry",
-                        coordinatorRequestManager.coordinator());
+                        "Will attempt to find the coordinator again and retry",
+                    coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
                 // Skip backoff so that the next HB is sent as soon as the new coordinator is discovered
@@ -365,8 +367,8 @@ public class HeartbeatRequestManager implements RequestManager {
 
             case COORDINATOR_NOT_AVAILABLE:
                 message = String.format("GroupHeartbeatRequest failed because the group coordinator %s is not available. " +
-                                "Will attempt to find the coordinator again and retry",
-                        coordinatorRequestManager.coordinator());
+                        "Will attempt to find the coordinator again and retry",
+                    coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
                 // Skip backoff so that the next HB is sent as soon as the new coordinator is discovered
@@ -376,21 +378,21 @@ public class HeartbeatRequestManager implements RequestManager {
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // the manager will backoff and retry
                 message = String.format("GroupHeartbeatRequest failed because the group coordinator %s is still loading." +
-                                "Will retry",
-                        coordinatorRequestManager.coordinator());
+                        "Will retry",
+                    coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 break;
 
             case GROUP_AUTHORIZATION_FAILED:
                 GroupAuthorizationException exception =
-                        GroupAuthorizationException.forGroupId(membershipManager.groupId());
+                    GroupAuthorizationException.forGroupId(membershipManager.groupId());
                 logger.error("GroupHeartbeatRequest failed due to group authorization failure: {}", exception.getMessage());
                 handleFatalFailure(error.exception(exception.getMessage()));
                 break;
 
             case UNRELEASED_INSTANCE_ID:
                 logger.error("GroupHeartbeatRequest failed due to unreleased instance id {}: {}",
-                        membershipManager.groupInstanceId().orElse("null"), errorMessage);
+                    membershipManager.groupInstanceId().orElse("null"), errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
                 break;
 
@@ -412,7 +414,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
             case FENCED_MEMBER_EPOCH:
                 message = String.format("GroupHeartbeatRequest failed for member %s because epoch %s is fenced.",
-                        membershipManager.memberId(), membershipManager.memberEpoch());
+                    membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
@@ -421,7 +423,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
             case UNKNOWN_MEMBER_ID:
                 message = String.format("GroupHeartbeatRequest failed because member %s is unknown.",
-                        membershipManager.memberId());
+                    membershipManager.memberId());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
@@ -534,9 +536,6 @@ public class HeartbeatRequestManager implements RequestManager {
         private final int rebalanceTimeoutMs;
         private final SentFields sentFields;
 
-        private final String temporaryId;
-
-
         public HeartbeatState(
             final SubscriptionState subscriptions,
             final MembershipManager membershipManager,
@@ -545,7 +544,6 @@ public class HeartbeatRequestManager implements RequestManager {
             this.membershipManager = membershipManager;
             this.rebalanceTimeoutMs = rebalanceTimeoutMs;
             this.sentFields = new SentFields();
-            this.temporaryId = Uuid.randomUuid().toString();
         }
 
 
@@ -560,12 +558,7 @@ public class HeartbeatRequestManager implements RequestManager {
             data.setGroupId(membershipManager.groupId());
 
             // MemberId - always sent, empty until it has been received from the coordinator
-            String memberId = membershipManager.memberId();
-            System.err.println("HB from Consumer with memberId: " + memberId);
-            data.setMemberId(memberId);
-
-            System.err.println("Consumer temporaryId: " + temporaryId);
-            data.setTemporaryId(temporaryId);
+            data.setMemberId(membershipManager.memberId());
 
             // MemberEpoch - always sent
             data.setMemberEpoch(membershipManager.memberEpoch());

@@ -122,7 +122,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -489,11 +488,6 @@ public class GroupMetadataManager {
      */
     private final ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy;
 
-    /**
-     * The map managed the mapping relation between temporaryId and memberId
-     */
-    private final Map<String, String> temporaryIdToMemberId;
-
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -544,7 +538,6 @@ public class GroupMetadataManager {
         this.shareGroupSessionTimeoutMs = shareGroupSessionTimeoutMs;
         this.shareGroupHeartbeatIntervalMs = shareGroupHeartbeatIntervalMs;
         this.shareGroupMetadataRefreshIntervalMs = shareGroupMetadataRefreshIntervalMs;
-        this.temporaryIdToMemberId = new ConcurrentHashMap<>();
     }
 
     /**
@@ -1259,17 +1252,7 @@ public class GroupMetadataManager {
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
 
         if (request.memberEpoch() > 0 || request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH) {
-            String memberId = request.memberId();
-            if (memberId == null || memberId.isEmpty()) {
-                System.err.println("no memberId");
-                String temporaryId = request.temporaryId();
-                if (temporaryIdToMemberId.containsKey(temporaryId)) {
-                    System.err.println("check tempId");
-                    String memberIdInCache = temporaryIdToMemberId.get(temporaryId);
-                    throwIfEmptyString(memberIdInCache, "MemberId can't be empty.");
-                    request.setMemberId(memberIdInCache);
-                } else throw new InvalidRequestException("MemberId can't be empty.");
-            }
+            throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
         } else if (request.memberEpoch() == 0) {
             if (request.rebalanceTimeoutMs() == -1) {
                 throw new InvalidRequestException("RebalanceTimeoutMs must be provided in first request.");
@@ -1453,7 +1436,7 @@ public class GroupMetadataManager {
         if (member.memberEpoch() != LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             // The new member can't join.
             log.info("[GroupId {}] Static member {} with instance id {} cannot join the group because the instance id is" +
-                    " is owned by member {}.", groupId, receivedMemberId, receivedInstanceId, member.memberId());
+                " is owned by member {}.", groupId, receivedMemberId, receivedInstanceId, member.memberId());
             throw Errors.UNRELEASED_INSTANCE_ID.exception("Static member " + receivedMemberId + " with instance id "
                 + receivedInstanceId + " cannot join the group because the instance id is owned by " + member.memberId() + " member.");
         }
@@ -1674,7 +1657,6 @@ public class GroupMetadataManager {
     private CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
         String groupId,
         String memberId,
-        String temporaryId,
         int memberEpoch,
         String instanceId,
         String rackId,
@@ -1694,11 +1676,7 @@ public class GroupMetadataManager {
         throwIfConsumerGroupIsFull(group, memberId);
 
         // Get or create the member.
-        if (memberId.isEmpty()) {
-            memberId = Uuid.randomUuid().toString();
-            temporaryIdToMemberId.put(temporaryId, memberId);
-        } else temporaryIdToMemberId.remove(temporaryId);
-
+        if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
         final ConsumerGroupMember member;
         if (instanceId == null) {
             member = getOrMaybeSubscribeDynamicConsumerGroupMember(
@@ -2231,7 +2209,7 @@ public class GroupMetadataManager {
      * @param useClassicProtocol    Whether the member uses the classic protocol.
      * @param records               The list to accumulate records created to replace
      *                              the previous static member.
-     *                              
+     *
      * @return The existing consumer group member or a new one.
      */
     private ConsumerGroupMember getOrMaybeSubscribeStaticConsumerGroupMember(
@@ -2271,7 +2249,7 @@ public class GroupMetadataManager {
                 replaceMember(records, group, existingStaticMemberOrNull, newMember);
 
                 log.info("[GroupId {}] Static member with instance id {} re-joins the consumer group " +
-                    "using the {} protocol. Created a new member {} to replace the existing member {}.",
+                        "using the {} protocol. Created a new member {} to replace the existing member {}.",
                     group.groupId(), instanceId, useClassicProtocol ? "classic" : "consumer", memberId, existingStaticMemberOrNull.memberId());
 
                 return newMember;
@@ -2417,7 +2395,7 @@ public class GroupMetadataManager {
             records.add(newCurrentAssignmentRecord(groupId, updatedMember));
 
             log.info("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
-                     + "assignedPartitions={} and revokedPartitions={}.",
+                    + "assignedPartitions={} and revokedPartitions={}.",
                 groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
                 assignmentToString(updatedMember.assignedPartitions()), assignmentToString(updatedMember.partitionsPendingRevocation()));
 
@@ -3148,7 +3126,6 @@ public class GroupMetadataManager {
             return consumerGroupHeartbeat(
                 request.groupId(),
                 request.memberId(),
-                request.temporaryId(),
                 request.memberEpoch(),
                 request.instanceId(),
                 request.rackId(),
@@ -5001,7 +4978,7 @@ public class GroupMetadataManager {
                 appendFuture.whenComplete((__, t) -> {
                     if (t != null) {
                         log.warn("Failed to persist metadata for group {} static member {} with " +
-                            "group instance id {} due to {}. Reverting to old member id {}.",
+                                "group instance id {} due to {}. Reverting to old member id {}.",
                             group.groupId(), newMemberId, groupInstanceId, t.getMessage(), oldMemberId);
 
                         // Failed to persist the member id of the given static member, revert the update of the static member in the group.
@@ -5143,7 +5120,7 @@ public class GroupMetadataManager {
             // If this is the leader, then we can attempt to persist state and transition to stable
             if (group.isLeader(memberId)) {
                 log.info("Assignment received from leader {} for group {} for generation {}. " +
-                    "The group has {} members, {} of which are static.",
+                        "The group has {} members, {} of which are static.",
                     memberId, groupId, group.generationId(), group.numMembers(), group.allStaticMemberIds().size());
 
                 // Fill all members with corresponding member assignment. If the member assignment
@@ -5319,7 +5296,7 @@ public class GroupMetadataManager {
             if (request.generationId() != group.generationId()) {
                 return Optional.of(Errors.ILLEGAL_GENERATION);
             } else if (isProtocolInconsistent(request.protocolType(), group.protocolType().orElse(null)) ||
-                       isProtocolInconsistent(request.protocolName(), group.protocolName().orElse(null))) {
+                isProtocolInconsistent(request.protocolName(), group.protocolName().orElse(null))) {
                 return Optional.of(Errors.INCONSISTENT_GROUP_PROTOCOL);
             } else {
                 return Optional.empty();
