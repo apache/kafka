@@ -72,7 +72,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(key = "controlled.shutdown.retry.backoff.ms", value = "1000"),
     @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "2")
 })
-@Tag("integration")
 public class LeaderElectionCommandTest {
     private final ClusterInstance cluster;
     int broker2 = 1;

@@ -57,7 +57,6 @@ import static org.mockito.Mockito.verify;
 
 @ClusterTestDefaults(brokers = 3)
 @ExtendWith(value = ClusterTestExtensions.class)
-@Tag("integration")
 public class RemoteLogSegmentLifecycleTest {
 
     private final int segSize = 1048576;

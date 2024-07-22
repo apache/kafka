@@ -70,7 +70,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Tag("integration")
 @ExtendWith(value = ClusterTestExtensions.class)
 public class DescribeConsumerGroupTest {
     private static final String TOPIC_PREFIX = "test.topic.";

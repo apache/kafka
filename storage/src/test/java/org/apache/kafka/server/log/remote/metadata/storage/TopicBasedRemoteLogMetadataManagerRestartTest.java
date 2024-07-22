@@ -40,7 +40,6 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@Tag("integration")
 public class TopicBasedRemoteLogMetadataManagerRestartTest {
 
     private final Time time = Time.SYSTEM;

@@ -59,7 +59,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
     @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "4")
 })
-@Tag("integration")
 public class GetOffsetShellTest {
     private final int topicCount = 4;
     private final ClusterInstance cluster;
