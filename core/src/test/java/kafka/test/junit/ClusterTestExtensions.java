@@ -28,8 +28,13 @@ import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 
 import org.apache.kafka.server.common.Features;
+import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.extension.AfterEachCallback;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.ExtensionContext.Namespace;
+import org.junit.jupiter.api.extension.ExtensionContext.Store;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
 import org.junit.platform.commons.util.ReflectionUtils;
@@ -37,10 +42,13 @@ import org.junit.platform.commons.util.ReflectionUtils;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -82,7 +90,20 @@ import java.util.stream.Stream;
  * SomeIntegrationTest will be instantiated, lifecycle methods (before/after) will be run, and "someTest" will be invoked.
  *
  */
-public class ClusterTestExtensions implements TestTemplateInvocationContextProvider {
+public class ClusterTestExtensions implements TestTemplateInvocationContextProvider, BeforeEachCallback, AfterEachCallback {
+    private static final String METRICS_METER_TICK_THREAD_PREFIX = "metrics-meter-tick-thread";
+    private static final String SCALA_THREAD_PREFIX = "scala-";
+    private static final String FORK_JOIN_POOL_THREAD_PREFIX = "ForkJoinPool";
+    private static final String JUNIT_THREAD_PREFIX = "junit-";
+    private static final String ATTACH_LISTENER_THREAD_PREFIX = "Attach Listener";
+    private static final String PROCESS_REAPER_THREAD_PREFIX = "process reaper";
+    private static final String RMI_THREAD_PREFIX = "RMI";
+    private static final String DETECT_THREAD_LEAK_KEY = "detectThreadLeak";
+    private static final Set<String> SKIPPED_THREAD_PREFIX = Collections.unmodifiableSet(Stream.of(
+            METRICS_METER_TICK_THREAD_PREFIX, SCALA_THREAD_PREFIX, FORK_JOIN_POOL_THREAD_PREFIX, JUNIT_THREAD_PREFIX,
+            ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX, RMI_THREAD_PREFIX)
+            .collect(Collectors.toSet()));
+
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {
         return true;
@@ -119,7 +140,31 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return generatedContexts.stream();
     }
 
+    @Override
+    public void beforeEach(ExtensionContext context) {
+        DetectThreadLeak detectThreadLeak = DetectThreadLeak.of(thread ->
+                SKIPPED_THREAD_PREFIX.stream().noneMatch(prefix -> thread.getName().startsWith(prefix)));
+        getStore(context).put(DETECT_THREAD_LEAK_KEY, detectThreadLeak);
+    }
 
+    @Override
+    public void afterEach(ExtensionContext context) throws InterruptedException {
+        DetectThreadLeak detectThreadLeak = getStore(context).remove(DETECT_THREAD_LEAK_KEY, DetectThreadLeak.class);
+        if (detectThreadLeak == null) {
+            return;
+        }
+        AtomicReference<List<Thread>> lastThread = new AtomicReference<>(Collections.emptyList());
+        TestUtils.waitForCondition(() -> {
+            List<Thread> threads = detectThreadLeak.newThreads();
+            lastThread.set(threads);
+            return threads.isEmpty();
+        }, () -> "Thread leak detected: " +
+                lastThread.get().stream().map(Thread::getName).collect(Collectors.joining(", ")));
+    }
+
+    private Store getStore(ExtensionContext context) {
+        return context.getStore(Namespace.create(context.getUniqueId()));
+    }
 
     List<TestTemplateInvocationContext> processClusterTemplate(ExtensionContext context, ClusterTemplate annot) {
         if (annot.value().trim().isEmpty()) {
