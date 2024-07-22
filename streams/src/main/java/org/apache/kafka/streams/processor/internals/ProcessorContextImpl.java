@@ -206,7 +206,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
             key,
             value,
             toInternal.hasTimestamp() ? toInternal.timestamp() : timestamp(),
-            headers()
+            toInternal.hasHeaders() ? toInternal.headers() : headers()
         );
         forward(toForward, toInternal.child());
     }

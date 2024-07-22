@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor;
 
 import java.util.Objects;
+import org.apache.kafka.common.header.Headers;
 
 /**
  * This class is used to provide the optional parameters when sending output records to downstream processor
@@ -25,20 +26,24 @@ import java.util.Objects;
 public class To {
     protected String childName;
     protected long timestamp;
+    protected Headers headers;
 
     private To(final String childName,
-               final long timestamp) {
+               final long timestamp,
+               final Headers headers) {
         this.childName = childName;
         this.timestamp = timestamp;
+        this.headers = headers;
     }
 
     protected To(final To to) {
-        this(to.childName, to.timestamp);
+        this(to.childName, to.timestamp, to.headers);
     }
 
     protected void update(final To to) {
         childName = to.childName;
         timestamp = to.timestamp;
+        headers = to.headers;
     }
 
     /**
@@ -47,7 +52,7 @@ public class To {
      * @return a new {@link To} instance configured with {@code childName}
      */
     public static To child(final String childName) {
-        return new To(childName, -1);
+        return new To(childName, -1, null);
     }
 
     /**
@@ -55,7 +60,7 @@ public class To {
      * @return a new {@link To} instance configured for all downstream processor
      */
     public static To all() {
-        return new To(null, -1);
+        return new To(null, -1, null);
     }
 
     /**
@@ -65,6 +70,16 @@ public class To {
      */
     public To withTimestamp(final long timestamp) {
         this.timestamp = timestamp;
+        return this;
+    }
+
+    /**
+     * Set the headers of the output records.
+     * @param headers the output record headers
+     * @return itself (i.e., {@code this})
+     */
+    public To withHeaders(final Headers headers) {
+        this.headers = headers;
         return this;
     }
 
@@ -78,7 +93,8 @@ public class To {
         }
         final To to = (To) o;
         return timestamp == to.timestamp &&
-            Objects.equals(childName, to.childName);
+            Objects.equals(childName, to.childName) &&
+            Objects.equals(headers, to.headers);
     }
 
     /**

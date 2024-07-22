@@ -14,42 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.header;
 
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.streams.processor.To;
+public interface Header {
+    /**
+     * The header's key, which is not necessarily unique within the set of headers on a Kafka message.
+     *
+     * @return the header's key; never null
+     */
+    String key();
 
-public class ToInternal extends To {
+    byte[] value();
 
-    public ToInternal() {
-        super(To.all());
-    }
-
-    public ToInternal(final To to) {
-        super(to);
-    }
-
-    public void update(final To to) {
-        super.update(to);
-    }
-
-    public boolean hasTimestamp() {
-        return timestamp != -1;
-    }
-
-    public boolean hasHeaders() {
-        return headers != null;
-    }
-
-    public long timestamp() {
-        return timestamp;
-    }
-
-    public Headers headers() {
-        return headers;
-    }
-
-    public String child() {
-        return childName;
-    }
+    String valueAsUtf8();
 }
