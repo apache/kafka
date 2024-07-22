@@ -363,7 +363,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def metadataLogSegmentMinBytes = getInt(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG)
   val serverMaxStartupTimeMs = getLong(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG)
 
-  def numNetworkThreads = getInt(ServerConfigs.NUM_NETWORK_THREADS_CONFIG)
   def backgroundThreads = getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG)
   def numIoThreads = getInt(ServerConfigs.NUM_IO_THREADS_CONFIG)
   def messageMaxBytes = getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG)
@@ -425,6 +424,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val failedAuthenticationDelayMs = getInt(SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG)
   val queuedMaxRequests = getInt(SocketServerConfigs.QUEUED_MAX_REQUESTS_CONFIG)
   val queuedMaxBytes = getLong(SocketServerConfigs.QUEUED_MAX_BYTES_CONFIG)
+  def numNetworkThreads = getInt(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG)
 
   /***************** rack configuration **************/
   val rack = Option(getString(ServerConfigs.BROKER_RACK_CONFIG))
