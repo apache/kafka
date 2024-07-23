@@ -862,7 +862,7 @@ public class KafkaConsumerTest {
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 2));
 
-        if (isAyncConsumer(groupProtocol)) {
+        if (groupProtocol == GroupProtocol.CONSUMER) {
             Node node = metadata.fetch().nodes().get(0);
             client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         }
@@ -934,7 +934,7 @@ public class KafkaConsumerTest {
         // lookup committed offset and find nothing
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, -1L), Errors.NONE), coordinator);
 
-        if (isAyncConsumer(groupProtocol)) {
+        if (groupProtocol == GroupProtocol.CONSUMER) {
             // New consumer poll(ZERO) needs to wait for the offset fetch event added by a call to poll, to be processed
             // by the background thread, so it can realize there are no committed offsets and then
             // throw the NoOffsetForPartitionException
@@ -2099,7 +2099,7 @@ public class KafkaConsumerTest {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         consumer.subscribe(singleton(topic));
 
-        if (isAyncConsumer(groupProtocol)) {
+        if (groupProtocol == GroupProtocol.CONSUMER) {
             // New consumer poll(ZERO) needs to wait for the event added by a call to poll, to be processed
             // by the background thread, so it can realize there is authentication fail  and then
             // throw the AuthenticationException
@@ -2976,7 +2976,7 @@ public class KafkaConsumerTest {
         KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singleton(invalidTopicName), getConsumerRebalanceListener(consumer));
 
-        if (isAyncConsumer(groupProtocol)) {
+        if (groupProtocol == GroupProtocol.CONSUMER) {
             // New consumer poll(ZERO) needs to wait for the event added by a call to poll, to be processed
             // by the background thread, so it can realize there is invalid topics and then
             // throw the InvalidTopicException
@@ -3340,7 +3340,7 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
 
         ConsumerPartitionAssignor assignor = new RangeAssignor();
 
-        if (isAyncConsumer(groupProtocol)) {
+        if (groupProtocol == GroupProtocol.CONSUMER) {
             Node node = metadata.fetch().nodes().get(0);
             client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         }
@@ -3423,12 +3423,5 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         public void configure(Map<String, ?> configs) {
             CLIENT_IDS.add(configs.get(ConsumerConfig.CLIENT_ID_CONFIG).toString());
         }
-    }
-
-    private Boolean isAyncConsumer(GroupProtocol groupProtocol) {
-        if (groupProtocol == GroupProtocol.CONSUMER) {
-            return true;
-        }
-        return false;
     }
 }
