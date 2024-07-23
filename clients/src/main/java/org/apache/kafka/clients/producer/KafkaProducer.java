@@ -69,6 +69,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.NodeConnectionCheckerUtil;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -85,6 +86,7 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 
@@ -258,6 +260,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
+    private List<InetSocketAddress> addresses = Collections.emptyList();
+    private final AtomicLong lastUpdateNodeTimeMs = new AtomicLong(0);
+
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -436,7 +441,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     transactionManager,
                     new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
 
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+            addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
                     config.getString(ProducerConfig.CLIENT_DNS_LOOKUP_CONFIG));
             if (metadata != null) {
@@ -1119,6 +1124,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         if (cluster.invalidTopics().contains(topic))
             throw new InvalidTopicException(topic);
+
+        try {
+            NodeConnectionCheckerUtil.checkNodesAvailability(this.metadata.fetch().nodes());
+        } catch (final Exception exc) {
+            Utils.bootstrapWithIntervalDelay(this.lastUpdateNodeTimeMs, this.metadata, this.addresses, 150);
+            throw new RuntimeException(exc);
+        }
 
         metadata.add(topic, nowMs);
 

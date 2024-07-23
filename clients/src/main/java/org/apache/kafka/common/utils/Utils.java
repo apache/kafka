@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.net.InetSocketAddress;
 import java.nio.BufferUnderflowException;
 import java.nio.file.StandardOpenOption;
 import java.util.AbstractMap;
@@ -23,6 +24,8 @@ import java.util.EnumSet;
 import java.util.Map.Entry;
 import java.util.SortedSet;
 import java.util.TreeSet;
+
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
@@ -69,6 +72,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BinaryOperator;
@@ -1475,6 +1479,19 @@ public final class Utils {
         return Stream.of(enumClass.getEnumConstants())
                 .map(Object::toString)
                 .toArray(String[]::new);
+    }
+
+    public static boolean bootstrapWithIntervalDelay(final AtomicLong lastUpdateNodeTimeMs,
+                                                     final Metadata metadata,
+                                                     final List<InetSocketAddress> addresses,
+                                                     final int bootstrapIntervalMs) {
+        final long currentTimeMs = System.currentTimeMillis();
+        if (currentTimeMs - lastUpdateNodeTimeMs.get() > bootstrapIntervalMs) {
+            lastUpdateNodeTimeMs.set(currentTimeMs);
+            metadata.bootstrap(addresses);
+            return true;
+        }
+        return false;
     }
 
     /**

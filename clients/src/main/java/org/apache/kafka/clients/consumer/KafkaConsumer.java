@@ -54,6 +54,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.NodeConnectionCheckerUtil;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -596,6 +597,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
+    private List<InetSocketAddress> addresses = Collections.emptyList();
+    private final AtomicLong lastUpdateNodeTimeMs = new AtomicLong(0);
 
     /**
      * A consumer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -728,7 +731,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     !config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
                     config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
                     subscriptions, logContext, clusterResourceListeners);
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+            addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG), config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG));
             this.metadata.bootstrap(addresses);
             String metricGrpPrefix = "consumer";
@@ -1226,6 +1229,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
+            }
+
+            try {
+                NodeConnectionCheckerUtil.checkNodesAvailability(this.metadata.fetch().nodes());
+            } catch (final Exception exc) {
+                Utils.bootstrapWithIntervalDelay(this.lastUpdateNodeTimeMs, this.metadata, this.addresses, 150);
             }
 
             do {
