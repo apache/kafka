@@ -39,6 +39,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
@@ -50,7 +51,6 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
-import org.apache.kafka.test.TestCondition
 import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
@@ -60,7 +60,7 @@ import org.slf4j.LoggerFactory
 
 import java.util.AbstractMap.SimpleImmutableEntry
 import scala.annotation.nowarn
-import scala.collection.{Seq, mutable}
+import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -105,13 +105,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client.alterUserScramCredentials(util.Arrays.asList(
       new UserScramCredentialUpsertion(targetUserName, new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "123456")
     )).all.get
-    org.apache.kafka.test.TestUtils.waitForCondition(new TestCondition() {
-      override def conditionMet(): Boolean = {
-        // waiting metadata sync
-        val userTomResult = client.describeUserScramCredentials().all().get()
-        userTomResult.size() == 1
-      }
-    }, "add one user scram credential timeout")
+    TestUtils.waitUntilTrue(() => {client.describeUserScramCredentials().all().get().size() == 1},
+      "Add one user scram credential timeout")
     val result = client.describeUserScramCredentials().all().get()
     result.forEach((userName, scramDescription) => {
       assertEquals(targetUserName, userName)
@@ -127,27 +122,19 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       new UserScramCredentialUpsertion("tom2", new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "123456"),
       new UserScramCredentialUpsertion("tom3", new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "123456")
     )).all().get
-    org.apache.kafka.test.TestUtils.waitForCondition(new TestCondition() {
-      override def conditionMet(): Boolean = {
-        // waiting metadata sync
-        val userTomResult = client.describeUserScramCredentials().all().get()
-        userTomResult.size() == 3
-      }
-    }, "add user scram credential timeout")
+    TestUtils.waitUntilTrue(() => {client.describeUserScramCredentials().all().get().size() == 3},
+      "Add user scram credential timeout")
     assertEquals(3, client.describeUserScramCredentials().all().get().size())
 
     // alter user info
     client.alterUserScramCredentials(util.Arrays.asList(
       new UserScramCredentialUpsertion(targetUserName, new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_512, 8192), "123456")
     )).all.get
-    org.apache.kafka.test.TestUtils.waitForCondition(new TestCondition() {
-      override def conditionMet(): Boolean = {
-        // waiting metadata sync
-        val userTomResult = client.describeUserScramCredentials().all().get()
-        val userScramCredential = userTomResult.get(targetUserName)
-        val credentialInfos = userScramCredential.credentialInfos()
-        credentialInfos.size() == 2
-      }
+    TestUtils.waitUntilTrue(() => {
+      val userTomResult = client.describeUserScramCredentials().all().get()
+      val userScramCredential = userTomResult.get(targetUserName)
+      val credentialInfos = userScramCredential.credentialInfos()
+      credentialInfos.size() == 2
     }, "Alter user scram credential timeout")
     val userTomResult = client.describeUserScramCredentials().all().get()
     assertEquals(3, userTomResult.size())
@@ -211,11 +198,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       } finally consumer.close()
     }
 
-    def queryProducerDetail(): mutable.Buffer[ProducerState] = {
-      val producerIterator = client.describeProducers(Collections.singletonList(tp))
-        .partitionResult(tp).get().activeProducers().asScala
-      producerIterator
-    }
+    def queryProducerDetail() = client.describeProducers(Collections.singletonList(tp))
+      .partitionResult(tp).get().activeProducers().asScala
 
     // send common msg
     appendCommonRecords(1)
@@ -242,15 +226,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // send ongoing transaction msg
     val ongoingProducer = appendTransactionRecords("foo3", 3, commit = false)
-    val transactionNoneCommitProducerIterator = queryProducerDetail()
-    assertEquals(3, transactionNoneCommitProducerIterator.size)
-    val containsOngoingIterator = transactionNoneCommitProducerIterator
-      .filter(producer => producer.currentTransactionStartOffset().isPresent)
-    assertEquals(1, containsOngoingIterator.size)
-    val ongoingTransactionProducerState = containsOngoingIterator.last
-    // we send (1 common msg) + (2 transaction msg) + (1 transaction marker msg), so transactionStartOffset is 4
-    assertEquals(4, ongoingTransactionProducerState.currentTransactionStartOffset().getAsLong)
-    ongoingProducer.close()
+    try {
+      val transactionNoneCommitProducerIterator = queryProducerDetail()
+      assertEquals(3, transactionNoneCommitProducerIterator.size)
+      val containsOngoingIterator = transactionNoneCommitProducerIterator
+        .filter(producer => producer.currentTransactionStartOffset().isPresent)
+      assertEquals(1, containsOngoingIterator.size)
+      val ongoingTransactionProducerState = containsOngoingIterator.last
+      // we send (1 common msg) + (2 transaction msg) + (1 transaction marker msg), so transactionStartOffset is 4
+      assertEquals(4, ongoingTransactionProducerState.currentTransactionStartOffset().getAsLong)
+    } finally ongoingProducer.close()
   }
 
   @ParameterizedTest
@@ -279,9 +264,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
 
     def transactionState(): TransactionState = {
-      val transactionResult = client.describeTransactions(Collections.singleton(transactionId))
-        .description(transactionId).get()
-      transactionResult.state()
+      client.describeTransactions(Collections.singleton(transactionId)).description(transactionId).get().state()
+    }
+
+    def findCoordinatorIdByTransactionId(transactionId: String): Int = {
+      // calculate the transaction partition id
+      val transactionPartitionId = Utils.abs(transactionId.hashCode) % 50
+      val transactionTopic = client.describeTopics(Collections.singleton(Topic.TRANSACTION_STATE_TOPIC_NAME))
+      val partitionList = transactionTopic.allTopicNames().get().get(Topic.TRANSACTION_STATE_TOPIC_NAME).partitions()
+      val partition = partitionList.asScala.filter(tp => tp.partition() == transactionPartitionId).head
+      partition.leader().id()
     }
 
     // normal commit case
@@ -289,7 +281,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     try {
       // init, the transaction is not begin, so TransactionalIdNotFoundException is expected
       val exception = assertThrows(classOf[ExecutionException], () => transactionState())
-      assertTrue(exception.getCause.isInstanceOf[TransactionalIdNotFoundException])
+      assertInstanceOf(classOf[TransactionalIdNotFoundException], exception.getCause)
 
       producer.initTransactions()
       assertEquals(TransactionState.EMPTY, transactionState())
@@ -301,6 +293,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       producer.flush()
       assertEquals(TransactionState.ONGOING, transactionState())
       producer.commitTransaction()
+
+
+      val transactionResult = client.describeTransactions(Collections.singleton(transactionId))
+        .description(transactionId).get()
+      assertEquals(findCoordinatorIdByTransactionId(transactionId), transactionResult.coordinatorId())
+      assertEquals(0, transactionResult.producerId())
+      assertEquals(0, transactionResult.producerEpoch())
+      assertEquals(1, transactionResult.topicPartitions().size())
+      assertEquals(tp, transactionResult.topicPartitions().asScala.head)
+
 
       val state = transactionState()
       // Either PREPARE_COMMIT or COMPLETE_COMMIT is expected
@@ -324,11 +326,23 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       abortProducer.beginTransaction()
       assertEquals(TransactionState.EMPTY, transactionState())
 
+      val transactionResult = client.describeTransactions(Collections.singleton(transactionId))
+        .description(transactionId).get()
+      assertEquals(findCoordinatorIdByTransactionId(transactionId), transactionResult.coordinatorId())
+      assertEquals(0, transactionResult.topicPartitions().size())
+
       abortProducer.send(new ProducerRecord[Array[Byte], Array[Byte]](
         tp.topic(), tp.partition(), "k1".getBytes, "v1".getBytes()))
       abortProducer.send(new ProducerRecord[Array[Byte], Array[Byte]](
         tp.topic(), tp.partition(), "k2".getBytes, "v2".getBytes()))
       abortProducer.flush()
+
+      val transactionSendMsgResult = client.describeTransactions(Collections.singleton(transactionId))
+        .description(transactionId).get()
+      assertEquals(findCoordinatorIdByTransactionId(transactionId), transactionSendMsgResult.coordinatorId())
+      assertEquals(1, transactionSendMsgResult.topicPartitions().size())
+      assertEquals(tp, transactionSendMsgResult.topicPartitions().asScala.head)
+
       assertEquals(TransactionState.ONGOING, transactionState())
       abortProducer.abortTransaction()
       val state = transactionState()
@@ -367,7 +381,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         client.describeTransactions(Collections.singleton(transactionId), timeoutOptions)
           .description(transactionId).get()
       })
-      assertTrue(exception.getCause.isInstanceOf[TimeoutException])
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
     } finally producer.close()
   }
 
@@ -404,16 +418,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             transactionalProducer.producerEpoch().toShort,
             transactionalProducer.coordinatorEpoch().getAsInt), options).all().get()
       })
-      assertTrue(exception.getCause.isInstanceOf[TimeoutException])
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
     } finally producer.close()
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testListTransactions(quorum: String): Unit = {
+    val tp = new TopicPartition("topic1", 0)
     def createTransactionList(): Unit = {
       client = createAdminClient
-      val tp = new TopicPartition("topic1", 0)
       client.createTopics(Collections.singletonList(new NewTopic(tp.topic(), 1, 1.toShort))).all().get()
 
       def consumeToExpectedNumber = (expectedNumber: Int) => {
@@ -484,7 +498,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     options = new ListTransactionsOptions()
     val producerIds: util.Collection[java.lang.Long] = new util.ArrayList[java.lang.Long]()
-    producerIds.add(new java.lang.Long(0L))
+    producerIds.add(0L)
     options.filterProducerIds(producerIds)
     assertEquals(1, client.listTransactions(options).all().get().size())
 
@@ -493,6 +507,23 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     Thread.sleep(501)
     options.filterOnDuration(500)
     assertEquals(3, client.listTransactions(options).all().get().size())
+
+    val producerNew = TestUtils.createTransactionalProducer("foo4", brokers)
+    try {
+      producerNew.initTransactions()
+      producerNew.beginTransaction()
+      producerNew.send(new ProducerRecord[Array[Byte], Array[Byte]](
+        tp.topic(), tp.partition(), "k1".getBytes, "v1".getBytes()))
+      producerNew.flush()
+      options = new ListTransactionsOptions()
+      options.filterOnDuration(500)
+      val transactionList = client.listTransactions(options).all().get()
+      // current transaction start time is now, so transactionList size is still 3
+      assertEquals(3, transactionList.size())
+      val filterList = transactionList.asScala.filter(t => {t.transactionalId().equals("foo4")})
+      // transactionList not contains 'foo4'
+      assertEquals(0, filterList.size)
+    } finally producerNew.close()
   }
 
 
