@@ -1586,7 +1586,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     if (retentionSize < 0 || size < retentionSize) return 0
     var diff = size - retentionSize
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
-      if (diff - segment.size >= 0) {
+      if (diff - segment.size >= 0 || segment.size() > retentionSize) {
         diff -= segment.size
         true
       } else {
