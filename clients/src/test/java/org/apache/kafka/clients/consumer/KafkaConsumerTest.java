@@ -2103,14 +2103,8 @@ public class KafkaConsumerTest {
             // New consumer poll(ZERO) needs to wait for the event added by a call to poll, to be processed
             // by the background thread, so it can realize there is authentication fail  and then
             // throw the AuthenticationException
-            TestUtils.waitForCondition(() -> {
-                try {
-                    consumer.poll(Duration.ZERO);
-                    return false;
-                } catch (AuthenticationException e) {
-                    return true;
-                }
-            }, "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
+            assertPollEventuallyThrows(consumer, AuthenticationException.class,
+                    "he consumer was not able to discover metadata errors during continuous polling.");
         } else {
             assertThrows(AuthenticationException.class, () -> consumer.poll(Duration.ZERO));
         }
@@ -2980,17 +2974,24 @@ public class KafkaConsumerTest {
             // New consumer poll(ZERO) needs to wait for the event added by a call to poll, to be processed
             // by the background thread, so it can realize there is invalid topics and then
             // throw the InvalidTopicException
-            TestUtils.waitForCondition(() -> {
-                try {
-                    consumer.poll(Duration.ZERO);
-                    return false;
-                } catch (InvalidTopicException e) {
-                    return true;
-                }
-            }, "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
+            assertPollEventuallyThrows(consumer, InvalidTopicException.class,
+                    "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
         } else {
             assertThrows(InvalidTopicException.class, () -> consumer.poll(Duration.ZERO));
         }
+    }
+
+    private <T extends Throwable> void assertPollEventuallyThrows(KafkaConsumer<?, ?> consumer,
+            Class<T> expectedException, String errMsg) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            try {
+                consumer.poll(Duration.ZERO);
+                return false;
+            } catch (Throwable exception) {
+                System.out.println("exception:" + exception + "\t expectedException " + expectedException);
+                return expectedException.isInstance(exception);
+            }
+        }, errMsg);
     }
 
     @ParameterizedTest
