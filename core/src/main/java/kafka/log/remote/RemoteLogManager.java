@@ -1808,6 +1808,13 @@ public class RemoteLogManager implements Closeable {
                 new RemoteLogReader(fetchInfo, this, callback, brokerTopicStats, rlmFetchQuotaManager, remoteReadTimer));
     }
 
+    /**
+     * this method validates the copy and expiry tasks based on tiered state of a topic.
+     * If tieredState of the topic is enabled, make sure copy task exists and expiration task
+     * If tieredState of the topic is disabled, make sure copy task doesn't exist and and expiration task exists
+     * @param topicPartition leader topic id partition
+     * @param tieredStateOfTopic tiered state of a topic
+     */
     void validateCopyAndExpireTasks(TopicIdPartition topicPartition, boolean tieredStateOfTopic) {
         if (tieredStateOfTopic) {
             // make sure a copy task is available
@@ -1821,7 +1828,7 @@ public class RemoteLogManager implements Closeable {
         } else {
             // make sure no copy task exists
             leaderCopyRLMTasks.computeIfPresent(topicPartition, (topicIdPartition, task) -> {
-                LOGGER.info("Cancelling the copy RLM task for tpId: {}", topicPartition);
+                LOGGER.info("Cancelling the copy RLM task for tpId: {}", topicIdPartition);
                 task.cancel();
                 return null;
             });
