@@ -55,10 +55,10 @@ EXPOSE 9092
 
 ARG build_date
 
-LABEL org.label-schema.name="kafka" \
-      org.label-schema.description="Apache Kafka" \
-      org.label-schema.build-date="${build_date}" \
-      org.label-schema.vcs-url="https://github.com/apache/kafka" \
+LABEL org.opencontainers.image.title="kafka" \
+      org.opencontainers.image.description="Apache Kafka" \
+      org.opencontainers.image.created="${build_date}" \
+      org.opencontainers.image.source="https://github.com/apache/kafka" \
       maintainer="Apache Kafka"
 
 RUN apk add --no-cache gcompat ; \
