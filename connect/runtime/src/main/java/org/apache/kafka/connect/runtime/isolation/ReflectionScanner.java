@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import io.github.classgraph.ClassGraph;
-import io.github.classgraph.ClassInfoList;
-import io.github.classgraph.ScanResult;
-
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
@@ -36,9 +32,12 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.ServiceLoader;
-import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+
+import io.github.classgraph.ClassGraph;
+import io.github.classgraph.ClassInfoList;
+import io.github.classgraph.ScanResult;
 
 /**
  * A {@link PluginScanner} implementation which uses reflection and {@link ServiceLoader} to discover plugins.
@@ -85,7 +84,7 @@ public class ReflectionScanner extends PluginScanner {
         try (ScanResult classGraph = classGraphBuilder.scan()) {
           return new PluginScanResult(
                   getPluginDesc(classGraph, PluginType.SINK, source),
-                  getPluginDesc(classGpaph, PluginType.SOURCE, source),
+                  getPluginDesc(classGraph, PluginType.SOURCE, source),
                   getPluginDesc(classGraph, PluginType.CONVERTER, source),
                   getPluginDesc(classGraph, PluginType.HEADER_CONVERTER, source),
                   getTransformationPluginDesc(source, classGraph),

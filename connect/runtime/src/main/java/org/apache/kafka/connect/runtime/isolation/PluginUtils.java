@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import com.google.common.collect.Sets;
 
-import io.github.classgraph.ScanResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,6 +48,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import io.github.classgraph.ScanResult;
 
 /**
  * Connect plugin utility methods.
