@@ -746,6 +746,38 @@ public class ConsumerHeartbeatRequestManagerTest {
         NetworkClientDelegate.PollResult pollAgain = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, pollAgain.unsentRequests.size());
     }
+    
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
+    public void testConsumerAcksReconciledAssignmentWithFirstHeartBeatAckLost(final short version) {
+        // 1. complete reconciliation
+        createHeartbeatStatAndRequestManager();
+        String topic = "topic1";
+        int exceededTimeMs = 5;
+        Set<String> set = Collections.singleton(topic);
+        when(subscriptions.subscription()).thenReturn(set);
+        subscriptions.subscribe(set, Optional.empty());
+        mockJoiningMemberData(DEFAULT_GROUP_INSTANCE_ID);
+        // 2. send heartbeat1 to ack assignment tp0
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        // 3. HB1 times out
+        result.unsentRequests.get(0)
+                .handler()
+                .onFailure(time.milliseconds(), new TimeoutException("timeout"));
+        // 4. heartbeat request manager resets the sentFields to null HeartbeatState.reset()
+        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS + exceededTimeMs);
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
+        verify(heartbeatRequestState).reset();
+        // 5. following HB will include tp0 (and act as ack), tp0 != null
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
+        ConsumerGroupHeartbeatRequest heartbeatRequest =
+                (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
+        
+        assertTrue(heartbeatRequest.data().memberId().isEmpty());
+        assertEquals(Collections.singletonList(topic), heartbeatRequest.data().subscribedTopicNames());
+    }
 
     @Test
     public void testPollOnCloseGeneratesRequestIfNeeded() {
