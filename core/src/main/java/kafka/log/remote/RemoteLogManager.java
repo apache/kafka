@@ -158,7 +158,6 @@ public class RemoteLogManager implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
     private static final String REMOTE_LOG_READER_THREAD_NAME_PREFIX = "remote-log-reader";
-    public static final long FLAG_TO_SET_LOCAL_LOG_START_OFFSET = -2;
     private final RemoteLogManagerConfig rlmConfig;
     private final int brokerId;
     private final String logDir;
@@ -475,13 +474,15 @@ public class RemoteLogManager implements Closeable {
      * {@link RemoteLogMetadataManager#onStopPartitions(Set)} when {@link StopPartition#deleteLocalLog()} is true.
      * Deletes the partitions from the remote storage when {@link StopPartition#deleteRemoteLog()} is true.
      *
-     * @param stopPartitions topic partitions that needs to be stopped.
-     * @param errorHandler   callback to handle any errors while stopping the partitions.
+     * @param stopPartitions            topic partitions that needs to be stopped.
+     * @param errorHandler              callback to handle any errors while stopping the partitions.
+     * @param remoteLogDisablePolicy    the value of config "remote.log.disable.policy". If null, it means no need to consider it.
      */
     public void stopPartitions(Set<StopPartition> stopPartitions,
                                BiConsumer<TopicPartition, Throwable> errorHandler,
                                String remoteLogDisablePolicy) {
         LOGGER.debug("Stop partitions: {}", stopPartitions);
+        Set<TopicIdPartition> stopRLMMPartitions = new HashSet<>();
         for (StopPartition stopPartition: stopPartitions) {
             TopicPartition tp = stopPartition.topicPartition();
             try {
@@ -498,23 +499,21 @@ public class RemoteLogManager implements Closeable {
                         return null;
                     });
 
-                    // here, we have to handle retain and delete separately.
-                    // If "retain" is set, we should not cancel expiration task
+                    // If "delete" or "null" is set, we should cancel expiration task
                     if (!REMOTE_LOG_DISABLE_POLICY_RETAIN.equals(remoteLogDisablePolicy)) {
                         leaderExpirationRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
                             LOGGER.info("Cancelling the expiration RLM task for tpId: {}", tpId);
                             task.cancel();
                             return null;
                         });
-                    } else if (REMOTE_LOG_DISABLE_POLICY_DELETE.equals(remoteLogDisablePolicy)) {
-                        // update start offset to local log start offset
-                        // we use unused "-2" as the flag to set local log start offset
-                        updateRemoteLogStartOffset.accept(tp, FLAG_TO_SET_LOCAL_LOG_START_OFFSET);
+                    }
+                    // stop remoteLogMetadataManager if "delete" is set because that's not needed anymore.
+                    if (REMOTE_LOG_DISABLE_POLICY_DELETE.equals(remoteLogDisablePolicy)) {
+                        stopRLMMPartitions.add(tpId);
                     }
 
                     removeRemoteTopicPartitionMetrics(tpId);
 
-                    // we already set it correctly, just apply it.
                     if (stopPartition.deleteRemoteLog()) {
                         LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
                         deleteRemoteLogPartition(tpId);
@@ -532,11 +531,16 @@ public class RemoteLogManager implements Closeable {
                 .filter(sp -> sp.deleteLocalLog() && topicIdByPartitionMap.containsKey(sp.topicPartition()))
                 .map(sp -> new TopicIdPartition(topicIdByPartitionMap.get(sp.topicPartition()), sp.topicPartition()))
                 .collect(Collectors.toSet());
+
         if (!deleteLocalPartitions.isEmpty()) {
-            // NOTE: In ZK mode, this#stopPartitions method is called when Replica state changes to Offline and
-            // ReplicaDeletionStarted
-            remoteLogMetadataManager.onStopPartitions(deleteLocalPartitions);
             deleteLocalPartitions.forEach(tpId -> topicIdByPartitionMap.remove(tpId.topicPartition()));
+        }
+
+        stopRLMMPartitions.addAll(deleteLocalPartitions);
+        // NOTE: In ZK mode, this#stopPartitions method is called when Replica state changes to Offline and
+        // ReplicaDeletionStarted
+        if (!stopRLMMPartitions.isEmpty()) {
+            remoteLogMetadataManager.onStopPartitions(stopRLMMPartitions);
         }
     }
 

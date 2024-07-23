@@ -69,24 +69,19 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
 
     val logs = logManager.logsByTopic(topic)
     val wasRemoteLogEnabledBeforeUpdate = logs.exists(_.remoteLogEnabled())
-    var oldLogPolicy = logs.head.config.remoteLogDisablePolicy()
-    if (oldLogPolicy == null)
-      oldLogPolicy = "retain"
+    val oldLogPolicy = remoteLogDisablePolicy(logs.head)
 
     logManager.updateTopicConfig(topic, props, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
-    maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate, oldLogPolicy)
+    maybeUpdateRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate, oldLogPolicy)
   }
 
-  private[server] def maybeBootstrapRemoteLogComponents(topic: String,
+  private[server] def maybeUpdateRemoteLogComponents(topic: String,
                                                         logs: Seq[UnifiedLog],
                                                         wasRemoteLogEnabledBeforeUpdate: Boolean,
                                                         oldLogPolicy: String): Unit = {
     val isRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
-    var newRemoteLogPolicy = logs.head.config.remoteLogDisablePolicy()
-    if (newRemoteLogPolicy == null)
-      newRemoteLogPolicy = "retain"
-
-
+    val newRemoteLogPolicy = remoteLogDisablePolicy(logs.head)
+    val isNewPolicyDelete = newRemoteLogPolicy.equals("delete")
 
     val (leaderPartitions, followerPartitions) =
       logs.flatMap(log => replicaManager.onlinePartition(log.topicPartition)).partition(_.isLeader)
@@ -97,19 +92,43 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
         rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
     }
 
-    // When there's a configRecord related to topic, we'll invoke updateLogConfig and enter here.
-    // So, here, we can check if the tiered storage is enabled or disabled, or remote log policy change or not, then do stopPartitions
-    // for each partition.
-    if (wasRemoteLogEnabledBeforeUpdate != isRemoteLogEnabled || !oldLogPolicy.equals(newRemoteLogPolicy)) {
+    // Stop partitions when
+    //   (1) "remote.storage.enable" changes from true to false
+    //   (2) "remote.storage.enable" is false, and "remote.log.disable.policy" changes to "delete", to cancel expire task and delete remote logs
+    // For (2), we don't need to worry about "retain"'s case because if it's changed from "delete" to "retain",
+    // all the remote log tasks are cancelled and remote logs are deleted, nothing else needs to be done.
+    if (!isRemoteLogEnabled && (wasRemoteLogEnabledBeforeUpdate || (isNewPolicyDelete && !oldLogPolicy.equals(newRemoteLogPolicy)))) {
       val stopPartitions: java.util.HashSet[StopPartition] = new java.util.HashSet[StopPartition]()
-      leaderPartitions.toSet.asJava.stream().forEach(partition => {
+      leaderPartitions.foreach(partition => {
         // only delete remote logs when remoteLog Policy is "delete"
-        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false, deleteRemoteLog = newRemoteLogPolicy.equals("delete")))
+        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false, deleteRemoteLog = isNewPolicyDelete))
       })
 
-      replicaManager.remoteLogManager.foreach(rlm => rlm.stopPartitions(stopPartitions, (tp, e) => {}, newRemoteLogPolicy))
+      followerPartitions.foreach(partition => {
+        // we need to cancel follower tasks and stop RLMM if "delete" is set
+        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false, deleteRemoteLog = false))
+      })
 
+      if (isNewPolicyDelete) {
+        // update the log start offset to local log start offset for the leader replica when "delete" policy is set
+        logs.foreach(log => {
+          if (leaderPartitions.find(p => p.equals(log.topicPartition)).isDefined) {
+            log.updateLogStartOffsetFromRemoteTier(log.localLogStartOffset())
+          }
+        })
+      }
+
+      replicaManager.remoteLogManager.foreach(rlm => rlm.stopPartitions(stopPartitions, (_, _) => {}, newRemoteLogPolicy))
     }
+  }
+
+  private def remoteLogDisablePolicy(log: UnifiedLog): String = {
+    var remoteLogPolicy = log.config.remoteLogDisablePolicy()
+    // default is policy is "retain"
+    if (remoteLogPolicy == null)
+      remoteLogPolicy = "retain"
+
+    remoteLogPolicy
   }
 
   def processConfigChanges(topic: String, topicConfig: Properties): Unit = {
