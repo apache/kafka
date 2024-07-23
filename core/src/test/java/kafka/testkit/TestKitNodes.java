@@ -115,41 +115,41 @@ public class TestKitNodes {
                 .collect(Collectors.toList());
 
             String unknownIds = perServerProperties.keySet().stream()
-                    .filter(id -> !controllerNodeIds.contains(id))
-                    .filter(id -> !brokerNodeIds.contains(id))
-                    .map(Object::toString)
-                    .collect(Collectors.joining(", "));
+                .filter(id -> !controllerNodeIds.contains(id))
+                .filter(id -> !brokerNodeIds.contains(id))
+                .map(Object::toString)
+                .collect(Collectors.joining(", "));
             if (!unknownIds.isEmpty()) {
                 throw new IllegalArgumentException(
-                        String.format("Unknown server id %s in perServerProperties, the existent server ids are %s",
-                                unknownIds,
-                                Stream.concat(brokerNodeIds.stream(), controllerNodeIds.stream())
-                                        .map(Object::toString)
-                                        .collect(Collectors.joining(", "))));
+                    String.format("Unknown server id %s in perServerProperties, the existent server ids are %s",
+                        unknownIds,
+                        Stream.concat(brokerNodeIds.stream(), controllerNodeIds.stream())
+                            .map(Object::toString)
+                            .collect(Collectors.joining(", "))));
             }
 
-            TreeMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
+            TreeMap<Integer, TestKitNode> controllerNodes = new TreeMap<>();
             for (int id : controllerNodeIds) {
-                ControllerNode controllerNode = ControllerNode.builder()
+                TestKitNode controllerNode = new TestKitNode.Builder()
                     .setId(id)
                     .setBaseDirectory(baseDirectory)
                     .setClusterId(clusterId)
                     .setCombined(brokerNodeIds.contains(id))
                     .setPropertyOverrides(perServerProperties.getOrDefault(id, Collections.emptyMap()))
-                    .build();
+                    .buildControllerNode();
                 controllerNodes.put(id, controllerNode);
             }
 
-            TreeMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
+            TreeMap<Integer, TestKitNode> brokerNodes = new TreeMap<>();
             for (int id : brokerNodeIds) {
-                BrokerNode brokerNode = BrokerNode.builder()
+                TestKitNode brokerNode = new TestKitNode.Builder()
                     .setId(id)
                     .setNumLogDirectories(numDisksPerBroker)
                     .setBaseDirectory(baseDirectory)
                     .setClusterId(clusterId)
                     .setCombined(controllerNodeIds.contains(id))
                     .setPropertyOverrides(perServerProperties.getOrDefault(id, Collections.emptyMap()))
-                    .build();
+                    .buildBrokerNode();
                 brokerNodes.put(id, brokerNode);
             }
 
@@ -164,15 +164,15 @@ public class TestKitNodes {
     private final String baseDirectory;
     private final String clusterId;
     private final BootstrapMetadata bootstrapMetadata;
-    private final SortedMap<Integer, ControllerNode> controllerNodes;
-    private final SortedMap<Integer, BrokerNode> brokerNodes;
+    private final SortedMap<Integer, TestKitNode> controllerNodes;
+    private final SortedMap<Integer, TestKitNode> brokerNodes;
 
     private TestKitNodes(
         String baseDirectory,
         String clusterId,
         BootstrapMetadata bootstrapMetadata,
-        SortedMap<Integer, ControllerNode> controllerNodes,
-        SortedMap<Integer, BrokerNode> brokerNodes
+        SortedMap<Integer, TestKitNode> controllerNodes,
+        SortedMap<Integer, TestKitNode> brokerNodes
     ) {
         this.baseDirectory = Objects.requireNonNull(baseDirectory);
         this.clusterId = Objects.requireNonNull(clusterId);
@@ -193,7 +193,7 @@ public class TestKitNodes {
         return clusterId;
     }
 
-    public SortedMap<Integer, ControllerNode> controllerNodes() {
+    public SortedMap<Integer, TestKitNode> controllerNodes() {
         return controllerNodes;
     }
 
@@ -201,7 +201,7 @@ public class TestKitNodes {
         return bootstrapMetadata;
     }
 
-    public SortedMap<Integer, BrokerNode> brokerNodes() {
+    public SortedMap<Integer, TestKitNode> brokerNodes() {
         return brokerNodes;
     }
 
