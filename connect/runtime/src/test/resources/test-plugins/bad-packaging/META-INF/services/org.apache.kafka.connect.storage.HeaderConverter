@@ -13,10 +13,5 @@
  # See the License for the specific language governing permissions and
  # limitations under the License.
 
-test.plugins.DefaultConstructorPrivateConnector
-test.plugins.DefaultConstructorThrowsConnector
-test.plugins.InnocuousSinkConnector
-test.plugins.NoDefaultConstructorConnector
-test.plugins.StaticInitializerThrowsConnector
-test.plugins.OuterClass$InnerClass
-test.plugins.VersionMethodThrowsConnector
+test.plugins.DefaultConstructorThrowsConverter
+test.plugins.NoDefaultConstructorConverter
