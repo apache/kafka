@@ -354,6 +354,10 @@ public class PluginUtils {
             }
         }
         pluginSources.add(classpathPluginSource(classLoader.getParent()));
+        System.out.println("stx output plugin");
+        for (PluginSource p : pluginSources) {
+            System.out.println(p.toString());
+        }
         return pluginSources;
     }
 

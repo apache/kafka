@@ -80,10 +80,10 @@ public class ReflectionScanner extends PluginScanner {
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
         ClassGraph classGraphBuilder = new ClassGraph().enableClassInfo()
-                //.overrideClassLoaders(new ClassLoader[]{source.loader()});
-                .addClassLoader(source.loader());
+                .overrideClassLoaders(new ClassLoader[]{source.loader()})
+                //.addClassLoader(source.loader())
                 //.overrideClasspath(Arrays.asList(source.urls()));
-                //.ignoreParentClassLoaders();
+                .ignoreParentClassLoaders();
         List<URL> urls = classGraphBuilder.getClasspathURLs();
         urls.addAll(Arrays.asList(source.urls()));
         if (!urls.isEmpty()) {
@@ -134,8 +134,8 @@ public class ReflectionScanner extends PluginScanner {
 
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
         System.out.println("stx");
-        System.out.println(plugins.loadClasses(kclass, true).size());
-        for (Class<? extends T> pluginKlass : plugins.loadClasses(kclass, true)) {
+        System.out.println(plugins.getStandardClasses().loadClasses(kclass, true).size());
+        for (Class<? extends T> pluginKlass : plugins.getStandardClasses().loadClasses(kclass, true)) {
             if (!PluginUtils.isConcrete(pluginKlass)) {
                 log.debug("Skipping {} in {} as it is not concrete implementation", pluginKlass, source);
                 continue;
