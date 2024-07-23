@@ -1663,9 +1663,13 @@ public final class Utils {
      * @param <V> the type of values stored in the map
      */
     public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix, boolean strip) {
+        return entriesWithPrefix(map, prefix, strip, false);
+    }
+
+    public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix, boolean strip, boolean allowMatchingLength) {
         Map<String, V> result = new HashMap<>();
         for (Map.Entry<String, V> entry : map.entrySet()) {
-            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
+            if (entry.getKey().startsWith(prefix) && (allowMatchingLength || entry.getKey().length() > prefix.length())) {
                 if (strip)
                     result.put(entry.getKey().substring(prefix.length()), entry.getValue());
                 else
