@@ -34,7 +34,7 @@ import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
 public class RemoteLogReader implements Callable<Void> {
-    private static final Logger logger = LoggerFactory.getLogger(RemoteLogReader.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogReader.class);
     private final RemoteStorageFetchInfo fetchInfo;
     private final RemoteLogManager rlm;
     private final BrokerTopicStats brokerTopicStats;
@@ -62,7 +62,7 @@ public class RemoteLogReader implements Callable<Void> {
     public Void call() {
         RemoteLogReadResult result;
         try {
-            logger.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
+            LOGGER.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
             FetchDataInfo fetchDataInfo = remoteReadTimer.time(() -> rlm.read(fetchInfo));
             brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
             brokerTopicStats.allTopicsStats().remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
@@ -72,10 +72,10 @@ public class RemoteLogReader implements Callable<Void> {
         } catch (Exception e) {
             brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).failedRemoteFetchRequestRate().mark();
             brokerTopicStats.allTopicsStats().failedRemoteFetchRequestRate().mark();
-            logger.error("Error occurred while reading the remote data for {}", fetchInfo.topicPartition, e);
+            LOGGER.error("Error occurred while reading the remote data for {}", fetchInfo.topicPartition, e);
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         }
-        logger.debug("Finished reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
+        LOGGER.debug("Finished reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
         quotaManager.record(result.fetchDataInfo.map(fetchDataInfo -> fetchDataInfo.records.sizeInBytes()).orElse(0));
         callback.accept(result);
         return null;

@@ -34,7 +34,7 @@ import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.RE
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
 
 public class RemoteStorageThreadPool extends ThreadPoolExecutor {
-    private static final Logger logger = LoggerFactory.getLogger(RemoteStorageThreadPool.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(RemoteStorageThreadPool.class);
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
     @SuppressWarnings("this-escape")
@@ -53,11 +53,11 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
     protected void afterExecute(Runnable runnable, Throwable th) {
         if (th != null) {
             if (th instanceof FatalExitError) {
-                logger.error("Stopping the server as it encountered a fatal error.");
+                LOGGER.error("Stopping the server as it encountered a fatal error.");
                 Exit.exit(((FatalExitError) th).statusCode());
             } else {
                 if (!isShutdown())
-                    logger.error("Error occurred while executing task: {}", runnable, th);
+                    LOGGER.error("Error occurred while executing task: {}", runnable, th);
             }
         }
     }
