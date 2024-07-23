@@ -115,17 +115,17 @@ public class TestKitNodes {
                 .collect(Collectors.toList());
 
             String unknownIds = perServerProperties.keySet().stream()
-                .filter(id -> !controllerNodeIds.contains(id))
-                .filter(id -> !brokerNodeIds.contains(id))
-                .map(Object::toString)
-                .collect(Collectors.joining(", "));
+                    .filter(id -> !controllerNodeIds.contains(id))
+                    .filter(id -> !brokerNodeIds.contains(id))
+                    .map(Object::toString)
+                    .collect(Collectors.joining(", "));
             if (!unknownIds.isEmpty()) {
                 throw new IllegalArgumentException(
-                    String.format("Unknown server id %s in perServerProperties, the existent server ids are %s",
-                        unknownIds,
-                        Stream.concat(brokerNodeIds.stream(), controllerNodeIds.stream())
-                            .map(Object::toString)
-                            .collect(Collectors.joining(", "))));
+                        String.format("Unknown server id %s in perServerProperties, the existent server ids are %s",
+                                unknownIds,
+                                Stream.concat(brokerNodeIds.stream(), controllerNodeIds.stream())
+                                        .map(Object::toString)
+                                        .collect(Collectors.joining(", "))));
             }
 
             TreeMap<Integer, TestKitNode> controllerNodes = new TreeMap<>();
