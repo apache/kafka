@@ -316,7 +316,10 @@ public class ProducerPerformance {
                .type(String.class)
                .metavar("TRANSACTIONAL-ID")
                .dest("transactionalId")
-               .help("The transactional id to use. This config take precedence over transactional.id via --producer.config or --producer-props");
+               .help("The transactional id to use. This config takes precedence over the transactional.id " +
+                       "specified via --producer.config or --producer-props. Note that if the transactional ID " +
+                       "is not specified while --transaction-duration-ms is provided, the default value for the " +
+                       "transactional id will be performance-producer-default-transactional-id.");
 
         parser.addArgument("--transaction-duration-ms")
                .action(store())
@@ -324,7 +327,10 @@ public class ProducerPerformance {
                .type(Long.class)
                .metavar("TRANSACTION-DURATION")
                .dest("transactionDurationMs")
-               .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. The value should > 0.");
+               .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. " +
+                       "The value should be greater than 0. If the transactional id is specified via --producer-props, " +
+                       "--producer.config, or --transactional-id but --transaction-duration-ms is not specified, " +
+                       "the default value will be 3000.");
 
         return parser;
     }
