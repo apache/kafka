@@ -27,7 +27,7 @@ on:
 
 jobs:
   promote:
-    if: github.repository == 'apache/kafka'
+    # if: github.repository == 'apache/kafka'
     runs-on: ubuntu-latest
     steps:
     - name: Set up QEMU
