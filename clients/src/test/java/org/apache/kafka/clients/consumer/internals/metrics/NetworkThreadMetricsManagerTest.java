@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -33,15 +34,16 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 public class NetworkThreadMetricsManagerTest {
     private final Time time = new MockTime();
     private final Metrics metrics = new Metrics(time);
+    private final long shortTimeToSleep = 100;
 
     @Test
     public void testTimeBetweenNetworkThreadPollMetrics() {
-        final long shortTimeToSleep = 100;
+
         NetworkThreadMetricsManager networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
 
         // Assert the existence of metrics
-        assertNotNull(metrics.metric(networkThreadMetricsManager.maxPollTime));
-        assertNotNull(metrics.metric(networkThreadMetricsManager.avgPollTime));
+        assertNotNull(metrics.metric(networkThreadMetricsManager.pollTimeMax));
+        assertNotNull(metrics.metric(networkThreadMetricsManager.pollTimeAvg));
 
         // Record poll time and sleep for short amount of time
         long currentTimeMs = time.milliseconds();
@@ -64,8 +66,8 @@ public class NetworkThreadMetricsManagerTest {
         // Calculating expected average time between polls
         long totalTimeBetweenPolls = randomSleepTime * 1000 + shortTimeToSleep;
 
-        assertEquals(metrics.metric(networkThreadMetricsManager.avgPollTime).metricValue(), totalTimeBetweenPolls / 2d);
-        assertEquals(metrics.metric(networkThreadMetricsManager.maxPollTime).metricValue(), randomSleepTime * 1000d);
+        assertEquals(metrics.metric(networkThreadMetricsManager.pollTimeAvg).metricValue(), totalTimeBetweenPolls / 2d);
+        assertEquals(metrics.metric(networkThreadMetricsManager.pollTimeMax).metricValue(), randomSleepTime * 1000d);
     }
 
     @Test
@@ -88,16 +90,40 @@ public class NetworkThreadMetricsManagerTest {
     public void testApplicationEventQueueChangeMetrics() {
         NetworkThreadMetricsManager networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
         PollEvent pollEvent = new PollEvent(0);
+        ShareFetchEvent shareFetchEvent = new ShareFetchEvent(null);
 
         // Assert the existence of metrics
-        assertNotNull(metrics.metric(networkThreadMetricsManager.avgAppEventTime));
-        assertNotNull(metrics.metric(networkThreadMetricsManager.maxAppEventTime));
+        assertNotNull(metrics.metric(networkThreadMetricsManager.appEventTimeAvg));
+        assertNotNull(metrics.metric(networkThreadMetricsManager.appEventTimeMax));
 
         // Record application event queue change
         networkThreadMetricsManager.recordApplicationEventQueueChange(pollEvent, time.milliseconds(), true);
 
         // Assert recorded metrics values
-        assertEquals(metrics.metric(networkThreadMetricsManager.avgAppEventTime).metricValue(), NaN);
-        assertEquals(metrics.metric(networkThreadMetricsManager.maxAppEventTime).metricValue(), NaN);
+        assertEquals(metrics.metric(networkThreadMetricsManager.appEventTimeAvg).metricValue(), NaN);
+        assertEquals(metrics.metric(networkThreadMetricsManager.appEventTimeMax).metricValue(), NaN);
+
+        // Randomly sleep 1-10 seconds
+        Random rand = new Random();
+        int randomSleepTime = rand.nextInt(10) + 1;
+        time.sleep(TimeUnit.SECONDS.toMillis(randomSleepTime));
+
+        // Record application event queue change
+        networkThreadMetricsManager.recordApplicationEventQueueChange(pollEvent, time.milliseconds(), false);
+
+        // Assert recorded metrics values
+        assertEquals(metrics.metric(networkThreadMetricsManager.appEventTimeAvg).metricValue(), (double) randomSleepTime * 1000);
+        assertEquals(metrics.metric(networkThreadMetricsManager.appEventTimeMax).metricValue(), (double) randomSleepTime * 1000);
+
+        // Record application event queue change
+        networkThreadMetricsManager.recordApplicationEventQueueChange(shareFetchEvent, time.milliseconds(), true);
+        time.sleep(TimeUnit.SECONDS.toMillis(randomSleepTime) + shortTimeToSleep);
+
+        // Record application event queue change
+        networkThreadMetricsManager.recordApplicationEventQueueChange(shareFetchEvent, time.milliseconds(), false);
+
+        // Assert recorded metrics values
+        assertEquals(metrics.metric(networkThreadMetricsManager.appEventTimeAvg).metricValue(), (double) randomSleepTime * 1000 + shortTimeToSleep / 2d);
+        assertEquals(metrics.metric(networkThreadMetricsManager.appEventTimeMax).metricValue(), (double) randomSleepTime * 1000 + shortTimeToSleep);
     }
 }

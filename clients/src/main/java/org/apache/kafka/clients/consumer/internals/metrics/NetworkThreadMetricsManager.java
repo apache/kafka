@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals.metrics;
 
+import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.Metrics;
@@ -32,32 +34,38 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER
 
 public class NetworkThreadMetricsManager {
     // MetricNames visible for testing
-    final MetricName maxPollTime;
-    final MetricName avgPollTime;
+    final MetricName pollTimeMax;
+    final MetricName pollTimeAvg;
     final MetricName applicationEventQueueSize;
-    final MetricName avgAppEventTime;
-    final MetricName maxAppEventTime;
-    final MetricName avgAppEventProcessingTime;
-    final MetricName maxAppEventProcessingTime;
+    final MetricName appEventTimeAvg;
+    final MetricName appEventTimeMax;
+    final MetricName appEventProcessingTimeAvg;
+    final MetricName appEventProcessingTimeMax;
+    final MetricName unsentRequestsQueueSize;
+    final MetricName unsentRequestTimeAvg;
+    final MetricName unsentRequestTimeMax;
     private final Sensor consumerNetworkThreadPollSensor;
     private final Sensor applicationEventQueueSizeSensor;
     private final Sensor applicationEventQueueChangeSensor;
+    private final Sensor unsentRequestsQueueSensor;
+    private final Sensor unsentRequestsQueueSizeSensor;
     private final Sensor applicationEventProcessingSensor;
     private long lastPollTime = -1;
     private final HashMap<Uuid, Long> applicationEventQueueMap = new HashMap<>();
+    private final HashMap<NetworkClientDelegate.UnsentRequest, Long> unsentRequestsQueueMap = new HashMap<>();
 
     public NetworkThreadMetricsManager(Metrics metrics) {
         final String metricGroupName = CONSUMER_METRIC_GROUP_PREFIX + CONSUMER_METRICS_SUFFIX;
 
         consumerNetworkThreadPollSensor = metrics.sensor("consumer-network-thread-poll");
-        maxPollTime = metrics.metricName("time-between-network-thread-polls-max",
+        pollTimeMax = metrics.metricName("time-between-network-thread-polls-max",
                 metricGroupName,
                 "The maximum time in milliseconds between each poll in the network thread");
-        avgPollTime = metrics.metricName("time-between-network-thread-polls-avg",
+        pollTimeAvg = metrics.metricName("time-between-network-thread-polls-avg",
                 metricGroupName,
                 "The average time in milliseconds between each poll in the network thread");
-        consumerNetworkThreadPollSensor.add(maxPollTime, new Max());
-        consumerNetworkThreadPollSensor.add(avgPollTime, new Avg());
+        consumerNetworkThreadPollSensor.add(pollTimeMax, new Max());
+        consumerNetworkThreadPollSensor.add(pollTimeAvg, new Avg());
 
         applicationEventQueueSizeSensor = metrics.sensor("application-event-queue-size");
         applicationEventQueueSize = metrics.metricName("application-event-queue-size",
@@ -66,24 +74,40 @@ public class NetworkThreadMetricsManager {
         applicationEventQueueSizeSensor.add(applicationEventQueueSize, new Value());
 
         applicationEventQueueChangeSensor = metrics.sensor("application-event-queue-change");
-        avgAppEventTime = metrics.metricName("application-event-queue-time-avg",
+        appEventTimeAvg = metrics.metricName("application-event-queue-time-avg",
                 metricGroupName,
                 "The average time in milliseconds that application events are taking to be dequeued");
-        maxAppEventTime = metrics.metricName("application-event-queue-time-max",
+        appEventTimeMax = metrics.metricName("application-event-queue-time-max",
                 metricGroupName,
                 "The maximum time in milliseconds that application events are taking to be dequeued");
-        applicationEventQueueChangeSensor.add(avgAppEventTime, new Avg());
-        applicationEventQueueChangeSensor.add(maxAppEventTime, new Max());
+        applicationEventQueueChangeSensor.add(appEventTimeAvg, new Avg());
+        applicationEventQueueChangeSensor.add(appEventTimeMax, new Max());
 
         applicationEventProcessingSensor = metrics.sensor("application-event-queue-processing");
-        avgAppEventProcessingTime = metrics.metricName("application-event-queue-processing-time-avg",
+        appEventProcessingTimeAvg = metrics.metricName("application-event-queue-processing-time-avg",
                 metricGroupName,
                 "The average time in milliseconds that all available application events are taking to be processed");
-        maxAppEventProcessingTime = metrics.metricName("application-event-queue-processing-time-max",
+        appEventProcessingTimeMax = metrics.metricName("application-event-queue-processing-time-max",
                 metricGroupName,
                 "The maximum time in milliseconds that all available application events are taking to be processed");
-        applicationEventProcessingSensor.add(avgAppEventProcessingTime, new Avg());
-        applicationEventProcessingSensor.add(maxAppEventProcessingTime, new Max());
+        applicationEventProcessingSensor.add(appEventProcessingTimeAvg, new Avg());
+        applicationEventProcessingSensor.add(appEventProcessingTimeMax, new Max());
+
+        unsentRequestsQueueSizeSensor = metrics.sensor("unsent-requests-queue-size");
+        unsentRequestsQueueSize = metrics.metricName("unsent-requests-queue-size",
+                metricGroupName,
+                "The current size of the unsent requests queue");
+        unsentRequestsQueueSizeSensor.add(unsentRequestsQueueSize, new Value());
+
+        unsentRequestsQueueSensor = metrics.sensor("unsent-requests-queue-change");
+        unsentRequestTimeAvg = metrics.metricName("unsent-requests-queue-time-avg",
+                metricGroupName,
+                "The average time in milliseconds that unsent requests are taking to be sent");
+        unsentRequestTimeMax = metrics.metricName("unsent-requests-queue-time-max",
+                metricGroupName,
+                "The maximum time in milliseconds that unsent requests are taking to be sent");
+        unsentRequestsQueueSensor.add(unsentRequestTimeAvg, new Avg());
+        unsentRequestsQueueSensor.add(unsentRequestTimeMax, new Max());
     }
 
     public void updatePollTime(long nowMs) {
@@ -112,5 +136,19 @@ public class NetworkThreadMetricsManager {
 
     public void recordApplicationEventProcessingTime(long timeMs) {
         applicationEventProcessingSensor.record(timeMs);
+    }
+
+    public void recordUnsentRequestQueueSize(int queueSize) {
+        unsentRequestsQueueSizeSensor.record(queueSize);
+    }
+
+    public void recordUnsentRequestsQueueChange(NetworkClientDelegate.UnsentRequest request, long nowMs, boolean isNewRequest) {
+        if (isNewRequest) {
+            unsentRequestsQueueMap.put(request, nowMs);
+        }
+        else {
+            long timeSinceRequestAdded = nowMs - unsentRequestsQueueMap.get(request);
+            unsentRequestsQueueSensor.record(timeSinceRequestAdded);
+        }
     }
 }

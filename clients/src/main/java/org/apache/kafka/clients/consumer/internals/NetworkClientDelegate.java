@@ -268,6 +268,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         Objects.requireNonNull(r);
         r.setTimer(this.time, this.requestTimeoutMs);
         unsentRequests.add(r);
+
     }
 
     public static class PollResult {

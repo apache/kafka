@@ -174,6 +174,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         applicationEventQueue.drainTo(events);
         metricsManager.recordApplicationEventQueueSize(applicationEventQueue.size());
 
+        long totalProcessingTime = 0;
         for (ApplicationEvent event : events) {
             try {
                 if (event instanceof CompletableEvent)
@@ -181,7 +182,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
                 long startMs = time.milliseconds();
                 applicationEventProcessor.process(event);
-                metricsManager.recordApplicationEventQueueChange(event, time.milliseconds() - startMs, false);
+                long processingTime = time.milliseconds() - startMs;
+                totalProcessingTime += processingTime;
+
+                metricsManager.recordApplicationEventQueueChange(event, startMs - totalProcessingTime, false);
+                metricsManager.recordApplicationEventProcessingTime(processingTime);
             } catch (Throwable t) {
                 log.warn("Error processing event {}", t.getMessage(), t);
             }
