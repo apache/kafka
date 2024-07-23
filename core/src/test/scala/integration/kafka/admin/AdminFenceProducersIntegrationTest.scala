@@ -20,11 +20,12 @@ package integration.kafka.admin
 import kafka.api.IntegrationTestHarness
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException}
+import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
 import org.apache.kafka.server.config.ServerLogConfigs
-import org.junit.jupiter.api.Assertions.{assertInstanceOf, assertThrows, assertTrue, fail}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -94,8 +95,8 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
 
     producer.beginTransaction()
     try {
-        producer.send(record).get()
-        fail("expected ProducerFencedException")
+      producer.send(record).get()
+      fail("expected ProducerFencedException")
     } catch {
       case _: ProducerFencedException => //ok
       case ee: ExecutionException =>
@@ -105,6 +106,37 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
     }
 
     assertThrows(classOf[ProducerFencedException], () => producer.commitTransaction())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFenceTimeoutMs(quorum: String): Unit = {
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(record).get()
+    producer.commitTransaction()
+    def timeoutOption = new FenceProducersOptions()
+    try {
+      adminClient.fenceProducers(Collections.singletonList(txnId), timeoutOption.timeoutMs(0)).all().get()
+    } catch {
+      case ee: ExecutionException =>
+        assertInstanceOf(classOf[TimeoutException], ee.getCause) //ok
+    }
+    producer.beginTransaction()
+    try {
+      producer.send(record).get()
+    } catch {
+      case _: ProducerFencedException => //ok
+      case ee: ExecutionException =>
+        assertInstanceOf(classOf[ProducerFencedException], ee.getCause) //ok
+      case e: Exception =>
+        throw e
+    }
+    assertDoesNotThrow(new Executable() {
+      override def execute(): Unit = {
+        producer.commitTransaction()
+      }
+    })
   }
 
   @ParameterizedTest
@@ -122,8 +154,8 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
     } catch {
       case ee: ExecutionException =>
         assertTrue(ee.getCause.isInstanceOf[ProducerFencedException] ||
-                   ee.getCause.isInstanceOf[InvalidProducerEpochException],
-                   "Unexpected ExecutionException cause " + ee.getCause)
+          ee.getCause.isInstanceOf[InvalidProducerEpochException],
+          "Unexpected ExecutionException cause " + ee.getCause)
       case e: Exception =>
         throw e
     }

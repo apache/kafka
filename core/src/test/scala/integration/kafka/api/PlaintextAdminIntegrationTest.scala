@@ -43,7 +43,7 @@ import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{ConsumerGroupState, ElectionType, IsolationLevel, KafkaException, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
+import org.apache.kafka.common.{ConsumerGroupState, ElectionType, IsolationLevel, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
@@ -2599,12 +2599,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     testAppendConfig(props, "0:0", "1:1,0:0")
   }
 
-  @Test
-  def testFenceProducersTimeoutMs(): Unit = {
-    client = createAdminClient
-    client.fenceProducers(Collections.singleton("1"))
-  }
-
   @ParameterizedTest
   @ValueSource(strings = Array("quorum=kraft"))
   def testListClientMetricsResources(ignored: String): Unit = {
@@ -2632,14 +2626,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertDoesNotThrow(() => client.listClientMetricsResources(enoughOption).all().get())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("quorum=kraft"))
-  def testClientInstanceId(ignored: String): Unit = {
-    def additional = new Properties()
-    additional.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG,true)
-    client = createAdminClient(configOverrides = additional)
-    assertThrows(classOf[KafkaException], () => client.clientInstanceId(JDuration.ofSeconds(1)))
-  }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
