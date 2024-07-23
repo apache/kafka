@@ -56,6 +56,15 @@
                 <li><a href="#mirrormakerconfigs">3.8 MirrorMaker Configs</a>
                 <li><a href="#systemproperties">3.9 System Properties</a>
                 <li><a href="#tieredstorageconfigs">3.10 Tiered Storage Configs</a>
+                <li><a href="#config_providers">3.11 Configuration Providers</a>
+                    <ul>
+                        <li><a href="#using_providers">Using</a>
+                        <li><a href="#config_provider">ConfigProvider</a>
+                        <li><a href="#directory_config_provider">DirectoryConfigProvider</a>
+                        <li><a href="#env_var_config_provider">EnvVarConfigProvider</a>    
+                        <li><a href="#file_config_provider">FileConfigProvider</a>
+                        <li><a href="#ref_config_provider">Referencing</a>     
+                    </ul>    
             </ul>
         
         <li><a href="#design">4. Design</a>
@@ -129,18 +138,8 @@
                         <li><a href="#prodconfig">Production Server Config</a>
                     </ul>
                 
-                <li><a href="#config_providers">6.6 Configuration Providers</a>
-                    <ul>
-                        <li><a href="#common_provider_params">Common Parameters</a>
-                        <li><a href="#config_provider">ConfigProvider</a>
-                        <li><a href="#directory_config_provider">DirectoryConfigProvider</a>
-                        <li><a href="#env_var_config_provider">EnvVarConfigProvider</a>    
-                        <li><a href="#file_config_provider">FileConfigProvider</a>
-                        <li><a href="#ref_config_provider">Referencing</a>     
-                    </ul>
-                
-                <li><a href="#java">6.7 Java Version</a>
-                <li><a href="#hwandos">6.8 Hardware and OS</a>
+                <li><a href="#java">6.6 Java Version</a>
+                <li><a href="#hwandos">6.7 Hardware and OS</a>
                     <ul>
                         <li><a href="#os">OS</a>
                         <li><a href="#diskandfs">Disks and Filesystems</a>
@@ -150,7 +149,7 @@
                         <li><a href="#replace_disk">Replace KRaft Controller Disk</a>
                     </ul>
                 
-                <li><a href="#monitoring">6.9 Monitoring</a>
+                <li><a href="#monitoring">6.8 Monitoring</a>
                     <ul>
                         <li><a href="#remote_jmx">Security Considerations for Remote Monitoring using JMX</a>
                         <li><a href="#tiered_storage_monitoring">Tiered Storage Monitoring</a>
@@ -164,14 +163,14 @@
                         <li><a href="#others_monitoring">Others</a>
                     </ul>
                 
-                <li><a href="#zk">6.10 ZooKeeper</a>
+                <li><a href="#zk">6.9 ZooKeeper</a>
                     <ul>
                         <li><a href="#zkversion">Stable Version</a>
                         <li><a href="#zk_depr">ZooKeeper Deprecation</a>
                         <li><a href="#zkops">Operationalization</a>
                     </ul>
                 
-                <li><a href="#kraft">6.11 KRaft</a>
+                <li><a href="#kraft">6.10 KRaft</a>
                     <ul>
                         <li><a href="#kraft_config">Configuration</a>
                         <li><a href="#kraft_storage">Storage Tool</a>
@@ -181,7 +180,7 @@
                         <li><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a>
                     </ul>
                 
-                <li><a href="#tiered_storage">6.12 Tiered Storage</a>
+                <li><a href="#tiered_storage">6.11 Tiered Storage</a>
                     <ul>
                         <li><a href="#tiered_storage_overview">Tiered Storage Overview</a>
                         <li><a href="#tiered_storage_config">Configuration</a>
