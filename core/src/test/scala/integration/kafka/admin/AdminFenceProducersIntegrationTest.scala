@@ -110,7 +110,7 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testFenceTimeoutMs(quorum: String): Unit = {
+  def testFenceProducerTimeoutMs(quorum: String): Unit = {
     producer.initTransactions()
     producer.beginTransaction()
     producer.send(record).get()

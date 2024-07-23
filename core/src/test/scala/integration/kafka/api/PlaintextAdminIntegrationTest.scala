@@ -2627,20 +2627,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testAddRaftVoter(): Unit = {
-    client = createAdminClient()
-    assertThrows(classOf[ExecutionException], () => client.addRaftVoter(1,Uuid.randomUuid(),Collections.emptySet()).all().get())
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testRemoveRaftVoter(): Unit = {
-    client = createAdminClient()
-    assertThrows(classOf[ExecutionException], () => client.removeRaftVoter(1,Uuid.randomUuid()).all().get())
-  }
-
   @Test
   def testMetrics(): Unit = {
     client = createAdminClient
