@@ -29,11 +29,12 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 /**
  * Fake plugin class for testing classloading isolation.
  * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
- * <p>This class has no default constructor
+ * <p>Unconditionally throw an exception during the default constructor.
  */
-public class NoDefaultConstructorConverter implements Converter, HeaderConverter {
+public class DefaultConstructorThrowsConverter implements Converter, HeaderConverter {
 
-    public NoDefaultConstructorConverter(int ignored) {
+    public DefaultConstructorThrowsConverter() {
+        throw new RuntimeException("I always throw an exception");
     }
 
     @Override
