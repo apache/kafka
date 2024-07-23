@@ -1,6 +1,5 @@
 package kafka.test;
 
-import kafka.server.KafkaBroker;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
@@ -15,7 +14,6 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.DescribeClusterResult;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -25,6 +23,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(value = ClusterTestExtensions.class)
@@ -65,6 +64,18 @@ public class AdminApiIntegrationTest {
         try (Admin admin = Admin.create(configs)) {
             assertThrows(ExecutionException.class, () -> {
                 admin.removeRaftVoter(1, Uuid.randomUuid()).all().get();
+            });
+        }
+    }
+
+    @ClusterTest(types = Type.KRAFT)
+    public void testMetrics(ClusterInstance clusterInstance) {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true");
+        configs.put("bootstrap.servers", clusterInstance.bootstrapServers());
+        try (Admin admin = Admin.create(configs)) {
+            admin.metrics().forEach((metricName, metric) -> {
+                assertSame(metricName, metric.metricName());
             });
         }
     }

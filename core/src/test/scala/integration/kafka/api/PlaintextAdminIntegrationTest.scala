@@ -52,7 +52,7 @@ import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs, ServerLogCon
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.LoggerFactory
@@ -2624,24 +2624,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertThrows(classOf[ExecutionException], () => client.listClientMetricsResources(timeoutOption).all().get())
     def enoughOption = new ListClientMetricsResourcesOptions().timeoutMs(1000)
     assertDoesNotThrow(() => client.listClientMetricsResources(enoughOption).all().get())
-  }
-
-
-  @Test
-  def testMetrics(): Unit = {
-    client = createAdminClient
-    createTopic(topic)
-    val metric = client.metrics()
-    metric.forEach((key, value) => {
-      //      assertTrue(metricName.tags().containsKey("client-id"))
-      //      assertTrue(metricName.tags().containsKey("client-type"))
-      //      assertTrue(metricName.tags().containsKey("client-software-name"))
-      //      assertTrue(metricName.tags().containsKey("client-software-version"))
-      //      assertTrue(metricName.tags().containsKey("client-instance-id"))
-      assertTrue(key == value.metricName())
-      println(value.metricName())
-      println(value.metricValue())
-    })
   }
 
   private def testAppendConfig(props: Properties, append: String, expected: String): Unit = {
