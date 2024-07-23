@@ -61,10 +61,13 @@ public class QuorumFeaturesTest {
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
             MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         for (Features feature : Features.PRODUCTION_FEATURES) {
-            expectedFeatures.put(feature.featureName(), VersionRange.of(
-                feature.minimumProduction(),
-                feature.defaultValue(MetadataVersion.LATEST_PRODUCTION)
-            ));
+            short maxVersion = feature.defaultValue(MetadataVersion.LATEST_PRODUCTION);
+            if (maxVersion > 0) {
+                expectedFeatures.put(feature.featureName(), VersionRange.of(
+                    feature.minimumProduction(),
+                    maxVersion
+                ));
+            }
         }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(false));
     }
@@ -76,10 +79,13 @@ public class QuorumFeaturesTest {
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
             MetadataVersion.latestTesting().featureLevel()));
         for (Features feature : Features.PRODUCTION_FEATURES) {
-            expectedFeatures.put(feature.featureName(), VersionRange.of(
-                feature.minimumProduction(),
-                feature.defaultValue(MetadataVersion.latestTesting())
-            ));
+            short maxVersion = feature.defaultValue(MetadataVersion.latestTesting());
+            if (maxVersion > 0) {
+                expectedFeatures.put(feature.featureName(), VersionRange.of(
+                    feature.minimumProduction(),
+                    maxVersion
+                ));
+            }
         }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));
     }
