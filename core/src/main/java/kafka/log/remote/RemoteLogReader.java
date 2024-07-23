@@ -34,7 +34,7 @@ import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
 public class RemoteLogReader implements Callable<Void> {
-    private final Logger logger = LoggerFactory.getLogger(RemoteLogReader.class);
+    private static final Logger logger = LoggerFactory.getLogger(RemoteLogReader.class);
     private final RemoteStorageFetchInfo fetchInfo;
     private final RemoteLogManager rlm;
     private final BrokerTopicStats brokerTopicStats;

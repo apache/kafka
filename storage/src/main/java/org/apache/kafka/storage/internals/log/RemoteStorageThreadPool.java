@@ -34,7 +34,7 @@ import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.RE
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
 
 public class RemoteStorageThreadPool extends ThreadPoolExecutor {
-    private final Logger logger = LoggerFactory.getLogger(RemoteStorageThreadPool.class);
+    private static final Logger logger = LoggerFactory.getLogger(RemoteStorageThreadPool.class);
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
     @SuppressWarnings("this-escape")
