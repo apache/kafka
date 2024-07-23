@@ -232,7 +232,7 @@ public final class ClientUtils {
             bootstrapConfig = new NetworkClient.BootstrapConfiguration(
                     config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                     ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
+                    CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS);
             return new NetworkClient(metadataUpdater,
                     metadata,
                     selector,

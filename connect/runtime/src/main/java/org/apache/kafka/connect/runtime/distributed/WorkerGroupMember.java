@@ -110,7 +110,7 @@ public class WorkerGroupMember {
             NetworkClient.BootstrapConfiguration bootstrapConfig = new NetworkClient.BootstrapConfiguration(
                     config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                     ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
+                    CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS);
             NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
                     metadata,

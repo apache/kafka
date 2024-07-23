@@ -1400,11 +1400,6 @@ public class NetworkClientTest {
         assertDoesNotThrow(() -> client.ensureBootstrapped());
     }
 
-    @Test
-    public void testClientIsBootStrapped() {
-
-    }
-
     private RequestHeader parseHeader(ByteBuffer buffer) {
         buffer.getInt(); // skip size
         return RequestHeader.parse(buffer.slice());
