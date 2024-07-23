@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import com.google.common.collect.Sets;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -481,7 +479,7 @@ public class PluginUtils {
                 if (classLoader instanceof URLClassLoader) {
                     URL[] urls = ((URLClassLoader) classLoader).getURLs();
                     if (urls != null) {
-                        result.addAll(Sets.<URL>newHashSet(urls));
+                        result.addAll(new HashSet<URL>(Arrays.asList(urls)));
                     }
                 }
                 classLoader = classLoader.getParent();

@@ -31,9 +31,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.ServiceLoader;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.net.URL;
 
 import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ClassInfoList;
@@ -78,11 +80,17 @@ public class ReflectionScanner extends PluginScanner {
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
         ClassGraph classGraphBuilder = new ClassGraph().enableClassInfo()
-                .overrideClassLoaders(new ClassLoader[]{source.loader()})
-                .overrideClasspath(Arrays.asList(source.urls()))
-                .ignoreParentClassLoaders();
+                //.overrideClassLoaders(new ClassLoader[]{source.loader()});
+                .addClassLoader(source.loader());
+                //.overrideClasspath(Arrays.asList(source.urls()));
+                //.ignoreParentClassLoaders();
+        List<URL> urls = classGraphBuilder.getClasspathURLs();
+        urls.addAll(Arrays.asList(source.urls()));
+        if (!urls.isEmpty()) {
+            classGraphBuilder.overrideClasspath(urls);
+        }
         try (ScanResult classGraph = classGraphBuilder.scan()) {
-          return new PluginScanResult(
+            return new PluginScanResult(
                   getPluginDesc(classGraph, PluginType.SINK, source),
                   getPluginDesc(classGraph, PluginType.SOURCE, source),
                   getPluginDesc(classGraph, PluginType.CONVERTER, source),
@@ -113,9 +121,11 @@ public class ReflectionScanner extends PluginScanner {
             PluginSource source
     ) {
         ClassInfoList plugins;
-        Class<? extends T> kclass = (Class<T>) type.superClass();
+        Class<T> kclass = (Class<T>) type.superClass();
         try {
             plugins = classGraph.getSubclasses(kclass.getName());
+            System.out.println("stx");
+            System.out.println(kclass.getName());
         } catch (Exception e) {
             log.debug("Reflections scanner could not find any {} in {} for URLs: {}",
                     type, source, source.urls(), e);
@@ -123,7 +133,9 @@ public class ReflectionScanner extends PluginScanner {
         }
 
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
-        for (Class<? extends T> pluginKlass : plugins.getStandardClasses().loadClasses(kclass)) {
+        System.out.println("stx");
+        System.out.println(plugins.loadClasses(kclass, true).size());
+        for (Class<? extends T> pluginKlass : plugins.loadClasses(kclass, true)) {
             if (!PluginUtils.isConcrete(pluginKlass)) {
                 log.debug("Skipping {} in {} as it is not concrete implementation", pluginKlass, source);
                 continue;
@@ -135,10 +147,12 @@ public class ReflectionScanner extends PluginScanner {
             }
             try (LoaderSwap loaderSwap = withClassLoader(source.loader())) {
                 result.add(pluginDesc(pluginKlass, versionFor(pluginKlass), type, source));
-            } catch (ReflectiveOperationException | LinkageError e) {
-                log.error("Failed to discover {} in {}: Unable to instantiate {}{}",
+            //} catch (ReflectiveOperationException | LinkageError e) {
+            } catch (Exception e) {
+                log.error("Failed to discover {} in {}: Unable to instantiate {}",
                         type.simpleName(), source, pluginKlass.getSimpleName(),
-                        reflectiveErrorDescription(e), e);
+                        // reflectiveErrorDescription(e), e);
+                        e);
             }
         }
         return result;
