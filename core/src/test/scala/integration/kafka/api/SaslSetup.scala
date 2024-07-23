@@ -69,7 +69,8 @@ trait SaslSetup {
 
     val hasKerberos = jaasSections.exists { section =>
       section.getModules.asScala.exists {
-        case _: JaasModule => true
+        case module: JaasModule if module.name == "com.ibm.security.auth.module.Krb5LoginModule" ||
+                                  module.name == "com.sun.security.auth.module.Krb5LoginModule" => true
         case _ => false
       }
     }
@@ -82,7 +83,7 @@ trait SaslSetup {
 
     val hasZk = jaasSections.exists { section =>
       section.getModules.asScala.exists {
-        case _: JaasModule => true
+        case module: JaasModule if module.name == "org.apache.zookeeper.server.auth.DigestLoginModule" => true
         case _ => false
       }
     }

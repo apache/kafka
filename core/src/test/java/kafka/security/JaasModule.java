@@ -142,11 +142,11 @@ public class JaasModule {
         this.toString = toString;
     }
 
-    String name() {
+    public String name() {
         return name;
     }
 
-    boolean debug() {
+    public boolean debug() {
         return debug;
     }
 
