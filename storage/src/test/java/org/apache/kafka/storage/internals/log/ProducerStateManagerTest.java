@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.log;
-
-import kafka.log.UnifiedLog;
+package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
@@ -29,23 +27,9 @@ import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.MockTime;
-import org.apache.kafka.storage.internals.log.AppendOrigin;
-import org.apache.kafka.storage.internals.log.BatchMetadata;
-import org.apache.kafka.storage.internals.log.CompletedTxn;
-import org.apache.kafka.storage.internals.log.LogFileUtils;
-import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
-import org.apache.kafka.storage.internals.log.ProducerAppendInfo;
-import org.apache.kafka.storage.internals.log.ProducerStateEntry;
-import org.apache.kafka.storage.internals.log.ProducerStateManager;
-import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
-import org.apache.kafka.storage.internals.log.SnapshotFile;
-import org.apache.kafka.storage.internals.log.TxnMetadata;
-import org.apache.kafka.storage.internals.log.VerificationGuard;
-import org.apache.kafka.storage.internals.log.VerificationStateEntry;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -90,22 +74,23 @@ import static org.mockito.Mockito.when;
 
 public class ProducerStateManagerTest {
 
-    private File logDir;
-    private ProducerStateManager stateManager;
-    private final TopicPartition partition = new TopicPartition("test", 0);
-    private final long producerId = 1;
-    private final int maxTransactionTimeoutMs = 5 * 60 * 1000;
-    private final ProducerStateManagerConfig producerStateManagerConfig =
-            new ProducerStateManagerConfig(PRODUCER_ID_EXPIRATION_MS_DEFAULT, true);
-    private final long lateTransactionTimeoutMs = maxTransactionTimeoutMs + LATE_TRANSACTION_BUFFER_MS;
-    private final MockTime time = new MockTime();
+    private final File logDir;
+    private final ProducerStateManager stateManager;
+    private final TopicPartition partition;
+    private final ProducerStateManagerConfig producerStateManagerConfig;
+    private final MockTime time;
 
+    private final long producerId = 1;
     private final short epoch = 0;
     private final int defaultSequence = 0;
+    private final int maxTransactionTimeoutMs = 5 * 60 * 1000;
+    private final long lateTransactionTimeoutMs = maxTransactionTimeoutMs + LATE_TRANSACTION_BUFFER_MS;
 
-    @BeforeEach
-    public void setUp() throws IOException {
+    public ProducerStateManagerTest() throws IOException {
         logDir = TestUtils.tempDirectory();
+        partition = new TopicPartition("test", 0);
+        producerStateManagerConfig = new ProducerStateManagerConfig(PRODUCER_ID_EXPIRATION_MS_DEFAULT, true);
+        time = new MockTime();
         stateManager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs,
                 producerStateManagerConfig, time);
     }
@@ -117,7 +102,6 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testBasicIdMapping() {
-
         // First entry for id 0 added
         appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, 0L, false);
         // Second entry for id 0 added
@@ -1272,7 +1256,7 @@ public class ProducerStateManagerTest {
 
     private Set<Long> currentSnapshotOffsets() {
         return Arrays.stream(Objects.requireNonNull(logDir.listFiles()))
-                .map(UnifiedLog::offsetFromFile)
+                .map(LogFileUtils::offsetFromFile)
                 .collect(Collectors.toSet());
     }
 

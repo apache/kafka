@@ -61,8 +61,6 @@
             <allow pkg="org.apache.kafka.server.record" />
             <allow pkg="org.apache.kafka.test" />
             <allow pkg="org.apache.kafka.storage"/>
-            <allow pkg="org.apache.kafka.server.util"/>
-            <allow pkg="org.apache.kafka.coordinator.transaction"/>
             <allow pkg="kafka.log"/>
             <subpackage name="remote">
                 <allow pkg="scala.collection" />
@@ -83,6 +81,7 @@
         <allow pkg="org.apache.kafka.storage.internals"/>
         <allow pkg="org.apache.kafka.test" />
         <allow pkg="com.github.benmanes.caffeine.cache" />
+        <allow pkg="org.apache.kafka.coordinator.transaction"/>
     </subpackage>
 
     <!-- START OF TIERED STORAGE INTEGRATION TEST IMPORT DEPENDENCIES -->
