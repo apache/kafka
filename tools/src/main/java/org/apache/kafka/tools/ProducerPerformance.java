@@ -60,48 +60,18 @@ public class ProducerPerformance {
         ArgumentParser parser = argParser();
 
         try {
-            Namespace res = parser.parseArgs(args);
+            ConfigPostProcessor config = new ConfigPostProcessor(parser, args);
+            String topicName = config.topicName();
+            long numRecords = config.numRecords();
+            Integer recordSize = config.recordSize();
+            double throughput = config.throughput();
+            boolean payloadMonotonic = config.payloadMonotonic();
+            boolean shouldPrintMetrics = config.shouldPrintMetrics();
+            Long transactionDurationMs = config.transactionDurationMs();
+            boolean transactionsEnabled = config.transactionsEnabled();
+            List<byte[]> payloadByteList = config.payloadByteList();
 
-            /* parse args */
-            String topicName = res.getString("topic");
-            long numRecords = res.getLong("numRecords");
-            Integer recordSize = res.getInt("recordSize");
-            double throughput = res.getDouble("throughput");
-            boolean payloadMonotonic = res.getBoolean("payloadMonotonic");
-            List<String> producerProps = res.getList("producerConfig");
-            String producerConfig = res.getString("producerConfigFile");
-            String payloadFilePath = res.getString("payloadFile");
-            String transactionalId = res.getString("transactionalId");
-            boolean shouldPrintMetrics = res.getBoolean("printMetrics");
-            Long transactionDurationMs = res.getLong("transactionDurationMs");
-
-            // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
-            String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
-
-            if (producerProps == null && producerConfig == null) {
-                throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
-            }
-
-            List<byte[]> payloadByteList = readPayloadFile(payloadFilePath, payloadDelimiter);
-
-            Properties props = readProps(producerProps, producerConfig);
-            boolean transactionsEnabled = transactionDurationMs != null
-                    || transactionalId != null
-                    || props.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
-            if (transactionsEnabled && transactionDurationMs == null) {
-                transactionDurationMs = DEFAULT_TRANSACTION_DURATION_MS;
-            }
-            if (transactionsEnabled && transactionDurationMs <= 0) {
-                throw new ArgumentParserException("--transaction-duration-ms should > 0", parser);
-            }
-            if (transactionsEnabled) {
-                Optional<String> txIdInProps =
-                        Optional.ofNullable(props.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG)).map(Object::toString);
-                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, Optional.ofNullable(transactionalId).orElse(
-                        txIdInProps.orElse(DEFAULT_TRANSACTION_ID)));
-            }
-
-            KafkaProducer<byte[], byte[]> producer = createKafkaProducer(props);
+            KafkaProducer<byte[], byte[]> producer = createKafkaProducer(config.producerProps());
 
             if (transactionsEnabled)
                 producer.initTransactions();
@@ -111,7 +81,7 @@ public class ProducerPerformance {
             if (recordSize != null) {
                 payload = new byte[recordSize];
             }
-            // not threadsafe, do not share with other threads
+            // not thread-safe, do not share with other threads
             SplittableRandom random = new SplittableRandom(0);
             ProducerRecord<byte[], byte[]> record;
             stats = new Stats(numRecords, 5000);
@@ -507,4 +477,100 @@ public class ProducerPerformance {
         }
     }
 
+    static final class ConfigPostProcessor {
+        private final String topicName;
+        private final long numRecords;
+        private final Integer recordSize;
+        private final double throughput;
+        private final boolean payloadMonotonic;
+        private final Properties producerProps;
+        private final boolean shouldPrintMetrics;
+        private final Long transactionDurationMs;
+        private final boolean transactionsEnabled;
+        private final List<byte[]> payloadByteList;
+
+        public ConfigPostProcessor(ArgumentParser parser, String[] args) throws IOException, ArgumentParserException {
+            Namespace namespace = parser.parseArgs(args);
+            this.topicName = namespace.getString("topic");
+            this.numRecords = namespace.getLong("numRecords");
+            this.recordSize = namespace.getInt("recordSize");
+            this.throughput = namespace.getDouble("throughput");
+            this.payloadMonotonic = namespace.getBoolean("payloadMonotonic");
+            this.shouldPrintMetrics = namespace.getBoolean("printMetrics");
+
+            List<String> producerConfigs = namespace.getList("producerConfig");
+            String producerConfigFile = namespace.getString("producerConfigFile");
+            String payloadFilePath = namespace.getString("payloadFile");
+            Long transactionDurationMsArg = namespace.getLong("transactionDurationMs");
+            String transactionIdArg = namespace.getString("transactionalId");
+            if (producerConfigs == null && producerConfigFile == null) {
+                throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
+            }
+            if (transactionDurationMsArg != null && transactionDurationMsArg <= 0) {
+                throw new ArgumentParserException("--transaction-duration-ms should > 0", parser);
+            }
+
+            // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
+            String payloadDelimiter = namespace.getString("payloadDelimiter").equals("\\n")
+                    ? "\n" : namespace.getString("payloadDelimiter");
+            this.payloadByteList = readPayloadFile(payloadFilePath, payloadDelimiter);
+            this.producerProps = readProps(producerConfigs, producerConfigFile);
+            // setup transaction related configs
+            this.transactionsEnabled = transactionDurationMsArg != null
+                    || transactionIdArg != null
+                    || producerProps.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+            if (transactionsEnabled) {
+                Optional<String> txIdInProps =
+                        Optional.ofNullable(producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG))
+                                .map(Object::toString);
+                String transactionId = Optional.ofNullable(transactionIdArg).orElse(txIdInProps.orElse(DEFAULT_TRANSACTION_ID));
+                producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionId);
+
+                if (transactionDurationMsArg == null) {
+                    transactionDurationMsArg = DEFAULT_TRANSACTION_DURATION_MS;
+                }
+            }
+            this.transactionDurationMs = transactionDurationMsArg;
+        }
+
+        public String topicName() {
+            return topicName;
+        }
+
+        public long numRecords() {
+            return numRecords;
+        }
+
+        public Integer recordSize() {
+            return recordSize;
+        }
+
+        public double throughput() {
+            return throughput;
+        }
+
+        public boolean payloadMonotonic() {
+            return payloadMonotonic;
+        }
+
+        public Properties producerProps() {
+            return producerProps;
+        }
+
+        public Long transactionDurationMs() {
+            return transactionDurationMs;
+        }
+
+        public boolean shouldPrintMetrics() {
+            return shouldPrintMetrics;
+        }
+
+        public boolean transactionsEnabled() {
+            return transactionsEnabled;
+        }
+
+        public List<byte[]> payloadByteList() {
+            return payloadByteList;
+        }
+    }
 }
