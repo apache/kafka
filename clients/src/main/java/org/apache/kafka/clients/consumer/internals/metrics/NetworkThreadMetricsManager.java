@@ -17,10 +17,13 @@
 package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Value;
 
 import java.util.HashMap;
 
@@ -28,53 +31,86 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 
 public class NetworkThreadMetricsManager {
-    MetricName timeBetweenNetworkThreadPollMax;
-    MetricName timeBetweenNetworkThreadPollAvg;
-    private long lastNetworkThreadPoll = -1;
-    private long timeBetweenPollsMax = -1;
-    private int totalPolls = 0;
-    private long totalTimeBetweenPolls = 0;
-    private long timeBetweenPollsAvg = -1;
-
-    MetricName applicationEventQueueSize;
-    MetricName applicationEventQueueTimeAvg;
-    MetricName applicationEventQueueTimeMax;
-    private HashMap<Uuid, Long> applicationEventsMap;
-
-    MetricName applicationEventQueueProcessingTimeAvg;
-    MetricName applicationEventQueueProcessingTimeMax;
-
-    MetricName unsentRequestsQueueSize;
-    MetricName unsentRequestsQueueTimeMax;
-    MetricName unsentRequestsQueueTimeAvg;
-    private Sensor networkThreadPollSensor;
-    private Sensor applicationEventQueueSensor;
-    private Sensor unsentRequestsQueueSensor;
+    // MetricNames visible for testing
+    final MetricName maxPollTime;
+    final MetricName avgPollTime;
+    final MetricName applicationEventQueueSize;
+    final MetricName avgAppEventTime;
+    final MetricName maxAppEventTime;
+    final MetricName avgAppEventProcessingTime;
+    final MetricName maxAppEventProcessingTime;
+    private final Sensor consumerNetworkThreadPollSensor;
+    private final Sensor applicationEventQueueSizeSensor;
+    private final Sensor applicationEventQueueChangeSensor;
+    private final Sensor applicationEventProcessingSensor;
+    private long lastPollTime = -1;
+    private final HashMap<Uuid, Long> applicationEventQueueMap = new HashMap<>();
 
     public NetworkThreadMetricsManager(Metrics metrics) {
-        this(metrics, CONSUMER_METRIC_GROUP_PREFIX);
+        final String metricGroupName = CONSUMER_METRIC_GROUP_PREFIX + CONSUMER_METRICS_SUFFIX;
+
+        consumerNetworkThreadPollSensor = metrics.sensor("consumer-network-thread-poll");
+        maxPollTime = metrics.metricName("time-between-network-thread-polls-max",
+                metricGroupName,
+                "The maximum time in milliseconds between each poll in the network thread");
+        avgPollTime = metrics.metricName("time-between-network-thread-polls-avg",
+                metricGroupName,
+                "The average time in milliseconds between each poll in the network thread");
+        consumerNetworkThreadPollSensor.add(maxPollTime, new Max());
+        consumerNetworkThreadPollSensor.add(avgPollTime, new Avg());
+
+        applicationEventQueueSizeSensor = metrics.sensor("application-event-queue-size");
+        applicationEventQueueSize = metrics.metricName("application-event-queue-size",
+                metricGroupName,
+                "The current size of the consumer network application event queue");
+        applicationEventQueueSizeSensor.add(applicationEventQueueSize, new Value());
+
+        applicationEventQueueChangeSensor = metrics.sensor("application-event-queue-change");
+        avgAppEventTime = metrics.metricName("application-event-queue-time-avg",
+                metricGroupName,
+                "The average time in milliseconds that application events are taking to be dequeued");
+        maxAppEventTime = metrics.metricName("application-event-queue-time-max",
+                metricGroupName,
+                "The maximum time in milliseconds that application events are taking to be dequeued");
+        applicationEventQueueChangeSensor.add(avgAppEventTime, new Avg());
+        applicationEventQueueChangeSensor.add(maxAppEventTime, new Max());
+
+        applicationEventProcessingSensor = metrics.sensor("application-event-queue-processing");
+        avgAppEventProcessingTime = metrics.metricName("application-event-queue-processing-time-avg",
+                metricGroupName,
+                "The average time in milliseconds that all available application events are taking to be processed");
+        maxAppEventProcessingTime = metrics.metricName("application-event-queue-processing-time-max",
+                metricGroupName,
+                "The maximum time in milliseconds that all available application events are taking to be processed");
+        applicationEventProcessingSensor.add(avgAppEventProcessingTime, new Avg());
+        applicationEventProcessingSensor.add(maxAppEventProcessingTime, new Max());
     }
 
-    public NetworkThreadMetricsManager(Metrics metrics, String metricGroupPrefix) {
-        String metricGroupName = metricGroupPrefix + CONSUMER_METRICS_SUFFIX;
-        applicationEventsMap = new HashMap<>();
-    }
-
-    public void recordNetworkThreadPoll(long nowMs) {
-        long timeBetweenPolls = nowMs - lastNetworkThreadPoll;
-        lastNetworkThreadPoll = nowMs;
-        totalPolls++;
-        totalTimeBetweenPolls += timeBetweenPolls;
-        timeBetweenPollsAvg = totalTimeBetweenPolls / totalPolls;
-
-        if (timeBetweenPolls > timeBetweenPollsMax)
-            timeBetweenPollsMax = timeBetweenPolls;
-    }
-
-    public void recordApplicationEventQueueChange(long nowMs, ApplicationEvent event) {
-        Uuid id = event.id();
-        if (!applicationEventsMap.containsKey(event.id())) {
-            applicationEventsMap.put(event.id())
+    public void updatePollTime(long nowMs) {
+        if (lastPollTime != -1) {
+            long timeSinceLastPoll = nowMs - lastPollTime;
+            consumerNetworkThreadPollSensor.record(timeSinceLastPoll);
         }
+        lastPollTime = nowMs;
+    }
+
+    public void recordApplicationEventQueueSize(int queueSize) {
+        applicationEventQueueSizeSensor.record(queueSize);
+    }
+
+    public void recordApplicationEventQueueChange(ApplicationEvent event, long nowMs, boolean isNewEvent) {
+        Uuid id = event.id();
+
+        if (isNewEvent) {
+            applicationEventQueueMap.put(id, nowMs);
+        }
+        else {
+            long timeSinceEventAdded = nowMs - applicationEventQueueMap.get(id);
+            applicationEventQueueChangeSensor.record(timeSinceEventAdded);
+        }
+    }
+
+    public void recordApplicationEventProcessingTime(long timeMs) {
+        applicationEventProcessingSensor.record(timeMs);
     }
 }

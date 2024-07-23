@@ -541,7 +541,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 new CompletableEventReaper(logContext),
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
-                requestManagersSupplier);
+                requestManagersSupplier,
+                metrics);
         this.backgroundEventProcessor = new BackgroundEventProcessor(rebalanceListenerInvoker);
         this.backgroundEventReaper = new CompletableEventReaper(logContext);
     }

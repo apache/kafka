@@ -102,7 +102,8 @@ public class ConsumerNetworkThreadTest {
                 applicationEventReaper,
                 () -> applicationEventProcessor,
                 () -> networkClientDelegate,
-                () -> requestManagers
+                () -> requestManagers,
+                null
         );
     }
 
