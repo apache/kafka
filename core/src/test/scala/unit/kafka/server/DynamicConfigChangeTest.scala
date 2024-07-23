@@ -674,7 +674,7 @@ class DynamicConfigChangeUnitTest {
 
     val isRemoteLogEnabledBeforeUpdate = false
     val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null, None)
-    configHandler.maybeBootstrapRemoteLogComponents(topic, Seq(log0, log1), isRemoteLogEnabledBeforeUpdate, "retain")
+    configHandler.maybeUpdateRemoteLogComponents(topic, Seq(log0, log1), isRemoteLogEnabledBeforeUpdate, "retain")
     assertEquals(Collections.singleton(partition0), leaderPartitionsArg.getValue)
     assertEquals(Collections.singleton(partition1), followerPartitionsArg.getValue)
   }
@@ -692,7 +692,7 @@ class DynamicConfigChangeUnitTest {
 
     val isRemoteLogEnabledBeforeUpdate = true
     val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null, None)
-    configHandler.maybeBootstrapRemoteLogComponents(topic, Seq(log0), isRemoteLogEnabledBeforeUpdate, "retain")
+    configHandler.maybeUpdateRemoteLogComponents(topic, Seq(log0), isRemoteLogEnabledBeforeUpdate, "retain")
     verify(rlm, never()).onLeadershipChange(any(), any(), any())
   }
 }

@@ -23,6 +23,7 @@ import kafka.log.LocalLog.nextOption
 import kafka.log.remote.RemoteLogManager
 import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, RequestLocal}
 import kafka.utils._
+import org.apache.kafka.common.config.TopicConfig.REMOTE_LOG_DISABLE_POLICY_RETAIN
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeProducersResponseData
@@ -188,6 +189,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def remoteLogEnabled(): Boolean = {
     UnifiedLog.isRemoteLogEnabled(remoteStorageSystemEnable, config, topicPartition.topic())
+  }
+
+  def remoteLogEnabledOrRetainPolicy(): Boolean = {
+    val remoteLogDisablePolicy = config.remoteLogDisablePolicy()
+    remoteLogEnabled() || (remoteLogDisablePolicy == null || REMOTE_LOG_DISABLE_POLICY_RETAIN.equals(remoteLogDisablePolicy))
   }
 
   /**

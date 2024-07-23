@@ -1749,7 +1749,7 @@ class ReplicaManager(val config: KafkaConfig,
     //   1) remote log manager is enabled and it is available
     //   2) `log` instance should not be null here as that would have been caught earlier with NotLeaderForPartitionException or ReplicaNotAvailableException.
     //   3) fetch offset is within the offset range of the remote storage layer
-    if (remoteLogManager.isDefined && log != null && log.remoteLogEnabled() &&
+    if (remoteLogManager.isDefined && log != null && log.remoteLogEnabledOrRetainPolicy() &&
       log.logStartOffset <= offset && offset < log.localLogStartOffset())
     {
       val highWatermark = log.highWatermark
