@@ -83,6 +83,8 @@ public class ReflectionScanner extends PluginScanner {
                 .overrideClassLoaders(new ClassLoader[]{source.loader()})
                 //.addClassLoader(source.loader())
                 //.overrideClasspath(Arrays.asList(source.urls()));
+                .acceptModules("*")
+                .enableExternalClasses()
                 .ignoreParentClassLoaders();
         List<URL> urls = classGraphBuilder.getClasspathURLs();
         urls.addAll(Arrays.asList(source.urls()));
@@ -90,6 +92,11 @@ public class ReflectionScanner extends PluginScanner {
             classGraphBuilder.overrideClasspath(urls);
         }
         try (ScanResult classGraph = classGraphBuilder.scan()) {
+            System.out.println("ScanResult size");
+            System.out.println(classGraph.getAllClasses().size());
+            System.out.println(classGraph.getSubclasses("org.apache.kafka.connect.storage.Converter").size());
+//            System.out.println(classGraph.getAllClasses().get(0).getName());
+//            System.out.println(classGraph.getAllClasses().get(0).getInterfaces().get(0).getName());
             return new PluginScanResult(
                   getPluginDesc(classGraph, PluginType.SINK, source),
                   getPluginDesc(classGraph, PluginType.SOURCE, source),
@@ -124,8 +131,12 @@ public class ReflectionScanner extends PluginScanner {
         Class<T> kclass = (Class<T>) type.superClass();
         try {
             plugins = classGraph.getSubclasses(kclass.getName());
+            if (plugins.size() == 0) {
+                plugins = classGraph.getClassesImplementing(kclass.getName());
+            }
             System.out.println("stx");
             System.out.println(kclass.getName());
+            System.out.println(plugins.size());
         } catch (Exception e) {
             log.debug("Reflections scanner could not find any {} in {} for URLs: {}",
                     type, source, source.urls(), e);
@@ -133,8 +144,11 @@ public class ReflectionScanner extends PluginScanner {
         }
 
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
-        System.out.println("stx");
-        System.out.println(plugins.getStandardClasses().loadClasses(kclass, true).size());
+        if (kclass.getName().equals("org.apache.kafka.connect.storage.Converter")) {
+            System.out.println("stx plugins size");
+            //System.out.println(plugins.loadClasses(kclass, true).size());
+            System.out.println(classGraph.getClassesImplementing(kclass.getName()).size());
+        }
         for (Class<? extends T> pluginKlass : plugins.getStandardClasses().loadClasses(kclass, true)) {
             if (!PluginUtils.isConcrete(pluginKlass)) {
                 log.debug("Skipping {} in {} as it is not concrete implementation", pluginKlass, source);
