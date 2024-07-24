@@ -31,13 +31,11 @@ import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.common.utils.Utils.getNullableSizePrefixedArray;
 
 public class ProcessorRecordContext implements RecordContext, RecordMetadata {
-
     private final long timestamp;
     private final long offset;
     private final String topic;
     private final int partition;
     private final Headers headers;
-
     public ProcessorRecordContext(final long timestamp,
                                   final long offset,
                                   final int partition,
@@ -49,32 +47,26 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         this.partition = partition;
         this.headers = Objects.requireNonNull(headers);
     }
-
     @Override
     public long offset() {
         return offset;
     }
-
     @Override
     public long timestamp() {
         return timestamp;
     }
-
     @Override
     public String topic() {
         return topic;
     }
-
     @Override
     public int partition() {
         return partition;
     }
-
     @Override
     public Headers headers() {
         return headers;
     }
-
     public long residentMemorySizeEstimate() {
         long size = 0;
         size += Long.BYTES; // value.context.timestamp
@@ -92,7 +84,6 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         }
         return size;
     }
-
     public byte[] serialize() {
         final byte[] topicBytes = topic.getBytes(UTF_8);
         final byte[][] headerKeysBytes;
