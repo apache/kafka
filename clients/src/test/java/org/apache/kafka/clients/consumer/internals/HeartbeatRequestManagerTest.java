@@ -155,7 +155,7 @@ public class HeartbeatRequestManagerTest {
                 backgroundEventHandler);
     }
 
-    private void createHeartbeatStateandRequestManager() {
+    private void createHeartbeatStatAndRequestManager() {
         this.heartbeatState = new HeartbeatState(
                 subscriptions,
                 membershipManager,
@@ -218,7 +218,7 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments(short version) {
-        createHeartbeatStateandRequestManager();
+        createHeartbeatStatAndRequestManager();
         createHeartbeatRequestStateWithZeroHeartbeatInterval();
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         String topic = "topic1";
@@ -376,7 +376,7 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testValidateConsumerGroupHeartbeatRequest(final short version) {
-        createHeartbeatStateandRequestManager();
+        createHeartbeatStatAndRequestManager();
 
         // The initial heartbeatInterval is set to 0, but we're testing
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
@@ -413,7 +413,7 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testValidateConsumerGroupHeartbeatRequestAssignmentSentWhenLocalEpochChanges(final short version) {
-        createHeartbeatStateandRequestManager();
+        createHeartbeatStatAndRequestManager();
 
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
 
