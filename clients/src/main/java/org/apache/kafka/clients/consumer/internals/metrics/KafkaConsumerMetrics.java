@@ -170,9 +170,17 @@ public class KafkaConsumerMetrics implements AutoCloseable {
     @Override
     public void close() {
         metrics.removeMetric(lastPollMetricName);
+        metrics.removeMetric(backgroundEventQueueSize);
+        metrics.removeMetric(backgroundEventQueueTimeAvg);
+        metrics.removeMetric(backgroundEventQueueTimeMax);
+        metrics.removeMetric(backgroundEventQueueProcessingAvg);
+        metrics.removeMetric(backgroundEventQueueProcessingMax);
         metrics.removeSensor(timeBetweenPollSensor.name());
         metrics.removeSensor(pollIdleSensor.name());
         metrics.removeSensor(commitSyncSensor.name());
         metrics.removeSensor(committedSensor.name());
+        metrics.removeSensor(backgroundEventQueueSensor.name());
+        metrics.removeSensor(backgroundEventQueueSizeSensor.name());
+        metrics.removeSensor(backgroundEventProcessingSensor.name());
     }
 }
