@@ -99,7 +99,7 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
   }
 }
 
-case class StopPartition(topicPartition: TopicPartition, deleteLocalLog: Boolean, deleteRemoteLog: Boolean = false)
+case class StopPartition(topicPartition: TopicPartition, deleteLocalLog: Boolean, deleteRemoteLog: Boolean = false, remoteLogDisablePolicy: String = null)
 
 /**
  * Result metadata of a log read operation on the log
@@ -1746,10 +1746,10 @@ class ReplicaManager(val config: KafkaConfig,
                                           exception: OffsetOutOfRangeException): LogReadResult = {
     val offset = fetchInfo.fetchOffset
     // In case of offset out of range errors, handle it for tiered storage only if all the below conditions are true.
-    //   1) remote log manager is enabled and it is available
+    //   1) remote log manager is enabled and it is available, or "remote.log.disable.policy" is "retain"
     //   2) `log` instance should not be null here as that would have been caught earlier with NotLeaderForPartitionException or ReplicaNotAvailableException.
     //   3) fetch offset is within the offset range of the remote storage layer
-    if (remoteLogManager.isDefined && log != null && log.remoteLogEnabledOrRetainPolicy() &&
+    if (remoteLogManager.isDefined && log != null && log.canReadRemoteStorage() &&
       log.logStartOffset <= offset && offset < log.localLogStartOffset())
     {
       val highWatermark = log.highWatermark

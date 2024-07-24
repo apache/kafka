@@ -463,12 +463,6 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    public void stopPartitions(Set<StopPartition> stopPartitions,
-                               BiConsumer<TopicPartition, Throwable> errorHandler) {
-        // null means remoteLogDisablePolicy is not applied
-        stopPartitions(stopPartitions, errorHandler, null);
-    }
-
     /**
      * Stop the remote-log-manager task for the given partitions. And, calls the
      * {@link RemoteLogMetadataManager#onStopPartitions(Set)} when {@link StopPartition#deleteLocalLog()} is true.
@@ -476,15 +470,14 @@ public class RemoteLogManager implements Closeable {
      *
      * @param stopPartitions            topic partitions that needs to be stopped.
      * @param errorHandler              callback to handle any errors while stopping the partitions.
-     * @param remoteLogDisablePolicy    the value of config "remote.log.disable.policy". If null, it means no need to consider it.
      */
     public void stopPartitions(Set<StopPartition> stopPartitions,
-                               BiConsumer<TopicPartition, Throwable> errorHandler,
-                               String remoteLogDisablePolicy) {
+                               BiConsumer<TopicPartition, Throwable> errorHandler) {
         LOGGER.debug("Stop partitions: {}", stopPartitions);
         Set<TopicIdPartition> stopRLMMPartitions = new HashSet<>();
         for (StopPartition stopPartition: stopPartitions) {
             TopicPartition tp = stopPartition.topicPartition();
+            String remoteLogDisablePolicy = stopPartition.remoteLogDisablePolicy();
             try {
                 if (topicIdByPartitionMap.containsKey(tp)) {
                     TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
@@ -499,7 +492,7 @@ public class RemoteLogManager implements Closeable {
                         return null;
                     });
 
-                    // If "delete" or "null" is set, we should cancel expiration task
+                    // If "delete" or null is set, we should cancel expiration task
                     if (!REMOTE_LOG_DISABLE_POLICY_RETAIN.equals(remoteLogDisablePolicy)) {
                         leaderExpirationRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
                             LOGGER.info("Cancelling the expiration RLM task for tpId: {}", tpId);

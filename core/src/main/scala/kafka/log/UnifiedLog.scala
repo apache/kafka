@@ -191,9 +191,23 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     UnifiedLog.isRemoteLogEnabled(remoteStorageSystemEnable, config, topicPartition.topic())
   }
 
-  def remoteLogEnabledOrRetainPolicy(): Boolean = {
+  /**
+   * Check if consumer can read from remote storage.
+   * Return true if there is data in the remote storage, and
+   *    (1) the topic "remote.storage.enable" is enabled, or
+   *    (2) "remote.log.disable.policy" is "retain"
+   *
+   * @return true if remote data is readable.
+   */
+  def canReadRemoteStorage(): Boolean = {
+    def hasRetainPolicy(remoteLogDisablePolicy: String): Boolean = {
+      remoteLogDisablePolicy == null || REMOTE_LOG_DISABLE_POLICY_RETAIN.equals(remoteLogDisablePolicy)
+    }
     val remoteLogDisablePolicy = config.remoteLogDisablePolicy()
-    remoteLogEnabled() || (remoteLogDisablePolicy == null || REMOTE_LOG_DISABLE_POLICY_RETAIN.equals(remoteLogDisablePolicy))
+    // We can't just check if "remote.log.disable.policy" is "retain" because that's the default value.
+    // We should also check if there is data in remote storage. If so, it means we can read from remote storage
+    (localLogStartOffset() > logStartOffset) &&
+      (config.remoteStorageEnable() || hasRetainPolicy(remoteLogDisablePolicy))
   }
 
   /**
@@ -1992,8 +2006,6 @@ object UnifiedLog extends Logging {
         || Topic.CLUSTER_METADATA_TOPIC_NAME.equals(topic)) &&
       config.remoteStorageEnable()
   }
-
-
 
   def apply(dir: File,
             config: LogConfig,

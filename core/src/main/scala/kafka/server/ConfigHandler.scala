@@ -101,12 +101,14 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
       val stopPartitions: java.util.HashSet[StopPartition] = new java.util.HashSet[StopPartition]()
       leaderPartitions.foreach(partition => {
         // only delete remote logs when remoteLog Policy is "delete"
-        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false, deleteRemoteLog = isNewPolicyDelete))
+        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false,
+          deleteRemoteLog = isNewPolicyDelete, remoteLogDisablePolicy = newRemoteLogPolicy))
       })
 
       followerPartitions.foreach(partition => {
         // we need to cancel follower tasks and stop RLMM if "delete" is set
-        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false, deleteRemoteLog = false))
+        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false,
+          deleteRemoteLog = false, remoteLogDisablePolicy = newRemoteLogPolicy))
       })
 
       if (isNewPolicyDelete) {
@@ -118,7 +120,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
         })
       }
 
-      replicaManager.remoteLogManager.foreach(rlm => rlm.stopPartitions(stopPartitions, (_, _) => {}, newRemoteLogPolicy))
+      replicaManager.remoteLogManager.foreach(rlm => rlm.stopPartitions(stopPartitions, (_, _) => {}))
     }
   }
 
