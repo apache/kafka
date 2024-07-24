@@ -362,12 +362,20 @@ public class NioEchoServer extends Thread {
         socketChannels.clear();
     }
 
+    public void closeNewChannels() throws IOException {
+        for (SocketChannel channel : newChannels) {
+            channel.close();
+        }
+        newChannels.clear();
+    }
+
     public void close() throws IOException, InterruptedException {
         this.serverSocketChannel.close();
         closeSocketChannels();
         Utils.closeQuietly(selector, "selector");
         acceptorThread.interrupt();
         acceptorThread.join();
+        closeNewChannels();
         interrupt();
         join();
     }

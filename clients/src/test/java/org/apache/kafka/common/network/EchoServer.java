@@ -89,6 +89,7 @@ class EchoServer extends Thread {
                 }
                 synchronized (sockets) {
                     if (closing) {
+                        socket.close();
                         break;
                     }
                     sockets.add(socket);

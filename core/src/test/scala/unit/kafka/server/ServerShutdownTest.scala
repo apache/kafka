@@ -272,7 +272,9 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       val receiveFuture = executor.submit(new Runnable {
         override def run(): Unit = {
           val socket = serverSocket.accept()
-          new DataInputStream(socket.getInputStream).readByte()
+          val inputStream = new DataInputStream(socket.getInputStream)
+          inputStream.readByte()
+          inputStream.close()
         }
       })
 
