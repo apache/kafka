@@ -296,9 +296,7 @@ class BrokerServer(
         time,
         assignmentsChannelManager,
         config.brokerId,
-        () => lifecycleManager.brokerEpoch,
-        (directoryId: Uuid) => logManager.directoryPath(directoryId).asJava,
-        (topicId: Uuid) => Optional.ofNullable(metadataCache.topicIdsToNames().get(topicId))
+        () => metadataCache.getImage()
       )
       val directoryEventHandler = new DirectoryEventHandler {
         override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, reason: String, callback: Runnable): Unit =
