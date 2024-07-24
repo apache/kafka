@@ -22,7 +22,7 @@ import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException, TimeoutException, WakeupException}
+import org.apache.kafka.common.errors.{InterruptException, InvalidGroupIdException, InvalidTopicException, TimeoutException, WakeupException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
@@ -910,5 +910,28 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
 
     assertThrows(classOf[WakeupException], () => consumer.position(topicPartition, Duration.ofSeconds(100)))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testCloseLeavesGroupIfInterrupted(quorum: String, groupProtocol: String): Unit = {
+    val consumer = createConsumer()
+    val listener = new TestConsumerReassignmentListener()
+    consumer.subscribe(List(topic).asJava, listener)
+    awaitRebalance(consumer, listener)
+
+    try {
+      assertEquals(1, listener.callsToAssigned)
+      assertEquals(0, listener.callsToRevoked)
+
+      Thread.currentThread().interrupt()
+      assertThrows(classOf[InterruptException], () => consumer.close(Duration.ZERO))
+
+      assertEquals(1, listener.callsToAssigned)
+      assertEquals(1, listener.callsToRevoked)
+    } finally {
+      // Clear the interrupted flag so we don't create problems for subsequent tests.
+      Thread.interrupted()
+    }
   }
 }

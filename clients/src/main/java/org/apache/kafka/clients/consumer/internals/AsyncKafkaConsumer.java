@@ -1227,6 +1227,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private void close(Duration timeout, boolean swallowException) {
         log.trace("Closing the Kafka consumer");
+        boolean wasInterrupted = Thread.interrupted();
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
         // We are already closing with a timeout, don't allow wake-ups from here on.
@@ -1258,9 +1259,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         AppInfoParser.unregisterAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics);
         log.debug("Kafka consumer has been closed");
         Throwable exception = firstException.get();
-        if (exception != null && !swallowException) {
+        if ((wasInterrupted || exception != null) && !swallowException) {
             if (exception instanceof InterruptException) {
                 throw (InterruptException) exception;
+            } else if (wasInterrupted) {
+                throw new InterruptException("Consumer was interrupted by user prior to close()");
             }
             throw new KafkaException("Failed to close kafka consumer", exception);
         }
@@ -1907,10 +1910,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
      * {@link ConsumerRebalanceListener} callback is performed.
      *
-     * @param future         Event that contains a {@link CompletableFuture}; it is on this future that the
-     *                       application thread will wait for completion
+     * @param future         {@link CompletableFuture} on which the application thread will wait for completion
      * @param timer          Overall timer that bounds how long to wait for the event to complete
-     * @return {@code true} if the event completed within the timeout, {@code false} otherwise
+     * @return Value returned by the event's {@link Future#get()}
      */
     // Visible for testing
     <T> T processBackgroundEvents(Future<T> future, Timer timer) {
@@ -1933,6 +1935,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             } catch (TimeoutException e) {
                 // Ignore this as we will retry the event until the timeout expires.
             } finally {
+                processBackgroundEvents();
                 timer.update();
             }
         } while (timer.notExpired());
