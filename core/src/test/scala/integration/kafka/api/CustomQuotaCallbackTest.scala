@@ -56,9 +56,9 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   private val adminClients = new ArrayBuffer[Admin]()
   private var producerWithoutQuota: KafkaProducer[Array[Byte], Array[Byte]] = _
 
-  val defaultRequestQuota: Int = 1000
-  val defaultProduceQuota: Int = 2000 * 1000 * 1000
-  val defaultConsumeQuota: Int = 1000 * 1000 * 1000
+  val defaultRequestQuota = 1000
+  val defaultProduceQuota = 2000 * 1000 * 1000
+  val defaultConsumeQuota = 1000 * 1000 * 1000
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {

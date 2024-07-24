@@ -63,7 +63,7 @@ object SaslPlainSslEndToEndAuthorizationTest {
   }
 
   object Credentials {
-    val allUsers: Map[String, String] = Map(KAFKA_PLAIN_USER -> "user1-password",
+    val allUsers = Map(KAFKA_PLAIN_USER -> "user1-password",
       KAFKA_PLAIN_USER_2 -> KAFKA_PLAIN_PASSWORD_2,
       KAFKA_PLAIN_ADMIN -> "broker-password")
   }
