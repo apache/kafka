@@ -574,7 +574,10 @@ public class LogValidator {
         if (batch.magic() <= RecordBatch.MAGIC_VALUE_V1 && batch.isCompressed()) {
             try {
                 record.ensureValid();
-            } catch (InvalidRecordException | CorruptRecordException e) {
+            } catch (CorruptRecordException e) {
+                metricsRecorder.recordInvalidChecksums();
+                throw e;
+            } catch (InvalidRecordException e) {
                 metricsRecorder.recordInvalidChecksums();
                 throw new CorruptRecordException(e.getMessage() + " in topic partition " + topicPartition);
             }
