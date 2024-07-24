@@ -802,7 +802,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             }
         } catch (final FailedProcessingException failedProcessingException) {
             // Do not keep the failed processing exception in the stack trace
-            handleException(new Exception(failedProcessingException.getCause()));
+            handleException(failedProcessingException.getCause());
         } catch (final StreamsException exception) {
             record = null;
             throw exception;
@@ -815,7 +815,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return true;
     }
 
-    private void handleException(final Exception e) {
+    private void handleException(final Throwable e) {
         final StreamsException error = new StreamsException(
             String.format(
                 "Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
