@@ -17,14 +17,8 @@
 
 package kafka.api
 
-import kafka.security.{JaasModule, JaasTestUtils}
+import kafka.security.JaasTestUtils
 import kafka.security.JaasTestUtils.JaasSection
-
-import java.io.File
-import java.util
-import java.util.Properties
-import javax.security.auth.login.Configuration
-import scala.collection.Seq
 import kafka.security.minikdc.MiniKdc
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -40,9 +34,14 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.ConfigType
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.util.Using
+import java.io.File
+import java.util
+import java.util.Properties
+import javax.security.auth.login.Configuration
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
+import scala.util.Using
 
 /*
  * Implements an enumeration for the modes enabled here:
@@ -67,13 +66,7 @@ trait SaslSetup {
     // Important if tests leak consumers, producers or brokers
     LoginManager.closeAll()
 
-    val hasKerberos = jaasSections.exists { section =>
-      section.getModules.asScala.exists {
-        case module: JaasModule if module.name == "com.ibm.security.auth.module.Krb5LoginModule" ||
-                                  module.name == "com.sun.security.auth.module.Krb5LoginModule" => true
-        case _ => false
-      }
-    }
+    val hasKerberos = jaasSections.exists(_.getModules.asScala.exists(_.name().endsWith("Krb5LoginModule")))
 
     if (hasKerberos) {
       initializeKerberos()
@@ -81,12 +74,7 @@ trait SaslSetup {
 
     writeJaasConfigurationToFile(jaasSections)
 
-    val hasZk = jaasSections.exists { section =>
-      section.getModules.asScala.exists {
-        case module: JaasModule if module.name == "org.apache.zookeeper.server.auth.DigestLoginModule" => true
-        case _ => false
-      }
-    }
+    val hasZk = jaasSections.exists(_.getModules.asScala.exists(_.name() == "org.apache.zookeeper.server.auth.DigestLoginModule"))
 
     if (hasZk)
       System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")

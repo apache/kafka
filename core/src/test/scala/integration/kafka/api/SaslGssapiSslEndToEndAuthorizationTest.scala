@@ -30,7 +30,7 @@ class SaslGssapiSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTe
     JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME)
 
   override protected def kafkaClientSaslMechanism = "GSSAPI"
-  override protected def kafkaServerSaslMechanisms: List[String] = List("GSSAPI")
+  override protected def kafkaServerSaslMechanisms = List("GSSAPI")
   override protected def authorizerClass = classOf[AclAuthorizer]
 
   // Configure brokers to require SSL client authentication in order to verify that SASL_SSL works correctly even if the

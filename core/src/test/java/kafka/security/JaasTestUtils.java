@@ -235,13 +235,9 @@ public class JaasTestUtils {
                 ).map(Collections::singletonList).orElse(Collections.emptyList()));
     }
 
-    private static String jaasSectionsToString(List<JaasSection> jaasSections) {
-        return String.join("", jaasSections.stream().map(Object::toString).toArray(String[]::new));
-    }
-
     private static void writeToFile(File file, List<JaasSection> jaasSections) throws IOException {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
-            writer.write(jaasSectionsToString(jaasSections));
+            writer.write(String.join("", jaasSections.stream().map(Object::toString).toArray(String[]::new)));
         }
     }
 }
