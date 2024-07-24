@@ -61,53 +61,43 @@ public class ProducerPerformance {
 
         try {
             ConfigPostProcessor config = new ConfigPostProcessor(parser, args);
-            String topicName = config.topicName();
-            long numRecords = config.numRecords();
-            Integer recordSize = config.recordSize();
-            double throughput = config.throughput();
-            boolean payloadMonotonic = config.payloadMonotonic();
-            boolean shouldPrintMetrics = config.shouldPrintMetrics();
-            Long transactionDurationMs = config.transactionDurationMs();
-            boolean transactionsEnabled = config.transactionsEnabled();
-            List<byte[]> payloadByteList = config.payloadByteList();
+            KafkaProducer<byte[], byte[]> producer = createKafkaProducer(config.producerProps);
 
-            KafkaProducer<byte[], byte[]> producer = createKafkaProducer(config.producerProps());
-
-            if (transactionsEnabled)
+            if (config.transactionsEnabled)
                 producer.initTransactions();
 
             /* setup perf test */
             byte[] payload = null;
-            if (recordSize != null) {
-                payload = new byte[recordSize];
+            if (config.recordSize != null) {
+                payload = new byte[config.recordSize];
             }
             // not thread-safe, do not share with other threads
             SplittableRandom random = new SplittableRandom(0);
             ProducerRecord<byte[], byte[]> record;
-            stats = new Stats(numRecords, 5000);
+            stats = new Stats(config.numRecords, 5000);
             long startMs = System.currentTimeMillis();
 
-            ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
+            ThroughputThrottler throttler = new ThroughputThrottler(config.throughput, startMs);
 
             int currentTransactionSize = 0;
             long transactionStartTime = 0;
-            for (long i = 0; i < numRecords; i++) {
+            for (long i = 0; i < config.numRecords; i++) {
 
-                payload = generateRandomPayload(recordSize, payloadByteList, payload, random, payloadMonotonic, i);
+                payload = generateRandomPayload(config.recordSize, config.payloadByteList, payload, random, config.payloadMonotonic, i);
 
-                if (transactionsEnabled && currentTransactionSize == 0) {
+                if (config.transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-                record = new ProducerRecord<>(topicName, payload);
+                record = new ProducerRecord<>(config.topicName, payload);
 
                 long sendStartMs = System.currentTimeMillis();
                 cb = new PerfCallback(sendStartMs, payload.length, stats);
                 producer.send(record, cb);
 
                 currentTransactionSize++;
-                if (transactionsEnabled && transactionDurationMs <= (sendStartMs - transactionStartTime)) {
+                if (config.transactionsEnabled && config.transactionDurationMs <= (sendStartMs - transactionStartTime)) {
                     producer.commitTransaction();
                     currentTransactionSize = 0;
                 }
@@ -117,10 +107,10 @@ public class ProducerPerformance {
                 }
             }
 
-            if (transactionsEnabled && currentTransactionSize != 0)
+            if (config.transactionsEnabled && currentTransactionSize != 0)
                 producer.commitTransaction();
 
-            if (!shouldPrintMetrics) {
+            if (!config.shouldPrintMetrics) {
                 producer.close();
 
                 /* print final results */
@@ -484,16 +474,16 @@ public class ProducerPerformance {
     }
 
     static final class ConfigPostProcessor {
-        private final String topicName;
-        private final long numRecords;
-        private final Integer recordSize;
-        private final double throughput;
-        private final boolean payloadMonotonic;
-        private final Properties producerProps;
-        private final boolean shouldPrintMetrics;
-        private final Long transactionDurationMs;
-        private final boolean transactionsEnabled;
-        private final List<byte[]> payloadByteList;
+        final String topicName;
+        final long numRecords;
+        final Integer recordSize;
+        final double throughput;
+        final boolean payloadMonotonic;
+        final Properties producerProps;
+        final boolean shouldPrintMetrics;
+        final Long transactionDurationMs;
+        final boolean transactionsEnabled;
+        final List<byte[]> payloadByteList;
 
         public ConfigPostProcessor(ArgumentParser parser, String[] args) throws IOException, ArgumentParserException {
             Namespace namespace = parser.parseArgs(args);
@@ -537,46 +527,6 @@ public class ProducerPerformance {
                 }
             }
             this.transactionDurationMs = transactionDurationMsArg;
-        }
-
-        public String topicName() {
-            return topicName;
-        }
-
-        public long numRecords() {
-            return numRecords;
-        }
-
-        public Integer recordSize() {
-            return recordSize;
-        }
-
-        public double throughput() {
-            return throughput;
-        }
-
-        public boolean payloadMonotonic() {
-            return payloadMonotonic;
-        }
-
-        public Properties producerProps() {
-            return producerProps;
-        }
-
-        public Long transactionDurationMs() {
-            return transactionDurationMs;
-        }
-
-        public boolean shouldPrintMetrics() {
-            return shouldPrintMetrics;
-        }
-
-        public boolean transactionsEnabled() {
-            return transactionsEnabled;
-        }
-
-        public List<byte[]> payloadByteList() {
-            return payloadByteList;
         }
     }
 }

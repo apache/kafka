@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -344,17 +345,17 @@ public class ProducerPerformanceTest {
             "--transaction-duration-ms", "5000",
         };
         ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
-        assertEquals("Hello-Kafka", configs.topicName());
-        assertEquals(5, configs.numRecords());
-        assertEquals(100, configs.throughput());
-        assertEquals(100, configs.recordSize());
-        assertFalse(configs.payloadMonotonic());
-        assertTrue(configs.shouldPrintMetrics());
-        assertTrue(configs.payloadByteList().isEmpty());
-        Properties props = configs.producerProps();
+        assertEquals("Hello-Kafka", configs.topicName);
+        assertEquals(5, configs.numRecords);
+        assertEquals(100, configs.throughput);
+        assertEquals(100, configs.recordSize);
+        assertFalse(configs.payloadMonotonic);
+        assertTrue(configs.shouldPrintMetrics);
+        assertTrue(configs.payloadByteList.isEmpty());
+        Properties props = configs.producerProps;
         assertEquals(5, props.size());
-        assertTrue(configs.transactionsEnabled());
-        assertEquals(5000, configs.transactionDurationMs());
+        assertTrue(configs.transactionsEnabled);
+        assertEquals(5000, configs.transactionDurationMs);
     }
 
     @Test
@@ -391,9 +392,9 @@ public class ProducerPerformanceTest {
             "--record-size", "100",
             "--producer-props", "bootstrap.servers=localhost:9000"};
         ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
-        assertFalse(configs.transactionsEnabled());
-        assertNull(configs.transactionDurationMs());
-        assertFalse(configs.producerProps().contains(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
+        assertFalse(configs.transactionsEnabled);
+        assertNull(configs.transactionDurationMs);
+        assertFalse(configs.producerProps.contains(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
     }
 
     @Test
@@ -406,9 +407,9 @@ public class ProducerPerformanceTest {
             "--record-size", "100",
             "--producer-props", "bootstrap.servers=localhost:9000", "transactional.id=foobar"};
         ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
-        assertTrue(configs.transactionsEnabled());
-        assertEquals(ProducerPerformance.DEFAULT_TRANSACTION_DURATION_MS, configs.transactionDurationMs());
-        assertEquals("foobar", configs.producerProps().get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
+        assertTrue(configs.transactionsEnabled);
+        assertEquals(ProducerPerformance.DEFAULT_TRANSACTION_DURATION_MS, configs.transactionDurationMs);
+        assertEquals("foobar", configs.producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
     }
 
     @Test
@@ -423,9 +424,9 @@ public class ProducerPerformanceTest {
             "--producer.config", producerConfigFile.getAbsolutePath(),
             "--producer-props", "bootstrap.servers=localhost:9000"};
         ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
-        assertTrue(configs.transactionsEnabled());
-        assertEquals(ProducerPerformance.DEFAULT_TRANSACTION_DURATION_MS, configs.transactionDurationMs());
-        assertEquals("foobar", configs.producerProps().get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
+        assertTrue(configs.transactionsEnabled);
+        assertEquals(ProducerPerformance.DEFAULT_TRANSACTION_DURATION_MS, configs.transactionDurationMs);
+        assertEquals("foobar", configs.producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
 
         args = new String[]{
             "--topic", "Hello-Kafka",
@@ -435,9 +436,9 @@ public class ProducerPerformanceTest {
             "--producer.config", producerConfigFile.getAbsolutePath(),
             "--producer-props", "bootstrap.servers=localhost:9000", "transactional.id=hello_kafka"};
         configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
-        assertTrue(configs.transactionsEnabled());
-        assertEquals(ProducerPerformance.DEFAULT_TRANSACTION_DURATION_MS, configs.transactionDurationMs());
-        assertEquals("hello_kafka", configs.producerProps().get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
+        assertTrue(configs.transactionsEnabled);
+        assertEquals(ProducerPerformance.DEFAULT_TRANSACTION_DURATION_MS, configs.transactionDurationMs);
+        assertEquals("hello_kafka", configs.producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
 
         args = new String[]{
             "--topic", "Hello-Kafka",
@@ -448,9 +449,9 @@ public class ProducerPerformanceTest {
             "--producer.config", producerConfigFile.getAbsolutePath(),
             "--producer-props", "bootstrap.servers=localhost:9000", "transactional.id=hello_kafka"};
         configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
-        assertTrue(configs.transactionsEnabled());
-        assertEquals(ProducerPerformance.DEFAULT_TRANSACTION_DURATION_MS, configs.transactionDurationMs());
-        assertEquals("kafka_hello", configs.producerProps().get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
+        assertTrue(configs.transactionsEnabled);
+        assertEquals(ProducerPerformance.DEFAULT_TRANSACTION_DURATION_MS, configs.transactionDurationMs);
+        assertEquals("kafka_hello", configs.producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
 
         Utils.delete(producerConfigFile);
     }
@@ -466,8 +467,8 @@ public class ProducerPerformanceTest {
             "--transaction-duration-ms", "5000",
             "--producer-props", "bootstrap.servers=localhost:9000"};
         ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
-        assertTrue(configs.transactionsEnabled());
-        assertEquals(5000, configs.transactionDurationMs());
-        assertEquals(ProducerPerformance.DEFAULT_TRANSACTION_ID, configs.producerProps().get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
+        assertTrue(configs.transactionsEnabled);
+        assertEquals(5000, configs.transactionDurationMs);
+        assertEquals(ProducerPerformance.DEFAULT_TRANSACTION_ID, configs.producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
     }
 }
