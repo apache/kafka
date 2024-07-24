@@ -17,11 +17,14 @@
 
 package org.apache.kafka.clients.consumer.internals.metrics;
 
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Random;
@@ -30,22 +33,21 @@ import java.util.concurrent.TimeUnit;
 import static java.lang.Double.NaN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.mock;
 
 public class NetworkThreadMetricsManagerTest {
     private final Time time = new MockTime();
     private final Metrics metrics = new Metrics(time);
     private final long shortTimeToSleep = 100;
+    private final NetworkThreadMetricsManager networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
 
     @Test
     public void testTimeBetweenNetworkThreadPollMetrics() {
-
-        NetworkThreadMetricsManager networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
-
         // Assert the existence of metrics
         assertNotNull(metrics.metric(networkThreadMetricsManager.pollTimeMax));
         assertNotNull(metrics.metric(networkThreadMetricsManager.pollTimeAvg));
 
-        // Record poll time and sleep for short amount of time
+        // Record poll time and sleep
         long currentTimeMs = time.milliseconds();
         networkThreadMetricsManager.updatePollTime(currentTimeMs);
         time.sleep(shortTimeToSleep);
@@ -63,7 +65,6 @@ public class NetworkThreadMetricsManagerTest {
         currentTimeMs = time.milliseconds();
         networkThreadMetricsManager.updatePollTime(currentTimeMs);
 
-        // Calculating expected average time between polls
         long totalTimeBetweenPolls = randomSleepTime * 1000 + shortTimeToSleep;
 
         assertEquals(metrics.metric(networkThreadMetricsManager.pollTimeAvg).metricValue(), totalTimeBetweenPolls / 2d);
@@ -72,8 +73,6 @@ public class NetworkThreadMetricsManagerTest {
 
     @Test
     public void testApplicationEventQueueSizeMetric() {
-        NetworkThreadMetricsManager networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
-
         // Assert the existence of metrics
         assertNotNull(metrics.metric(networkThreadMetricsManager.applicationEventQueueSize));
 
@@ -88,7 +87,6 @@ public class NetworkThreadMetricsManagerTest {
 
     @Test
     public void testApplicationEventQueueChangeMetrics() {
-        NetworkThreadMetricsManager networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
         PollEvent pollEvent = new PollEvent(0);
         ShareFetchEvent shareFetchEvent = new ShareFetchEvent(null);
 
@@ -125,5 +123,62 @@ public class NetworkThreadMetricsManagerTest {
         // Assert recorded metrics values
         assertEquals(metrics.metric(networkThreadMetricsManager.appEventTimeAvg).metricValue(), (double) randomSleepTime * 1000 + shortTimeToSleep / 2d);
         assertEquals(metrics.metric(networkThreadMetricsManager.appEventTimeMax).metricValue(), (double) randomSleepTime * 1000 + shortTimeToSleep);
+    }
+
+    @Test
+    public void testUnsentRequestMetrics() {
+        NetworkClientDelegate.UnsentRequest request1 = new NetworkClientDelegate.UnsentRequest(mock(FetchRequest.Builder.class), null);
+        NetworkClientDelegate.UnsentRequest request2 = new NetworkClientDelegate.UnsentRequest(mock(FetchRequest.Builder.class), null);
+
+        // Assert the existence of metrics
+        assertNotNull(metrics.metric(networkThreadMetricsManager.unsentRequestsQueueSize));
+        assertNotNull(metrics.metric(networkThreadMetricsManager.unsentRequestTimeAvg));
+        assertNotNull(metrics.metric(networkThreadMetricsManager.unsentRequestTimeMax));
+
+        // Record adding an unsent request
+        long now = time.milliseconds();
+        networkThreadMetricsManager.recordUnsentRequestsQueueChange(request1, now, true);
+        networkThreadMetricsManager.recordUnsentRequestQueueSize(1);
+
+        // Assert recorded metrics values
+        assertEquals(metrics.metric(networkThreadMetricsManager.unsentRequestsQueueSize).metricValue(), 1d);
+        assertEquals(metrics.metric(networkThreadMetricsManager.unsentRequestTimeAvg).metricValue(), NaN);
+        assertEquals(metrics.metric(networkThreadMetricsManager.unsentRequestTimeMax).metricValue(), NaN);
+
+        // Randomly sleep 1-10 seconds
+        Random rand = new Random();
+        int randomSleepTime1 = rand.nextInt(10) + 1;
+        time.sleep(TimeUnit.SECONDS.toMillis(randomSleepTime1));
+
+        // Record sending an unsent request
+        networkThreadMetricsManager.recordUnsentRequestsQueueChange(request1, time.milliseconds(), false);
+        networkThreadMetricsManager.recordUnsentRequestQueueSize(0);
+
+        // Assert recorded metrics values
+        assertEquals(metrics.metric(networkThreadMetricsManager.unsentRequestsQueueSize).metricValue(), 0d);
+        assertEquals(metrics.metric(networkThreadMetricsManager.unsentRequestTimeAvg).metricValue(), (double) randomSleepTime1 * 1000);
+        assertEquals(metrics.metric(networkThreadMetricsManager.unsentRequestTimeMax).metricValue(), (double) randomSleepTime1 * 1000);
+
+        // Record adding an unsent request
+        now = time.milliseconds();
+        networkThreadMetricsManager.recordUnsentRequestsQueueChange(request2, now, true);
+        networkThreadMetricsManager.recordUnsentRequestQueueSize(1);
+
+        // Assert recorded metrics values
+        assertEquals(metrics.metric(networkThreadMetricsManager.unsentRequestsQueueSize).metricValue(), 1d);
+
+        // Randomly sleep 1-10 seconds
+        int randomSleepTime2 = rand.nextInt(10) + 1;
+        time.sleep(TimeUnit.SECONDS.toMillis(randomSleepTime2));
+
+        // Record sending unsent requests
+        now = time.milliseconds();
+        networkThreadMetricsManager.recordUnsentRequestsQueueChange(request2, now, false);
+        networkThreadMetricsManager.recordUnsentRequestQueueSize(0);
+
+        // Assert recorded metrics values
+        assertEquals(metrics.metric(networkThreadMetricsManager.unsentRequestsQueueSize).metricValue(), 0d);
+        assertEquals(metrics.metric(networkThreadMetricsManager.unsentRequestTimeAvg).metricValue(), (double) (randomSleepTime1 + randomSleepTime2) * 1000 / 2);
+        assertEquals(metrics.metric(networkThreadMetricsManager.unsentRequestTimeMax).metricValue(), (double) (Math.max(randomSleepTime1, randomSleepTime2)) * 1000);
     }
 }

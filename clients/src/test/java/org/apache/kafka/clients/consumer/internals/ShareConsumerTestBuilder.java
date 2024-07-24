@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.metrics.NetworkThreadMetricsManager;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -144,7 +145,8 @@ public class ShareConsumerTestBuilder implements Closeable {
                 logContext,
                 client,
                 metadata,
-                backgroundEventHandler));
+                backgroundEventHandler,
+                new NetworkThreadMetricsManager(metrics)));
 
         ShareFetchBuffer fetchBuffer = new ShareFetchBuffer(logContext);
         ShareConsumeRequestManager consumeRequestManager = spy(new ShareConsumeRequestManager(

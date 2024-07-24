@@ -131,6 +131,7 @@ public class NetworkThreadMetricsManager {
         else {
             long timeSinceEventAdded = nowMs - applicationEventQueueMap.get(id);
             applicationEventQueueChangeSensor.record(timeSinceEventAdded);
+            applicationEventQueueMap.remove(id);
         }
     }
 
@@ -149,6 +150,7 @@ public class NetworkThreadMetricsManager {
         else {
             long timeSinceRequestAdded = nowMs - unsentRequestsQueueMap.get(request);
             unsentRequestsQueueSensor.record(timeSinceRequestAdded);
+            unsentRequestsQueueMap.remove(request);
         }
     }
 }

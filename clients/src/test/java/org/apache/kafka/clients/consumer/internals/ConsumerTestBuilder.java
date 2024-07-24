@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.metrics.NetworkThreadMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -164,7 +165,8 @@ public class ConsumerTestBuilder implements Closeable {
                 logContext,
                 client,
                 metadata,
-                backgroundEventHandler));
+                backgroundEventHandler,
+                new NetworkThreadMetricsManager(metrics)));
         this.offsetsRequestManager = spy(new OffsetsRequestManager(subscriptions,
                 metadata,
                 fetchConfig.isolationLevel,

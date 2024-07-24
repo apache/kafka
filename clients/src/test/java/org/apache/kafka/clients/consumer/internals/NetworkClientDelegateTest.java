@@ -238,7 +238,8 @@ public class NetworkClientDelegateTest {
                 logContext,
                 this.client,
                 this.metadata,
-                this.backgroundEventHandler);
+                this.backgroundEventHandler,
+                null);
     }
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {
