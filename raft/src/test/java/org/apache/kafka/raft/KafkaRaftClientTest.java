@@ -596,21 +596,22 @@ public class KafkaRaftClientTest {
             .build();
 
         context.becomeLeader();
+        int epoch = context.currentEpoch();
         assertEquals(OptionalInt.of(localId), context.currentLeader());
 
         // begin epoch requests should be sent out every beginQuorumEpochTimeoutMs
         context.time.sleep(context.beginQuorumEpochTimeoutMs);
         context.client.poll();
-        context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), Utils.mkSet(remoteId1, remoteId2));
+        context.assertSentBeginQuorumEpochRequest(epoch, Utils.mkSet(remoteId1, remoteId2));
 
         int partialDelay = context.beginQuorumEpochTimeoutMs / 2;
         context.time.sleep(partialDelay);
         context.client.poll();
-        context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), Utils.mkSet());
+        context.assertSentBeginQuorumEpochRequest(epoch, Utils.mkSet());
 
         context.time.sleep(context.beginQuorumEpochTimeoutMs - partialDelay);
         context.client.poll();
-        context.assertSentBeginQuorumEpochRequest(context.currentEpoch(), Utils.mkSet(remoteId1, remoteId2));
+        context.assertSentBeginQuorumEpochRequest(epoch, Utils.mkSet(remoteId1, remoteId2));
     }
 
     @ParameterizedTest

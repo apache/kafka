@@ -37,6 +37,8 @@ import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
+import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -577,8 +579,8 @@ public final class RaftClientTestContext {
         for (RaftRequest.Outbound request : collectBeginEpochRequests(epoch)) {
             BeginQuorumEpochResponseData beginEpochResponse = beginEpochResponse(epoch, localIdOrThrow());
             deliverResponse(request.correlationId(), request.destination(), beginEpochResponse);
+            client.poll();
         }
-        client.poll();
     }
 
     public void pollUntil(TestCondition condition) throws InterruptedException {
@@ -797,10 +799,12 @@ public final class RaftClientTestContext {
         channel.mockReceive(new RaftResponse.Inbound(correlationId, versionedResponse, source));
     }
 
-    void assertSentBeginQuorumEpochRequest(int epoch, Set<Integer> destinationIds) {
+    List<RaftRequest.Outbound> assertSentBeginQuorumEpochRequest(int epoch, Set<Integer> destinationIds) {
         List<RaftRequest.Outbound> requests = collectBeginEpochRequests(epoch);
         assertEquals(destinationIds.size(), requests.size());
         assertEquals(destinationIds, requests.stream().map(r -> r.destination().id()).collect(Collectors.toSet()));
+
+        return requests;
     }
 
     private List<RaftResponse.Outbound> drainSentResponses(
@@ -1108,6 +1112,20 @@ public final class RaftClientTestContext {
         return addVoterResponse;
     }
 
+    RemoveRaftVoterResponseData assertSentRemoveVoterResponse(Errors error) {
+        List<RaftResponse.Outbound> sentResponses = drainSentResponses(ApiKeys.REMOVE_RAFT_VOTER);
+        assertEquals(1, sentResponses.size());
+
+        RaftResponse.Outbound response = sentResponses.get(0);
+        assertInstanceOf(RemoveRaftVoterResponseData.class, response.data());
+
+        RemoveRaftVoterResponseData removeVoterResponse = (RemoveRaftVoterResponseData) response.data();
+        assertEquals(error, Errors.forCode(removeVoterResponse.errorCode()));
+
+        return removeVoterResponse;
+    }
+
+    // TODO: preferredSuccessors should be a list of replica keys
     List<RaftRequest.Outbound> collectEndQuorumRequests(
         int epoch,
         Set<Integer> destinationIdSet,
@@ -1251,7 +1269,7 @@ public final class RaftClientTestContext {
         );
     }
 
-    private BeginQuorumEpochResponseData beginEpochResponse(int epoch, int leaderId) {
+    BeginQuorumEpochResponseData beginEpochResponse(int epoch, int leaderId) {
         return RaftUtil.singletonBeginQuorumEpochResponse(
             channel.listenerName(),
             beginQuorumEpochRpcVersion(),
@@ -1574,7 +1592,7 @@ public final class RaftClientTestContext {
         Endpoints endpoints
     ) {
         return addVoterRequest(
-            clusterId.toString(),
+            clusterId,
             timeoutMs,
             voter,
             endpoints
@@ -1595,6 +1613,13 @@ public final class RaftClientTestContext {
         );
     }
 
+    RemoveRaftVoterRequestData removeVoterRequest(ReplicaKey voter) {
+        return removeVoterRequest(clusterId, voter);
+    }
+
+    RemoveRaftVoterRequestData removeVoterRequest(String cluster, ReplicaKey voter) {
+        return RaftUtil.removeVoterRequest(cluster, voter);
+    }
 
     private short fetchRpcVersion() {
         if (kip853Rpc) {
@@ -1652,6 +1677,14 @@ public final class RaftClientTestContext {
         }
     }
 
+    private short removeVoterRpcVersion() {
+        if (kip853Rpc) {
+            return 0;
+        } else {
+            throw new IllegalStateException("Reconfiguration must be enabled by calling withKip853Rpc(true)");
+        }
+    }
+
     private short raftRequestVersion(ApiMessage request) {
         if (request instanceof FetchRequestData) {
             return fetchRpcVersion();
@@ -1667,6 +1700,8 @@ public final class RaftClientTestContext {
             return describeQuorumRpcVersion();
         } else if (request instanceof AddRaftVoterRequestData) {
             return addVoterRpcVersion();
+        } else if (request instanceof RemoveRaftVoterRequestData) {
+            return removeVoterRpcVersion();
         } else {
             throw new IllegalArgumentException(String.format("Request %s is not a raft request", request));
         }
@@ -1687,6 +1722,8 @@ public final class RaftClientTestContext {
             return describeQuorumRpcVersion();
         } else if (response instanceof AddRaftVoterResponseData) {
             return addVoterRpcVersion();
+        } else if (response instanceof RemoveRaftVoterResponseData) {
+            return removeVoterRpcVersion();
         } else if (response instanceof ApiVersionsResponseData) {
             return 4;
         } else {
