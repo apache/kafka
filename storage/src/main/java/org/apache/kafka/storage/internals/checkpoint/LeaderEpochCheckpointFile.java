@@ -56,7 +56,7 @@ public class LeaderEpochCheckpointFile {
         checkpoint.write(epochs);
     }
 
-    public void writeForTruncation(Collection<EpochEntry> epochs) {
+    public void writeIfDirExists(Collection<EpochEntry> epochs) {
         // Writing epoch entries after truncation is done asynchronously for performance reasons.
         // This could cause NoSuchFileException when the directory is renamed concurrently for topic deletion,
         // so we use writeIfDirExists here.
