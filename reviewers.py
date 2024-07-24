@@ -38,11 +38,11 @@ def prompt_for_user():
 if __name__ == "__main__":
     print("Utility to help generate 'Reviewers' string for Pull Requests. Use Ctrl+D or Ctrl+C to exit")
 
-    stream = os.popen("git log | grep Reviewers")
+    stream = os.popen("git log | grep 'Reviewers\|Author'")
     lines = stream.readlines()
     all_reviewers = defaultdict(int)
     for line in lines:
-        stripped = line.strip().lstrip("Reviewers: ")
+        stripped = line.strip().lstrip("Reviewers: ").lstrip("Author: ")
         reviewers = stripped.split(",")
         for reviewer in reviewers:
             all_reviewers[reviewer.strip()] += 1
