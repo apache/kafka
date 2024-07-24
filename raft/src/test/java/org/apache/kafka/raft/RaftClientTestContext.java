@@ -649,8 +649,7 @@ public final class RaftClientTestContext {
         List<ReplicaState> voterStates,
         List<ReplicaState> observerStates
     ) {
-        short apiVersion = describeQuorumRpcVersion();
-        assertSentDescribeQuorumResponse(leaderId, leaderEpoch, highWatermark, voterStates, observerStates, apiVersion, Errors.NONE);
+        assertSentDescribeQuorumResponse(leaderId, leaderEpoch, highWatermark, voterStates, observerStates, Errors.NONE);
     }
 
     void assertSentDescribeQuorumResponse(
@@ -659,7 +658,6 @@ public final class RaftClientTestContext {
         long highWatermark,
         List<ReplicaState> voterStates,
         List<ReplicaState> observerStates,
-        short apiVersion,
         Errors error
     ) {
         DescribeQuorumResponseData response = collectDescribeQuorumResponse();
@@ -677,7 +675,7 @@ public final class RaftClientTestContext {
         }
 
         DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection(0);
-        if (apiVersion >= 2) {
+        if (describeQuorumRpcVersion() >= 2) {
             nodes = new DescribeQuorumResponseData.NodeCollection(voterStates.size());
             for (ReplicaState voterState : voterStates) {
                 nodes.add(new DescribeQuorumResponseData.Node()
