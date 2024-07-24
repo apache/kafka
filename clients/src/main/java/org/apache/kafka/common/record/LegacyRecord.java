@@ -124,7 +124,7 @@ public final class LegacyRecord {
     }
 
     /**
-     * Throw an InvalidRecordException if isValid is false for this record
+     * Throw an CorruptRecordException if isValid is false for this record
      */
     public void ensureValid() {
         if (sizeInBytes() < RECORD_OVERHEAD_V0)

@@ -29,7 +29,6 @@ import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataMana
 import org.apache.kafka.server.log.remote.metadata.storage.RemotePartitionMetadataStore;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Collections;
@@ -46,7 +45,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@Tag("integration")
 @ExtendWith(ClusterTestExtensions.class)
 @ClusterTestDefaults(brokers = 3)
 public class RemoteLogMetadataManagerTest {
