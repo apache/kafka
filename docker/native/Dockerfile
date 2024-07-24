@@ -34,14 +34,7 @@ RUN mkdir $KAFKA_DIR; \
     microdnf install wget; \
     wget -nv -O kafka.tgz "$KAFKA_URL"; \
     wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
-    for server in ha.pool.sks-keyservers.net $(shuf -e \
-                          hkp://p80.pool.sks-keyservers.net:80 \
-                          keyserver.ubuntu.com \
-                          hkp://keyserver.ubuntu.com:80 \
-                          pgp.mit.edu \
-                          hkp://keys.openpgp.org) ; do \
-      gpg --batch --keyserver "$server" --recv-keys "$GPG_KEY" && break || : ; \
-    done && \
+    gpg --batch --keyserver https://downloads.apache.org/kafka/KEYS --recv-keys "$GPG_KEY"; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
     tar xfz kafka.tgz -C $KAFKA_DIR --strip-components 1; \
     rm kafka.tgz ; \

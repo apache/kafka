@@ -64,14 +64,7 @@ RUN set -eux ; \
     apk add --no-cache wget gcompat gpg gpg-agent procps bash; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
-    for server in ha.pool.sks-keyservers.net $(shuf -e \
-                          hkp://p80.pool.sks-keyservers.net:80 \
-                          keyserver.ubuntu.com \
-                          hkp://keyserver.ubuntu.com:80 \
-                          pgp.mit.edu \
-                          hkp://keys.openpgp.org) ; do \
-      gpg --batch --keyserver "$server" --recv-keys "$GPG_KEY" && break || : ; \
-    done && \
+    gpg --batch --keyserver https://downloads.apache.org/kafka/KEYS --recv-keys "$GPG_KEY"; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
     mkdir opt/kafka; \
     tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
