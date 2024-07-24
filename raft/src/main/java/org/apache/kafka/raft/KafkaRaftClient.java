@@ -2909,7 +2909,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // shutdown completes or an epoch bump forces another state transition
             return shutdown.remainingTimeMs();
         } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
-            // KAFKA-17067 is going to fix this. VotedState doesn't mean it that the replica is a voter
+            // KAFKA-17067 is going to fix this. VotedState doesn't mean that the replica is a voter
             // we need to treat VotedState similar to UnattachedState.
             transitionToCandidate(currentTimeMs);
             return 0L;

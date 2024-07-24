@@ -47,8 +47,6 @@ import java.util.concurrent.CompletableFuture;
  *    REQUEST_TIMED_OUT error if it doesn't commit in time.
  * 6. Send the RemoveVoter successful response to the client.
  * 7. Resign the leadership if the leader is not in the new voter set
- *
- * TODO: make sure that the user cannot shrink the voter set to zero voters
  */
 public final class RemoveVoterHandler {
     private final Optional<ReplicaKey> localReplicaKey;
