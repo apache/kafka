@@ -390,6 +390,7 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
     ) {
         return new MemberSubscriptionAndAssignmentImpl(
             Optional.ofNullable(member.rackId()),
+            Optional.ofNullable(member.instanceId()),
             new TopicIds(member.subscribedTopicNames(), topicsImage),
             memberAssignment
         );

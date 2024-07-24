@@ -145,10 +145,7 @@ public final class VoterSet {
      * Returns all of the voters.
      */
     public Set<VoterNode> voterNodes() {
-        return voters
-            .values()
-            .stream()
-            .collect(Collectors.toSet());
+        return new HashSet<>(voters.values());
     }
 
     /**
@@ -362,6 +359,14 @@ public final class VoterSet {
                 listeners,
                 supportedKRaftVersion
             );
+        }
+
+        public static VoterNode of(
+            ReplicaKey voterKey,
+            Endpoints listeners,
+            SupportedVersionRange supportedKRaftVersion
+        ) {
+            return new VoterNode(voterKey, listeners, supportedKRaftVersion);
         }
     }
 

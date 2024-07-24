@@ -75,8 +75,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import scala.Option;
-
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -218,7 +216,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             props.putIfAbsent(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true");
             props.putIfAbsent(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
-            return new KafkaConfig(props, false, Option.empty());
+            return new KafkaConfig(props, false);
         }
 
         public KafkaClusterTestKit build() throws Exception {
@@ -297,8 +295,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 }
             } catch (Exception e) {
                 if (executorService != null) {
-                    executorService.shutdownNow();
-                    executorService.awaitTermination(5, TimeUnit.MINUTES);
+                    ThreadUtils.shutdownExecutorServiceQuietly(executorService, 5, TimeUnit.MINUTES);
                 }
                 for (BrokerServer brokerServer : brokers.values()) {
                     brokerServer.shutdown();
@@ -640,8 +637,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             throw e;
         } finally {
-            executorService.shutdownNow();
-            executorService.awaitTermination(5, TimeUnit.MINUTES);
+            ThreadUtils.shutdownExecutorServiceQuietly(executorService, 5, TimeUnit.MINUTES);
         }
         faultHandlerFactory.fatalFaultHandler().maybeRethrowFirstException();
         faultHandlerFactory.nonFatalFaultHandler().maybeRethrowFirstException();

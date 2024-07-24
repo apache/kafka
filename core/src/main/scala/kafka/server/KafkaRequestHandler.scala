@@ -23,7 +23,7 @@ import kafka.server.KafkaRequestHandler.{threadCurrentRequest, threadRequestChan
 
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
-import com.yammer.metrics.core.{Gauge, Meter}
+import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
@@ -284,26 +284,35 @@ class BrokerTopicMetrics(name: Option[String], remoteStorageEnabled: Boolean = f
   }
 
   case class GaugeWrapper(metricType: String) {
-    @volatile private var gaugeObject: Gauge[Long] = _
-    final private val gaugeLock = new Object
-    final val aggregatedMetric = new AggregatedMetric()
+    // The map to store:
+    //   - per-partition value for topic-level metrics. The key will be the partition number
+    //   - per-topic value for broker-level metrics. The key will be the topic name
+    private val metricValues = new ConcurrentHashMap[String, Long]()
 
-    def gauge(): Gauge[Long] = gaugeLock synchronized {
-      if (gaugeObject == null) {
-        gaugeObject = metricsGroup.newGauge(metricType, () => aggregatedMetric.value(), tags)
-      }
-      return gaugeObject
+    def setValue(key: String, value: Long): Unit = {
+      newGaugeIfNeed()
+      metricValues.put(key, value)
     }
 
-    def close(): Unit = gaugeLock synchronized {
-      if (gaugeObject != null) {
-        metricsGroup.removeMetric(metricType, tags)
-        aggregatedMetric.close()
-        gaugeObject = null
-      }
+    def removeKey(key: String): Unit = {
+      newGaugeIfNeed()
+      metricValues.remove(key)
     }
 
-    gauge()
+    // metricsGroup uses ConcurrentMap to store gauges, so we don't need to use synchronized block here
+    def close(): Unit = {
+      metricsGroup.removeMetric(metricType, tags)
+      metricValues.clear()
+    }
+
+    def value(): Long = metricValues.values().stream().mapToLong(v => v).sum()
+
+    // metricsGroup uses ConcurrentMap to store gauges, so we don't need to use synchronized block here
+    private def newGaugeIfNeed(): Unit = {
+      metricsGroup.newGauge(metricType, () => value(), tags)
+    }
+
+    newGaugeIfNeed()
   }
 
   // an internal map for "lazy initialization" of certain metrics
@@ -407,47 +416,47 @@ class BrokerTopicMetrics(name: Option[String], remoteStorageEnabled: Boolean = f
 
   def invalidOffsetOrSequenceRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
 
-  def remoteCopyLagBytesAggrMetric(): AggregatedMetric = {
-    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName).aggregatedMetric
+  def remoteCopyLagBytesAggrMetric(): GaugeWrapper = {
+    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName)
   }
 
   // Visible for testing
   def remoteCopyLagBytes: Long = remoteCopyLagBytesAggrMetric().value()
 
-  def remoteCopyLagSegmentsAggrMetric(): AggregatedMetric = {
-    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName).aggregatedMetric
+  def remoteCopyLagSegmentsAggrMetric(): GaugeWrapper = {
+    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName)
   }
 
   // Visible for testing
   def remoteCopyLagSegments: Long = remoteCopyLagSegmentsAggrMetric().value()
 
-  def remoteLogMetadataCountAggrMetric(): AggregatedMetric = {
-    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).aggregatedMetric
+  def remoteLogMetadataCountAggrMetric(): GaugeWrapper = {
+    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName)
   }
 
   def remoteLogMetadataCount: Long = remoteLogMetadataCountAggrMetric().value()
 
-  def remoteLogSizeBytesAggrMetric(): AggregatedMetric = {
-    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName).aggregatedMetric
+  def remoteLogSizeBytesAggrMetric(): GaugeWrapper = {
+    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName)
   }
 
   def remoteLogSizeBytes: Long = remoteLogSizeBytesAggrMetric().value()
 
-  def remoteLogSizeComputationTimeAggrMetric(): AggregatedMetric = {
-    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).aggregatedMetric
+  def remoteLogSizeComputationTimeAggrMetric(): GaugeWrapper = {
+    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName)
   }
 
   def remoteLogSizeComputationTime: Long = remoteLogSizeComputationTimeAggrMetric().value()
 
-  def remoteDeleteLagBytesAggrMetric(): AggregatedMetric = {
-    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName).aggregatedMetric
+  def remoteDeleteLagBytesAggrMetric(): GaugeWrapper = {
+    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName)
   }
 
   // Visible for testing
   def remoteDeleteLagBytes: Long = remoteDeleteLagBytesAggrMetric().value()
 
-  def remoteDeleteLagSegmentsAggrMetric(): AggregatedMetric = {
-    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName).aggregatedMetric
+  def remoteDeleteLagSegmentsAggrMetric(): GaugeWrapper = {
+    metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName)
   }
 
   // Visible for testing
@@ -486,18 +495,6 @@ class BrokerTopicMetrics(name: Option[String], remoteStorageEnabled: Boolean = f
     metricTypeMap.values.foreach(_.close())
     metricGaugeTypeMap.values.foreach(_.close())
   }
-}
-
-class AggregatedMetric {
-  // The map to store:
-  //   - per-partition value for topic-level metrics. The key will be the partition number
-  //   - per-topic value for broker-level metrics. The key will be the topic name
-  private val metricValues = new ConcurrentHashMap[String, Long]()
-  def setValue(key: String, value: Long): Unit = metricValues.put(key, value)
-  def removeKey(key: String): Option[Long] = Option.apply(metricValues.remove(key))
-  // Sum all values in the metricValues map
-  def value(): Long = metricValues.values().stream().mapToLong(v => v).sum()
-  def close(): Unit = metricValues.clear()
 }
 
 object BrokerTopicStats {

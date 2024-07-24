@@ -536,7 +536,7 @@ public class RaftEventSimulationTest {
         final Random random;
         final AtomicInteger correlationIdCounter = new AtomicInteger();
         final MockTime time = new MockTime();
-        final Uuid clusterId = Uuid.randomUuid();
+        final String clusterId = Uuid.randomUuid().toString();
         final Map<Integer, Node> voters = new HashMap<>();
         final Map<Integer, PersistentState> nodes = new HashMap<>();
         final Map<Integer, RaftNode> running = new HashMap<>();
@@ -788,7 +788,7 @@ public class RaftEventSimulationTest {
                 time,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
-                clusterId.toString(),
+                clusterId,
                 Collections.emptyList(),
                 endpointsFromId(nodeId, channel.listenerName()),
                 logContext,
@@ -866,12 +866,12 @@ public class RaftEventSimulationTest {
 
         long highWatermark() {
             return client.quorum().highWatermark()
-                .map(hw -> hw.offset)
+                .map(LogOffsetMetadata::offset)
                 .orElse(0L);
         }
 
         long logEndOffset() {
-            return log.endOffset().offset;
+            return log.endOffset().offset();
         }
 
         @Override
@@ -947,7 +947,7 @@ public class RaftEventSimulationTest {
          * Returns if the message should be sent to the destination.
          *
          * Returns false when outbound request messages contains a destination {@code Node} that
-         * matches the set of unreaable {@code InetSocketAddress}. Note that the {@code Node.id()}
+         * matches the set of unreachable {@code InetSocketAddress}. Note that the {@code Node.id()}
          * and {@code Node.rack()} are not compared.
          *
          * @param message the raft message
@@ -996,9 +996,9 @@ public class RaftEventSimulationTest {
                     fail("Non-monotonic update of epoch detected on node " + nodeId + ": " +
                             oldEpoch + " -> " + newEpoch);
                 }
-                cluster.ifRunning(nodeId, nodeState -> {
-                    assertEquals(newEpoch, nodeState.client.quorum().epoch());
-                });
+                cluster.ifRunning(nodeId, nodeState ->
+                    assertEquals(newEpoch, nodeState.client.quorum().epoch())
+                );
                 nodeEpochs.put(nodeId, newEpoch);
             }
         }
@@ -1016,7 +1016,7 @@ public class RaftEventSimulationTest {
             cluster.leaderHighWatermark().ifPresent(highWatermark -> {
                 long numReachedHighWatermark = cluster.nodes.entrySet().stream()
                     .filter(entry -> cluster.voters.containsKey(entry.getKey()))
-                    .filter(entry -> entry.getValue().log.endOffset().offset >= highWatermark)
+                    .filter(entry -> entry.getValue().log.endOffset().offset() >= highWatermark)
                     .count();
                 assertTrue(
                     numReachedHighWatermark >= cluster.majoritySize(),
@@ -1114,7 +1114,7 @@ public class RaftEventSimulationTest {
                         assertEquals(
                             logStartOffset,
                             earliestSnapshotId.offset(),
-                            () -> String.format("mising snapshot at log start offset: nodeId = %s", nodeId)
+                            () -> String.format("missing snapshot at log start offset: nodeId = %s", nodeId)
                         );
                     }
                 });
@@ -1300,9 +1300,9 @@ public class RaftEventSimulationTest {
             if (!filters.get(inflightRequest.sourceId).acceptInbound(inbound))
                 return;
 
-            cluster.nodeIfRunning(inflightRequest.sourceId).ifPresent(node -> {
-                node.channel.mockReceive(inbound);
-            });
+            cluster.nodeIfRunning(inflightRequest.sourceId).ifPresent(node ->
+                node.channel.mockReceive(inbound)
+            );
         }
 
         void filter(int nodeId, NetworkFilter filter) {

@@ -26,6 +26,7 @@ import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{BufferSupplier, MockTime, Time}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -38,6 +39,7 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.stream.Collectors
 
 class KafkaRequestHandlerTest {
   val brokerTopicStats = new BrokerTopicStats(true)
@@ -671,4 +673,26 @@ class KafkaRequestHandlerTest {
     assertEquals(0, allTopicMetrics.remoteLogSizeBytes)
   }
 
+  @Test
+  def testGaugeClose(): Unit = {
+    val brokerTopicStats = new BrokerTopicStats(true)
+    val topic = "close-test-topic"
+    val brokerTopicMetrics: BrokerTopicMetrics = brokerTopicStats.topicStats(topic)
+    assertEquals(7, KafkaYammerMetrics.defaultRegistry.allMetrics().keySet().stream().filter(metricName => metricName.getMBeanName.contains(s"topic=$topic")).collect(Collectors.toList()).size())
+
+    brokerTopicMetrics.close()
+    assertEquals(0, KafkaYammerMetrics.defaultRegistry.allMetrics().keySet().stream().filter(metricName => metricName.getMBeanName.contains(s"topic=$topic")).collect(Collectors.toList()).size())
+
+    brokerTopicStats.recordRemoteCopyLagBytes(topic, 0, 1)
+    brokerTopicStats.recordRemoteCopyLagSegments(topic, 0, 1)
+    brokerTopicStats.recordRemoteDeleteLagBytes(topic, 0, 1)
+    brokerTopicStats.recordRemoteDeleteLagSegments(topic, 0, 1)
+    brokerTopicStats.recordRemoteLogMetadataCount(topic, 0, 1)
+    brokerTopicStats.recordRemoteLogSizeComputationTime(topic, 0, 1)
+    brokerTopicStats.recordRemoteLogSizeBytes(topic, 0, 1)
+    assertEquals(7, KafkaYammerMetrics.defaultRegistry.allMetrics().keySet().stream().filter(metricName => metricName.getMBeanName.contains(s"topic=$topic")).collect(Collectors.toList()).size())
+
+    // cleanup
+    brokerTopicStats.close()
+  }
 }

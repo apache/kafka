@@ -285,12 +285,12 @@ public class KafkaNetworkChannelTest {
                 return VoteRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId, lastEpoch, 329);
 
             case FETCH:
-                FetchRequestData request = RaftUtil.singletonFetchRequest(topicPartition, topicId, fetchPartition -> {
+                FetchRequestData request = RaftUtil.singletonFetchRequest(topicPartition, topicId, fetchPartition ->
                     fetchPartition
                         .setCurrentLeaderEpoch(5)
                         .setFetchOffset(333)
-                        .setLastFetchedEpoch(5);
-                });
+                        .setLastFetchedEpoch(5)
+                );
                 request.setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(1));
                 return request;
 

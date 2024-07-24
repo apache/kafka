@@ -40,6 +40,9 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup;
+import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -303,6 +306,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
             request,
             exception,
             (error, message) -> new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(message)
+        ));
+    }
+
+    /**
+     * See {@link GroupCoordinator#shareGroupHeartbeat(RequestContext, ShareGroupHeartbeatRequestData)}.
+     */
+    @Override
+    public CompletableFuture<ShareGroupHeartbeatResponseData> shareGroupHeartbeat(
+        RequestContext context,
+        ShareGroupHeartbeatRequestData request
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+        }
+
+        return runtime.scheduleWriteOperation(
+            "share-group-heartbeat",
+            topicPartitionFor(request.groupId()),
+            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+            coordinator -> coordinator.shareGroupHeartbeat(context, request)
+        ).exceptionally(exception -> handleOperationException(
+            "share-group-heartbeat",
+            request,
+            exception,
+            (error, message) -> new ShareGroupHeartbeatResponseData()
                 .setErrorCode(error.code())
                 .setErrorMessage(message)
         ));
@@ -587,6 +619,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
+    }
+
+    /**
+     * See {@link GroupCoordinator#shareGroupDescribe(RequestContext, List)}.
+     */
+    @Override
+    public CompletableFuture<List<DescribedGroup>> shareGroupDescribe(
+        RequestContext context,
+        List<String> groupIds) {
+        // TODO: Implement this method as part of KIP-932.
+        throw new UnsupportedOperationException();
     }
 
     /**

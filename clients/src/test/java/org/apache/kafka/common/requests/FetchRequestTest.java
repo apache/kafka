@@ -243,4 +243,51 @@ public class FetchRequestTest {
             new FetchRequest.PartitionData(Uuid.randomUuid(), 300, 0L, 300, Optional.of(300)));
     }
 
+    @ParameterizedTest
+    @MethodSource("fetchVersions")
+    public void testFetchRequestNoCacheData(short version) {
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+        TopicIdPartition tp = new TopicIdPartition(topicId, partition, "topic");
+        
+        FetchRequest fetchRequest = createFetchRequestByVersion(version, topicId, tp);
+        
+        Map<Uuid, String> topicNames = Collections.singletonMap(topicId, tp.topic());
+        List<TopicIdPartition> requestsWithTopicsName = fetchRequest.forgottenTopics(topicNames);
+        assertEquals(topicNames.size(), requestsWithTopicsName.size());
+        requestsWithTopicsName.forEach(request -> {
+            assertEquals(tp.topic(), request.topic());
+            assertEquals(topicId, request.topicId());
+            assertEquals(tp.partition(), request.partition());
+            assertEquals(tp.topicPartition(), request.topicPartition());
+        });
+
+        String expectedTopic = version >= 13 ? null : tp.topic();
+        List<TopicIdPartition> requestData = fetchRequest.forgottenTopics(Collections.emptyMap());
+        assertEquals(1, requestData.size());
+        requestData.forEach(request -> {
+            assertEquals(expectedTopic, request.topic());
+            assertEquals(topicId, request.topicId());
+            assertEquals(tp.partition(), request.partition());
+            assertEquals(new TopicPartition(expectedTopic, partition), request.topicPartition());
+        });
+
+    }
+
+    private FetchRequest createFetchRequestByVersion(short version, Uuid topicId, TopicIdPartition tp) {
+        Map<TopicPartition, FetchRequest.PartitionData> partitionData = Collections.singletonMap(tp.topicPartition(),
+                new FetchRequest.PartitionData(topicId, 0, 0, 0, Optional.empty()));
+        if (version >= 13) {
+            return FetchRequest.Builder
+                    .forReplica(version, 0, 1, 1, 1, partitionData)
+                    .replaced(Collections.singletonList(tp))
+                    .metadata(FetchMetadata.newIncremental(123)).build(version);
+        } else {
+            return FetchRequest.Builder
+                    .forReplica(version, 0, 1, 1, 1, partitionData)
+                    .removed(Collections.singletonList(tp))
+                    .metadata(FetchMetadata.newIncremental(123)).build(version);
+        }
+    }
+
 }

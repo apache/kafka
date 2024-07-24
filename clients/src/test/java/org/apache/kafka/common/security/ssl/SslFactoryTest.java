@@ -204,6 +204,11 @@ public abstract class SslFactoryTest {
                 .createNewTrustStore(trustStoreFile)
                 .build();
         SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER);
+
+        // Verify that we'll throw an exception if validateReconfiguration is called before sslFactory is configured
+        Exception e = assertThrows(ConfigException.class, () -> sslFactory.validateReconfiguration(sslConfig));
+        assertEquals("SSL reconfiguration failed due to java.lang.IllegalStateException: SslFactory has not been configured.", e.getMessage());
+
         sslFactory.configure(sslConfig);
         SslEngineFactory sslEngineFactory = sslFactory.sslEngineFactory();
         assertNotNull(sslEngineFactory, "SslEngineFactory not created");
@@ -215,37 +220,37 @@ public abstract class SslFactoryTest {
 
         // Verify that the SslEngineFactory is recreated on reconfigure() if config is changed
         trustStoreFile = TestUtils.tempFile("truststore", ".jks");
-        sslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
+        Map<String, Object> newSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
-        sslFactory.reconfigure(sslConfig);
+        sslFactory.reconfigure(newSslConfig);
         assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
         sslEngineFactory = sslFactory.sslEngineFactory();
 
         // Verify that builder is recreated on reconfigure() if config is not changed, but truststore file was modified
         trustStoreFile.setLastModified(System.currentTimeMillis() + 10000);
-        sslFactory.reconfigure(sslConfig);
+        sslFactory.reconfigure(newSslConfig);
         assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
         sslEngineFactory = sslFactory.sslEngineFactory();
 
         // Verify that builder is recreated on reconfigure() if config is not changed, but keystore file was modified
-        File keyStoreFile = new File((String) sslConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
+        File keyStoreFile = new File((String) newSslConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
         keyStoreFile.setLastModified(System.currentTimeMillis() + 10000);
-        sslFactory.reconfigure(sslConfig);
+        sslFactory.reconfigure(newSslConfig);
         assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
         sslEngineFactory = sslFactory.sslEngineFactory();
 
         // Verify that builder is recreated after validation on reconfigure() if config is not changed, but keystore file was modified
         keyStoreFile.setLastModified(System.currentTimeMillis() + 15000);
-        sslFactory.validateReconfiguration(sslConfig);
-        sslFactory.reconfigure(sslConfig);
+        sslFactory.validateReconfiguration(newSslConfig);
+        sslFactory.reconfigure(newSslConfig);
         assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
         sslEngineFactory = sslFactory.sslEngineFactory();
 
         // Verify that the builder is not recreated if modification time cannot be determined
         keyStoreFile.setLastModified(System.currentTimeMillis() + 20000);
         Files.delete(keyStoreFile.toPath());
-        sslFactory.reconfigure(sslConfig);
+        sslFactory.reconfigure(newSslConfig);
         assertSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory recreated unnecessarily");
     }
 
