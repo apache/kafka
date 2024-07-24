@@ -938,14 +938,8 @@ public class KafkaConsumerTest {
             // New consumer poll(ZERO) needs to wait for the offset fetch event added by a call to poll, to be processed
             // by the background thread, so it can realize there are no committed offsets and then
             // throw the NoOffsetForPartitionException
-            TestUtils.waitForCondition(() -> {
-                try {
-                    consumer.poll(Duration.ZERO);
-                    return false;
-                } catch (NoOffsetForPartitionException e) {
-                    return true;
-                }
-            }, "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
+            assertPollEventuallyThrows(consumer, NoOffsetForPartitionException.class,
+                    "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
         } else {
             assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
         }
@@ -2981,14 +2975,13 @@ public class KafkaConsumerTest {
         }
     }
 
-    private <T extends Throwable> void assertPollEventuallyThrows(KafkaConsumer<?, ?> consumer,
+    private static <T extends Throwable> void assertPollEventuallyThrows(KafkaConsumer<?, ?> consumer,
             Class<T> expectedException, String errMsg) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             try {
                 consumer.poll(Duration.ZERO);
                 return false;
             } catch (Throwable exception) {
-                System.out.println("exception:" + exception + "\t expectedException " + expectedException);
                 return expectedException.isInstance(exception);
             }
         }, errMsg);
