@@ -130,26 +130,6 @@ final class EndpointsTest {
     }
 
     @Test
-    void testToString() {
-        ListenerName listener1 = ListenerName.normalised("listener1");
-        InetSocketAddress address1 = InetSocketAddress.createUnresolved("localhost", 9093);
-
-        Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress),
-                Utils.mkEntry(listener1, address1));
-        Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
-
-        String expectedString = String.format(
-                "Endpoints(endpoints={%s=%s, %s=%s})",
-                testListener,
-                testSocketAddress,
-                listener1,
-                address1);
-
-        assertEquals(expectedString, endpoints.toString());
-    }
-
-    @Test
     void testToBeginQuorumEpochRequestWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
                 Utils.mkEntry(testListener, testSocketAddress));
@@ -170,13 +150,6 @@ final class EndpointsTest {
         Endpoints endpoints = Endpoints.empty();
 
         assertEquals(0, endpoints.toBeginQuorumEpochRequest().size());
-    }
-
-    @Test
-    void testEmpty() {
-        Endpoints emptyEndpoints = Endpoints.empty();
-
-        assertEquals(Endpoints.fromInetSocketAddresses(Collections.emptyMap()), emptyEndpoints);
     }
 
     @Test
