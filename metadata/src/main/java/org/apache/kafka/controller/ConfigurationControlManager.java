@@ -41,7 +41,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -472,10 +471,7 @@ public class ConfigurationControlManager {
             if (configs != null) {
                 Collection<String> targetConfigs = resourceEntry.getValue();
                 if (targetConfigs.isEmpty()) {
-                    Iterator<Entry<String, String>> iter =
-                        configs.entrySet(lastCommittedOffset).iterator();
-                    while (iter.hasNext()) {
-                        Entry<String, String> entry = iter.next();
+                    for (Entry<String, String> entry : configs.entrySet(lastCommittedOffset)) {
                         foundConfigs.put(entry.getKey(), entry.getValue());
                     }
                 } else {

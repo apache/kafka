@@ -40,14 +40,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(value = 40)
 public class EventHandlerExceptionInfoTest {
     private static final EventHandlerExceptionInfo TOPIC_EXISTS =
-        EventHandlerExceptionInfo.fromInternal(
-            new TopicExistsException("Topic exists."),
-            () -> OptionalInt.empty());
+        EventHandlerExceptionInfo.fromInternal(new TopicExistsException("Topic exists."), OptionalInt::empty);
 
     private static final EventHandlerExceptionInfo REJECTED_EXECUTION =
-        EventHandlerExceptionInfo.fromInternal(
-            new RejectedExecutionException(),
-            () -> OptionalInt.empty());
+        EventHandlerExceptionInfo.fromInternal(new RejectedExecutionException(), OptionalInt::empty);
 
     private static final EventHandlerExceptionInfo INTERRUPTED =
         EventHandlerExceptionInfo.fromInternal(

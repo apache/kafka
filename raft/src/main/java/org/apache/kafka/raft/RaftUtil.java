@@ -18,6 +18,8 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
+import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
@@ -301,7 +303,7 @@ public class RaftUtil {
         String clusterId,
         int leaderEpoch,
         int leaderId,
-        Endpoints leaderEndponts,
+        Endpoints leaderEndpoints,
         ReplicaKey voterKey
     ) {
         return new BeginQuorumEpochRequestData()
@@ -322,7 +324,7 @@ public class RaftUtil {
                         )
                 )
             )
-            .setLeaderEndpoints(leaderEndponts.toBeginQuorumEpochRequest());
+            .setLeaderEndpoints(leaderEndpoints.toBeginQuorumEpochRequest());
     }
 
     public static BeginQuorumEpochResponseData singletonBeginQuorumEpochResponse(
@@ -500,6 +502,31 @@ public class RaftUtil {
         return response;
     }
 
+    public static AddRaftVoterRequestData addVoterRequest(
+        String clusterId,
+        int timeoutMs,
+        ReplicaKey voter,
+        Endpoints listeners
+    ) {
+        return new AddRaftVoterRequestData()
+            .setClusterId(clusterId)
+            .setTimeoutMs(timeoutMs)
+            .setVoterId(voter.id())
+            .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
+            .setListeners(listeners.toAddVoterRequest());
+    }
+
+    public static AddRaftVoterResponseData addVoterResponse(
+        Errors error,
+        String errorMessage
+    ) {
+        errorMessage = errorMessage == null ? error.message() : errorMessage;
+
+        return new AddRaftVoterResponseData()
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage);
+    }
+
     public static Optional<ReplicaKey> voteRequestVoterKey(
         VoteRequestData request,
         VoteRequestData.PartitionData partition
@@ -519,6 +546,14 @@ public class RaftUtil {
             return Optional.empty();
         } else {
             return Optional.of(ReplicaKey.of(request.voterId(), partition.voterDirectoryId()));
+        }
+    }
+
+    public static Optional<ReplicaKey> addVoterRequestVoterKey(AddRaftVoterRequestData request) {
+        if (request.voterId() < 0) {
+            return Optional.empty();
+        } else {
+            return Optional.of(ReplicaKey.of(request.voterId(), request.voterDirectoryId()));
         }
     }
 
