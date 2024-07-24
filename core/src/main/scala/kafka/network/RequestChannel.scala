@@ -257,7 +257,9 @@ object RequestChannel extends Logging {
         m.responseSendTimeHist.update(Math.round(responseSendTimeMs))
         m.totalTimeHist.update(Math.round(totalTimeMs))
         m.requestBytesHist.update(sizeOfBodyInBytes)
-        m.messageConversionsTimeHist.foreach(_.update(Math.round(messageConversionsTimeMs)))
+        if (messageConversionsTimeMs > 0) {
+          m.messageConversionsTimeHist.foreach(_.update(Math.round(messageConversionsTimeMs)))
+        }
         m.tempMemoryBytesHist.foreach(_.update(temporaryMemoryBytes))
       }
 
