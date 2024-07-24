@@ -29,8 +29,8 @@ import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.security.authorizer.AclEntry
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.jupiter.api.{Tag, Timeout}
 
 import java.lang.{Byte => JByte}
 import scala.jdk.CollectionConverters._
@@ -38,7 +38,6 @@ import scala.jdk.CollectionConverters._
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1)
-@Tag("integration")
 class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest(types = Array(Type.ZK))
