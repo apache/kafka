@@ -46,7 +46,7 @@ import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
+import org.apache.kafka.server.util.{KafkaScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache}
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 import org.junit.jupiter.api.function.Executable
@@ -965,7 +965,7 @@ class LogManagerTest {
         maxTransactionTimeoutMs = 5 * 60 * 1000,
         producerStateManagerConfig = new ProducerStateManagerConfig(5 * 60 * 1000, false),
         producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-        scheduler = mockTime.scheduler,
+        scheduler = mock(classOf[Scheduler]),
         time = mockTime,
         brokerTopicStats = mockBrokerTopicStats,
         logDirFailureChannel = mock(classOf[LogDirFailureChannel]),

@@ -53,8 +53,8 @@ public class MetadataLoaderMetricsTest {
         FakeMetadataLoaderMetrics(Optional<MetricsRegistry> registry) {
             metrics = new MetadataLoaderMetrics(
                 registry,
-                n -> batchProcessingTimeNs.set(n),
-                n -> batchSize.set(n),
+                batchProcessingTimeNs::set,
+                batchSize::set,
                 provenance);
         }
 

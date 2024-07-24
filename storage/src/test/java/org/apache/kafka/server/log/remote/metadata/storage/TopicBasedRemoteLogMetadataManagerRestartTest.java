@@ -30,7 +30,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Arrays;
@@ -40,7 +39,6 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@Tag("integration")
 public class TopicBasedRemoteLogMetadataManagerRestartTest {
 
     private final Time time = Time.SYSTEM;
