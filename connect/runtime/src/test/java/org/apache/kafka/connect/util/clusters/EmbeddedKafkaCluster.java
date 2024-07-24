@@ -192,7 +192,7 @@ public class EmbeddedKafkaCluster {
      *         never null but possibly empty
      */
     public Set<BrokerServer> runningBrokers() {
-        return brokersInState(state -> state == BrokerState.RUNNING);
+        return brokersInState(BrokerState.RUNNING::equals);
     }
 
     /**
@@ -203,17 +203,8 @@ public class EmbeddedKafkaCluster {
      */
     public Set<BrokerServer> brokersInState(Predicate<BrokerState> desiredState) {
         return cluster.brokers().values().stream()
-                .filter(b -> hasState(b, desiredState))
+                .filter(b -> desiredState.test(b.brokerState()))
                 .collect(Collectors.toSet());
-    }
-
-    protected boolean hasState(BrokerServer server, Predicate<BrokerState> desiredState) {
-        try {
-            return desiredState.test(server.brokerState());
-        } catch (Throwable e) {
-            // Broker failed to respond.
-            return false;
-        }
     }
 
     public boolean sslEnabled() {
