@@ -138,7 +138,7 @@ public class HeartbeatRequestManagerTest {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mock(Node.class)));
     }
 
-    private void createHeartbeatStateWithZeroHeartbeatInterval() {
+    private void createHeartbeatRequestStateWithZeroHeartbeatInterval() {
         this.heartbeatRequestState = spy(new HeartbeatRequestState(
                 logContext,
                 time,
@@ -155,12 +155,29 @@ public class HeartbeatRequestManagerTest {
                 backgroundEventHandler);
     }
 
+    private void createHeartbeatStateandRequestManager() {
+        this.heartbeatState = new HeartbeatState(
+                subscriptions,
+                membershipManager,
+                DEFAULT_MAX_POLL_INTERVAL_MS
+        );
+
+        this.heartbeatRequestManager = createHeartbeatRequestManager(
+                coordinatorRequestManager,
+                membershipManager,
+                heartbeatState,
+                heartbeatRequestState,
+                backgroundEventHandler
+        );
+    }
+
+
     @Test
     public void testHeartbeatOnStartup() {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size());
 
-        createHeartbeatStateWithZeroHeartbeatInterval();
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
@@ -201,20 +218,8 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments(short version) {
-        heartbeatState = new HeartbeatState(
-                subscriptions,
-                membershipManager,
-                DEFAULT_MAX_POLL_INTERVAL_MS
-        );
-
-        heartbeatRequestManager = createHeartbeatRequestManager(
-                coordinatorRequestManager,
-                membershipManager,
-                heartbeatState,
-                heartbeatRequestState,
-                backgroundEventHandler
-        );
-        createHeartbeatStateWithZeroHeartbeatInterval();
+        createHeartbeatStateandRequestManager();
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         String topic = "topic1";
         Set<String> set = Collections.singleton(topic);
@@ -247,7 +252,7 @@ public class HeartbeatRequestManagerTest {
     @ValueSource(booleans = {true, false})
     public void testSkippingHeartbeat(final boolean shouldSkipHeartbeat) {
         // The initial heartbeatInterval is set to 0
-        createHeartbeatStateWithZeroHeartbeatInterval();
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
 
         // Mocking notInGroup
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(shouldSkipHeartbeat);
@@ -327,7 +332,7 @@ public class HeartbeatRequestManagerTest {
     @Test
     public void testNetworkTimeout() {
         // The initial heartbeatInterval is set to 0
-        createHeartbeatStateWithZeroHeartbeatInterval();
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
         // Mimic network timeout
@@ -371,19 +376,7 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testValidateConsumerGroupHeartbeatRequest(final short version) {
-        heartbeatState = new HeartbeatState(
-                subscriptions,
-                membershipManager,
-                DEFAULT_MAX_POLL_INTERVAL_MS
-        );
-
-        heartbeatRequestManager = createHeartbeatRequestManager(
-                coordinatorRequestManager,
-                membershipManager,
-                heartbeatState,
-                heartbeatRequestState,
-                backgroundEventHandler
-        );
+        createHeartbeatStateandRequestManager();
 
         // The initial heartbeatInterval is set to 0, but we're testing
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
@@ -420,17 +413,7 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testValidateConsumerGroupHeartbeatRequestAssignmentSentWhenLocalEpochChanges(final short version) {
-        heartbeatState = new HeartbeatState(
-                subscriptions,
-                membershipManager,
-                DEFAULT_MAX_POLL_INTERVAL_MS);
-
-        heartbeatRequestManager = createHeartbeatRequestManager(
-                coordinatorRequestManager,
-                membershipManager,
-                heartbeatState,
-                heartbeatRequestState,
-                backgroundEventHandler);
+        createHeartbeatStateandRequestManager();
 
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
 
@@ -550,7 +533,7 @@ public class HeartbeatRequestManagerTest {
                 DEFAULT_MAX_POLL_INTERVAL_MS
         );
 
-        createHeartbeatStateWithZeroHeartbeatInterval();
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
 
         // The initial ConsumerGroupHeartbeatRequest sets most fields to their initial empty values
         ConsumerGroupHeartbeatRequestData data = heartbeatState.buildRequestData();
