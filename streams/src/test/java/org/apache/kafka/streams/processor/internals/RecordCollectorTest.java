@@ -1578,8 +1578,29 @@ public class RecordCollectorTest {
             collector.initialize();
 
             final StreamsException exception = assertThrows(
-                    StreamsException.class,
+                StreamsException.class,
                 () -> collector.send(topic, "key", "val", null, 0, null, stringSerializer, errorSerializer, sinkNodeName, context));
+
+            assertInstanceOf(RuntimeException.class, exception.getCause());
+            assertEquals("KABOOM!", exception.getCause().getMessage());
+        }
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionWhenKeySerializationFailedAndProductionExceptionHandlerRepliesWithFail() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = newRecordCollector(new ProductionExceptionHandlerMock(
+                ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL,
+                context,
+                sinkNodeName,
+                taskId,
+                ProductionExceptionHandler.SerializationExceptionOrigin.KEY
+            ));
+            collector.initialize();
+
+            final StreamsException exception = assertThrows(
+                StreamsException.class,
+                () -> collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context));
 
             assertInstanceOf(RuntimeException.class, exception.getCause());
             assertEquals("KABOOM!", exception.getCause().getMessage());
