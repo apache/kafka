@@ -1216,7 +1216,7 @@ public class ReplicationControlManager {
         }
 
         int[] newIsr = partitionData.newIsrWithEpochs().stream()
-            .mapToInt(brokerState -> brokerState.brokerId()).toArray();
+            .mapToInt(BrokerState::brokerId).toArray();
 
         if (!Replicas.validateIsr(partition.replicas, newIsr)) {
             log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
@@ -1560,6 +1560,7 @@ public class ReplicationControlManager {
         if (states.current() != states.next()) {
             switch (states.next()) {
                 case FENCED:
+                case SHUTDOWN_NOW:
                     handleBrokerFenced(brokerId, records);
                     break;
                 case UNFENCED:
@@ -1567,9 +1568,6 @@ public class ReplicationControlManager {
                     break;
                 case CONTROLLED_SHUTDOWN:
                     handleBrokerInControlledShutdown(brokerId, brokerEpoch, records);
-                    break;
-                case SHUTDOWN_NOW:
-                    handleBrokerFenced(brokerId, records);
                     break;
             }
         }
@@ -2078,7 +2076,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString())
+            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name)
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -2202,9 +2200,7 @@ public class ReplicationControlManager {
         for (int partitionId : partitionIds) {
             Optional<OngoingPartitionReassignment> ongoing =
                 getOngoingPartitionReassignment(topicInfo, partitionId);
-            if (ongoing.isPresent()) {
-                ongoingTopic.partitions().add(ongoing.get());
-            }
+            ongoing.ifPresent(ongoingPartitionReassignment -> ongoingTopic.partitions().add(ongoingPartitionReassignment));
         }
         if (!ongoingTopic.partitions().isEmpty()) {
             response.topics().add(ongoingTopic);
