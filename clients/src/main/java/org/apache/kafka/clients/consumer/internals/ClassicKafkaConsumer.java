@@ -103,9 +103,13 @@ import static org.apache.kafka.common.utils.Utils.swallow;
  *
  * <p/>
  *
- * <em>Note:</em> per its name, this implementation is left for backward compatibility purposes. The updated consumer
- * group protocol (from KIP-848) introduces allows users continue using the legacy "classic" group protocol.
- * This class should not be invoked directly; users should instead create a {@link KafkaConsumer} as before.
+ * This {@link ConsumerDelegate} implementation exists for backward compatibility to allow users to continue to use
+ * the existing classic group protocol.
+ *
+ * <p/>
+ *
+ * <em>Note:</em> This class should not be invoked directly; users should instead create and use the
+ * {@link KafkaConsumer} API as before.
  */
 public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
@@ -137,7 +141,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final List<ConsumerPartitionAssignor> assignors;
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
-    // currentThread holds the threadId of the current thread accessing LegacyKafkaConsumer
+    // currentThread holds the threadId of the current thread accessing this Consumer
     // and is used to prevent multi-threaded access
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     // refcount is used to allow reentrant access by the thread who has acquired currentThread
