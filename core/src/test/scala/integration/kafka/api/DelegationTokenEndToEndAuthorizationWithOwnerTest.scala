@@ -38,12 +38,12 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
 
   def AclTokenCreate = new AclBinding(new ResourcePattern(USER, clientPrincipal.toString, LITERAL),
     new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.CREATE_TOKENS, AclPermissionType.ALLOW))
-  def TokenCreateAcl: Set[AccessControlEntry] = Set(new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.CREATE_TOKENS, AclPermissionType.ALLOW))
+  def TokenCreateAcl = Set(new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.CREATE_TOKENS, AclPermissionType.ALLOW))
 
   // tests the naive positive case for token requesting for others
   def AclTokenDescribe = new AclBinding(new ResourcePattern(USER, clientPrincipal.toString, LITERAL),
     new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.DESCRIBE_TOKENS, AclPermissionType.ALLOW))
-  def TokenDescribeAcl: Set[AccessControlEntry] = Set(new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.DESCRIBE_TOKENS, AclPermissionType.ALLOW))
+  def TokenDescribeAcl = Set(new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.DESCRIBE_TOKENS, AclPermissionType.ALLOW))
 
   // This permission is just there so that otherClientPrincipal shows up among the resources
   def AclTokenOtherDescribe = new AclBinding(new ResourcePattern(USER, otherClientPrincipal.toString, LITERAL),

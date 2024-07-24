@@ -39,12 +39,11 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.zookeeper.client.ZKClientConfig
 
-import java.io.File
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 class ZkAuthorizationTest extends QuorumTestHarness with Logging {
-  val jaasFile: File = JaasTestUtils.writeJaasContextsToFile(JaasTestUtils.zkSections)
+  val jaasFile = JaasTestUtils.writeJaasContextsToFile(JaasTestUtils.zkSections)
   val authProvider = "zookeeper.authProvider.1"
 
   @BeforeEach

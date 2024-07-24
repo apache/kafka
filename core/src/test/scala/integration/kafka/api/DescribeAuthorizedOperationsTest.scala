@@ -30,7 +30,6 @@ import org.apache.kafka.server.config.{ServerConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
-import java.io.File
 import scala.jdk.CollectionConverters._
 
 object DescribeAuthorizedOperationsTest {
@@ -84,7 +83,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
 
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
 
-  override protected lazy val trustStoreFile: Some[File] = Some(TestUtils.tempFile("truststore", ".jks"))
+  override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
 
   override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
     val authorizer = CoreUtils.createObject[Authorizer](classOf[AclAuthorizer].getName)

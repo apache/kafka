@@ -36,8 +36,8 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   override protected val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
-  override protected val serverSaslProperties: Some[Properties] = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
-  override protected val clientSaslProperties: Some[Properties] = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
+  override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
+  override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
   val consumerCount = 1
   val producerCount = 1
   val brokerCount = 1
