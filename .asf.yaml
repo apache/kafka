@@ -27,14 +27,14 @@ jenkins:
   github_whitelist:
     - FrankYang0529
     - kamalcph
+    - apoorvmittal10
     - lianetm
+    - brandboat
     - kirktrue
     - nizhikov
-    - brandboat
-    - AndrewJSchofield
+    - OmniaGM
     - dongnuo123
-    - philipnee
-    - jeffkbkim
+    - frankvicky
 
 # This list allows you to triage pull requests. It can have a maximum of 10 people.
 # https://cwiki.apache.org/confluence/pages/viewpage.action?spaceKey=INFRA&title=Git+-+.asf.yaml+features#Git.asf.yamlfeatures-AssigningexternalcollaboratorswiththetriageroleonGitHub
@@ -42,11 +42,11 @@ github:
   collaborators:
     - FrankYang0529
     - kamalcph
+    - apoorvmittal10
     - lianetm
+    - brandboat
     - kirktrue
     - nizhikov
-    - brandboat
-    - AndrewJSchofield
+    - OmniaGM
     - dongnuo123
-    - philipnee
-    - jeffkbkim
+    - frankvicky
