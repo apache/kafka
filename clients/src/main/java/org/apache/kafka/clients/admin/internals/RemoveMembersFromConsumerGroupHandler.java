@@ -40,7 +40,7 @@ public class RemoveMembersFromConsumerGroupHandler extends AdminApiHandler.Batch
 
     private final CoordinatorKey groupId;
     private final List<MemberIdentity> members;
-    private final Logger log;
+    private static final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public RemoveMembersFromConsumerGroupHandler(

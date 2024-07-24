@@ -45,7 +45,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class DescribeTransactionsHandler extends AdminApiHandler.Batched<CoordinatorKey, TransactionDescription> {
-    private final Logger log;
+    private static final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public DescribeTransactionsHandler(

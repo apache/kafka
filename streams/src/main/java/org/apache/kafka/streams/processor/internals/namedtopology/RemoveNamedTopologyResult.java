@@ -69,7 +69,7 @@ public class RemoveNamedTopologyResult {
     }
 
     private static class ResetOffsetsFuture extends KafkaFutureImpl<Void> {
-        private final Logger log;
+        private static final Logger log;
 
         final Runnable resetOffsets;
         final KafkaFutureImpl<Void> removeTopologyFuture;

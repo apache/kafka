@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * (described in detail in KIP-794).  There is one partitioner object per topic.
  */
 public class BuiltInPartitioner {
-    private final Logger log;
+    private static final Logger log;
     private final String topic;
     private final int stickyBatchSize;
 

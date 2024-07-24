@@ -43,7 +43,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
 
     private final boolean requireStable;
     private final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs;
-    private final Logger log;
+    private static final Logger log;
     private final CoordinatorStrategy lookupStrategy;
 
     public ListConsumerGroupOffsetsHandler(

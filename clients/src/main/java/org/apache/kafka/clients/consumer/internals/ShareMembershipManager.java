@@ -93,7 +93,7 @@ public class ShareMembershipManager implements RequestManager {
     /**
      * Logger.
      */
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * TopicPartition comparator based on topic name and partition id.

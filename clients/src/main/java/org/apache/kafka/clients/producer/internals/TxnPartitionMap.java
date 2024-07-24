@@ -31,7 +31,7 @@ import java.util.OptionalLong;
 
 class TxnPartitionMap {
 
-    private final Logger log;
+    private static final Logger log;
 
     private final Map<TopicPartition, TxnPartitionEntry> topicPartitions = new HashMap<>();
 

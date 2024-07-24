@@ -92,7 +92,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     static final int METADATA_COMMIT_MAX_WAIT_MS = 300_000;
 
     private final Time time;
-    private final Logger log;
+    private static final Logger log;
     private final int nodeId;
     private final MigrationClient zkMigrationClient;
     private final KRaftMigrationZkWriter zkMetadataWriter;

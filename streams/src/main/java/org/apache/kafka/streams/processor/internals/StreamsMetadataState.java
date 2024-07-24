@@ -54,7 +54,7 @@ import static org.apache.kafka.clients.producer.RecordMetadata.UNKNOWN_PARTITION
  * in a KafkaStreams application
  */
 public class StreamsMetadataState {
-    private final Logger log;
+    private static final Logger log;
     public static final HostInfo UNKNOWN_HOST = HostInfo.unavailable();
     private final TopologyMetadata topologyMetadata;
     private final Set<String> globalStores;

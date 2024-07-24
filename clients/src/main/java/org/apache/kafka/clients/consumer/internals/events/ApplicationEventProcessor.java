@@ -48,7 +48,7 @@ import java.util.function.Supplier;
  */
 public class ApplicationEventProcessor implements EventProcessor<ApplicationEvent> {
 
-    private final Logger log;
+    private static final Logger log;
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;

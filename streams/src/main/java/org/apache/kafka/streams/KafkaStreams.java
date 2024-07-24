@@ -164,7 +164,7 @@ public class KafkaStreams implements AutoCloseable {
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
     private final Time time;
-    private final Logger log;
+    private static final Logger log;
     protected final String clientId;
     private final Metrics metrics;
     protected final StreamsConfig applicationConfigs;

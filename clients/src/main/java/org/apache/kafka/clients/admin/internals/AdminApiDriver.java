@@ -83,7 +83,7 @@ import java.util.stream.Collectors;
  *            when the key type is a consumer `GroupId`)
  */
 public class AdminApiDriver<K, V> {
-    private final Logger log;
+    private static final Logger log;
     private final ExponentialBackoff retryBackoff;
     private final long deadlineMs;
     private final AdminApiHandler<K, V> handler;

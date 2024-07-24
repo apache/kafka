@@ -33,7 +33,7 @@ import java.util.TreeMap;
  * We wait for the high watermark of the log to advance before completing them.
  */
 public class DeferredEventQueue {
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * A map from log offsets to events.  Each event will be completed once the log

@@ -206,7 +206,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     /**
      * The logger.
      */
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * The group coordinator configurations.

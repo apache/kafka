@@ -182,7 +182,7 @@ public class EndpointReadyFutures {
         }
     }
 
-    private final Logger log;
+    private static final Logger log;
 
     private final Map<Endpoint, CompletableFuture<Void>> futures;
 

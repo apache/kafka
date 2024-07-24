@@ -56,7 +56,7 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompat
  * to workers.
  */
 public class WorkerCoordinator extends AbstractCoordinator implements Closeable {
-    private final Logger log;
+    private static final Logger log;
     private final String restUrl;
     private final ConfigBackingStore configStorage;
     private volatile ExtendedAssignment assignmentSnapshot;

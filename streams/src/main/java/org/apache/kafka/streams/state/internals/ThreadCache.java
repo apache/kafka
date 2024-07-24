@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * record based
  */
 public class ThreadCache {
-    private final Logger log;
+    private static final Logger log;
     private volatile long maxCacheSizeBytes;
     private final StreamsMetricsImpl metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();

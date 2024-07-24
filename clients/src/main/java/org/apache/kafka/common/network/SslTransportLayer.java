@@ -79,7 +79,7 @@ public class SslTransportLayer implements TransportLayer {
     private final SelectionKey key;
     private final SocketChannel socketChannel;
     private final ChannelMetadataRegistry metadataRegistry;
-    private final Logger log;
+    private static final Logger log;
 
     private HandshakeStatus handshakeStatus;
     private SSLEngineResult handshakeResult;

@@ -85,7 +85,7 @@ public class RocksDBMetricsRecorder {
     private static final String ROCKSDB_PROPERTIES_PREFIX = "rocksdb.";
 
 
-    private final Logger logger;
+    private static final Logger logger;
 
     private Sensor bytesWrittenToDatabaseSensor;
     private Sensor bytesReadFromDatabaseSensor;

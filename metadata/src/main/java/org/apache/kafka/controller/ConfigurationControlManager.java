@@ -57,7 +57,7 @@ import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_
 public class ConfigurationControlManager {
     public static final ConfigResource DEFAULT_NODE = new ConfigResource(Type.BROKER, "");
 
-    private final Logger log;
+    private static final Logger log;
     private final SnapshotRegistry snapshotRegistry;
     private final KafkaConfigSchema configSchema;
     private final Consumer<ConfigResource> existenceChecker;

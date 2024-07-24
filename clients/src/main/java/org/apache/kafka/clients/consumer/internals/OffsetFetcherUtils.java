@@ -64,7 +64,7 @@ class OffsetFetcherUtils {
     private final Time time;
     private final long retryBackoffMs;
     private final ApiVersions apiVersions;
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * Exception that occurred while validating positions, that will be propagated on the next

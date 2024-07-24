@@ -60,7 +60,7 @@ public class ShareCompletedFetch {
     final ShareFetchResponseData.PartitionData partitionData;
     final short requestVersion;
 
-    private final Logger log;
+    private static final Logger log;
     private final BufferSupplier decompressionBufferSupplier;
     private final Iterator<? extends RecordBatch> batches;
     private int recordsRead;

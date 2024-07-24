@@ -195,7 +195,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private ChangelogReaderState state;
 
     private final Time time;
-    private final Logger log;
+    private static final Logger log;
     private final Duration pollTime;
     private final long updateOffsetIntervalMs;
 

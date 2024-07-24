@@ -155,7 +155,7 @@ public class OffsetMetadataManager {
     /**
      * The logger.
      */
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * The snapshot registry.

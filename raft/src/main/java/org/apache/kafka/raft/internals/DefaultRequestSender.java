@@ -38,7 +38,7 @@ public final class DefaultRequestSender  implements RequestSender {
     private final RequestManager requestManager;
     private final NetworkChannel channel;
     private final RaftMessageQueue messageQueue;
-    private final Logger logger;
+    private static final Logger logger;
 
     public DefaultRequestSender(
         RequestManager requestManager,

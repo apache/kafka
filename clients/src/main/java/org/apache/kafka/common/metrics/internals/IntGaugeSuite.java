@@ -41,7 +41,7 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
     /**
      * The log4j logger.
      */
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * The name of this suite.

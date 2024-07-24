@@ -94,7 +94,7 @@ public class SnapshotRegistry {
         }
     }
 
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * A map from snapshot epochs to snapshot data structures.

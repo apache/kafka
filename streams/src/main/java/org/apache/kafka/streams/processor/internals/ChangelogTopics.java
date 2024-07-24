@@ -43,7 +43,7 @@ public class ChangelogTopics {
     private final Set<TopicPartition> preExistingNonSourceTopicBasedChangelogPartitions = new HashSet<>();
     private final Set<String> sourceTopicBasedChangelogTopics = new HashSet<>();
     private final Set<TopicPartition> preExistingSourceTopicBasedChangelogPartitions = new HashSet<>();
-    private final Logger log;
+    private static final Logger log;
 
     public ChangelogTopics(final InternalTopicManager internalTopicManager,
                            final Map<Subtopology, TopicsInfo> topicGroups,

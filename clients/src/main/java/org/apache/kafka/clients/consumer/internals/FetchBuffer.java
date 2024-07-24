@@ -48,7 +48,7 @@ import java.util.function.Predicate;
  */
 public class FetchBuffer implements AutoCloseable {
 
-    private final Logger log;
+    private static final Logger log;
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
     private final Lock lock;
     private final Condition notEmptyCondition;

@@ -336,7 +336,7 @@ public class KafkaAdminClient extends AdminClient {
      */
     static final String NETWORK_THREAD_PREFIX = "kafka-admin-client-thread";
 
-    private final Logger log;
+    private static final Logger log;
     private final LogContext logContext;
 
     /**

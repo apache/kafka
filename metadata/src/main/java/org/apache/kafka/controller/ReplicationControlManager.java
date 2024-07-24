@@ -297,7 +297,7 @@ public class ReplicationControlManager {
     }
 
     private final SnapshotRegistry snapshotRegistry;
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * The KIP-464 default replication factor that is used if a CreateTopics request does

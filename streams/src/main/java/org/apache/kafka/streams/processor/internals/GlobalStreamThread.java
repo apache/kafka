@@ -58,7 +58,7 @@ import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.St
  */
 public class GlobalStreamThread extends Thread {
 
-    private final Logger log;
+    private static final Logger log;
     private final LogContext logContext;
     private final StreamsConfig config;
     private final Consumer<byte[], byte[]> globalConsumer;
@@ -230,7 +230,7 @@ public class GlobalStreamThread extends Thread {
         private final Consumer<byte[], byte[]> globalConsumer;
         private final GlobalStateMaintainer stateMaintainer;
         private final Duration pollTime;
-        private final Logger log;
+        private static final Logger log;
 
         StateConsumer(final LogContext logContext,
                       final Consumer<byte[], byte[]> globalConsumer,

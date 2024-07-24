@@ -50,7 +50,7 @@ public class RepartitionTopics {
     private final TopologyMetadata topologyMetadata;
     private final Cluster clusterMetadata;
     private final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
-    private final Logger log;
+    private static final Logger log;
     private final Map<TopicPartition, PartitionInfo> topicPartitionInfos = new HashMap<>();
     private final Map<Subtopology, Set<String>> missingInputTopicsBySubtopology = new HashMap<>();
 

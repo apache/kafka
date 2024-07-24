@@ -92,7 +92,7 @@ import java.util.function.Supplier;
 public class TransactionManager {
     private static final int NO_INFLIGHT_REQUEST_CORRELATION_ID = -1;
 
-    private final Logger log;
+    private static final Logger log;
     private final String transactionalId;
     private final int transactionTimeoutMs;
     private final ApiVersions apiVersions;

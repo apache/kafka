@@ -62,7 +62,7 @@ import static org.apache.kafka.connect.util.ConnectUtils.transformValues;
  *
  */
 public class IncrementalCooperativeAssignor implements ConnectAssignor {
-    private final Logger log;
+    private static final Logger log;
     private final Time time;
     private final int maxDelay;
     private ConnectorsAndTasks previousAssignment;

@@ -43,7 +43,7 @@ public class KafkaRaftClientDriver<T> extends ShutdownableThread {
      * Closed in {@link #shutdown()} after shutdown completes.
      */
     private final KafkaRaftClient<T> client;
-    private final Logger log;
+    private static final Logger log;
     private final FaultHandler fatalFaultHandler;
 
     public KafkaRaftClientDriver(

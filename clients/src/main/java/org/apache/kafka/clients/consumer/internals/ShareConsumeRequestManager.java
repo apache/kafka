@@ -69,7 +69,7 @@ import java.util.stream.Collectors;
 @SuppressWarnings("NPathComplexity")
 public class ShareConsumeRequestManager implements RequestManager, MemberStateListener, Closeable {
     private final Time time;
-    private final Logger log;
+    private static final Logger log;
     private final LogContext logContext;
     private final String groupId;
     private final ConsumerMetadata metadata;

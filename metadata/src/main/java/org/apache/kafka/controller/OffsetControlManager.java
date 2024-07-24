@@ -87,7 +87,7 @@ class OffsetControlManager {
     /**
      * The slf4j logger.
      */
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * The snapshot registry.
