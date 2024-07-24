@@ -206,7 +206,7 @@ public interface ClusterInstance {
         TestUtils.waitForCondition(() ->
             brokers().values().stream().allMatch(broker ->
                 topicPartitions.stream().allMatch(tp ->
-                    broker.replicaManager().onlinePartition(tp).isEmpty())
+                        broker.replicaManager().logManager().getLog(tp, false).isEmpty())
             ), "Replica logs not deleted after delete topic is complete"
         );
 
