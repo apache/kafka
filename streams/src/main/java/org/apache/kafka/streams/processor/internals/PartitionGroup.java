@@ -59,7 +59,7 @@ import java.util.function.Function;
  */
 class PartitionGroup extends AbstractPartitionGroup {
 
-    private final Logger logger;
+    private static final Logger logger;
     private final Map<TopicPartition, RecordQueue> partitionQueues;
     private final Function<TopicPartition, OptionalLong> lagProvider;
     private final Sensor enforcedProcessingSensor;

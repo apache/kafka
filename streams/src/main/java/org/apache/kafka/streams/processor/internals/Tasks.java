@@ -44,7 +44,7 @@ import static org.apache.kafka.common.utils.Utils.union;
  * processed by the latter.
  */
 class Tasks implements TasksRegistry {
-    private final Logger log;
+    private static final Logger log;
 
     // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
     // note that these two maps may be accessed by concurrent threads and hence

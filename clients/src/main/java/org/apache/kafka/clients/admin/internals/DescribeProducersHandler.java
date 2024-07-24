@@ -48,7 +48,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class DescribeProducersHandler extends AdminApiHandler.Batched<TopicPartition, PartitionProducerState> {
-    private final Logger log;
+    private static final Logger log;
     private final DescribeProducersOptions options;
     private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
 

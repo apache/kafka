@@ -70,7 +70,7 @@ public class InternalTopicManager {
         "Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the dev-mailing list (https://kafka.apache.org/contact).";
     private static final String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. " + BUG_ERROR_MESSAGE;
 
-    private final Logger log;
+    private static final Logger log;
 
     private final Time time;
     private final Admin adminClient;

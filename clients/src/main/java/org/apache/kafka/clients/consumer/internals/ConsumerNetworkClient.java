@@ -58,7 +58,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     // the mutable state of this class is protected by the object's monitor (excluding the wakeup
     // flag and the request completion queue below).
-    private final Logger log;
+    private static final Logger log;
     private final KafkaClient client;
     private final UnsentRequests unsent = new UnsentRequests();
     private final Metadata metadata;

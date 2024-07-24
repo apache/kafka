@@ -136,7 +136,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     /**
      * The log4j logger for this loader.
      */
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * The clock used by this loader.

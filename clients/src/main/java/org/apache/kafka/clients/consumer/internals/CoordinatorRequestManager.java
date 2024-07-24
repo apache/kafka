@@ -51,7 +51,7 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
  */
 public class CoordinatorRequestManager implements RequestManager {
     private static final long COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS = 60 * 1000;
-    private final Logger log;
+    private static final Logger log;
     private final BackgroundEventHandler backgroundEventHandler;
     private final String groupId;
 

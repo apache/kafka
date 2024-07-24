@@ -96,7 +96,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private final Map<String, Long> connectionsMaxReauthMsByMechanism;
     private final Time time;
     private final LogContext logContext;
-    private final Logger log;
+    private static final Logger log;
 
     private SslFactory sslFactory;
     private Map<String, ?> configs;

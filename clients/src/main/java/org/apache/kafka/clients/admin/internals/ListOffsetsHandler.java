@@ -52,7 +52,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
 
     private final Map<TopicPartition, Long> offsetTimestampsByPartition;
     private final ListOffsetsOptions options;
-    private final Logger log;
+    private static final Logger log;
     private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
 
     public ListOffsetsHandler(

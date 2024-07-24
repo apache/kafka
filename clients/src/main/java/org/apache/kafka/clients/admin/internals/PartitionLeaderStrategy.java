@@ -42,7 +42,7 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
     private static final ApiRequestScope SINGLE_REQUEST_SCOPE = new ApiRequestScope() {
     };
 
-    private final Logger log;
+    private static final Logger log;
     private final boolean tolerateUnknownTopics;
 
     public PartitionLeaderStrategy(LogContext logContext) {

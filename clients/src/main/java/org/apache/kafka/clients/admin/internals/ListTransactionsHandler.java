@@ -37,7 +37,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class ListTransactionsHandler extends AdminApiHandler.Batched<AllBrokersStrategy.BrokerKey, Collection<TransactionListing>> {
-    private final Logger log;
+    private static final Logger log;
     private final ListTransactionsOptions options;
     private final AllBrokersStrategy lookupStrategy;
 

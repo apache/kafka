@@ -102,7 +102,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
-    private final Logger log;
+    private static final Logger log;
     private final java.nio.channels.Selector nioSelector;
     private final Map<String, KafkaChannel> channels;
     private final Set<KafkaChannel> explicitlyMutedChannels;

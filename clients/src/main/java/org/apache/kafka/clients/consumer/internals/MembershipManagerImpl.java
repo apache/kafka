@@ -194,7 +194,7 @@ public class MembershipManagerImpl implements MembershipManager {
     /**
      * Logger.
      */
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * Manager to perform commit requests needed before revoking partitions (if auto-commit is

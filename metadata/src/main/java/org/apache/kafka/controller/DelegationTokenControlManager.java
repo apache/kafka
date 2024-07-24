@@ -104,7 +104,7 @@ public class DelegationTokenControlManager {
         }
     }
 
-    private final Logger log;
+    private static final Logger log;
     private final DelegationTokenCache tokenCache;
     private final String tokenSecretKeyString;
     private final long tokenDefaultMaxLifetimeMs;

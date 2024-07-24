@@ -76,7 +76,7 @@ import static org.apache.kafka.trogdor.common.StringFormatter.durationString;
  * A client for the Trogdor coordinator.
  */
 public class CoordinatorClient {
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * The maximum number of tries to make.

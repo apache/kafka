@@ -61,7 +61,7 @@ import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.top
  */
 public class OffsetFetcher {
 
-    private final Logger log;
+    private static final Logger log;
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final ConsumerNetworkClient client;

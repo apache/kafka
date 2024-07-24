@@ -23,7 +23,7 @@ import org.slf4j.Logger;
 
 class RequestState {
 
-    private final Logger log;
+    private static final Logger log;
     protected final String owner;
     static final int RETRY_BACKOFF_EXP_BASE = 2;
     static final double RETRY_BACKOFF_JITTER = 0.2;

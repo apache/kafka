@@ -149,7 +149,7 @@ public class SaslClientAuthenticator implements Authenticator {
     private final String clientPrincipalName;
     private final AuthenticateCallbackHandler callbackHandler;
     private final Time time;
-    private final Logger log;
+    private static final Logger log;
     private final ReauthInfo reauthInfo;
 
     // buffers used in `authenticate`

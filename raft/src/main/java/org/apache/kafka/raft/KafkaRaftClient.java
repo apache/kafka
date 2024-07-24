@@ -163,7 +163,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private final Uuid nodeDirectoryId;
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final LogContext logContext;
-    private final Logger logger;
+    private static final Logger logger;
     private final Time time;
     private final int fetchMaxWaitMs;
     private final String clusterId;
@@ -2974,7 +2974,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * A simple timer based log cleaner
      */
     private static class RaftMetadataLogCleanerManager {
-        private final Logger logger;
+        private static final Logger logger;
         private final Timer timer;
         private final long delayMs;
         private final Runnable cleaner;

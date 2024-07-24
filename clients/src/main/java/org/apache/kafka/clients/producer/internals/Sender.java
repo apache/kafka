@@ -79,7 +79,7 @@ import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
  */
 public class Sender implements Runnable {
 
-    private final Logger log;
+    private static final Logger log;
 
     /* the state of each nodes connection */
     private final KafkaClient client;

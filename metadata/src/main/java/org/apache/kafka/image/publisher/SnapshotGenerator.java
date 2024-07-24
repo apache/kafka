@@ -137,7 +137,7 @@ public class SnapshotGenerator implements MetadataPublisher {
     /**
      * The slf4j logger to use.
      */
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * The fault handler to use.

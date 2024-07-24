@@ -49,7 +49,7 @@ public class CleanShutdownFileHandler {
     // Visible for testing
     final File cleanShutdownFile;
     private static final int CURRENT_VERSION = 0;
-    private final Logger logger;
+    private static final Logger logger;
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private static class Content {

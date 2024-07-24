@@ -61,7 +61,7 @@ import java.util.stream.Collectors;
 public class DescribeConsumerGroupsHandler implements AdminApiHandler<CoordinatorKey, ConsumerGroupDescription> {
 
     private final boolean includeAuthorizedOperations;
-    private final Logger log;
+    private static final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
     private final Set<String> useClassicGroupApi;
 

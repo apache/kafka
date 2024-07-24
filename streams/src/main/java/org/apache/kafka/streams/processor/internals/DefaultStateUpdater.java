@@ -745,7 +745,7 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     private final Time time;
-    private final Logger log;
+    private static final Logger log;
     private final String name;
     private final Metrics metrics;
     private final Consumer<byte[], byte[]> restoreConsumer;

@@ -54,7 +54,7 @@ public class MetadataBatchLoader {
         void update(MetadataDelta delta, MetadataImage image, LogDeltaManifest manifest);
     }
 
-    private final Logger log;
+    private static final Logger log;
     private final Time time;
     private final FaultHandler faultHandler;
     private final MetadataUpdater callback;

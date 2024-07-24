@@ -82,7 +82,7 @@ public class TaskManager {
     // initialize the task list
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState
-    private final Logger log;
+    private static final Logger log;
     private final Time time;
     private final TasksRegistry tasks;
     private final ProcessId processId;

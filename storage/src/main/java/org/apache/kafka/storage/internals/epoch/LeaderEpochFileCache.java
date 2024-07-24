@@ -55,7 +55,7 @@ public class LeaderEpochFileCache {
     private final TopicPartition topicPartition;
     private final LeaderEpochCheckpointFile checkpoint;
     private final Scheduler scheduler;
-    private final Logger log;
+    private static final Logger log;
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private final TreeMap<Integer, EpochEntry> epochs = new TreeMap<>();

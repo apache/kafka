@@ -44,7 +44,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
     /**
      * The logger.
      */
-    private final Logger log;
+    private static final Logger log;
 
     /**
      * The accumulator.
@@ -118,7 +118,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
      * accumulator and runs them.
      */
     private class EventProcessorThread extends Thread {
-        private final Logger log;
+        private static final Logger log;
 
         EventProcessorThread(
             String name

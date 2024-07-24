@@ -80,7 +80,7 @@ public class QuorumState {
     private final OptionalInt localId;
     private final Uuid localDirectoryId;
     private final Time time;
-    private final Logger log;
+    private static final Logger log;
     private final QuorumStateStore store;
     private final KRaftControlRecordStateMachine partitionState;
     private final Endpoints localListeners;

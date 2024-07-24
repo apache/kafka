@@ -40,7 +40,7 @@ import java.util.function.Supplier;
  */
 public class ApplicationEventHandler implements Closeable {
 
-    private final Logger log;
+    private static final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final ConsumerNetworkThread networkThread;
     private final IdempotentCloser closer = new IdempotentCloser();
