@@ -31,13 +31,11 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
 import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@Tag("integration")
 class ClientQuotasRequestTest(cluster: ClusterInstance) {
   @ClusterTest
   def testAlterClientQuotasRequest(): Unit = {

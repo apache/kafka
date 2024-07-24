@@ -31,7 +31,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
@@ -72,7 +71,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(key = "controlled.shutdown.retry.backoff.ms", value = "1000"),
     @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "2")
 })
-@Tag("integration")
 public class LeaderElectionCommandTest {
     private final ClusterInstance cluster;
     int broker2 = 1;

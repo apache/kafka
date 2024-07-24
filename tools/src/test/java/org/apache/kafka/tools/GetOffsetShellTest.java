@@ -36,7 +36,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
@@ -59,7 +58,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
     @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "4")
 })
-@Tag("integration")
 public class GetOffsetShellTest {
     private final int topicCount = 4;
     private final ClusterInstance cluster;
