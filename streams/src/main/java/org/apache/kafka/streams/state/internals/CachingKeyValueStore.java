@@ -295,7 +295,9 @@ public class CachingKeyValueStore
                     context.offset(),
                     context.timestamp(),
                     context.partition(),
-                    context.topic()));
+                    context.topic(),
+                    context.recordContext().rawRecord())
+            );
 
             StoreQueryUtils.updatePosition(position, context);
         }

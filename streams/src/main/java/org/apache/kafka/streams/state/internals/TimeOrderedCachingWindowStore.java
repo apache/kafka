@@ -274,7 +274,9 @@ class TimeOrderedCachingWindowStore
                 context.offset(),
                 context.timestamp(),
                 context.partition(),
-                context.topic());
+                context.topic(),
+                context.recordContext().rawRecord()
+            );
 
         // Put to index first so that base can be evicted later
         if (hasIndex) {
@@ -291,7 +293,9 @@ class TimeOrderedCachingWindowStore
                     context.offset(),
                     context.timestamp(),
                     context.partition(),
-                    "");
+                    "",
+                    context.recordContext().rawRecord()
+                );
             final Bytes indexKey = KeyFirstWindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, 0);
             context.cache().put(cacheName, indexKeyCacheFunction.cacheKey(indexKey), emptyEntry);
         } else {

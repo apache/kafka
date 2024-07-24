@@ -189,7 +189,7 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
             headers = new RecordHeaders(headerArr);
         }
 
-        return new ProcessorRecordContext(timestamp, offset, partition, topic, headers, null);
+        return new ProcessorRecordContext(timestamp, offset, partition, topic, headers);
     }
 
     @Override

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -32,7 +33,7 @@ class LRUCacheEntry {
 
 
     LRUCacheEntry(final byte[] value) {
-        this(value, new RecordHeaders(), false, -1, -1, -1, "");
+        this(value, new RecordHeaders(), false, -1, -1, -1, "", null);
     }
 
     LRUCacheEntry(final byte[] value,
@@ -41,8 +42,16 @@ class LRUCacheEntry {
                   final long offset,
                   final long timestamp,
                   final int partition,
-                  final String topic) {
-        final ProcessorRecordContext context = new ProcessorRecordContext(timestamp, offset, partition, topic, headers);
+                  final String topic,
+                  final ConsumerRecord<byte[], byte[]> rawRecord) {
+        final ProcessorRecordContext context = new ProcessorRecordContext(
+            timestamp,
+            offset,
+            partition,
+            topic,
+            headers,
+            rawRecord
+        );
 
         this.record = new ContextualRecord(
             value,

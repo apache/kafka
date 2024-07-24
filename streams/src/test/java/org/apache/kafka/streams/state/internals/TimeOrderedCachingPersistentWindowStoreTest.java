@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
@@ -120,7 +121,14 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         cachingStore.setFlushListener(cacheListener, false);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
-        context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, TOPIC, new RecordHeaders()));
+        context.setRecordContext(new ProcessorRecordContext(
+                DEFAULT_TIMESTAMP,
+                0,
+                0,
+                TOPIC,
+                new RecordHeaders(),
+                new ConsumerRecord<>(TOPIC, 0, 0, new byte[0], new byte[0])
+        ));
         cachingStore.init((StateStoreContext) context, cachingStore);
     }
 
@@ -948,7 +956,8 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
                 context.offset(),
                 context.timestamp(),
                 context.partition(),
-                "")
+                "",
+                context.recordContext().rawRecord())
         );
 
         underlyingStore.put(key, value, 1);

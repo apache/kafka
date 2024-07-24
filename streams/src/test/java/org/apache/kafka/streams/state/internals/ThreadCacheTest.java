@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
@@ -48,6 +49,7 @@ public class ThreadCacheTest {
     final String namespace2 = "0.2-namespace";
     private final LogContext logContext = new LogContext("testCache ");
     private final byte[][] bytes = new byte[][]{{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
+    private final ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("topic", 0, 0, new byte[0], new byte[0]);
 
     @Test
     public void basicPutGet() {
@@ -65,7 +67,7 @@ public class ThreadCacheTest {
         for (final KeyValue<String, String> kvToInsert : toInsert) {
             final Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             final byte[] value = kvToInsert.value.getBytes();
-            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1L, 1L, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1L, 1L, 1, "", consumerRecord));
         }
 
         for (final KeyValue<String, String> kvToInsert : toInsert) {
@@ -98,7 +100,7 @@ public class ThreadCacheTest {
             final String keyStr = "K" + i;
             final Bytes key = Bytes.wrap(keyStr.getBytes());
             final byte[] value = new byte[valueSizeBytes];
-            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1L, 1L, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1L, 1L, 1, "", consumerRecord));
         }
 
 
@@ -176,7 +178,7 @@ public class ThreadCacheTest {
         for (final KeyValue<String, String> kvToInsert : toInsert) {
             final Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             final byte[] value = kvToInsert.value.getBytes();
-            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1, 1, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1, 1, 1, "", consumerRecord));
         }
 
         for (int i = 0; i < expected.size(); i++) {
@@ -617,7 +619,7 @@ public class ThreadCacheTest {
     }
 
     private LRUCacheEntry dirtyEntry(final byte[] key) {
-        return new LRUCacheEntry(key, new RecordHeaders(), true, -1, -1, -1, "");
+        return new LRUCacheEntry(key, new RecordHeaders(), true, -1, -1, -1, "", consumerRecord);
     }
 
     private LRUCacheEntry cleanEntry(final byte[] key) {

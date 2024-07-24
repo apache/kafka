@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -41,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class NamedCacheTest {
-
+    private final ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("topic", 0, 0, new byte[0], new byte[0]);
     private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
     private NamedCache cache;
 
@@ -64,7 +65,7 @@ public class NamedCacheTest {
             final byte[] key = stringStringKeyValue.key.getBytes();
             final byte[] value = stringStringKeyValue.value.getBytes();
             cache.put(Bytes.wrap(key),
-                new LRUCacheEntry(value, new RecordHeaders(), true, 1, 1, 1, ""));
+                new LRUCacheEntry(value, new RecordHeaders(), true, 1, 1, 1, "", consumerRecord));
             final LRUCacheEntry head = cache.first();
             final LRUCacheEntry tail = cache.last();
             assertEquals(new String(head.value()), stringStringKeyValue.value);
@@ -152,9 +153,9 @@ public class NamedCacheTest {
     @Test
     public void shouldFlushDirtEntriesOnEviction() {
         final List<ThreadCache.DirtyEntry> flushed = new ArrayList<>();
-        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, "", consumerRecord));
         cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}));
-        cache.put(Bytes.wrap(new byte[]{2}), new LRUCacheEntry(new byte[]{30}, headers, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{2}), new LRUCacheEntry(new byte[]{30}, headers, true, 0, 0, 0, "", consumerRecord));
 
         cache.setListener(flushed::addAll);
 
@@ -176,16 +177,16 @@ public class NamedCacheTest {
 
     @Test
     public void shouldThrowIllegalStateExceptionWhenTryingToOverwriteDirtyEntryWithCleanEntry() {
-        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, "", consumerRecord));
         assertThrows(IllegalStateException.class, () -> cache.put(Bytes.wrap(new byte[]{0}),
-            new LRUCacheEntry(new byte[]{10}, new RecordHeaders(), false, 0, 0, 0, "")));
+            new LRUCacheEntry(new byte[]{10}, new RecordHeaders(), false, 0, 0, 0, "", consumerRecord)));
     }
 
     @Test
     public void shouldRemoveDeletedValuesOnFlush() {
         cache.setListener(dirty -> { /* no-op */ });
-        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(null, headers, true, 0, 0, 0, ""));
-        cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}, new RecordHeaders(), true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(null, headers, true, 0, 0, 0, "", consumerRecord));
+        cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}, new RecordHeaders(), true, 0, 0, 0, "", consumerRecord));
         cache.flush();
         assertEquals(1, cache.size());
         assertNotNull(cache.get(Bytes.wrap(new byte[]{1})));
@@ -193,7 +194,7 @@ public class NamedCacheTest {
 
     @Test
     public void shouldBeReentrantAndNotBreakLRU() {
-        final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, new RecordHeaders(), true, 0, 0, 0, "");
+        final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, new RecordHeaders(), true, 0, 0, 0, "", consumerRecord);
         final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
         cache.put(Bytes.wrap(new byte[]{0}), dirty);
         cache.put(Bytes.wrap(new byte[]{1}), clean);
@@ -236,7 +237,7 @@ public class NamedCacheTest {
 
     @Test
     public void shouldNotThrowIllegalArgumentAfterEvictingDirtyRecordAndThenPuttingNewRecordWithSameKey() {
-        final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, new RecordHeaders(), true, 0, 0, 0, "");
+        final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, new RecordHeaders(), true, 0, 0, 0, "", consumerRecord);
         final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
         final Bytes key = Bytes.wrap(new byte[] {3});
         cache.setListener(dirty1 -> cache.put(key, clean));

@@ -170,7 +170,9 @@ class CachingWindowStore
                 context.offset(),
                 context.timestamp(),
                 context.partition(),
-                context.topic());
+                context.topic(),
+                context.recordContext().rawRecord()
+            );
         context.cache().put(cacheName, cacheFunction.cacheKey(keyBytes), entry);
 
         maxObservedTimestamp.set(Math.max(keySchema.segmentTimestamp(keyBytes), maxObservedTimestamp.get()));
