@@ -806,7 +806,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } catch (final StreamsException exception) {
             record = null;
             throw exception;
-        } catch (final RuntimeException e) {
+        } catch (final Exception e) {
             handleException(e);
         } finally {
             processorContext.setCurrentNode(null);
