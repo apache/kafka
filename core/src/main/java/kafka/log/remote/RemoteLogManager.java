@@ -526,7 +526,6 @@ public class RemoteLogManager implements Closeable {
                 LOGGER.error("Error while stopping the partition: {}", stopPartition, ex);
             }
         }
-        // Note `deleteLocalLog` will always be true when `deleteRemoteLog` is true but not the other way around.
         Set<TopicIdPartition> deleteLocalPartitions = stopPartitions.stream()
                 .filter(sp -> sp.deleteLocalLog() && topicIdByPartitionMap.containsKey(sp.topicPartition()))
                 .map(sp -> new TopicIdPartition(topicIdByPartitionMap.get(sp.topicPartition()), sp.topicPartition()))

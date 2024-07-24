@@ -103,12 +103,9 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
                 .consume(topicA, p0, 0L, 4, 3)
 
                 // verify the remote retention policy is working.
-                // update retention size to 2, and we have 3 inactive segments with each size 1,
-                // so there will be 1 remote log segment get deleted
-                .updateTopicConfig(topicA,
-                        Collections.singletonMap(TopicConfig.RETENTION_BYTES_CONFIG, "2"),
-                        Collections.emptyList())
+                // Use DELETE_RECORDS API to delete the records upto offset 1 and expect 1 remote segment to be deleted
                 .expectDeletionInRemoteStorage(broker0, topicA, p0, DELETE_SEGMENT, 1)
+                .deleteRecords(topicA, p0, 1L)
                 .waitForRemoteLogSegmentDeletion(topicA)
 
                 // setting delete policy to "delete" and disable remote storage
@@ -116,6 +113,8 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
                         deletePolicy,
                         Collections.emptyList())
                 // make sure all remote data is deleted
-                .expectEmptyRemoteStorage(topicA, p0);
+                .expectEmptyRemoteStorage(topicA, p0)
+                // verify the local log is still consumable
+                .consume(topicA, p0, 3L, 1, 0);
     }
 }
