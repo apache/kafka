@@ -107,7 +107,7 @@ import static org.apache.kafka.common.utils.Utils.swallow;
  * group protocol (from KIP-848) introduces allows users continue using the legacy "classic" group protocol.
  * This class should not be invoked directly; users should instead create a {@link KafkaConsumer} as before.
  */
-public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
+public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private static final long NO_CURRENT_THREAD = -1L;
     public static final String DEFAULT_REASON = "rebalance enforced by user";
@@ -146,7 +146,7 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
 
-    LegacyKafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
+    ClassicKafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
@@ -268,15 +268,15 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // visible for testing
-    LegacyKafkaConsumer(LogContext logContext,
-                        Time time,
-                        ConsumerConfig config,
-                        Deserializer<K> keyDeserializer,
-                        Deserializer<V> valueDeserializer,
-                        KafkaClient client,
-                        SubscriptionState subscriptions,
-                        ConsumerMetadata metadata,
-                        List<ConsumerPartitionAssignor> assignors) {
+    ClassicKafkaConsumer(LogContext logContext,
+                         Time time,
+                         ConsumerConfig config,
+                         Deserializer<K> keyDeserializer,
+                         Deserializer<V> valueDeserializer,
+                         KafkaClient client,
+                         SubscriptionState subscriptions,
+                         ConsumerMetadata metadata,
+                         List<ConsumerPartitionAssignor> assignors) {
         this.log = logContext.logger(getClass());
         this.time = time;
         this.subscriptions = subscriptions;
