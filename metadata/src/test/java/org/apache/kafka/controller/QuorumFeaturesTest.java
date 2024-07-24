@@ -163,7 +163,7 @@ public class QuorumFeaturesTest {
     @Test
     public void testZkMigrationReadyIfAllControllersReady() {
         Map<Integer, ControllerRegistration> controllers = new HashMap<>();
-        QUORUM_FEATURES.quorumNodeIds().forEach(id -> {
+        QUORUM_FEATURES.quorumNodeIds().forEach(id ->
             controllers.put(id,
                 new ControllerRegistration.Builder().
                     setId(id).
@@ -171,8 +171,8 @@ public class QuorumFeaturesTest {
                     setIncarnationId(Uuid.fromString("kCBJaDGNQk6x3y5xbtQOpg")).
                     setListeners(Collections.singletonMap("CONTROLLER",
                         new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
-                    build());
-        });
+                    build())
+        );
         assertEquals(Optional.empty(), QUORUM_FEATURES.reasonAllControllersZkMigrationNotReady(
             MetadataVersion.IBP_3_7_IV0, controllers));
     }

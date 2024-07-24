@@ -16,8 +16,6 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.internals.generated.TransactionLogKey
-
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
@@ -37,6 +35,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, TransactionVersion}
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey
 import org.apache.kafka.server.util.MockScheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, LogConfig, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
