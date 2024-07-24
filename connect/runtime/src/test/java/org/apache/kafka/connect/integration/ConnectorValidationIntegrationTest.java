@@ -69,7 +69,6 @@ public class ConnectorValidationIntegrationTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(GROUP_ID_CONFIG, WORKER_GROUP_ID);
 
-        // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connector-validation-connect-cluster")
                 .workerProps(workerProps)
@@ -82,7 +81,6 @@ public class ConnectorValidationIntegrationTest {
     @AfterAll
     public static void close() {
         if (connect != null) {
-            // stop all Connect, Kafka and Zk threads.
             Utils.closeQuietly(connect::stop, "Embedded Connect cluster");
         }
     }

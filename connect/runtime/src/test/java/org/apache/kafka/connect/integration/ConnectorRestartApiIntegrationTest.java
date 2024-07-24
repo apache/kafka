@@ -119,7 +119,6 @@ public class ConnectorRestartApiIntegrationTest {
 
     @AfterAll
     public static void close() {
-        // stop all Connect and Kafka and threads.
         CONNECT_CLUSTERS.values().forEach(EmbeddedConnectCluster::stop);
     }
 
