@@ -38,6 +38,7 @@ import java.util.TreeSet;
 import java.net.URL;
 
 import io.github.classgraph.ClassGraph;
+import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ClassInfoList;
 import io.github.classgraph.ScanResult;
 
@@ -74,6 +75,8 @@ public class ReflectionScanner extends PluginScanner {
 
     private static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
         T pluginImpl = pluginKlass.getDeclaredConstructor().newInstance();
+        log.info("sx versionFor: ")
+        log.info(pluginKlass.getName());
         return versionFor(pluginImpl);
     }
 
@@ -83,8 +86,12 @@ public class ReflectionScanner extends PluginScanner {
                 .overrideClassLoaders(new ClassLoader[]{source.loader()})
                 //.addClassLoader(source.loader())
                 //.overrideClasspath(Arrays.asList(source.urls()));
-                .acceptModules("*")
+//                .acceptModules("*")
                 .enableExternalClasses()
+                .enableInterClassDependencies()
+                .enableAllInfo()
+//                .disableNestedJarScanning()
+//                .acceptPackages("")
                 .ignoreParentClassLoaders();
         List<URL> urls = classGraphBuilder.getClasspathURLs();
         urls.addAll(Arrays.asList(source.urls()));
@@ -92,11 +99,17 @@ public class ReflectionScanner extends PluginScanner {
             classGraphBuilder.overrideClasspath(urls);
         }
         try (ScanResult classGraph = classGraphBuilder.scan()) {
-            System.out.println("ScanResult size");
-            System.out.println(classGraph.getAllClasses().size());
-            System.out.println(classGraph.getSubclasses("org.apache.kafka.connect.storage.Converter").size());
-//            System.out.println(classGraph.getAllClasses().get(0).getName());
-//            System.out.println(classGraph.getAllClasses().get(0).getInterfaces().get(0).getName());
+            if (source.urls().length > 0) { //&& source.urls()[0].toString().contains("subclass-of-classpath")) {
+                log.info("sx ScanResult size");
+                log.info(classGraph.getAllClasses().size());
+                log.info("sx scan result each");
+                for (ClassInfo ci : classGraph.getAllClasses()) {
+                    log.info(ci.getName());
+                    if (ci.getInterfaces().size() > 0) {
+                        log.info(ci.getInterfaces().get(0).getName());
+                    }
+                }
+            }
             return new PluginScanResult(
                   getPluginDesc(classGraph, PluginType.SINK, source),
                   getPluginDesc(classGraph, PluginType.SOURCE, source),
@@ -134,9 +147,12 @@ public class ReflectionScanner extends PluginScanner {
             if (plugins.size() == 0) {
                 plugins = classGraph.getClassesImplementing(kclass.getName());
             }
-            System.out.println("stx");
-            System.out.println(kclass.getName());
-            System.out.println(plugins.size());
+            log.info(kclass.getName());
+            log.info(plugins.size());
+            for (ClassInfo ci : plugins) {
+                log.info("sx plugin each");
+                log.info(ci.getName());
+            }
         } catch (Exception e) {
             log.debug("Reflections scanner could not find any {} in {} for URLs: {}",
                     type, source, source.urls(), e);
@@ -144,11 +160,6 @@ public class ReflectionScanner extends PluginScanner {
         }
 
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
-        if (kclass.getName().equals("org.apache.kafka.connect.storage.Converter")) {
-            System.out.println("stx plugins size");
-            //System.out.println(plugins.loadClasses(kclass, true).size());
-            System.out.println(classGraph.getClassesImplementing(kclass.getName()).size());
-        }
         for (Class<? extends T> pluginKlass : plugins.getStandardClasses().loadClasses(kclass, true)) {
             if (!PluginUtils.isConcrete(pluginKlass)) {
                 log.debug("Skipping {} in {} as it is not concrete implementation", pluginKlass, source);
@@ -161,12 +172,10 @@ public class ReflectionScanner extends PluginScanner {
             }
             try (LoaderSwap loaderSwap = withClassLoader(source.loader())) {
                 result.add(pluginDesc(pluginKlass, versionFor(pluginKlass), type, source));
-            //} catch (ReflectiveOperationException | LinkageError e) {
-            } catch (Exception e) {
-                log.error("Failed to discover {} in {}: Unable to instantiate {}",
+            } catch (ReflectiveOperationException | LinkageError e) {
+                log.error("Failed to discover {} in {}: Unable to instantiate {}{}",
                         type.simpleName(), source, pluginKlass.getSimpleName(),
-                        // reflectiveErrorDescription(e), e);
-                        e);
+                        reflectiveErrorDescription(e), e);
             }
         }
         return result;
