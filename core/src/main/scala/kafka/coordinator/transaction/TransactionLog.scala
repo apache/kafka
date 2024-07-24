@@ -19,12 +19,12 @@ package kafka.coordinator.transaction
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import kafka.internals.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.{Record, RecordBatch}
 import org.apache.kafka.common.{MessageFormatter, TopicPartition}
+import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -143,6 +143,7 @@ object TransactionLog {
   }
 
   // Formatter for use with tools to read transaction log messages
+  @Deprecated
   class TransactionLogMessageFormatter extends MessageFormatter {
     def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
       Option(consumerRecord.key).map(key => readTxnRecordKey(ByteBuffer.wrap(key))).foreach {
