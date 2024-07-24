@@ -1368,11 +1368,11 @@ public class MirrorConnectorsIntegrationBaseTest {
      */
     protected final void warmUpConsumer(Map<String, Object> consumerProps) {
         final String topic = "test-topic-1";
-        warmUpConsumer("primary", primary.kafka(), consumerProps, topic, NUM_PARTITIONS);
-        warmUpConsumer("backup", backup.kafka(), consumerProps, topic, NUM_PARTITIONS);
+        warmUpConsumer("primary", primary.kafka(), consumerProps, topic);
+        warmUpConsumer("backup", backup.kafka(), consumerProps, topic);
     }
 
-    private void warmUpConsumer(String clusterName, EmbeddedKafkaCluster kafkaCluster, Map<String, Object> consumerProps, String topic, int numPartitions) {
+    private void warmUpConsumer(String clusterName, EmbeddedKafkaCluster kafkaCluster, Map<String, Object> consumerProps, String topic) {
         try (Consumer<?, ?> dummyConsumer = kafkaCluster.createConsumerAndSubscribeTo(consumerProps, topic)) {
             // poll to ensure we've joined the group
             dummyConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
