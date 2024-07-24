@@ -28,14 +28,14 @@ import java.util.OptionalInt;
 import java.util.Set;
 
 /**
- * A replica is "unattached" when it doesn't known the leader or the leader's endpoint.
+ * A replica is "unattached" when it doesn't know the leader or the leader's endpoint.
  *
  * Typically, a replica doesn't know the leader if the KRaft topic is undergoing an election cycle.
  *
  * It is also possible for a replica to be unattached if it doesn't know the leader's endpoint.
  * This typically happens when a replica starts up and the known leader id is not part of the local
  * voter set. In that case, during startup the replica transitions to unattached instead of
- * transitioning to follower. The unattched replica discovers the leader and leader's endpoint
+ * transitioning to follower. The unattached replica discovers the leader and leader's endpoint
  * either through random Fetch requests to the bootstrap servers or through BeginQuorumEpoch
  * request from the leader.
  */

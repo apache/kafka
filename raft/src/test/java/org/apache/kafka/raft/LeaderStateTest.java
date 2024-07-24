@@ -539,7 +539,7 @@ public class LeaderStateTest {
         assertFalse(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(15L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
 
-        // HW will not update to 16L until majority of remaining voterSet (node1, node2) are at least 16L
+        // HW will not update to 16L until the majority of remaining voterSet (node1, node2) are at least 16L
         assertTrue(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(16L)));
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
     }

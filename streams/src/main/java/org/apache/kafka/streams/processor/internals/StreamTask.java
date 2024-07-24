@@ -30,10 +30,12 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -105,6 +107,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @SuppressWarnings("rawtypes")
     protected final InternalProcessorContext processorContext;
+    private final ProcessingExceptionHandler processingExceptionHandler;
 
     private StampedRecord record;
     private boolean commitNeeded = false;
@@ -217,6 +220,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             highWatermark.put(topicPartition, -1L);
         }
         timeCurrentIdlingStarted = Optional.empty();
+        processingExceptionHandler = config.processingExceptionHandler;
     }
 
     // create queues for each assigned partition and associate them
@@ -800,6 +804,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             record = null;
             throw exception;
         } catch (final RuntimeException e) {
+            // Do not keep the failed processing exception in the stack trace
+            final Throwable processingException = e instanceof FailedProcessingException ? e.getCause() : e;
+
             final StreamsException error = new StreamsException(
                 String.format(
                     "Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
@@ -808,9 +815,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     record.topic(),
                     record.partition(),
                     record.offset(),
-                    getStacktraceString(e)
+                    getStacktraceString(processingException)
                 ),
-                e
+                processingException
             );
             record = null;
 
@@ -833,7 +840,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             record.offset(),
             record.partition(),
             record.topic(),
-            record.headers()
+            record.headers(),
+            record.rawRecord()
         );
         updateProcessorContext(currNode, wallClockTime, recordContext);
 
@@ -861,7 +869,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         processTimeMs = 0L;
     }
 
-    private String getStacktraceString(final RuntimeException e) {
+    private String getStacktraceString(final Throwable e) {
         String stacktrace = null;
         try (final StringWriter stringWriter = new StringWriter();
              final PrintWriter printWriter = new PrintWriter(stringWriter)) {
@@ -894,7 +902,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             -1L,
             -1,
             null,
-            new RecordHeaders()
+            new RecordHeaders(),
+            null
         );
         updateProcessorContext(node, time.milliseconds(), recordContext);
 
@@ -1020,7 +1029,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         for (final ProcessorNode<?, ?, ?, ?> node : topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
-                node.init(processorContext);
+                node.init(processorContext, processingExceptionHandler);
             } finally {
                 processorContext.setCurrentNode(null);
             }
