@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -195,48 +196,46 @@ public interface ClusterInstance {
     @SuppressWarnings("deprecation")
     default void verifyTopicDeletion(String topic, int partitions) throws InterruptedException {
         List<TopicPartition> topicPartitions = IntStream.range(0, partitions).mapToObj(i -> new TopicPartition(topic, i)).collect(Collectors.toList());
-        TestUtils.waitForCondition(
-                () ->
-                        brokers().values().stream().allMatch(broker ->
-                                topicPartitions.stream().allMatch(tp ->
-                                        broker.replicaManager().onlinePartition(tp).isEmpty())
-                        ), "Replica manager's should have deleted all of this topic's partitions"
+        TestUtils.waitForCondition(() ->
+            brokers().values().stream().allMatch(broker ->
+                topicPartitions.stream().allMatch(tp ->
+                    broker.replicaManager().onlinePartition(tp).isEmpty())
+            ), "Replica manager's should have deleted all of this topic's partitions"
         );
 
-        TestUtils.waitForCondition(
-                () ->
-                        brokers().values().stream().allMatch(broker ->
-                                topicPartitions.stream().allMatch(tp ->
-                                        broker.replicaManager().onlinePartition(tp).isEmpty())
-                        ), "Replica logs not deleted after delete topic is complete"
+        TestUtils.waitForCondition(() ->
+            brokers().values().stream().allMatch(broker ->
+                topicPartitions.stream().allMatch(tp ->
+                    broker.replicaManager().onlinePartition(tp).isEmpty())
+            ), "Replica logs not deleted after delete topic is complete"
         );
 
 
         TestUtils.waitForCondition(() -> brokers().values().stream().allMatch(broker ->
-                topicPartitions.stream().allMatch(tp ->
-                        JavaConverters.seqAsJavaList(broker.logManager().liveLogDirs()).stream()
-                                .map(logDir -> JavaConverters.mapAsJavaMap(new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null).read()))
-                                .collect(Collectors.toList())
-                                .stream()
-                                .noneMatch(checkpointsPerLogDir -> checkpointsPerLogDir.containsKey(tp))
-                )
+            topicPartitions.stream().allMatch(tp ->
+                JavaConverters.seqAsJavaList(broker.logManager().liveLogDirs()).stream()
+                    .map(logDir -> JavaConverters.mapAsJavaMap(new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null).read()))
+                    .noneMatch(checkpointsPerLogDir -> checkpointsPerLogDir.containsKey(tp))
+            )
         ), "Cleaner offset for deleted partition should have been removed");
 
-        TestUtils.waitForCondition(() -> brokers().values().stream().allMatch(
-                        broker -> broker.config().logDirs().forall(
-                                logDir -> topicPartitions.stream().noneMatch(
-                                        tp -> new File(logDir, tp.topic() + "-" + tp.partition()).exists()))),
-                "Failed to soft-delete the data to a delete directory"
+        TestUtils.waitForCondition(() ->
+            brokers().values().stream().allMatch(broker ->
+                broker.config().logDirs().forall(
+                    logDir -> topicPartitions.stream().noneMatch(
+                        tp -> new File(logDir, tp.topic() + "-" + tp.partition()).exists()))),
+            "Failed to soft-delete the data to a delete directory"
         );
 
-        TestUtils.waitForCondition(() -> brokers().values().stream().allMatch(
-                broker -> broker.config().logDirs().forall(
-                        logDir -> topicPartitions.stream().noneMatch(
-                                tp -> Arrays.asList(new File(logDir).list()).stream().allMatch(
-                                        partitionDirectoryName -> partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&
-                                                partitionDirectoryName.endsWith(UnifiedLog.DeleteDirSuffix())
-                                )
+        TestUtils.waitForCondition(() ->
+            brokers().values().stream().allMatch(broker ->
+                broker.config().logDirs().forall(
+                    logDir -> topicPartitions.stream().noneMatch(
+                        tp -> Arrays.stream(Objects.requireNonNull(new File(logDir).list())).allMatch(
+                            partitionDirectoryName -> partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&
+                                partitionDirectoryName.endsWith(UnifiedLog.DeleteDirSuffix())
                         )
+                    )
                 )
         ), "Failed to hard-delete the delete directory");
     }
