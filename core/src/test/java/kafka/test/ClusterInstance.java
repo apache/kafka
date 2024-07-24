@@ -17,7 +17,6 @@
 
 package kafka.test;
 
-import kafka.api.IntegrationTestHarness;
 import kafka.log.UnifiedLog;
 import kafka.network.SocketServer;
 import kafka.server.BrokerServer;
@@ -195,18 +194,6 @@ public interface ClusterInstance {
 
     @SuppressWarnings("deprecation")
     default void verifyTopicDeletion(String topic, int partitions) throws InterruptedException {
-        if (!isKRaftTest()) {
-            TestUtils.waitForCondition(
-                    () -> !((IntegrationTestHarness) getUnderlying()).zkClient().isTopicMarkedForDeletion(topic),
-                    String.format("Admin path /admin/delete_topics/%s path not deleted even after a replica is restarted", topic)
-            );
-
-            TestUtils.waitForCondition(
-                    () -> !((IntegrationTestHarness) getUnderlying()).zkClient().topicExists(topic),
-                    String.format("Topic path /brokers/topics/%s not deleted after /admin/delete_topics/%s path is deleted", topic, topic)
-            );
-        }
-
         List<TopicPartition> topicPartitions = IntStream.range(0, partitions).mapToObj(i -> new TopicPartition(topic, i)).collect(Collectors.toList());
         TestUtils.waitForCondition(
                 () ->
