@@ -2603,7 +2603,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("quorum=kraft"))
   def testListClientMetricsResources(ignored: String): Unit = {
     client = createAdminClient
-    def newTopic = new NewTopic(topic, partition, 1.toShort)
+    def newTopic = new NewTopic(topic, partition, 0.toShort)
     client.createTopics(Collections.singleton(newTopic))
     assertTrue(client.listClientMetricsResources().all().get().isEmpty)
     def name = "name"
