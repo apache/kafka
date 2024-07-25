@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -26,6 +23,12 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKeyJsonConverter;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValueJsonConverter;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -43,7 +46,7 @@ public class OffsetsMessageFormatter implements MessageFormatter {
     private static final String DATA = "data";
     private static final String KEY = "key";
     private static final String VALUE = "value";
-    private static final String NULL = "NULL";
+    private static final String UNKNOWN = "unknown";
 
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
@@ -52,19 +55,27 @@ public class OffsetsMessageFormatter implements MessageFormatter {
         byte[] key = consumerRecord.key();
         if (Objects.nonNull(key)) {
             short keyVersion = ByteBuffer.wrap(key).getShort();
-            Optional<OffsetCommitKey> offsetCommitKey = readToGroupMetadataKey(ByteBuffer.wrap(key));
-            settingKeyNode(json, offsetCommitKey, keyVersion);
+            JsonNode dataNode = readToGroupMetadataKey(ByteBuffer.wrap(key))
+                    .map(logKey -> OffsetCommitKeyJsonConverter.write(logKey, keyVersion))
+                    .orElseGet(() -> new TextNode(UNKNOWN));
+            json.putObject(KEY)
+                    .put(VERSION, keyVersion)
+                    .set(DATA, dataNode);
         } else {
-            json.put(KEY, NULL);
+            json.set(KEY, NullNode.getInstance());
         }
 
         byte[] value = consumerRecord.value();
         if (Objects.nonNull(value)) {
             short valueVersion = ByteBuffer.wrap(value).getShort();
-            Optional<OffsetCommitValue> offsetCommitValue = readToOffsetCommitValue(ByteBuffer.wrap(value));
-            settingValueNode(json, offsetCommitValue, valueVersion);
+            JsonNode dataNode = readToOffsetCommitValue(ByteBuffer.wrap(value))
+                    .map(logValue -> OffsetCommitValueJsonConverter.write(logValue, valueVersion))
+                    .orElseGet(() -> new TextNode(UNKNOWN));
+            json.putObject(VALUE)
+                    .put(VERSION, valueVersion)
+                    .set(DATA, dataNode);
         } else {
-            json.put(VALUE, NULL);
+            json.set(KEY, NullNode.getInstance());
         }
 
         try {
@@ -95,36 +106,5 @@ public class OffsetsMessageFormatter implements MessageFormatter {
         } else {
             throw new IllegalStateException("Unknown offset message version: " + version);
         }
-    }
-
-    private void settingKeyNode(ObjectNode json, Optional<OffsetCommitKey> transactionLogKey, short keyVersion) {
-        if (transactionLogKey.isPresent()) {
-            addDataNode(json, KEY, keyVersion,
-                    OffsetCommitKeyJsonConverter.write(transactionLogKey.get(), keyVersion));
-        } else {
-            addUnknownNode(json, KEY, keyVersion);
-        }
-    }
-
-    private void settingValueNode(ObjectNode json, Optional<OffsetCommitValue> transactionLogValue, short valueVersion) {
-        if (transactionLogValue.isPresent()) {
-            addDataNode(json, VALUE, valueVersion,
-                    OffsetCommitValueJsonConverter.write(transactionLogValue.get(), valueVersion));
-        } else {
-            addUnknownNode(json, VALUE, valueVersion);
-        }
-    }
-
-    private void addUnknownNode(ObjectNode json, String nodeName, short keyVersion) {
-        json.putObject(nodeName)
-                .put(VERSION, Short.toString(keyVersion))
-                .put(DATA, "unknown");
-    }
-
-    private static void addDataNode(ObjectNode json, String value,
-                                    short valueVersion, JsonNode data) {
-        json.putObject(value)
-                .put(VERSION, Short.toString(valueVersion))
-                .set(DATA, data);
     }
 }
