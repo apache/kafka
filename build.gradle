@@ -1395,7 +1395,7 @@ project(':group-coordinator') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
@@ -1450,7 +1450,7 @@ project(':transaction-coordinator') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }

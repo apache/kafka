@@ -19,7 +19,6 @@ package org.apache.kafka.shell;
 
 import kafka.raft.KafkaRaftManager;
 import kafka.tools.TerseFailure;
-import kafka.utils.FileLock;
 
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -28,6 +27,7 @@ import org.apache.kafka.metadata.util.SnapshotFileReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.LoggingFaultHandler;
+import org.apache.kafka.server.util.FileLock;
 import org.apache.kafka.shell.command.Commands;
 import org.apache.kafka.shell.state.MetadataShellPublisher;
 import org.apache.kafka.shell.state.MetadataShellState;
