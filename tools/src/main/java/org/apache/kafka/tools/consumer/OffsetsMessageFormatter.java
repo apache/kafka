@@ -75,7 +75,7 @@ public class OffsetsMessageFormatter implements MessageFormatter {
                     .put(VERSION, valueVersion)
                     .set(DATA, dataNode);
         } else {
-            json.set(KEY, NullNode.getInstance());
+            json.set(VALUE, NullNode.getInstance());
         }
 
         try {
@@ -104,7 +104,7 @@ public class OffsetsMessageFormatter implements MessageFormatter {
             value.setExpireTimestamp(value.expireTimestamp() == DEFAULT_TIMESTAMP ? 0L : value.expireTimestamp());
             return Optional.of(value);
         } else {
-            throw new IllegalStateException("Unknown offset message version: " + version);
+            return Optional.empty();
         }
     }
 }
