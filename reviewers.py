@@ -50,7 +50,8 @@ if __name__ == "__main__":
     parsed_reviewers = []
 
     for item in all_reviewers.items():
-        m = re.match("(?P<name>.*)\s<(?P<email>.*)>", item[0])
+        patterns = r"(?P<name>.*)\s<(?P<email>.*)>"
+        m = re.match(patterns, item[0])
         if m is not None and len(m.groups()) == 2:
             if item[1] > 2:
                 parsed_reviewers.append((m.group("name"), m.group("email"), item[1]))
