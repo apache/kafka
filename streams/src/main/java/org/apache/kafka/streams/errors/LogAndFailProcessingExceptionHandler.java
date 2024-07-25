@@ -32,7 +32,7 @@ public class LogAndFailProcessingExceptionHandler implements ProcessingException
 
     @Override
     public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
-        log.warn("Exception caught during message processing, " +
+        log.error("Exception caught during message processing, " +
                 "processor node: {}, taskId: {}, source topic: {}, source partition: {}, source offset: {}",
             context.processorNodeId(), context.taskId(), context.topic(), context.partition(), context.offset(),
             exception);
