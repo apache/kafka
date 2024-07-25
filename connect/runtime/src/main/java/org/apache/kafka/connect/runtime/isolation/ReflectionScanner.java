@@ -29,10 +29,10 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
+import java.util.HashSet;
 import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.net.URL;
@@ -75,33 +75,31 @@ public class ReflectionScanner extends PluginScanner {
 
     private static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
         T pluginImpl = pluginKlass.getDeclaredConstructor().newInstance();
-        log.info("sx versionFor: ")
+        log.info("sx versionFor: ");
         log.info(pluginKlass.getName());
         return versionFor(pluginImpl);
     }
 
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
+        Set<URL> urls = new HashSet<>();
+        Collections.addAll(urls, source.urls());
         ClassGraph classGraphBuilder = new ClassGraph().enableClassInfo()
-                .overrideClassLoaders(new ClassLoader[]{source.loader()})
-                //.addClassLoader(source.loader())
-                //.overrideClasspath(Arrays.asList(source.urls()));
-//                .acceptModules("*")
+                .addClassLoader(source.loader())
+                .filterClasspathElementsByURL(urls::contains)
                 .enableExternalClasses()
                 .enableInterClassDependencies()
                 .enableAllInfo()
-//                .disableNestedJarScanning()
-//                .acceptPackages("")
                 .ignoreParentClassLoaders();
-        List<URL> urls = classGraphBuilder.getClasspathURLs();
-        urls.addAll(Arrays.asList(source.urls()));
-        if (!urls.isEmpty()) {
-            classGraphBuilder.overrideClasspath(urls);
-        }
+        // List<URL> urls = classGraphBuilder.getClasspathURLs();
+        // urls.addAll(Arrays.asList(source.urls()));
+        // if (!urls.isEmpty()) {
+        //     classGraphBuilder.overrideClasspath(urls);
+        // }
         try (ScanResult classGraph = classGraphBuilder.scan()) {
             if (source.urls().length > 0) { //&& source.urls()[0].toString().contains("subclass-of-classpath")) {
                 log.info("sx ScanResult size");
-                log.info(classGraph.getAllClasses().size());
+                log.info("%s", classGraph.getAllClasses().size());
                 log.info("sx scan result each");
                 for (ClassInfo ci : classGraph.getAllClasses()) {
                     log.info(ci.getName());
@@ -148,7 +146,7 @@ public class ReflectionScanner extends PluginScanner {
                 plugins = classGraph.getClassesImplementing(kclass.getName());
             }
             log.info(kclass.getName());
-            log.info(plugins.size());
+            log.info("%s", plugins.size());
             for (ClassInfo ci : plugins) {
                 log.info("sx plugin each");
                 log.info(ci.getName());
