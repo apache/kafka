@@ -649,16 +649,16 @@ public final class RaftClientTestContext {
         List<ReplicaState> voterStates,
         List<ReplicaState> observerStates
     ) {
-        assertSentDescribeQuorumResponse(leaderId, leaderEpoch, highWatermark, voterStates, observerStates, Errors.NONE);
+        assertSentDescribeQuorumResponse(Errors.NONE, leaderId, leaderEpoch, highWatermark, voterStates, observerStates);
     }
 
     void assertSentDescribeQuorumResponse(
+        Errors error,
         int leaderId,
         int leaderEpoch,
         long highWatermark,
         List<ReplicaState> voterStates,
-        List<ReplicaState> observerStates,
-        Errors error
+        List<ReplicaState> observerStates
     ) {
         DescribeQuorumResponseData response = collectDescribeQuorumResponse();
 

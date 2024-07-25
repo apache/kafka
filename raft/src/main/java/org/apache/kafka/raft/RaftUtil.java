@@ -507,8 +507,8 @@ public class RaftUtil {
             for (LeaderState.ReplicaState voter : voters) {
                 nodes.add(
                     new DescribeQuorumResponseData.Node()
-                        .setNodeId(voter.replicaKey.id())
-                        .setListeners(voter.listeners.toDescribeQuorumResponseListeners())
+                        .setNodeId(voter.replicaKey().id())
+                        .setListeners(voter.listeners().toDescribeQuorumResponseListeners())
                 );
             }
             response.setNodes(nodes);
@@ -561,21 +561,21 @@ public class RaftUtil {
     ) {
         final long lastCaughtUpTimestamp;
         final long lastFetchTimestamp;
-        if (replicaState.replicaKey.id() == leaderId) {
+        if (replicaState.replicaKey().id() == leaderId) {
             lastCaughtUpTimestamp = currentTimeMs;
             lastFetchTimestamp = currentTimeMs;
         } else {
-            lastCaughtUpTimestamp = replicaState.lastCaughtUpTimestamp;
-            lastFetchTimestamp = replicaState.lastFetchTimestamp;
+            lastCaughtUpTimestamp = replicaState.lastCaughtUpTimestamp();
+            lastFetchTimestamp = replicaState.lastFetchTimestamp();
         }
         DescribeQuorumResponseData.ReplicaState replicaStateData = new DescribeQuorumResponseData.ReplicaState()
-            .setReplicaId(replicaState.replicaKey.id())
-            .setLogEndOffset(replicaState.endOffset.map(LogOffsetMetadata::offset).orElse(-1L))
+            .setReplicaId(replicaState.replicaKey().id())
+            .setLogEndOffset(replicaState.endOffset().map(LogOffsetMetadata::offset).orElse(-1L))
             .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
             .setLastFetchTimestamp(lastFetchTimestamp);
 
         if (apiVersion >= 2) {
-            replicaStateData.setReplicaDirectoryId(replicaState.replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID));
+            replicaStateData.setReplicaDirectoryId(replicaState.replicaKey().directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID));
         }
         return replicaStateData;
     }

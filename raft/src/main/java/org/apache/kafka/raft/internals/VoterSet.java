@@ -321,6 +321,9 @@ public final class VoterSet {
             }
         }
 
+        /**
+         * Returns the listeners of the voter node
+         */
         public Endpoints listeners() {
             return listeners;
         }
