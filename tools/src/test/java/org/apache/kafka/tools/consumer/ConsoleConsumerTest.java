@@ -70,6 +70,7 @@ import java.util.regex.Pattern;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -95,6 +96,7 @@ import static org.mockito.Mockito.when;
 public class ConsoleConsumerTest {
 
     private final String topic = "test-topic";
+    private final String groupId = "test-group";
     private final String transactionId = "transactional-id";
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -293,7 +295,7 @@ public class ConsoleConsumerTest {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
             admin.createTopics(singleton(newTopic));
-            produceMessages(cluster);
+            produceMessagesWithTxn(cluster);
 
             String[] transactionLogMessageFormatter = new String[]{
                 "--bootstrap-server", cluster.bootstrapServers(),
@@ -303,7 +305,7 @@ public class ConsoleConsumerTest {
             };
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(transactionLogMessageFormatter);
-            ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createConsumer(cluster));
+            ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createTxnConsumer(cluster));
             
             try (ByteArrayOutputStream out = new ByteArrayOutputStream();
                  PrintStream output = new PrintStream(out)) {
@@ -340,12 +342,11 @@ public class ConsoleConsumerTest {
             String[] offsetsMessageFormatter = new String[]{
                 "--bootstrap-server", cluster.bootstrapServers(),
                 "--topic", Topic.GROUP_METADATA_TOPIC_NAME,
-                "--formatter", "org.apache.kafka.tools.consumer.OffsetsMessageFormatter",
-                "--from-beginning"
+                "--formatter", "org.apache.kafka.tools.consumer.OffsetsMessageFormatter"
             };
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(offsetsMessageFormatter);
-            ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createConsumer(cluster));
+            ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createOffsetConsumer(cluster));
 
             try (ByteArrayOutputStream out = new ByteArrayOutputStream(); 
                  PrintStream output = new PrintStream(out)) {
@@ -357,25 +358,25 @@ public class ConsoleConsumerTest {
                 OffsetCommitKey offsetCommitKey =
                         OffsetCommitKeyJsonConverter.read(keyNode.get("data"), OffsetCommitKey.HIGHEST_SUPPORTED_VERSION);
                 assertNotNull(offsetCommitKey);
-                assertEquals(topic, offsetCommitKey.topic());
+                assertEquals(Topic.GROUP_METADATA_TOPIC_NAME, offsetCommitKey.topic());
+                assertEquals(groupId, offsetCommitKey.group());
 
                 JsonNode valueNode = jsonNode.get("value");
                 OffsetCommitValue offsetCommitValue =
-                        OffsetCommitValueJsonConverter.read(valueNode.get("data"), OffsetCommitKey.HIGHEST_SUPPORTED_VERSION);
+                        OffsetCommitValueJsonConverter.read(valueNode.get("data"), OffsetCommitValue.HIGHEST_SUPPORTED_VERSION);
                 assertNotNull(offsetCommitValue);
-                assertNotNull(offsetCommitValue.offset());
-                assertNotNull(offsetCommitValue.leaderEpoch());
+                assertEquals(0, offsetCommitValue.offset());
+                assertEquals(0, offsetCommitValue.leaderEpoch());
                 assertNotNull(offsetCommitValue.metadata());
-                assertNotNull(offsetCommitValue.commitTimestamp());
-                assertNotNull(offsetCommitValue.expireTimestamp());
+                assertEquals(-1, offsetCommitValue.expireTimestamp());
             } finally {
                 consumerWrapper.cleanup();
             }
         }
     }
 
-    private void produceMessages(ClusterInstance cluster) {
-        try (Producer<byte[], byte[]> producer = createProducer(cluster)) {
+    private void produceMessagesWithTxn(ClusterInstance cluster) {
+        try (Producer<byte[], byte[]> producer = createTxnProducer(cluster)) {
             producer.initTransactions();
             producer.beginTransaction();
             producer.send(new ProducerRecord<>(topic, new byte[1_000 * 100]));
@@ -383,26 +384,48 @@ public class ConsoleConsumerTest {
         }
     }
 
-    private Producer<byte[], byte[]> createProducer(ClusterInstance cluster) {
-        Properties props = new Properties();
-        props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+    private void produceMessages(ClusterInstance cluster) {
+        try (Producer<byte[], byte[]> producer = new KafkaProducer<>(producerProps(cluster))) {
+            producer.send(new ProducerRecord<>(topic, new byte[1_000 * 100]));
+        }
+    }
+
+    private Producer<byte[], byte[]> createTxnProducer(ClusterInstance cluster) {
+        Properties props = producerProps(cluster);
         props.put(ENABLE_IDEMPOTENCE_CONFIG, "true");
         props.put(ACKS_CONFIG, "all");
         props.put(TRANSACTIONAL_ID_CONFIG, transactionId);
-        props.put(KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         return new KafkaProducer<>(props);
     }
 
-    private Consumer<byte[], byte[]> createConsumer(ClusterInstance cluster) {
+    private Consumer<byte[], byte[]> createTxnConsumer(ClusterInstance cluster) {
+        Properties props = consumerProps(cluster);
+        props.put(ISOLATION_LEVEL_CONFIG, "read_committed");
+        props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        return new KafkaConsumer<>(props);
+    }
+
+    private Consumer<byte[], byte[]> createOffsetConsumer(ClusterInstance cluster) {
+        Properties props = consumerProps(cluster);
+        props.put(EXCLUDE_INTERNAL_TOPICS_CONFIG, "false");
+        return new KafkaConsumer<>(props);
+    }
+    
+    private Properties producerProps(ClusterInstance cluster) {
+        Properties props = new Properties();
+        props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        return props;
+    }
+    
+    private Properties consumerProps(ClusterInstance cluster) {
         Properties props = new Properties();
         props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
-        props.put(ISOLATION_LEVEL_CONFIG, "read_committed");
-        props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(GROUP_ID_CONFIG, "test-group");
-        return new KafkaConsumer<>(props);
+        props.put(GROUP_ID_CONFIG, groupId);
+        return props;
     }
 }

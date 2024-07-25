@@ -18,7 +18,9 @@ package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKeyJsonConverter;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
@@ -40,6 +42,9 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 import static org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP;
 
+/**
+ * Formatter for use with tools such as console consumer: Consumer should also set exclude.internal.topics to false.
+ */
 public class OffsetsMessageFormatter implements MessageFormatter {
 
     private static final String VERSION = "version";
@@ -56,8 +61,12 @@ public class OffsetsMessageFormatter implements MessageFormatter {
         if (Objects.nonNull(key)) {
             short keyVersion = ByteBuffer.wrap(key).getShort();
             JsonNode dataNode = readToGroupMetadataKey(ByteBuffer.wrap(key))
-                    .map(logKey -> OffsetCommitKeyJsonConverter.write(logKey, keyVersion))
+                    .map(logKey -> transferMetadataToJsonNode(logKey, keyVersion))
                     .orElseGet(() -> new TextNode(UNKNOWN));
+            // Only print if the message is an offset record.
+            if (dataNode instanceof NullNode) {
+                return;
+            }
             json.putObject(KEY)
                     .put(VERSION, keyVersion)
                     .set(DATA, dataNode);
@@ -85,16 +94,31 @@ public class OffsetsMessageFormatter implements MessageFormatter {
         }
     }
 
-    private Optional<OffsetCommitKey> readToGroupMetadataKey(ByteBuffer byteBuffer) {
+    private Optional<ApiMessage> readToGroupMetadataKey(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION
                 && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
             return Optional.of(new OffsetCommitKey(new ByteBufferAccessor(byteBuffer), version));
+        } else if (version >= GroupMetadataKey.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataKey.HIGHEST_SUPPORTED_VERSION) {
+            return Optional.of(new GroupMetadataKey(new ByteBufferAccessor(byteBuffer), version));
         } else {
             return Optional.empty();
         }
     }
 
+    private static JsonNode transferMetadataToJsonNode(ApiMessage logKey, short keyVersion) {
+        if (logKey instanceof OffsetCommitKey) {
+            return OffsetCommitKeyJsonConverter.write((OffsetCommitKey) logKey, keyVersion);
+        } else if (logKey instanceof GroupMetadataKey) {
+            return NullNode.getInstance();
+        } else {
+            return new TextNode(UNKNOWN);
+        }
+    }
+
+    /**
+     * We ignore the timestamp of the message because GroupMetadataMessage has its own timestamp.
+     */
     private Optional<OffsetCommitValue> readToOffsetCommitValue(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= OffsetCommitValue.LOWEST_SUPPORTED_VERSION
