@@ -62,6 +62,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -118,6 +120,17 @@ public class ProcessorNodeTest {
             new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
 
         final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
+        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.CONTINUE, internalProcessorContext));
+
+        assertDoesNotThrow(() -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
+    }
+
+    @Test
+    void shouldHandleProcessingExceptionWhenRawRecordIsNull() {
+        final ProcessorNode<Object, Object, Object, Object> node =
+            new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
+
+        final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContextWithNullRawRecord();
         node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.CONTINUE, internalProcessorContext));
 
         assertDoesNotThrow(() -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
@@ -300,8 +313,16 @@ public class ProcessorNodeTest {
         assertTrue(se.getMessage().contains("pname"));
     }
 
-    @SuppressWarnings("unchecked")
+    private InternalProcessorContext<Object, Object> mockInternalProcessorContextWithNullRawRecord() {
+        return mockInternalProcessorContext(null);
+    }
+
     private InternalProcessorContext<Object, Object> mockInternalProcessorContext() {
+        return mockInternalProcessorContext(new ConsumerRecord<>(TOPIC, PARTITION, OFFSET, KEY.getBytes(), VALUE.getBytes()));
+    }
+
+    @SuppressWarnings("unchecked")
+    private InternalProcessorContext<Object, Object> mockInternalProcessorContext(final ConsumerRecord<byte[], byte[]> record) {
         final InternalProcessorContext<Object, Object> internalProcessorContext = mock(InternalProcessorContext.class, withSettings().strictness(Strictness.LENIENT));
 
         when(internalProcessorContext.taskId()).thenReturn(TASK_ID);
@@ -316,7 +337,7 @@ public class ProcessorNodeTest {
                 PARTITION,
                 TOPIC,
                 new RecordHeaders(),
-                new ConsumerRecord<>(TOPIC, PARTITION, OFFSET, KEY.getBytes(), VALUE.getBytes())));
+                record));
         when(internalProcessorContext.currentNode()).thenReturn(new ProcessorNode<>(NAME));
 
         return internalProcessorContext;
@@ -337,13 +358,18 @@ public class ProcessorNodeTest {
             assertEquals(internalProcessorContext.topic(), context.topic());
             assertEquals(internalProcessorContext.partition(), context.partition());
             assertEquals(internalProcessorContext.offset(), context.offset());
-            assertArrayEquals(internalProcessorContext.recordContext().rawRecord().key(), context.sourceRawKey());
-            assertArrayEquals(internalProcessorContext.recordContext().rawRecord().value(), context.sourceRawValue());
+            if (internalProcessorContext.recordContext().rawRecord() != null) {
+                assertArrayEquals(internalProcessorContext.recordContext().rawRecord().key(), context.sourceRawKey());
+                assertArrayEquals(internalProcessorContext.recordContext().rawRecord().value(), context.sourceRawValue());
+            } else {
+                assertNull(context.sourceRawKey());
+                assertNull(context.sourceRawValue());
+            }
             assertEquals(internalProcessorContext.currentNode().name(), context.processorNodeId());
             assertEquals(internalProcessorContext.taskId(), context.taskId());
             assertEquals(KEY, record.key());
             assertEquals(VALUE, record.value());
-            assertTrue(exception instanceof RuntimeException);
+            assertInstanceOf(RuntimeException.class, exception);
             assertEquals("Processing exception should be caught and handled by the processing exception handler.", exception.getMessage());
 
             return response;

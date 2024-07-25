@@ -204,13 +204,16 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             // Rethrow exceptions that should not be handled here
             throw e;
         } catch (final Exception e) {
+            final byte[] sourceRawKey = internalProcessorContext.recordContext().rawRecord() != null ? internalProcessorContext.recordContext().rawRecord().key() : null;
+            final byte[] sourceRawValue = internalProcessorContext.recordContext().rawRecord() != null ? internalProcessorContext.recordContext().rawRecord().value() : null;
+
             final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
                 internalProcessorContext.topic(),
                 internalProcessorContext.partition(),
                 internalProcessorContext.offset(),
                 internalProcessorContext.headers(),
-                internalProcessorContext.recordContext().rawRecord().key(),
-                internalProcessorContext.recordContext().rawRecord().value(),
+                sourceRawKey,
+                sourceRawValue,
                 internalProcessorContext.currentNode().name(),
                 internalProcessorContext.taskId());
 
