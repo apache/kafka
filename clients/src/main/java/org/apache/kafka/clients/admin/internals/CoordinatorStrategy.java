@@ -41,7 +41,7 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
 
     private static final ApiRequestScope BATCH_REQUEST_SCOPE = new ApiRequestScope() { };
 
-    private static final Logger log;
+    private final Logger log;
     private final FindCoordinatorRequest.CoordinatorType type;
     private Set<CoordinatorKey> unrepresentableKeys = Collections.emptySet();
 

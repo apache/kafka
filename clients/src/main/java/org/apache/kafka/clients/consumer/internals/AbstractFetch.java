@@ -60,7 +60,7 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
  */
 public abstract class AbstractFetch implements Closeable {
 
-    private static final Logger log;
+    private final Logger log;
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
     protected final LogContext logContext;
     protected final ConsumerMetadata metadata;

@@ -41,7 +41,7 @@ public class ProducerMetadata extends Metadata {
     /* Topics with expiry time */
     private final Map<String, Long> topics = new HashMap<>();
     private final Set<String> newTopics = new HashSet<>();
-    private static final Logger log;
+    private final Logger log;
     private final Time time;
     private Map<String, Errors> errors = null;
 

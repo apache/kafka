@@ -38,7 +38,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class FenceProducersHandler extends AdminApiHandler.Unbatched<CoordinatorKey, ProducerIdAndEpoch> {
-    private static final Logger log;
+    private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
     private final int txnTimeoutMs;
 

@@ -39,7 +39,7 @@ import org.slf4j.Logger;
  * with the actual state, and try to make changes only if necessary.
  */
 public class BrokerRegistrationTracker implements MetadataPublisher {
-    private static final Logger log;
+    private final Logger log;
     private final int id;
     private final Runnable refreshRegistrationCallback;
 

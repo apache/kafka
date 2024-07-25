@@ -43,7 +43,7 @@ public final class AssignorConfiguration {
     private final String internalTaskAssignorClass;
 
     private final String logPrefix;
-    private static final Logger log;
+    private final Logger log;
     private final ReferenceContainer referenceContainer;
 
     private final StreamsConfig streamsConfig;

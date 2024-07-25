@@ -65,7 +65,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final BackgroundEventHandler backgroundEventHandler;
     private final Metadata metadata;
     private final Time time;
-    private static final Logger log;
+    private final Logger log;
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;

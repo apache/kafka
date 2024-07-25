@@ -130,7 +130,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    private static final Logger log;
+    private final Logger log;
     private final Heartbeat heartbeat;
     private final GroupCoordinatorMetrics sensors;
     private final GroupRebalanceConfig rebalanceConfig;

@@ -93,7 +93,7 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
     /**
      * The slf4j logger to use.
      */
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * The clock object.

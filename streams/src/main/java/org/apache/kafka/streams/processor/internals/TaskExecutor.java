@@ -47,7 +47,7 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMo
  */
 public class TaskExecutor {
 
-    private static final Logger log;
+    private final Logger log;
     private final TasksRegistry tasks;
     private final TaskManager taskManager;
     private final TaskExecutionMetadata executionMetadata;

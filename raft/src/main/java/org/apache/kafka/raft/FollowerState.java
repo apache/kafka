@@ -44,7 +44,7 @@ public class FollowerState implements EpochState {
      */
     private Optional<RawSnapshotWriter> fetchingSnapshot = Optional.empty();
 
-    private static final Logger log;
+    private final Logger log;
 
     public FollowerState(
         Time time,

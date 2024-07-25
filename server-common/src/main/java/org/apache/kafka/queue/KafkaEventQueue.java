@@ -417,7 +417,7 @@ public final class KafkaEventQueue implements EventQueue {
     /**
      * The log4j logger to use.
      */
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * The runnable that our thread executes.

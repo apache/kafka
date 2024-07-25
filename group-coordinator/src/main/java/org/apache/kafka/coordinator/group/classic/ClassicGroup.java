@@ -91,7 +91,7 @@ public class ClassicGroup implements Group {
     /**
      * The slf4j logger.
      */
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * The group id.

@@ -224,7 +224,7 @@ public class BrokerHeartbeatManager {
         }
     }
 
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * The Kafka clock object to use.

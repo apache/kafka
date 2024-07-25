@@ -46,7 +46,7 @@ public class AlterConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Co
 
     private final CoordinatorKey groupId;
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
-    private static final Logger log;
+    private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public AlterConsumerGroupOffsetsHandler(

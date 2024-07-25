@@ -3673,7 +3673,7 @@ public class FetchRequestManagerTest {
 
     private class TestableNetworkClientDelegate extends NetworkClientDelegate {
 
-        private static final Logger log = LoggerFactory.getLogger(NetworkClientDelegate.class);
+        private final Logger log = LoggerFactory.getLogger(NetworkClientDelegate.class);
         private final ConcurrentLinkedQueue<Node> pendingDisconnects = new ConcurrentLinkedQueue<>();
 
         public TestableNetworkClientDelegate(Time time,

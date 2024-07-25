@@ -436,7 +436,7 @@ public class LogContext {
     }
 
     private static class LocationIgnorantKafkaLogger extends AbstractKafkaLogger {
-        private static final Logger logger;
+        private final Logger logger;
 
         LocationIgnorantKafkaLogger(String logPrefix, Logger logger) {
             super(logPrefix);

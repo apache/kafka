@@ -34,7 +34,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
     private final Time time;
     private final TaskManager taskManager;
     private final StreamThread streamThread;
-    private static final Logger log;
+    private final Logger log;
     private final AtomicInteger assignmentErrorCode;
 
     StreamsRebalanceListener(final Time time,

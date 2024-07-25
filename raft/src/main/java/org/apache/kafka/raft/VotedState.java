@@ -40,7 +40,7 @@ public class VotedState implements EpochState {
     private final int electionTimeoutMs;
     private final Timer electionTimer;
     private final Optional<LogOffsetMetadata> highWatermark;
-    private static final Logger log;
+    private final Logger log;
 
     public VotedState(
         Time time,

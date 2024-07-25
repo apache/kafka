@@ -76,7 +76,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
     private final ConsumerMetadata metadata;
     private final IsolationLevel isolationLevel;
-    private static final Logger log;
+    private final Logger log;
     private final OffsetFetcherUtils offsetFetcherUtils;
     private final SubscriptionState subscriptionState;
 

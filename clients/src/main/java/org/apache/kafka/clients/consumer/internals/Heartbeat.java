@@ -35,7 +35,7 @@ public final class Heartbeat {
     private final Timer heartbeatTimer;
     private final Timer sessionTimer;
     private final Timer pollTimer;
-    private static final Logger log;
+    private final Logger log;
     private final ExponentialBackoff retryBackoff;
 
     private volatile long lastHeartbeatSend = 0L;

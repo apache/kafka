@@ -45,7 +45,7 @@ import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.Lea
  * Note that this class is NOT thread-safe.
  */
 public class EagerAssignor implements ConnectAssignor {
-    private static final Logger log;
+    private final Logger log;
 
     public EagerAssignor(LogContext logContext) {
         this.log = logContext.logger(EagerAssignor.class);

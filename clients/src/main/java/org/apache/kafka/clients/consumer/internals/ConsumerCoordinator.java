@@ -100,7 +100,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private static final TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
 
     private final GroupRebalanceConfig rebalanceConfig;
-    private static final Logger log;
+    private final Logger log;
     private final List<ConsumerPartitionAssignor> assignors;
     private final ConsumerMetadata metadata;
     private final ConsumerCoordinatorMetrics coordinatorMetrics;

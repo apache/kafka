@@ -70,7 +70,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private static final long NO_DEADLINE = -1L;
 
     private final Time time;
-    private static final Logger log;
+    private final Logger log;
     private final File baseDir;
     private final long taskTimeoutMs;
     private final ProcessorTopology topology;

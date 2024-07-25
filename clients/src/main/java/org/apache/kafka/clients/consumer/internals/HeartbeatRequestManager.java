@@ -74,7 +74,7 @@ import java.util.stream.Collectors;
  */
 public class HeartbeatRequestManager implements RequestManager {
 
-    private static final Logger logger;
+    private final Logger logger;
 
     /**
      * Time that the group coordinator will wait on member to revoke its partitions. This is provided by the group

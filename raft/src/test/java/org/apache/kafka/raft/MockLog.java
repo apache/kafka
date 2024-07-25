@@ -62,7 +62,7 @@ public class MockLog implements ReplicatedLog {
     private final NavigableMap<OffsetAndEpoch, MockRawSnapshotReader> snapshots = new TreeMap<>();
     private final TopicPartition topicPartition;
     private final Uuid topicId;
-    private static final Logger logger;
+    private final Logger logger;
 
     private long nextId = ID_GENERATOR.getAndIncrement();
     private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0, Optional.empty());

@@ -65,7 +65,7 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPO
  * manage topics while producers rely on topic expiry to limit the refresh set.
  */
 public class Metadata implements Closeable {
-    private static final Logger log;
+    private final Logger log;
     private final ExponentialBackoff refreshBackoff;
     private final long metadataExpireMs;
     private int updateVersion;  // bumped on every metadata response

@@ -72,7 +72,7 @@ public class ClientQuotaControlManager {
         }
     }
 
-    private static final Logger log;
+    private final Logger log;
 
     private final SnapshotRegistry snapshotRegistry;
 

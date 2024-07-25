@@ -53,7 +53,7 @@ public final class KRaftControlRecordStateMachine {
     private final ReplicatedLog log;
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;
-    private static final Logger logger;
+    private final Logger logger;
     private final int maxBatchSizeBytes;
 
     // These objects are synchronized using their respective object monitor. The two actors

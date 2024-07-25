@@ -68,7 +68,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getThread
  * For non-EOS, the user should not call transaction related methods.
  */
 public class StreamsProducer {
-    private static final Logger log;
+    private final Logger log;
     private final String logPrefix;
 
     private final Map<String, Object> eosV2ProducerConfigs;

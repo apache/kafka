@@ -75,7 +75,7 @@ public class LeaderState<T> implements EpochState {
     private Map<Integer, ReplicaState> voterStates = new HashMap<>();
     private Optional<AddVoterHandlerState> addVoterHandlerState = Optional.empty();
     private final Map<ReplicaKey, ReplicaState> observerStates = new HashMap<>();
-    private static final Logger log;
+    private final Logger log;
     private final BatchAccumulator<T> accumulator;
     // The set includes all of the followers voters that FETCH or FETCH_SNAPSHOT during the current checkQuorumTimer interval.
     private final Set<Integer> fetchedVoters = new HashSet<>();

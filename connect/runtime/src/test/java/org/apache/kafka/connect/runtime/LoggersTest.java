@@ -214,7 +214,7 @@ public class LoggersTest {
 
     private class TestLoggers extends Loggers {
 
-        private static final Logger rootLogger;
+        private final Logger rootLogger;
         private final Map<String, Logger> currentLoggers;
 
         public TestLoggers(Logger rootLogger, Logger... knownLoggers) {

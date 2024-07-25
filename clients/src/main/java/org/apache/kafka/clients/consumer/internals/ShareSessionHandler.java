@@ -54,7 +54,7 @@ import java.util.stream.Collectors;
  * which partitions need to be included in each ShareFetch/ShareAcknowledge request.
  */
 public class ShareSessionHandler {
-    private static final Logger log;
+    private final Logger log;
     private final int node;
     private final Uuid memberId;
 

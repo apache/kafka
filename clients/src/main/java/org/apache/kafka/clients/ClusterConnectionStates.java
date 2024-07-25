@@ -42,7 +42,7 @@ final class ClusterConnectionStates {
     static final int CONNECTION_SETUP_TIMEOUT_EXP_BASE = 2;
     static final double CONNECTION_SETUP_TIMEOUT_JITTER = 0.2;
     private final Map<String, NodeConnectionState> nodeState;
-    private static final Logger log;
+    private final Logger log;
     private final HostResolver hostResolver;
     private final Set<String> connectingNodes;
     private final ExponentialBackoff reconnectBackoff;
@@ -466,7 +466,7 @@ final class ClusterConnectionStates {
     private static class NodeConnectionState {
         private final String host;
         private final HostResolver hostResolver;
-        private static final Logger log;
+        private final Logger log;
 
         ConnectionState state;
         AuthenticationException authenticationException;

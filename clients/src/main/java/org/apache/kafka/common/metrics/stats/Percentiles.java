@@ -33,7 +33,7 @@ import java.util.List;
  */
 public class Percentiles extends SampledStat implements CompoundStat {
 
-    private static final Logger log = LoggerFactory.getLogger(Percentiles.class);
+    private final Logger log = LoggerFactory.getLogger(Percentiles.class);
 
     public enum BucketSizing {
         CONSTANT, LINEAR

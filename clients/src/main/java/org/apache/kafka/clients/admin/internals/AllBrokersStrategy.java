@@ -52,7 +52,7 @@ public class AllBrokersStrategy implements AdminApiLookupStrategy<AllBrokersStra
     private static final ApiRequestScope SINGLE_REQUEST_SCOPE = new ApiRequestScope() {
     };
 
-    private static final Logger log;
+    private final Logger log;
 
     public AllBrokersStrategy(
         LogContext logContext

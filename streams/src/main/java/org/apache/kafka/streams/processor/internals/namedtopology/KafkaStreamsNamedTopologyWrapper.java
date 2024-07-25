@@ -71,7 +71,7 @@ import java.util.stream.Collectors;
 @Unstable
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * An empty Kafka Streams application that allows NamedTopologies to be added at a later point

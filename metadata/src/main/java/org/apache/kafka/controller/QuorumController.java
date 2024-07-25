@@ -1579,7 +1579,7 @@ public final class QuorumController implements Controller {
     /**
      * The slf4j logger.
      */
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * The ID of this controller node.

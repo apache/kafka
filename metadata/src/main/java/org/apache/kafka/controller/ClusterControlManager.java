@@ -208,7 +208,7 @@ public class ClusterControlManager {
     /**
      * The SLF4J log object.
      */
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * The Kafka clock object to use.

@@ -63,7 +63,7 @@ import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 public class WorkerGroupMember {
     private static final String JMX_PREFIX = "kafka.connect";
 
-    private static final Logger log;
+    private final Logger log;
     private final String clientId;
     private final ConsumerNetworkClient client;
     private final Metrics metrics;

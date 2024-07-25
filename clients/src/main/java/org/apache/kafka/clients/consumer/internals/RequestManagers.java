@@ -45,7 +45,7 @@ import static org.apache.kafka.common.utils.Utils.closeQuietly;
  */
 public class RequestManagers implements Closeable {
 
-    private static final Logger log;
+    private final Logger log;
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
     public final Optional<HeartbeatRequestManager> heartbeatRequestManager;

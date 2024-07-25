@@ -68,7 +68,7 @@ public class TopicMetadataRequestManager implements RequestManager {
     private final List<TopicMetadataRequestState> inflightRequests;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
-    private static final Logger log;
+    private final Logger log;
     private final LogContext logContext;
 
     public TopicMetadataRequestManager(final LogContext context, final Time time, final ConsumerConfig config) {

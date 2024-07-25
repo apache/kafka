@@ -52,7 +52,7 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
  */
 public class FetchCollector<K, V> {
 
-    private static final Logger log;
+    private final Logger log;
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final FetchConfig fetchConfig;

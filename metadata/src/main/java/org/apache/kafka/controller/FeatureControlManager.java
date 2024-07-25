@@ -120,7 +120,7 @@ public class FeatureControlManager {
         }
     }
 
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * An immutable map containing the features supported by this controller's software.

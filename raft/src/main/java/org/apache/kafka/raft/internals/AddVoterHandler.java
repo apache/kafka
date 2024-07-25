@@ -67,7 +67,7 @@ public final class AddVoterHandler {
     private final KRaftControlRecordStateMachine partitionState;
     private final RequestSender requestSender;
     private final Time time;
-    private static final Logger logger;
+    private final Logger logger;
 
     public AddVoterHandler(
         KRaftControlRecordStateMachine partitionState,

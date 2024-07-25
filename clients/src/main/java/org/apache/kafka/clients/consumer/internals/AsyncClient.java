@@ -26,7 +26,7 @@ import org.slf4j.Logger;
 
 public abstract class AsyncClient<T1, Req extends AbstractRequest, Resp extends AbstractResponse, T2> {
 
-    private static final Logger log;
+    private final Logger log;
     private final ConsumerNetworkClient client;
 
     AsyncClient(ConsumerNetworkClient client, LogContext logContext) {

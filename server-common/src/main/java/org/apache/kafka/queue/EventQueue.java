@@ -45,7 +45,7 @@ public interface EventQueue extends AutoCloseable {
     }
 
     abstract class FailureLoggingEvent implements Event {
-        private static final Logger log;
+        private final Logger log;
 
         public FailureLoggingEvent(Logger log) {
             this.log = log;

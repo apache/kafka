@@ -105,7 +105,7 @@ public class ProducerStateManager {
                     new Field(CRC_FIELD, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
                     new Field(PRODUCER_ENTRIES_FIELD, new ArrayOf(PRODUCER_SNAPSHOT_ENTRY_SCHEMA), "The entries in the producer table"));
 
-    private static final Logger log;
+    private final Logger log;
 
     private final TopicPartition topicPartition;
     private final int maxTransactionTimeoutMs;

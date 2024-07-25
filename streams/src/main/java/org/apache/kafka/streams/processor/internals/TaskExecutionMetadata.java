@@ -111,7 +111,7 @@ public class TaskExecutionMetadata {
     }
 
     private class NamedTopologyMetadata {
-        private static final Logger log;
+        private final Logger log;
         private final Map<TaskId, Long> tasksToErrorTime = new ConcurrentHashMap<>();
 
         public NamedTopologyMetadata(final String topologyName) {

@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 
 public class DeleteConsumerGroupsHandler extends AdminApiHandler.Batched<CoordinatorKey, Void> {
 
-    private static final Logger log;
+    private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public DeleteConsumerGroupsHandler(

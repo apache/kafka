@@ -163,7 +163,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     public static class SharedLogData {
-        private static final Logger log = LoggerFactory.getLogger(SharedLogData.class);
+        private final Logger log = LoggerFactory.getLogger(SharedLogData.class);
 
         /**
          * Maps node IDs to the matching log managers.
@@ -466,7 +466,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
     }
 
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * The node ID of this local log manager. Each log manager must have a unique ID.

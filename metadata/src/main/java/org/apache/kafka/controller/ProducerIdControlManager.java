@@ -65,7 +65,7 @@ public class ProducerIdControlManager {
         }
     }
 
-    private static final Logger log;
+    private final Logger log;
     private final ClusterControlManager clusterControlManager;
     private final TimelineObject<ProducerIdsBlock> nextProducerBlock;
     private final TimelineLong brokerEpoch;

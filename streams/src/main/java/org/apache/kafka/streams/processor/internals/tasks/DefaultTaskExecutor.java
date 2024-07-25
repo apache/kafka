@@ -46,7 +46,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
         private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
         private final AtomicReference<KafkaFutureImpl<StreamTask>> taskReleaseRequested = new AtomicReference<>(null);
 
-        private static final Logger log;
+        private final Logger log;
 
         public TaskExecutorThread(final String name) {
             super(name);
@@ -219,7 +219,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
     private final String name;
     private final TaskManager taskManager;
     private final TaskExecutionMetadata taskExecutionMetadata;
-    private static final Logger log;
+    private final Logger log;
 
     private StreamTask currentTask = null;
     private TaskExecutorThread taskExecutorThread = null;

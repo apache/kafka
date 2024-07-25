@@ -50,7 +50,7 @@ public class ResignedState implements EpochState {
     private final Set<Integer> unackedVoters;
     private final Timer electionTimer;
     private final List<ReplicaKey> preferredSuccessors;
-    private static final Logger log;
+    private final Logger log;
 
     public ResignedState(
         Time time,

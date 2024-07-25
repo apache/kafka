@@ -79,7 +79,7 @@ public class AclControlManager {
         }
     }
 
-    private static final Logger log;
+    private final Logger log;
     private final TimelineHashMap<Uuid, StandardAcl> idToAcl;
     private final TimelineHashSet<StandardAcl> existingAcls;
 

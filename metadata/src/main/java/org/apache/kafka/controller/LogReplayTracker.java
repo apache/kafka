@@ -45,7 +45,7 @@ public class LogReplayTracker {
     /**
      * The slf4j logger.
      */
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * True if we haven't replayed any records yet.

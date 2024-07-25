@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 
 public class CopartitionedTopicsEnforcer {
     private final String logPrefix;
-    private static final Logger log;
+    private final Logger log;
 
     public CopartitionedTopicsEnforcer(final String logPrefix) {
         this.logPrefix = logPrefix;

@@ -42,7 +42,7 @@ public class RecordQueue {
 
     public static final long UNKNOWN = ConsumerRecord.NO_TIMESTAMP;
 
-    private static final Logger log;
+    private final Logger log;
     private final SourceNode<?, ?> source;
     private final TopicPartition partition;
     private final ProcessorContext<?, ?> processorContext;

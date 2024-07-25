@@ -48,7 +48,7 @@ public class RuntimeLoggerManager {
     }
 
     private final int nodeId;
-    private static final Logger log;
+    private final Logger log;
 
     public RuntimeLoggerManager(int nodeId,  Logger log) {
         this.nodeId = nodeId;

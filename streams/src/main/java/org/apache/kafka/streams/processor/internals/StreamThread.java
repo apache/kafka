@@ -278,7 +278,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     private final Time time;
-    private static final Logger log;
+    private final Logger log;
     private final String logPrefix;
     public final Object stateLock;
     private final Duration pollTime;

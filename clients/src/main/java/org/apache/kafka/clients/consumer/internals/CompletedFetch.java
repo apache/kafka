@@ -63,7 +63,7 @@ public class CompletedFetch {
     final FetchResponseData.PartitionData partitionData;
     final short requestVersion;
 
-    private static final Logger log;
+    private final Logger log;
     private final SubscriptionState subscriptions;
     private final BufferSupplier decompressionBufferSupplier;
     private final Iterator<? extends RecordBatch> batches;

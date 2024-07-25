@@ -60,7 +60,7 @@ class ActiveTaskCreator {
     private final Time time;
     private final KafkaClientSupplier clientSupplier;
     private final String threadId;
-    private static final Logger log;
+    private final Logger log;
     private final Sensor createTaskSensor;
     private final StreamsProducer threadProducer;
     private final Map<TaskId, StreamsProducer> taskProducers;

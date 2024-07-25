@@ -58,7 +58,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  * class on the receiving broker side is FetchManager.
  */
 public class FetchSessionHandler {
-    private static final Logger log;
+    private final Logger log;
 
     private final int node;
 

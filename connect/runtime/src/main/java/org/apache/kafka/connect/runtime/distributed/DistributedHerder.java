@@ -153,7 +153,7 @@ import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativ
  * </p>
  */
 public class DistributedHerder extends AbstractHerder implements Runnable {
-    private static final Logger log;
+    private final Logger log;
 
     private static final long FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long START_AND_STOP_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);

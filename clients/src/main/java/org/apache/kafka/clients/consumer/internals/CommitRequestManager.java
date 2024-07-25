@@ -73,7 +73,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final Time time;
     private final SubscriptionState subscriptions;
     private final LogContext logContext;
-    private static final Logger log;
+    private final Logger log;
     private final Optional<AutoCommitState> autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
@@ -1252,7 +1252,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         private final long autoCommitInterval;
         private boolean hasInflightCommit;
 
-        private static final Logger log;
+        private final Logger log;
 
         public AutoCommitState(
                 final Time time,

@@ -46,7 +46,7 @@ public class UnattachedState implements EpochState {
     private final long electionTimeoutMs;
     private final Timer electionTimer;
     private final Optional<LogOffsetMetadata> highWatermark;
-    private static final Logger log;
+    private final Logger log;
 
     public UnattachedState(
         Time time,

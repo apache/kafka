@@ -70,7 +70,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RecordAccumulator {
 
     private final LogContext logContext;
-    private static final Logger log;
+    private final Logger log;
     private volatile boolean closed;
     private final AtomicInteger flushesInProgress;
     private final AtomicInteger appendsInProgress;

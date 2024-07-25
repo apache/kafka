@@ -42,7 +42,7 @@ public class CandidateState implements EpochState {
     private final int electionTimeoutMs;
     private final Timer electionTimer;
     private final Timer backoffTimer;
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * The lifetime of a candidate state is the following.

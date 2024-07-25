@@ -43,7 +43,7 @@ import java.util.Optional;
  * service thread (which also uses the NetworkClient).
  */
 public class AdminMetadataManager {
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * The minimum amount of time that we should wait between subsequent

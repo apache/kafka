@@ -47,7 +47,7 @@ import java.util.Set;
  */
 public class TopicMetadataFetcher {
 
-    private static final Logger log;
+    private final Logger log;
     private final ConsumerNetworkClient client;
     private final ExponentialBackoff retryBackoff;
 

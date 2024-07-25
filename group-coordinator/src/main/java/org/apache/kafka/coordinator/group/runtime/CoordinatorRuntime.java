@@ -1790,7 +1790,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * The logger.
      */
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * The system time.

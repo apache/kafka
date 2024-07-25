@@ -705,7 +705,7 @@ public class RemoteLogManager implements Closeable {
     abstract class RLMTask extends CancellableRunnable {
 
         protected final TopicIdPartition topicIdPartition;
-        private static final Logger logger;
+        private final Logger logger;
 
         public RLMTask(TopicIdPartition topicIdPartition) {
             this.topicIdPartition = topicIdPartition;
@@ -750,7 +750,7 @@ public class RemoteLogManager implements Closeable {
 
     class RLMCopyTask extends RLMTask {
         private final int customMetadataSizeLimit;
-        private static final Logger logger;
+        private final Logger logger;
 
         // The copied and log-start offset is empty initially for a new RLMCopyTask, and needs to be fetched inside
         // the task's run() method.
@@ -992,7 +992,7 @@ public class RemoteLogManager implements Closeable {
     }
 
     class RLMExpirationTask extends RLMTask {
-        private static final Logger logger;
+        private final Logger logger;
 
         public RLMExpirationTask(TopicIdPartition topicIdPartition) {
             super(topicIdPartition);

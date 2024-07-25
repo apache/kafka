@@ -33,7 +33,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     private static final int SNAPSHOT_DELAY_IN_RECORDS = 10;
 
     private final int nodeId;
-    private static final Logger log;
+    private final Logger log;
     private final RaftClient<Integer> client;
 
     private int committed = 0;

@@ -58,7 +58,7 @@ import java.util.Map;
  */
 public class Fetcher<K, V> extends AbstractFetch {
 
-    private static final Logger log;
+    private final Logger log;
     private final ConsumerNetworkClient client;
     private final FetchCollector<K, V> fetchCollector;
 

@@ -43,7 +43,7 @@ public class DeleteConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<C
 
     private final CoordinatorKey groupId;
     private final Set<TopicPartition> partitions;
-    private static final Logger log;
+    private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public DeleteConsumerGroupOffsetsHandler(

@@ -30,7 +30,7 @@ import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSI
 
 
 public class FeaturesPublisher implements MetadataPublisher {
-    private static final Logger log;
+    private final Logger log;
     private volatile FinalizedFeatures finalizedFeatures = FinalizedFeatures.fromKRaftVersion(MINIMUM_KRAFT_VERSION);
 
     public FeaturesPublisher(

@@ -54,7 +54,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     static final long MAX_POLL_TIMEOUT_MS = 5000;
     private static final String BACKGROUND_THREAD_NAME = "consumer_background_thread";
     private final Time time;
-    private static final Logger log;
+    private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final CompletableEventReaper applicationEventReaper;
     private final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier;

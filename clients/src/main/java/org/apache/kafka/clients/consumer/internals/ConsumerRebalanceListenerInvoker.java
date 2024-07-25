@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  */
 public class ConsumerRebalanceListenerInvoker {
 
-    private static final Logger log;
+    private final Logger log;
     private final SubscriptionState subscriptions;
     private final Time time;
     private final RebalanceCallbackMetricsManager metricsManager;

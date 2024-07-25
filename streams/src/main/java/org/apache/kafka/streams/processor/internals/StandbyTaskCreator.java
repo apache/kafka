@@ -42,7 +42,7 @@ class StandbyTaskCreator {
     private final StateDirectory stateDirectory;
     private final ChangelogReader storeChangelogReader;
     private final ThreadCache dummyCache;
-    private static final Logger log;
+    private final Logger log;
     private final Sensor createTaskSensor;
     private final boolean stateUpdaterEnabled;
 

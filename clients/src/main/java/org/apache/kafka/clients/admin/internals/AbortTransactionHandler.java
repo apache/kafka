@@ -40,7 +40,7 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
 public class AbortTransactionHandler extends AdminApiHandler.Batched<TopicPartition, Void> {
-    private static final Logger log;
+    private final Logger log;
     private final AbortTransactionSpec abortSpec;
     private final PartitionLeaderStrategy lookupStrategy;
 

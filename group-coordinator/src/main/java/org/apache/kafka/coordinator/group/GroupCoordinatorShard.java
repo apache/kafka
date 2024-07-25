@@ -234,7 +234,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * The logger.
      */
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * The group metadata manager.

@@ -65,7 +65,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.producerR
 public class RecordCollectorImpl implements RecordCollector {
     private static final String SEND_EXCEPTION_MESSAGE = "Error encountered sending record to topic %s for task %s due to:%n%s";
 
-    private static final Logger log;
+    private final Logger log;
     private final TaskId taskId;
     private final StreamsProducer streamsProducer;
     private final ProductionExceptionHandler productionExceptionHandler;

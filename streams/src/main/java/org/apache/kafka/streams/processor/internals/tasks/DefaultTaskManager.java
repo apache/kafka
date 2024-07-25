@@ -54,7 +54,7 @@ import java.util.stream.Collectors;
 public class DefaultTaskManager implements TaskManager {
 
     private final Time time;
-    private static final Logger log;
+    private final Logger log;
     private final TasksRegistry tasks;
 
     private final Lock tasksLock = new ReentrantLock();

@@ -38,7 +38,7 @@ import java.util.function.Consumer;
  */
 public class CompletableEventReaper {
 
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * List of tracked events that are candidates for expiration.

@@ -161,7 +161,7 @@ public class ScramControlManager {
         }
     }
 
-    private static final Logger log;
+    private final Logger log;
     private final TimelineHashMap<ScramCredentialKey, ScramCredentialValue> credentials;
 
     private ScramControlManager(

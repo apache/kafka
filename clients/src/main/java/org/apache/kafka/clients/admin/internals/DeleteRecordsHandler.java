@@ -47,7 +47,7 @@ import java.util.Set;
 public final class DeleteRecordsHandler extends Batched<TopicPartition, DeletedRecords> {
 
     private final Map<TopicPartition, RecordsToDelete> recordsToDelete;
-    private static final Logger log;
+    private final Logger log;
     private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
 
     private final int timeout;

@@ -38,7 +38,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
  * Updates the state for all Global State Stores.
  */
 public class GlobalStateUpdateTask implements GlobalStateMaintainer {
-    private static final Logger log;
+    private final Logger log;
     private final LogContext logContext;
 
     private final ProcessorTopology topology;

@@ -82,7 +82,7 @@ public class NetworkClient implements KafkaClient {
         CLOSED
     }
 
-    private static final Logger log;
+    private final Logger log;
 
     /* the selector used to perform network i/o */
     private final Selectable selector;

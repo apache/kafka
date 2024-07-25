@@ -34,7 +34,7 @@ class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implements Coor
     /**
      * The logger.
      */
-    private static final Logger log;
+    private final Logger log;
 
     /**
      * The snapshot registry backing the coordinator.
