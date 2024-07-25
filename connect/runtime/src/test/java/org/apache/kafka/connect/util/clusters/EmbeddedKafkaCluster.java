@@ -120,7 +120,9 @@ public class EmbeddedKafkaCluster {
                     new TestKitNodes.Builder()
                             .setCombined(true)
                             .setNumBrokerNodes(numBrokers)
-                            .setNumControllerNodes(numBrokers)
+                            // Reduce number of controllers for faster startup
+                            // We may make this configurable in the future if there's a use case for it
+                            .setNumControllerNodes(1)
                             .build()
             );
 
