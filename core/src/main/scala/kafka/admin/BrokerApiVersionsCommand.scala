@@ -19,7 +19,7 @@ package kafka.admin
 
 import java.io.PrintStream
 import java.io.IOException
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
 import joptsimple.OptionSpec
@@ -297,7 +297,8 @@ object BrokerApiVersionsCommand {
 
       val bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
         ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-        CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS)
+        CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+        time)
 
       val networkClient = new NetworkClient(
         selector,
@@ -311,7 +312,7 @@ object BrokerApiVersionsCommand {
         requestTimeoutMs,
         connectionSetupTimeoutMs,
         connectionSetupTimeoutMaxMs,
-        bootstrapConfiguration,
+        Optional.of(bootstrapConfiguration),
         time,
         true,
         new ApiVersions,

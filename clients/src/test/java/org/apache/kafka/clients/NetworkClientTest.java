@@ -1085,7 +1085,7 @@ public class NetworkClientTest {
                 initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
         AtomicInteger initialAddressConns = new AtomicInteger();
         AtomicInteger newAddressConns = new AtomicInteger();
-        MockSelector selector = new MockSelector(this.time, inetSocketAddress -> {
+        MockSelector selector = new MockSelector(time, inetSocketAddress -> {
             InetAddress inetAddress = inetSocketAddress.getAddress();
             if (initialAddresses.contains(inetAddress)) {
                 initialAddressConns.incrementAndGet();
@@ -1147,7 +1147,7 @@ public class NetworkClientTest {
                 initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
         AtomicInteger initialAddressConns = new AtomicInteger();
         AtomicInteger newAddressConns = new AtomicInteger();
-        MockSelector selector = new MockSelector(this.time, inetSocketAddress -> {
+        MockSelector selector = new MockSelector(time, inetSocketAddress -> {
             InetAddress inetAddress = inetSocketAddress.getAddress();
             if (initialAddresses.contains(inetAddress)) {
                 initialAddressConns.incrementAndGet();
@@ -1200,7 +1200,7 @@ public class NetworkClientTest {
                 initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
         AtomicInteger initialAddressConns = new AtomicInteger();
         AtomicInteger newAddressConns = new AtomicInteger();
-        MockSelector selector = new MockSelector(this.time, inetSocketAddress -> {
+        MockSelector selector = new MockSelector(time, inetSocketAddress -> {
             InetAddress inetAddress = inetSocketAddress.getAddress();
             if (initialAddresses.contains(inetAddress)) {
                 initialAddressConns.incrementAndGet();

@@ -37,6 +37,7 @@ import org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
+import java.util.Optional
 import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
 
@@ -93,7 +94,7 @@ object TransactionMarkerChannelManager {
       config.requestTimeoutMs,
       config.connectionSetupTimeoutMs,
       config.connectionSetupTimeoutMaxMs,
-      null,
+      Optional.empty(),
       time,
       false,
       new ApiVersions,
