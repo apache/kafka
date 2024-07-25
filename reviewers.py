@@ -38,7 +38,8 @@ def prompt_for_user():
 if __name__ == "__main__":
     print("Utility to help generate 'Reviewers' string for Pull Requests. Use Ctrl+D or Ctrl+C to exit")
 
-    stream = os.popen("git log | grep 'Reviewers\|Author'")
+    command = r"git log | grep 'Reviewers\|Author'"
+    stream = os.popen(command)
     lines = stream.readlines()
     all_reviewers = defaultdict(int)
     for line in lines:
