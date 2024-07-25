@@ -486,6 +486,13 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatTimer.reset(heartbeatIntervalMs);
         }
 
+        @Override
+        public String toStringBase() {
+            return super.toStringBase() +
+                    ", remainingMs=" + heartbeatTimer.remainingMs() +
+                    ", heartbeatIntervalMs=" + heartbeatIntervalMs;
+        }
+
         /**
          * Check if a heartbeat request should be sent on the current time. A heartbeat should be
          * sent if the heartbeat timer has expired, backoff has expired, and there is no request
