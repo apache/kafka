@@ -1439,6 +1439,9 @@ project(':transaction-coordinator') {
   dependencies {
     implementation libs.jacksonDatabind
     implementation project(':clients')
+    testImplementation libs.junitJupiter
+    
+    testRuntimeOnly libs.junitPlatformLanucher
     generator project(':generator')
   }
   
