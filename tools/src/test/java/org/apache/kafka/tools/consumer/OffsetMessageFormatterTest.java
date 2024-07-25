@@ -23,6 +23,7 @@ import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
