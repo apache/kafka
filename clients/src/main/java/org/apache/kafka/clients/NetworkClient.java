@@ -60,6 +60,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -136,7 +137,7 @@ public class NetworkClient implements KafkaClient {
 
     private final AtomicReference<State> state;
 
-    private final BootstrapState bootstrapState;
+    private final BootstrapConfiguration bootstrapConfiguration;
 
     private final TelemetrySender telemetrySender;
 
@@ -151,7 +152,7 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
-                         BootstrapConfiguration bootstrapConfiguration,
+                         Optional<BootstrapConfiguration> bootstrapConfiguration,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -188,7 +189,7 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
-                         BootstrapConfiguration bootstrapConfiguration,
+                         Optional<BootstrapConfiguration> bootstrapConfiguration,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -229,7 +230,7 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
-                         BootstrapConfiguration bootstrapConfiguration,
+                         Optional<BootstrapConfiguration> bootstrapConfiguration,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -270,7 +271,7 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
-                         BootstrapConfiguration bootstrapConfiguration,
+                         Optional<BootstrapConfiguration> bootstrapConfiguration,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -310,7 +311,7 @@ public class NetworkClient implements KafkaClient {
         this.state = new AtomicReference<>(State.ACTIVE);
         this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
-        this.bootstrapState = new BootstrapState(bootstrapConfiguration);
+        this.bootstrapConfiguration = bootstrapConfiguration.orElse(null);
     }
 
     /**
@@ -592,12 +593,6 @@ public class NetworkClient implements KafkaClient {
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
         ensureActive();
-
-        if (!this.isBootstrapped() && !this.isBootstrapDisabled()) {
-            bootstrapState.timer.update(time.milliseconds());
-            bootstrapState.timer.reset(bootstrapState.dnsResolutionTimeoutMs);
-        }
-
         ensureBootstrapped();
 
         if (!abortedSends.isEmpty()) {
@@ -1126,101 +1121,60 @@ public class NetworkClient implements KafkaClient {
     }
 
     public static class BootstrapConfiguration {
-        public final List<String> bootstrapServers;
-        public final ClientDnsLookup clientDnsLookup;
-        public final long bootstrapResolveTimeoutMs;
-        private final boolean bootstrapDisabled;
-
-        public BootstrapConfiguration(final List<String> bootstrapServers,
-                                      final ClientDnsLookup clientDnsLookup,
-                                      final long bootstrapResolveTimeoutMs) {
-            this.bootstrapServers = bootstrapServers;
-            this.clientDnsLookup = clientDnsLookup;
-            this.bootstrapResolveTimeoutMs = bootstrapResolveTimeoutMs;
-            this.bootstrapDisabled = false;
-        }
-    }
-
-    private class BootstrapState {
         private final Timer timer;
         private final List<String> bootstrapServers;
         private final ClientDnsLookup clientDnsLookup;
-        private final long dnsResolutionTimeoutMs;
-        private final boolean isDisabled;
-        private boolean isBootstrapped;
+        private final long bootstrapResolveTimeoutMs;
+        private boolean isBootstrapped = false;
 
-        BootstrapState(BootstrapConfiguration bootstrapConfiguration) {
-            if (bootstrapConfiguration == null) {
-                this.dnsResolutionTimeoutMs = -1;
-                this.timer = null;
-                this.bootstrapServers = null;
-                this.clientDnsLookup = null;
-                this.isDisabled = true;
-                this.isBootstrapped = false;
-            } else {
-                this.dnsResolutionTimeoutMs = bootstrapConfiguration.bootstrapResolveTimeoutMs;
-                this.timer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
-                this.bootstrapServers = bootstrapConfiguration.bootstrapServers;
-                this.clientDnsLookup = bootstrapConfiguration.clientDnsLookup;
-                this.isDisabled = bootstrapConfiguration.bootstrapDisabled;
+        public BootstrapConfiguration(final List<String> bootstrapServers,
+                                      final ClientDnsLookup clientDnsLookup,
+                                      final long bootstrapResolveTimeoutMs,
+                                      final Time time) {
+            this.timer = time.timer(bootstrapResolveTimeoutMs);
+            this.bootstrapServers = bootstrapServers;
+            this.clientDnsLookup = clientDnsLookup;
+            this.bootstrapResolveTimeoutMs = bootstrapResolveTimeoutMs;
+        }
+
+        private void checkTimerExpiration() {
+            if (this.timer.isExpired()) {
+                throw new BootstrapResolutionException("Unable to Resolve Address within the configured period " +
+                        this.bootstrapResolveTimeoutMs + "ms.");
             }
         }
 
-        List<InetSocketAddress> tryResolveAddresses() {
-            timer.update(time.milliseconds());
+        private List<InetSocketAddress> tryResolveAddresses() {
+            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers, clientDnsLookup);
 
-            do {
-                if (timer.isExpired())
-                    break;
-
-                List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers, clientDnsLookup);
-                if (!addresses.isEmpty()) {
-                    timer.reset(dnsResolutionTimeoutMs);
-                    return addresses;
-                }
-
-                timer.update(time.milliseconds());
-
-            } while (timer.notExpired());
-
-
-            throw new BootstrapResolutionException("Timeout while attempting to resolve bootstrap servers.");
-        }
-
-        void checkTimerExpiration() {
-            if (this.timer.isExpired()) {
-                throw new BootstrapResolutionException("Unable to Resolve Address within the configured period " +
-                        this.dnsResolutionTimeoutMs + "ms.");
+            if (!addresses.isEmpty()) {
+                timer.reset(bootstrapResolveTimeoutMs);
+                isBootstrapped = true;
+                return addresses;
+            }
+            else {
+                return Collections.emptyList();
             }
         }
     }
 
     void ensureBootstrapped() {
-        if (this.bootstrapState.isDisabled || this.bootstrapState.isBootstrapped) {
+        if (this.isBootstrapped() || bootstrapConfiguration == null)
             return;
-        }
 
-        bootstrapState.checkTimerExpiration();
+        bootstrapConfiguration.timer.update(time.milliseconds());
+        bootstrapConfiguration.checkTimerExpiration();
 
-        List<InetSocketAddress> servers = this.bootstrapState.tryResolveAddresses();
+        List<InetSocketAddress> servers = this.bootstrapConfiguration.tryResolveAddresses();
         if (!servers.isEmpty()) {
             this.metadataUpdater.bootstrap(servers);
-            this.bootstrapState.isBootstrapped = true;
         }
-    }
-
-    // For testing purposes only
-    void ensureBootstrapped(long timeToSleep) {
-        bootstrapState.timer.sleep(timeToSleep);
-        ensureBootstrapped();
     }
 
     public boolean isBootstrapped() {
-        return bootstrapState.isBootstrapped;
-    }
-
-    public boolean isBootstrapDisabled() {
-        return bootstrapState.isDisabled;
+        if (bootstrapConfiguration == null)
+            return false;
+        else return bootstrapConfiguration.isBootstrapped;
     }
 
     class DefaultMetadataUpdater implements MetadataUpdater {

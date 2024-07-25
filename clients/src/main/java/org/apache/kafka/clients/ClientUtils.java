@@ -41,6 +41,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
@@ -232,7 +233,8 @@ public final class ClientUtils {
             bootstrapConfig = new NetworkClient.BootstrapConfiguration(
                     config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                     ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-                    CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS);
+                    CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                    time);
             return new NetworkClient(metadataUpdater,
                     metadata,
                     selector,
@@ -245,7 +247,7 @@ public final class ClientUtils {
                     requestTimeoutMs,
                     config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                     config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                    bootstrapConfig,
+                    Optional.of(bootstrapConfig),
                     time,
                     true,
                     apiVersions,

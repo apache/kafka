@@ -567,7 +567,11 @@ public class KafkaAdminClient extends AdminClient {
                     "admin-client",
                     channelBuilder,
                     logContext);
-            bootstrapConfig = new NetworkClient.BootstrapConfiguration(bootstrapAddresses, ClientDnsLookup.forConfig(config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG)), 2 * 60 * 1000);
+            bootstrapConfig = new NetworkClient.BootstrapConfiguration(
+                    bootstrapAddresses,
+                    ClientDnsLookup.forConfig(config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG)),
+                    2 * 60 * 1000,
+                    time);
             networkClient = new NetworkClient(metadataManager.updater(),
                     null,
                     selector,
@@ -580,7 +584,7 @@ public class KafkaAdminClient extends AdminClient {
                     config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
                     config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                     config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                    bootstrapConfig,
+                    Optional.of(bootstrapConfig),
                     time,
                     true,
                     apiVersions,
