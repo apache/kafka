@@ -17,10 +17,9 @@
 
 package org.apache.kafka.shell;
 
-import kafka.utils.FileLock;
-
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.fault.MockFaultHandler;
+import org.apache.kafka.server.util.FileLock;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
