@@ -62,6 +62,7 @@ import java.util.Set;
 import java.util.SortedSet;
 
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -171,6 +172,35 @@ public class HeartbeatRequestManagerTest {
         );
     }
 
+
+    @Test
+    public void testHeartBeatRequestStateToStringBase() {
+        long retryBackoffMs = 100;
+        long retryBackoffMaxMs = 1000;
+        LogContext logContext = new LogContext();
+        HeartbeatRequestState heartbeatRequestState = new HeartbeatRequestState(
+                logContext,
+                time,
+                DEFAULT_HEARTBEAT_INTERVAL_MS,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                .2
+        );
+
+        RequestState requestState = new RequestState(
+                logContext,
+                HeartbeatRequestManager.HeartbeatRequestState.class.getName(),
+                retryBackoffMs,
+                retryBackoffMaxMs
+        );
+
+        String target = requestState.toStringBase() +
+                ", remainingMs=" + DEFAULT_HEARTBEAT_INTERVAL_MS +
+                ", heartbeatIntervalMs=" + DEFAULT_HEARTBEAT_INTERVAL_MS;
+
+        assertDoesNotThrow(heartbeatRequestState::toString);
+        assertEquals(target, heartbeatRequestState.toStringBase());
+    }
 
     @Test
     public void testHeartbeatOnStartup() {
