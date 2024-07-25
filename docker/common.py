@@ -19,7 +19,7 @@ import subprocess
 import tempfile
 import os
 from distutils.dir_util import copy_tree
-from docker.version_gpg_keys import version_gpg_keys
+from version_gpg_keys import version_gpg_keys
 import shutil
 import sys
 import re
