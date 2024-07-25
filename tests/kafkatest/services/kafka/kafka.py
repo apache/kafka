@@ -782,7 +782,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         if self.use_new_coordinator:
             override_configs[config_property.NEW_GROUP_COORDINATOR_ENABLE] = 'true'
-    
+            override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG] = 'classic,consumer'
+
         for prop in self.server_prop_overrides:
             override_configs[prop[0]] = prop[1]
 
