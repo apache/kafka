@@ -2032,7 +2032,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         if (!hasValidClusterId(data.clusterId())) {
             return completedFuture(
-                new AddRaftVoterResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code())
+                new AddRaftVoterResponseData()
+                    .setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code())
+                    .setErrorMessage(
+                        String.format(
+                            "The given id \"%s\" doesn't match the cluster id \"%s\"",
+                            data.clusterId(),
+                            clusterId
+                        )
+                    )
             );
         }
 
@@ -2106,7 +2114,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         if (!hasValidClusterId(data.clusterId())) {
             return completedFuture(
-                new RemoveRaftVoterResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code())
+                new RemoveRaftVoterResponseData()
+                    .setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code())
+                    .setErrorMessage(
+                        String.format(
+                            "The given id \"%s\" doesn't match the cluster id \"%s\"",
+                            data.clusterId(),
+                            clusterId
+                        )
+                    )
             );
         }
 

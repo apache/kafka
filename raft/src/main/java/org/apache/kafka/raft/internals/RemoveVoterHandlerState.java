@@ -24,7 +24,7 @@ import org.apache.kafka.raft.RaftUtil;
 import java.util.concurrent.CompletableFuture;
 
 public final class RemoveVoterHandlerState implements AutoCloseable {
-    private long lastOffset;
+    private final long lastOffset;
     private final Timer timeout;
     private final CompletableFuture<RemoveRaftVoterResponseData> future = new CompletableFuture<>();
 
