@@ -109,7 +109,7 @@ public final class Endpoints {
         for (Map.Entry<ListenerName, InetSocketAddress> entry : endpoints.entrySet()) {
             listeners.add(
                 new AddRaftVoterRequestData.Listener()
-		    .setName(entry.getKey().value())
+                    .setName(entry.getKey().value())
                     .setHost(entry.getValue().getHostString())
                     .setPort(entry.getValue().getPort())
             );
