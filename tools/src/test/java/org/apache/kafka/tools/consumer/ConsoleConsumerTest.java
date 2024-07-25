@@ -39,6 +39,10 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitKeyJsonConverter;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitValueJsonConverter;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKeyJsonConverter;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
@@ -319,6 +323,51 @@ public class ConsoleConsumerTest {
                 assertNotNull(logValue);
                 assertEquals(0, logValue.producerId());
                 assertEquals(0, logValue.transactionStatus());
+            } finally {
+                consumerWrapper.cleanup();
+            }
+        }
+    }
+
+    @ClusterTest(brokers = 3)
+    public void testOffsetsMessageFormatter(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.createAdminClient()) {
+
+            NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
+            admin.createTopics(singleton(newTopic));
+            produceMessages(cluster);
+
+            String[] offsetsMessageFormatter = new String[]{
+                "--bootstrap-server", cluster.bootstrapServers(),
+                "--topic", Topic.GROUP_METADATA_TOPIC_NAME,
+                "--formatter", "org.apache.kafka.tools.consumer.OffsetsMessageFormatter",
+                "--from-beginning"
+            };
+
+            ConsoleConsumerOptions options = new ConsoleConsumerOptions(offsetsMessageFormatter);
+            ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createConsumer(cluster));
+
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream(); 
+                 PrintStream output = new PrintStream(out)) {
+                ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
+
+                JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
+                JsonNode keyNode = jsonNode.get("key");
+
+                OffsetCommitKey offsetCommitKey =
+                        OffsetCommitKeyJsonConverter.read(keyNode.get("data"), OffsetCommitKey.HIGHEST_SUPPORTED_VERSION);
+                assertNotNull(offsetCommitKey);
+                assertEquals(topic, offsetCommitKey.topic());
+
+                JsonNode valueNode = jsonNode.get("value");
+                OffsetCommitValue offsetCommitValue =
+                        OffsetCommitValueJsonConverter.read(valueNode.get("data"), OffsetCommitKey.HIGHEST_SUPPORTED_VERSION);
+                assertNotNull(offsetCommitValue);
+                assertNotNull(offsetCommitValue.offset());
+                assertNotNull(offsetCommitValue.leaderEpoch());
+                assertNotNull(offsetCommitValue.metadata());
+                assertNotNull(offsetCommitValue.commitTimestamp());
+                assertNotNull(offsetCommitValue.expireTimestamp());
             } finally {
                 consumerWrapper.cleanup();
             }
