@@ -124,7 +124,17 @@ public class JaasTestUtils {
     }
 
     public static String clientLoginModule(String mechanism, Optional<File> keytabLocation, String serviceName) {
-        return kafkaClientModule(mechanism, keytabLocation, KAFKA_CLIENT_PRINCIPAL, KAFKA_PLAIN_USER, KAFKA_PLAIN_PASSWORD, KAFKA_SCRAM_USER, KAFKA_SCRAM_PASSWORD, KAFKA_OAUTH_BEARER_USER, serviceName).toString();
+        return kafkaClientModule(
+            mechanism,
+            keytabLocation,
+            KAFKA_CLIENT_PRINCIPAL,
+            KAFKA_PLAIN_USER,
+            KAFKA_PLAIN_PASSWORD,
+            KAFKA_SCRAM_USER,
+            KAFKA_SCRAM_PASSWORD,
+            KAFKA_OAUTH_BEARER_USER,
+            serviceName
+        ).toString();
     }
 
     public static String clientLoginModule(String mechanism, Optional<File> keytabLocation) {
@@ -132,7 +142,17 @@ public class JaasTestUtils {
     }
 
     public static String adminLoginModule(String mechanism, Optional<File> keytabLocation, String serviceName) {
-        return kafkaClientModule(mechanism, keytabLocation, KAFKA_SERVER_PRINCIPAL, KAFKA_PLAIN_ADMIN, KAFKA_PLAIN_ADMIN_PASSWORD, KAFKA_SCRAM_ADMIN, KAFKA_SCRAM_ADMIN_PASSWORD, KAFKA_OAUTH_BEARER_ADMIN, serviceName).toString();
+        return kafkaClientModule(
+            mechanism,
+            keytabLocation,
+            KAFKA_SERVER_PRINCIPAL,
+            KAFKA_PLAIN_ADMIN,
+            KAFKA_PLAIN_ADMIN_PASSWORD,
+            KAFKA_SCRAM_ADMIN,
+            KAFKA_SCRAM_ADMIN_PASSWORD,
+            KAFKA_OAUTH_BEARER_ADMIN,
+            serviceName
+        ).toString();
     }
 
     public static String adminLoginModule(String mechanism, Optional<File> keytabLocation) {
@@ -196,7 +216,15 @@ public class JaasTestUtils {
         return new JaasSection(contextName, modules);
     }
 
-    private static JaasModule kafkaClientModule(String mechanism, Optional<File> keytabLocation, String clientPrincipal, String plainUser, String plainPassword, String scramUser, String scramPassword, String oauthBearerUser, String serviceName) {
+    private static JaasModule kafkaClientModule(String mechanism,
+                                                Optional<File> keytabLocation,
+                                                String clientPrincipal,
+                                                String plainUser,
+                                                String plainPassword,
+                                                String scramUser,
+                                                String scramPassword,
+                                                String oauthBearerUser,
+                                                String serviceName) {
         switch (mechanism) {
             case GSSAPI_MECHANISM:
                 return JaasModule.krb5LoginModule(

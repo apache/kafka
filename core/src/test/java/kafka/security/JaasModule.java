@@ -27,11 +27,7 @@ public class JaasModule {
         return new JaasModule(
             name,
             debug,
-            entries,
-            String.format("%s required\n  debug=%b\n  %s;\n", name, debug, entries.entrySet().stream()
-                .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
-                .reduce((e1, e2) -> e1 + "\n  " + e2)
-                .orElse(""))
+            entries
         );
     }
 
@@ -56,11 +52,7 @@ public class JaasModule {
         return new JaasModule(
             name,
             debug,
-            entries,
-            String.format("%s required\n  debug=%b\n  %s;\n", name, debug, entries.entrySet().stream()
-                .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
-                .reduce((e1, e2) -> e1 + "\n  " + e2)
-                .orElse(""))
+            entries
         );
     }
 
@@ -73,11 +65,7 @@ public class JaasModule {
         return new JaasModule(
             name,
             debug,
-            entries,
-            String.format("%s required\n  debug=%b\n  %s;\n", name, debug, entries.entrySet().stream()
-                .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
-                .reduce((e1, e2) -> e1 + "\n  " + e2)
-                .orElse(""))
+            entries
         );
     }
 
@@ -96,11 +84,7 @@ public class JaasModule {
         return new JaasModule(
             name,
             debug,
-            entries,
-            String.format("%s required\n  debug=%b\n  %s;\n", name, debug, entries.entrySet().stream()
-                .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
-                .reduce((e1, e2) -> e1 + "\n  " + e2)
-                .orElse(""))
+            entries
         );
     }
 
@@ -119,11 +103,7 @@ public class JaasModule {
         return new JaasModule(
             name,
             debug,
-            entries,
-            String.format("%s required\n  debug=%b\n  %s;\n", name, debug, entries.entrySet().stream()
-                .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
-                .reduce((e1, e2) -> e1 + "\n  " + e2)
-                .orElse(""))
+            entries
         );
     }
 
@@ -131,15 +111,15 @@ public class JaasModule {
 
     private final boolean debug;
 
-    private final Map<String, String> entries;
-
     private final String toString;
 
-    private JaasModule(String name, boolean debug, Map<String, String> entries, String toString) {
+    private JaasModule(String name, boolean debug, Map<String, String> entries) {
         this.name = name;
         this.debug = debug;
-        this.entries = entries;
-        this.toString = toString;
+        this.toString = String.format("%s required\n  debug=%b\n  %s;\n", name, debug, entries.entrySet().stream()
+                .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
+                .reduce((e1, e2) -> e1 + "\n  " + e2)
+                .orElse(""));
     }
 
     public String name() {
@@ -148,10 +128,6 @@ public class JaasModule {
 
     public boolean debug() {
         return debug;
-    }
-
-    Map<String, String> entries() {
-        return entries;
     }
 
     @Override
