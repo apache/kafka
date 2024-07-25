@@ -1439,7 +1439,6 @@ project(':transaction-coordinator') {
   dependencies {
     implementation libs.jacksonDatabind
     implementation project(':clients')
-    
     generator project(':generator')
   }
   
