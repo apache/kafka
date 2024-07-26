@@ -2815,15 +2815,15 @@ public class KafkaRaftClientTest {
         ReplicaKey bootstrapFollower2 = replicaKey(followerId2, withBootstrapSnapshot);
         Uuid followerDirectoryId2 = bootstrapFollower2.directoryId().orElse(withKip853Rpc ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower2 = ReplicaKey.of(followerId2, followerDirectoryId2);
-        VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower1, bootstrapFollower2));
-        VoterSet staticVoterSet = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
         RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, localDirectoryId)
             .withKip853Rpc(withKip853Rpc);
 
         if (withBootstrapSnapshot) {
+            VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower1, bootstrapFollower2));
             builder.withBootstrapSnapshot(Optional.of(bootstrapVoterSet));
         } else {
+            VoterSet staticVoterSet = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
             builder.withStaticVoters(staticVoterSet);
         }
         RaftClientTestContext context = builder.build();
@@ -2920,15 +2920,15 @@ public class KafkaRaftClientTest {
         ReplicaKey bootstrapFollower = replicaKey(followerId, withBootstrapSnapshot);
         Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(withKip853Rpc ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower = ReplicaKey.of(followerId, followerDirectoryId);
-        VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower));
-        VoterSet staticVoterSet = VoterSetTest.voterSet(Stream.of(local, follower));
 
         RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, localDirectoryId)
             .withKip853Rpc(withKip853Rpc);
 
         if (withBootstrapSnapshot) {
+            VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower));
             builder.withBootstrapSnapshot(Optional.of(bootstrapVoterSet));
         } else {
+            VoterSet staticVoterSet = VoterSetTest.voterSet(Stream.of(local, follower));
             builder.withStaticVoters(staticVoterSet);
         }
         RaftClientTestContext context = builder.build();
@@ -3062,14 +3062,14 @@ public class KafkaRaftClientTest {
         ReplicaKey bootstrapFollower = replicaKey(followerId, withBootstrapSnapshot);
         Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(withKip853Rpc ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower = ReplicaKey.of(followerId, followerDirectoryId);
-        VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower));
-        VoterSet staticVoterSet = VoterSetTest.voterSet(Stream.of(local, follower));
 
         RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, localDirectoryId)
             .withKip853Rpc(withKip853Rpc);
         if (withBootstrapSnapshot) {
+            VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower));
             builder.withBootstrapSnapshot(Optional.of(bootstrapVoterSet));
         } else {
+            VoterSet staticVoterSet = VoterSetTest.voterSet(Stream.of(local, follower));
             builder.withStaticVoters(staticVoterSet);
         }
         RaftClientTestContext context = builder.build();
@@ -3171,7 +3171,7 @@ public class KafkaRaftClientTest {
         context.assertSentDescribeQuorumResponse(localId, epoch, -1L, expectedVoterStates, Collections.emptyList());
     }
 
-    // After KAFKA-16535 we can test describe quorum output following voter removal and addition
+    // TODO: with KAFKA-16535 we can test describe quorum output following voter removal and addition
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
