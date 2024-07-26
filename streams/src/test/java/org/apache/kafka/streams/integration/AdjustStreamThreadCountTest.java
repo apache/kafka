@@ -453,7 +453,8 @@ public class AdjustStreamThreadCountTest {
             @Override
             public void process(final Record<String, String> record) {
                 context.forward(record);
-            }});
+            }
+        });
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), props)) {
             addStreamStateChangeListener(kafkaStreams);
