@@ -612,15 +612,26 @@ public class LogConfig extends AbstractConfig {
      * The default values should be extracted from the KafkaConfig.
      * @param props The properties to be validated
      */
-    private static void validateTopicLogConfigValues(Map<?, ?> props,
+    private static void validateTopicLogConfigValues(Map<String, String> existingConfigs,
+                                                     Map<?, ?> newConfigs,
                                                      boolean isRemoteLogStorageSystemEnabled) {
-        validateValues(props);
-        boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
+        validateValues(newConfigs);
+        boolean isRemoteLogStorageEnabled = (Boolean) newConfigs.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled) {
-            validateRemoteStorageOnlyIfSystemEnabled(props, isRemoteLogStorageSystemEnabled, false);
-            validateNoRemoteStorageForCompactedTopic(props);
-            validateRemoteStorageRetentionSize(props);
-            validateRemoteStorageRetentionTime(props);
+            validateRemoteStorageOnlyIfSystemEnabled(newConfigs, isRemoteLogStorageSystemEnabled, false);
+            validateNoRemoteStorageForCompactedTopic(newConfigs);
+            validateRemoteStorageRetentionSize(newConfigs);
+            validateRemoteStorageRetentionTime(newConfigs);
+        } else {
+            // The new config "remote.storage.enable" is false, validate if it's turning from true to false
+            validateNotTurningOffRemoteStorage(existingConfigs);
+        }
+    }
+
+    public static void validateNotTurningOffRemoteStorage(Map<String, String> existingConfigs) {
+        boolean wasRemoteLogEnabledBeforeUpdate = Boolean.parseBoolean(existingConfigs.getOrDefault(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"));
+        if (wasRemoteLogEnabledBeforeUpdate) {
+            throw new ConfigException("Disabling remote storage feature on the topic level is not supported.");
         }
     }
 
@@ -681,10 +692,11 @@ public class LogConfig extends AbstractConfig {
      * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
      */
     public static void validate(Properties props) {
-        validate(props, Collections.emptyMap(), false);
+        validate(Collections.emptyMap(), props, Collections.emptyMap(), false);
     }
 
-    public static void validate(Properties props,
+    public static void validate(Map<String, String> existingConfigs,
+                                Properties props,
                                 Map<?, ?> configuredProps,
                                 boolean isRemoteLogStorageSystemEnabled) {
         validateNames(props);
@@ -695,7 +707,7 @@ public class LogConfig extends AbstractConfig {
             Map<Object, Object> combinedConfigs = new HashMap<>(configuredProps);
             combinedConfigs.putAll(props);
             Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
-            validateTopicLogConfigValues(valueMaps, isRemoteLogStorageSystemEnabled);
+            validateTopicLogConfigValues(existingConfigs, valueMaps, isRemoteLogStorageSystemEnabled);
         }
     }
 
