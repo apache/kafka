@@ -1288,7 +1288,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(calculateDeadlineMs(timer));
         applicationEventHandler.add(unsubscribeEvent);
         try {
-            processBackgroundEvents(unsubscribeEvent.future(), timer);
+            unsubscribe(unsubscribeEvent.future(), timer);
             log.info("Completed releasing assignment and sending leave group to close consumer");
         } catch (TimeoutException e) {
             log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +
@@ -1488,7 +1488,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     subscriptions.assignedPartitions());
 
             try {
-                processBackgroundEvents(unsubscribeEvent.future(), timer);
+                unsubscribe(unsubscribeEvent.future(), timer);
                 log.info("Unsubscribed all topics or patterns and assigned partitions");
             } catch (TimeoutException e) {
                 log.error("Failed while waiting for the unsubscribe event to complete");
@@ -1878,44 +1878,43 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * This method can be used by cases where the caller has an event that needs to both block for completion but
-     * also process background events. For some events, in order to fully process the associated logic, the
-     * {@link ConsumerNetworkThread background thread} needs assistance from the application thread to complete.
-     * If the application thread simply blocked on the event after submitting it, the processing would deadlock.
-     * The logic herein is basically a loop that performs two tasks in each iteration:
+     * This is a helper method used by {@link #unsubscribe()} and {@link #close()}. There is a bit of coordination
+     * needed by the application and background threads to perform an unsubscribe:
      *
-     * <ol>
-     *     <li>Process background events, if any</li>
-     *     <li><em>Briefly</em> wait for {@link CompletableApplicationEvent an event} to complete</li>
-     * </ol>
+     * <ul>
+     *     <li>
+     *         To start the unsubscribe process, the <em>application thread</em> enqueues an {@link UnsubscribeEvent}
+     *         on its application event queue.
+     *     </li>
+     *     <li>
+     *         The <em>background thread</em> will soon thereafter process the {@link UnsubscribeEvent} from the
+     *         application event queue. As part of the unsubscribe process, the
+     *         {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} callback needs to be invoked for any
+     *         partitions the consumer owns. However, this callback is designed to be executed on the application
+     *         thread so as not to block the background thread. To achieve this, the background thread will enqueue a
+     *         {@link ConsumerRebalanceListenerCallbackNeededEvent} on the background event queue.
+     *     </li>
+     *     <li>
+     *         Once again in the <em>application thread</em>, the background event queue is periodically queried to
+     *         see if there's work to be done. When the application thread processes the
+     *         {@link ConsumerRebalanceListenerCallbackNeededEvent}, it executes the
+     *         {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} callback and then turns around an
+     *         enqueues a {@link ConsumerRebalanceListenerCallbackCompletedEvent} on the application event queue.
+     *     </li>
+     *     <li>
+     *         Moments later, the <em>background thread</em> will see that event, process it, and continue
+     *         execution of the unsubscribe logic. Notably, it is at this point that the background thread will
+     *         {@link CompletableFuture#complete(Object) complete the Future} associated with the
+     *         {@link UnsubscribeEvent}, which will allow the next call to {@link Future#get()} to successfully return
+     *         without a {@link TimeoutException}.
+     *     </li>
+     * </ul>
      *
-     * <p/>
-     *
-     * Each iteration gives the application thread an opportunity to process background events, which may be
-     * necessary to complete the overall processing.
-     *
-     * <p/>
-     *
-     * As an example, take {@link #unsubscribe()}. To start unsubscribing, the application thread enqueues an
-     * {@link UnsubscribeEvent} on the application event queue. That event will eventually trigger the
-     * rebalancing logic in the background thread. Critically, as part of this rebalancing work, the
-     * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} callback needs to be invoked for any
-     * partitions the consumer owns. However,
-     * this callback must be executed on the application thread. To achieve this, the background thread enqueues a
-     * {@link ConsumerRebalanceListenerCallbackNeededEvent} on its background event queue. That event queue is
-     * periodically queried by the application thread to see if there's work to be done. When the application thread
-     * sees {@link ConsumerRebalanceListenerCallbackNeededEvent}, it is processed, and then a
-     * {@link ConsumerRebalanceListenerCallbackCompletedEvent} is then enqueued by the application thread on the
-     * application event queue. Moments later, the background thread will see that event, process it, and continue
-     * execution of the rebalancing logic. The rebalancing logic cannot complete until the
-     * {@link ConsumerRebalanceListener} callback is performed.
-     *
-     * @param future         {@link CompletableFuture} on which the application thread will wait for completion
-     * @param timer          Overall timer that bounds how long to wait for the event to complete
-     * @return Value returned by the event's {@link Future#get()}
+     * @param future {@link CompletableFuture} on which the application thread will wait for completion
+     * @param timer  Overall timer that bounds how long to wait for {@code future} to complete
      */
     // Visible for testing
-    <T> T processBackgroundEvents(Future<T> future, Timer timer) {
+    void unsubscribe(Future<?> future, Timer timer) {
         do {
             boolean hadEvents = processBackgroundEvents();
 
@@ -1924,23 +1923,30 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     // If the event is done (either successfully or otherwise), go ahead and attempt to return
                     // without waiting. We use the ConsumerUtils.getResult() method here to handle the conversion
                     // of the exception types.
-                    return ConsumerUtils.getResult(future);
+                    ConsumerUtils.getResult(future);
+                    return;
                 } else if (!hadEvents) {
                     // If the above processing yielded no events, then let's sit tight for a bit to allow the
                     // background thread to either finish the task, or populate the background event
                     // queue with things to process in our next loop.
                     Timer pollInterval = time.timer(100L);
-                    return ConsumerUtils.getResult(future, pollInterval);
+                    ConsumerUtils.getResult(future, pollInterval);
+                    return;
                 }
             } catch (TimeoutException e) {
                 // Ignore this as we will retry the event until the timeout expires.
             } finally {
-                processBackgroundEvents();
                 timer.update();
             }
         } while (timer.notExpired());
 
-        throw new TimeoutException("Operation timed out before completion");
+        // If we get to this point, the unsubscribe event did not complete in time. That means that the consumer did
+        // not process the callback event, which means that the background thread didn't receive the message to
+        // send out the "leave group" heartbeat. We perform one more last ditch effort to process any background events
+        // in the hope that our ConsumerRebalanceListenerCallbackNeededEvent is present and can be executed.
+        processBackgroundEvents();
+
+        throw new TimeoutException("Unsubscribe timed out before completion");
     }
 
     static ConsumerRebalanceListenerCallbackCompletedEvent invokeRebalanceCallbacks(ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,

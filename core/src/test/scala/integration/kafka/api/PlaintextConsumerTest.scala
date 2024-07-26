@@ -12,6 +12,8 @@
   */
 package kafka.api
 
+import kafka.api.PlaintextConsumerTest.TestWithParameterizedValuesForCloseLeavesGroup
+
 import java.time.Duration
 import java.util
 import java.util.Arrays.asList
@@ -31,9 +33,10 @@ import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
 
 import java.util.concurrent.{CompletableFuture, TimeUnit}
+import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 
 @Timeout(600)
@@ -912,26 +915,56 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertThrows(classOf[WakeupException], () => consumer.position(topicPartition, Duration.ofSeconds(100)))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCloseLeavesGroupIfInterrupted(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestWithParameterizedValuesForCloseLeavesGroup)
+  @MethodSource(Array("getCloseTestParameters"))
+  def testCloseLeavesGroup(quorum: String, groupProtocol: String, closeTimeoutSec: Int, shouldInterrupt: Boolean): Unit = {
     val consumer = createConsumer()
     val listener = new TestConsumerReassignmentListener()
     consumer.subscribe(List(topic).asJava, listener)
     awaitRebalance(consumer, listener)
 
-    try {
-      assertEquals(1, listener.callsToAssigned)
-      assertEquals(0, listener.callsToRevoked)
+    assertEquals(1, listener.callsToAssigned)
+    assertEquals(0, listener.callsToRevoked)
 
-      Thread.currentThread().interrupt()
-      assertThrows(classOf[InterruptException], () => consumer.close(Duration.ZERO))
-
-      assertEquals(1, listener.callsToAssigned)
-      assertEquals(1, listener.callsToRevoked)
-    } finally {
-      // Clear the interrupted flag so we don't create problems for subsequent tests.
-      Thread.interrupted()
+    if (shouldInterrupt) {
+      try {
+        Thread.currentThread().interrupt()
+        assertThrows(classOf[InterruptException], () => consumer.close(Duration.ofSeconds(closeTimeoutSec)))
+      } finally {
+        // Clear the interrupted flag so we don't create problems for subsequent tests.
+        Thread.interrupted()
+      }
+    } else {
+      consumer.close(Duration.ofSeconds(closeTimeoutSec))
     }
+
+    assertEquals(1, listener.callsToAssigned)
+    assertEquals(1, listener.callsToRevoked)
+  }
+}
+
+object PlaintextConsumerTest {
+
+  final val TestWithParameterizedValuesForCloseLeavesGroup = "{displayName}.quorum={0}.groupProtocol={1}.closeTimeoutSec={2}.shouldInterrupt={3}"
+
+  // We want to test the following combinations:
+  // * ZooKeeper and the classic group protocol
+  // * KRaft and the classic group protocol
+  // * KRaft with the new group coordinator enabled and the classic group protocol
+  // * KRaft with the new group coordinator enabled and the consumer group protocol
+  def getCloseTestParameters() : java.util.stream.Stream[Arguments] = {
+    val list = ListBuffer[Arguments]()
+
+    for (quorumAndGroupProtocol <- List(Array("zk", "classic"), Array("kraft", "classic"), Array("kraft+kip848", "classic"), Array("kraft+kip848", "consumer"))) {
+      for (closeTimeoutSec <- List(0, 30)) {
+        for (shouldInterrupt <- List(true, false)) {
+          val quorum = quorumAndGroupProtocol(0)
+          val groupProtocol = quorumAndGroupProtocol(1)
+          list += Arguments.of(quorum, groupProtocol, closeTimeoutSec, shouldInterrupt)
+        }
+      }
+    }
+
+    util.Arrays.stream(list.toArray)
   }
 }
