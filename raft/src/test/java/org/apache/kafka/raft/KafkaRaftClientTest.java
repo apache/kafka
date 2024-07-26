@@ -2855,7 +2855,6 @@ public class KafkaRaftClientTest {
                 .setLastCaughtUpTimestamp(-1));
         context.assertSentDescribeQuorumResponse(localId, epoch, -1L, expectedVoterStates, Collections.emptyList());
 
-        // After follower1 makes progress but both followers are not caught up
         context.time.sleep(100);
         long fetchOffset = withBootstrapSnapshot ? 3L : 1L;
         long followerFetchTime1 = context.time.milliseconds();

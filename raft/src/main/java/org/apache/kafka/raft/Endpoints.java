@@ -114,7 +114,7 @@ public final class Endpoints {
                     .setPort(entry.getValue().getPort())
             );
         }
-	return listeners;
+        return listeners;
     }
 
     public DescribeQuorumResponseData.ListenerCollection toDescribeQuorumResponseListeners() {
