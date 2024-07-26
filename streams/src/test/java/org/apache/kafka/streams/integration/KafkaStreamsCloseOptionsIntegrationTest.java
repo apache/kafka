@@ -90,10 +90,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
     @AfterAll
     public static void closeCluster() {
-        if (adminClient != null) {
-            adminClient.close();
-        }
-
+        Utils.closeQuietly(adminClient, "admin");
         CLUSTER.stop();
     }
 
@@ -150,7 +147,6 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         if (streams != null) {
             streams.close(Duration.ofSeconds(30));
         }
-
         Utils.delete(testFolder);
     }
 
