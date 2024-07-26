@@ -35,7 +35,6 @@ import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.TopicIdPartition;
-import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import com.yammer.metrics.core.Gauge;
@@ -125,11 +124,6 @@ public final class AssignmentsManager {
      * The registry to register our metrics with.
      */
     private final MetricsRegistry metricsRegistry;
-
-    /**
-     * Contains the metrics for this class.
-     */
-    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
     /**
      * The number of global failures we had previously (cleared after any success).
@@ -312,7 +306,7 @@ public final class AssignmentsManager {
             log.info("maybeSendAssignments: inflightSize = {}.", inflightSize);
         }
         if (inflightSize > 0) {
-            log.info("maybeSendAssignments: cannot send new assignments because there are " +
+            log.trace("maybeSendAssignments: cannot send new assignments because there are " +
                 "{} still in flight.", inflightSize);
             return;
         }
@@ -407,7 +401,7 @@ public final class AssignmentsManager {
             }
         } else {
             ready.putIfAbsent(topicIdPartition, assignment);
-            if (log.isDebugEnabled() || assignment.submissionTimeNs() + MIN_NOISY_FAILURE_INTERVAL_NS > nowNs) {
+            if (log.isDebugEnabled() || nowNs > assignment.submissionTimeNs() + MIN_NOISY_FAILURE_INTERVAL_NS) {
                 log.error("handleResponse: error assigning {}: {}.", assignment.topicIdPartition(), error);
             }
         }

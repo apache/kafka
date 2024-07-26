@@ -75,7 +75,7 @@ public class AssignmentsManagerDeadlineFunctionTest {
     @Test
     public void doNotScheduleImmediatelyWhenOverloadedIfThereArePreviousGlobalFailures() {
         assertEquals(OptionalLong.of(BACKOFF.initialInterval() * 2),
-            new AssignmentsManagerDeadlineFunction(BACKOFF, 0, 1, true,
+            new AssignmentsManagerDeadlineFunction(BACKOFF, 0, 1, false,
                 MAX_ASSIGNMENTS_PER_REQUEST + 1).
                     apply(OptionalLong.empty()));
     }
