@@ -386,16 +386,22 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
 
   private def waitUserQuota(user: String, expectedQuota: Double): Unit = {
     val quotaManager = brokers.head.quotaManagers.controllerMutation
+    val controllerQuotaManager =
+      if (isKRaftTest()) Option(controllerServers.head.quotaManagers.controllerMutation)
+      else Option.empty
     var actualQuota = Double.MinValue
 
     TestUtils.waitUntilTrue(() => {
       actualQuota = quotaManager.quota(user, "").bound()
-      expectedQuota == actualQuota
+      if (controllerQuotaManager.isDefined)
+        expectedQuota == actualQuota && expectedQuota == controllerQuotaManager.get.quota(user, "").bound()
+      else
+        expectedQuota == actualQuota
     }, s"Quota of $user is not $expectedQuota but $actualQuota")
   }
 
   private def quotaMetric(user: String): Option[KafkaMetric] = {
-    def metrics =
+    val metrics =
       if (isKRaftTest()) controllerServers.head.metrics
       else brokers.head.metrics
     val metricName = metrics.metricName(
