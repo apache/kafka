@@ -58,15 +58,12 @@ public class WorkerConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(WorkerConfig.class);
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
-    public static final String BOOTSTRAP_SERVERS_DOC
-            = "A list of host/port pairs to use for establishing the initial connection to the Kafka "
-            + "cluster. The client will make use of all servers irrespective of which servers are "
-            + "specified here for bootstrapping&mdash;this list only impacts the initial hosts used "
-            + "to discover the full set of servers. This list should be in the form "
-            + "<code>host1:port1,host2:port2,...</code>. Since these servers are just used for the "
-            + "initial connection to discover the full cluster membership (which may change "
-            + "dynamically), this list need not contain the full set of servers (you may want more "
-            + "than one, though, in case a server is down).";
+    public static final String BOOTSTRAP_SERVERS_DOC = 
+                "A list of host/port pairs used to establish the initial connection to the Kafka cluster. "
+                        + "Clients use this list to bootstrap and discover the full set of Kafka brokers. "
+                        + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
+                        + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
+                        + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
     public static final String BOOTSTRAP_SERVERS_DEFAULT = "localhost:9092";
 
     public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
