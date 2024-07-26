@@ -104,7 +104,7 @@ import static org.apache.kafka.common.utils.Utils.swallow;
  * <p/>
  *
  * This {@link ConsumerDelegate} implementation exists for backward compatibility to allow users to continue to use
- * the existing classic group protocol.
+ * the classic group protocol (pre-KIP 848).
  *
  * <p/>
  *
