@@ -26,6 +26,8 @@ import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -35,6 +37,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class QuorumFeaturesTest {
@@ -58,10 +61,13 @@ public class QuorumFeaturesTest {
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
             MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         for (Features feature : Features.PRODUCTION_FEATURES) {
-            expectedFeatures.put(feature.featureName(), VersionRange.of(
-                0,
-                feature.defaultValue(MetadataVersion.LATEST_PRODUCTION)
-            ));
+            short maxVersion = feature.defaultValue(MetadataVersion.LATEST_PRODUCTION);
+            if (maxVersion > 0) {
+                expectedFeatures.put(feature.featureName(), VersionRange.of(
+                    feature.minimumProduction(),
+                    maxVersion
+                ));
+            }
         }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(false));
     }
@@ -73,12 +79,24 @@ public class QuorumFeaturesTest {
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
             MetadataVersion.latestTesting().featureLevel()));
         for (Features feature : Features.PRODUCTION_FEATURES) {
-            expectedFeatures.put(feature.featureName(), VersionRange.of(
-                0,
-                feature.defaultValue(MetadataVersion.latestTesting())
-            ));
+            short maxVersion = feature.defaultValue(MetadataVersion.latestTesting());
+            if (maxVersion > 0) {
+                expectedFeatures.put(feature.featureName(), VersionRange.of(
+                    feature.minimumProduction(),
+                    maxVersion
+                ));
+            }
         }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void ensureDefaultSupportedFeaturesRangeMaxNotZero(boolean unstableVersionsEnabled) {
+        Map<String, VersionRange> quorumFeatures = QuorumFeatures.defaultFeatureMap(unstableVersionsEnabled);
+        for (VersionRange range : quorumFeatures.values()) {
+            assertNotEquals(0, range.max());
+        }
     }
 
     @Test

@@ -19,20 +19,22 @@ package org.apache.kafka.server.common;
 import java.util.Collections;
 import java.util.Map;
 
-public enum GroupVersion implements FeatureVersion {
+public enum TransactionVersion implements FeatureVersion {
 
-    // Version 0 is the original group coordinator prior to KIP-848.
-    GV_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
-    // Version 1 enables the consumer rebalance protocol (KIP-848).
-    GV_1(1, MetadataVersion.IBP_4_0_IV0, Collections.emptyMap());
+    // Version 0 is the original transaction coordinator with no extra features enabled.
+    TV_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+    // Version 1 enables flexible transactional state records. (KIP-890)
+    TV_1(1, MetadataVersion.IBP_4_0_IV0, Collections.emptyMap()),
+    // Version 2 enables epoch bump per transaction and optimizations. (KIP-890)
+    TV_2(2, MetadataVersion.IBP_4_0_IV0, Collections.emptyMap());
 
-    public static final String FEATURE_NAME = "group.version";
+    public static final String FEATURE_NAME = "transaction.version";
 
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;
     private final Map<String, Short> dependencies;
 
-    GroupVersion(
+    TransactionVersion(
         int featureLevel,
         MetadataVersion bootstrapMetadataVersion,
         Map<String, Short> dependencies

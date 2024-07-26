@@ -40,7 +40,8 @@ public enum Features {
      * See {@link TestFeatureVersion} as an example. See {@link FeatureVersion} when implementing a new feature.
      */
     TEST_VERSION("test.feature.version", TestFeatureVersion.values()),
-    KRAFT_VERSION("kraft.version", KRaftVersion.values());
+    KRAFT_VERSION("kraft.version", KRaftVersion.values()),
+    TRANSACTION_VERSION("transaction.version", TransactionVersion.values());
 
     public static final Features[] FEATURES;
     public static final List<Features> PRODUCTION_FEATURES;
@@ -75,6 +76,10 @@ public enum Features {
 
     public short latestProduction() {
         return defaultValue(MetadataVersion.LATEST_PRODUCTION);
+    }
+
+    public short minimumProduction() {
+        return featureVersions[0].featureLevel();
     }
 
     public short latestTesting() {
