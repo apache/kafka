@@ -128,9 +128,9 @@ public final class MetaPropertiesEnsembleTest {
     @Test
     public void testNonFailedDirectoryPropsForFoo() {
         Map<String, Optional<MetaProperties>> results = new HashMap<>();
-        FOO.nonFailedDirectoryProps().forEachRemaining(entry -> {
-            results.put(entry.getKey(), entry.getValue());
-        });
+        FOO.nonFailedDirectoryProps().forEachRemaining(entry ->
+            results.put(entry.getKey(), entry.getValue())
+        );
         assertEquals(Optional.empty(), results.get("/tmp/empty1"));
         assertEquals(Optional.empty(), results.get("/tmp/empty2"));
         assertNull(results.get("/tmp/error3"));
@@ -285,11 +285,11 @@ public final class MetaPropertiesEnsembleTest {
     public void testMetaPropertiesEnsembleLoadError() throws IOException {
         MetaPropertiesEnsemble.Loader loader = new MetaPropertiesEnsemble.Loader();
         loader.addMetadataLogDir(createErrorLogDir());
-        loader.addLogDir(createLogDir(new MetaProperties.Builder().
+        loader.addLogDirs(Collections.singletonList(createLogDir(new MetaProperties.Builder().
             setVersion(MetaPropertiesVersion.V1).
             setClusterId("AtgGav8yQjiaJ3rTXE7VCA").
             setNodeId(1).
-            build()));
+            build())));
         MetaPropertiesEnsemble metaPropertiesEnsemble = loader.load();
         assertEquals(1, metaPropertiesEnsemble.errorLogDirs().size());
         assertEquals(1, metaPropertiesEnsemble.logDirProps().size());
@@ -316,8 +316,7 @@ public final class MetaPropertiesEnsembleTest {
         MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(EMPTY);
         copier.setMetaLogDir(FOO.metadataLogDir());
         FOO.emptyLogDirs().forEach(e -> copier.emptyLogDirs().add(e));
-        FOO.logDirProps().entrySet().
-            forEach(e -> copier.logDirProps().put(e.getKey(), e.getValue()));
+        FOO.logDirProps().forEach((key, value) -> copier.logDirProps().put(key, value));
         FOO.errorLogDirs().forEach(e -> copier.errorLogDirs().add(e));
         verifyCopy(FOO, copier);
     }
@@ -373,7 +372,7 @@ public final class MetaPropertiesEnsembleTest {
         copier.emptyLogDirs().add("/tmp/foo");
         copier.errorLogDirs().add("/tmp/foo");
         assertEquals("Error: log directory /tmp/foo is in both emptyLogDirs and errorLogDirs.",
-            assertThrows(RuntimeException.class, () -> copier.verify()).getMessage());
+            assertThrows(RuntimeException.class, copier::verify).getMessage());
     }
 
     @Test
@@ -382,7 +381,7 @@ public final class MetaPropertiesEnsembleTest {
         copier.emptyLogDirs().add("/tmp/foo");
         copier.logDirProps().put("/tmp/foo", new MetaProperties.Builder().build());
         assertEquals("Error: log directory /tmp/foo is in both emptyLogDirs and logDirProps.",
-            assertThrows(RuntimeException.class, () -> copier.verify()).getMessage());
+            assertThrows(RuntimeException.class, copier::verify).getMessage());
     }
 
     @Test
@@ -391,7 +390,7 @@ public final class MetaPropertiesEnsembleTest {
         copier.errorLogDirs().add("/tmp/foo");
         copier.logDirProps().put("/tmp/foo", new MetaProperties.Builder().build());
         assertEquals("Error: log directory /tmp/foo is in both errorLogDirs and logDirProps.",
-            assertThrows(RuntimeException.class, () -> copier.verify()).getMessage());
+            assertThrows(RuntimeException.class, copier::verify).getMessage());
     }
 
     private static final List<MetaProperties> SAMPLE_META_PROPS_LIST = Arrays.asList(
@@ -436,9 +435,8 @@ public final class MetaPropertiesEnsembleTest {
         MetaPropertiesEnsemble.Loader loader = new MetaPropertiesEnsemble.Loader();
         String dir0 = createLogDir(SAMPLE_META_PROPS_LIST.get(0));
         loader.addMetadataLogDir(dir0);
-        loader.addLogDir(dir0);
         String dir1 = createLogDir(SAMPLE_META_PROPS_LIST.get(1));
-        loader.addLogDir(dir1);
+        loader.addLogDirs(Arrays.asList(dir0, dir1));
         MetaPropertiesEnsemble ensemble = loader.load();
         MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(ensemble);
         copier.setLogDirProps(dir0, SAMPLE_META_PROPS_LIST.get(2));
