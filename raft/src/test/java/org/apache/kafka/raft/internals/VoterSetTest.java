@@ -116,6 +116,16 @@ public final class VoterSetTest {
     }
 
     @Test
+    void testCannotRemoveToEmptyVoterSet() {
+        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(IntStream.of(1), true);
+        VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
+
+        ReplicaKey voter1 = aVoterMap.get(1).voterKey();
+        assertTrue(voterSet.isVoter(voter1));
+        assertEquals(Optional.empty(), voterSet.removeVoter(voter1));
+    }
+
+    @Test
     void testIsVoterWithDirectoryId() {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(IntStream.of(1, 2, 3), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));

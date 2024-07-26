@@ -188,14 +188,18 @@ public final class VoterSet {
      *
      * This object is immutable. A new voter set is returned if the voter was removed.
      *
-     * A voter can be removed from the voter set if its id and directory id match.
+     * A voter can be removed from the voter set if its id and directory id match and there
+     * are more than one voter in the set of voters.
      *
      * @param voterKey the voter key
      * @return a new voter set if the voter was removed, otherwise {@code Optional.empty()}
      */
     public Optional<VoterSet> removeVoter(ReplicaKey voterKey) {
         VoterNode oldVoter = voters.get(voterKey.id());
-        if (oldVoter != null && Objects.equals(oldVoter.voterKey(), voterKey)) {
+        if (oldVoter != null &&
+            Objects.equals(oldVoter.voterKey(), voterKey) &&
+            voters.size() > 1
+        ) {
             HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
             newVoters.remove(voterKey.id());
 
