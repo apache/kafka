@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
 import org.apache.kafka.common.config.{ConfigException, SslConfigs, TopicConfig}
 import org.apache.kafka.server.common.MetadataVersion
-import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Assertions.{assertTrue, _}
 import org.junit.jupiter.api.Test
 
 import java.util.{Collections, Properties}
@@ -339,6 +339,26 @@ class LogConfigTest {
       val message = assertThrows(classOf[ConfigException],
         () => LogConfig.validate(Collections.emptyMap(), logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled()))
       assertTrue(message.getMessage.contains("Tiered Storage functionality is disabled in the broker"))
+    }
+  }
+
+  @ParameterizedTest(name = "testDisableRemoteLogStorage with wasRemoteStorageEnabled: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testDisableRemoteLogStorage(wasRemoteStorageEnabled: Boolean): Unit = {
+    val kafkaProps = TestUtils.createDummyBrokerConfig()
+    kafkaProps.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
+    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+
+    val logProps = new Properties()
+    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false")
+    if (wasRemoteStorageEnabled) {
+      val message = assertThrows(classOf[ConfigException],
+        () => LogConfig.validate(Collections.singletonMap(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"),
+          logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled()))
+      assertTrue(message.getMessage.contains("Disabling remote storage feature on the topic level is not supported."))
+    } else {
+      LogConfig.validate(Collections.emptyMap(), logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
+      LogConfig.validate(Collections.singletonMap(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"), logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
     }
   }
 

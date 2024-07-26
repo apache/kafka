@@ -631,7 +631,7 @@ public class LogConfig extends AbstractConfig {
     public static void validateNotTurningOffRemoteStorage(Map<String, String> existingConfigs) {
         boolean wasRemoteLogEnabledBeforeUpdate = Boolean.parseBoolean(existingConfigs.getOrDefault(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"));
         if (wasRemoteLogEnabledBeforeUpdate) {
-            throw new ConfigException("Disabling remote storage feature on the topic level is not supported.");
+            throw new InvalidConfigurationException("Disabling remote storage feature on the topic level is not supported.");
         }
     }
 

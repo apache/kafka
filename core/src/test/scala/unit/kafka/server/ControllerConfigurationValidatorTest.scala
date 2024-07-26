@@ -20,11 +20,13 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, TOPIC}
-import org.apache.kafka.common.config.TopicConfig.{SEGMENT_BYTES_CONFIG, SEGMENT_JITTER_MS_CONFIG, SEGMENT_MS_CONFIG}
+import org.apache.kafka.common.config.TopicConfig.{REMOTE_LOG_STORAGE_ENABLE_CONFIG, SEGMENT_BYTES_CONFIG, SEGMENT_JITTER_MS_CONFIG, SEGMENT_MS_CONFIG}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, InvalidTopicException}
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
 import java.util.Collections.emptyMap
@@ -83,6 +85,23 @@ class ControllerConfigurationValidatorTest {
     assertEquals("Unknown topic config name: foobar",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
         new ConfigResource(TOPIC, "foo"), config, emptyMap())). getMessage)
+  }
+
+  @ParameterizedTest(name = "testDisablingRemoteStorageTopicConfig with wasRemoteStorageEnabled: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testDisablingRemoteStorageTopicConfig(wasRemoteStorageEnabled: Boolean): Unit = {
+    val config = new util.TreeMap[String, String]()
+    config.put(REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false")
+    if (wasRemoteStorageEnabled) {
+      assertEquals("Disabling remote storage feature on the topic level is not supported.",
+        assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
+          new ConfigResource(TOPIC, "foo"), config, util.Collections.singletonMap(REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"))).getMessage)
+    } else {
+      validator.validate(
+        new ConfigResource(TOPIC, "foo"), config, util.Collections.emptyMap())
+      validator.validate(
+        new ConfigResource(TOPIC, "foo"), config, util.Collections.singletonMap(REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"))
+    }
   }
 
   @Test
