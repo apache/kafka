@@ -608,9 +608,11 @@ public class LogConfig extends AbstractConfig {
 
     /**
      * Validates the values of the given properties. Should be called only by the broker.
-     * The `props` supplied contains the topic-level configs,
+     * The `newConfigs` supplied contains the topic-level configs,
      * The default values should be extracted from the KafkaConfig.
-     * @param props The properties to be validated
+     * @param existingConfigs                   The existing properties
+     * @param newConfigs                        The new properties to be validated
+     * @param isRemoteLogStorageSystemEnabled   true if system wise remote log storage is enabled
      */
     private static void validateTopicLogConfigValues(Map<String, String> existingConfigs,
                                                      Map<?, ?> newConfigs,
