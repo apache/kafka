@@ -38,7 +38,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import io.github.classgraph.ClassGraph;
-import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ClassInfoList;
 import io.github.classgraph.ScanResult;
 
@@ -75,8 +74,6 @@ public class ReflectionScanner extends PluginScanner {
 
     private static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
         T pluginImpl = pluginKlass.getDeclaredConstructor().newInstance();
-        log.info("sx versionFor: ");
-        log.info(pluginKlass.getName());
         return versionFor(pluginImpl);
     }
 
@@ -88,21 +85,8 @@ public class ReflectionScanner extends PluginScanner {
                 .addClassLoader(source.loader())
                 .filterClasspathElementsByURL(urls::contains)
                 .enableExternalClasses()
-                .enableAllInfo()
-                .verbose();
-//                .ignoreParentClassLoaders();
+                .enableAllInfo();
         try (ScanResult classGraph = classGraphBuilder.scan()) {
-            if (source.urls().length > 0) { //&& source.urls()[0].toString().contains("subclass-of-classpath")) {
-                log.info("sx ScanResult size");
-                log.info("" + classGraph.getAllClasses().size());
-                log.info("sx scan result each");
-                for (ClassInfo ci : classGraph.getAllClasses()) {
-                    log.info(ci.getName());
-                    if (ci.getInterfaces().size() > 0) {
-                        log.info(ci.getInterfaces().get(0).getName());
-                    }
-                }
-            }
             return new PluginScanResult(
                   getPluginDesc(classGraph, PluginType.SINK, source),
                   getPluginDesc(classGraph, PluginType.SOURCE, source),
@@ -137,14 +121,8 @@ public class ReflectionScanner extends PluginScanner {
         Class<T> kclass = (Class<T>) type.superClass();
         try {
             plugins = classGraph.getSubclasses(kclass.getName());
-            if (plugins.size() == 0) {
+            if (plugins.isEmpty()) {
                 plugins = classGraph.getClassesImplementing(kclass.getName());
-            }
-            log.info(kclass.getName());
-            log.info("" + plugins.size());
-            for (ClassInfo ci : plugins) {
-                log.info("sx plugin each");
-                log.info(ci.getName());
             }
         } catch (Exception e) {
             log.debug("Reflections scanner could not find any {} in {} for URLs: {}",

@@ -47,7 +47,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
-import io.github.classgraph.ScanResult;
+import io.github.classgraph.ClassGraph;
 
 /**
  * Connect plugin utility methods.
@@ -355,10 +355,6 @@ public class PluginUtils {
             }
         }
         pluginSources.add(classpathPluginSource(classLoader.getParent()));
-        System.out.println("stx output plugin");
-        for (PluginSource p : pluginSources) {
-            System.out.println(p.toString());
-        }
         return pluginSources;
     }
 
@@ -498,7 +494,7 @@ public class PluginUtils {
             return classLoaders;
         } else {
             ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader(), 
-                    staticClassLoader = ScanResult.class.getClassLoader();
+                    staticClassLoader = ClassGraph.class.getClassLoader();
             return contextClassLoader != null ?
                     staticClassLoader != null && contextClassLoader != staticClassLoader ?
                             new ClassLoader[]{contextClassLoader, staticClassLoader} :
