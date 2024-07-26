@@ -2803,21 +2803,28 @@ public class KafkaRaftClientTest {
     @CsvSource({ "true, true", "true, false", "false, false" })
     public void testDescribeQuorumWithFollowers(boolean withKip853Rpc, boolean withBootstrapSnapshot) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey local = replicaKey(localId, true);
-        Uuid localDirectoryId = local.directoryId().get();
-        ReplicaKey follower1 = replicaKey(localId + 1, true);
-        Uuid followerDirectoryId1 = follower1.directoryId().get();
-        ReplicaKey follower2 = replicaKey(localId + 2, false);
-        Set<Integer> voters = Utils.mkSet(localId, follower1.id(), follower2.id());
-        VoterSet voterSet = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
+        int followerId1 = localId + 1;
+        int followerId2 = localId + 2;
+        ReplicaKey local = replicaKey(localId, withBootstrapSnapshot);
+        // local directory id must exist
+        Uuid localDirectoryId = local.directoryId().orElse(Uuid.randomUuid());
+        ReplicaKey bootstrapFollower1 = replicaKey(followerId1, withBootstrapSnapshot);
+        // if withBootstrapSnapshot is false, directory ids are still needed by the static voter set
+        Uuid followerDirectoryId1 = bootstrapFollower1.directoryId().orElse(withKip853Rpc ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
+        ReplicaKey follower1 = ReplicaKey.of(followerId1, followerDirectoryId1);
+        ReplicaKey bootstrapFollower2 = replicaKey(followerId2, withBootstrapSnapshot);
+        Uuid followerDirectoryId2 = bootstrapFollower2.directoryId().orElse(withKip853Rpc ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
+        ReplicaKey follower2 = ReplicaKey.of(followerId2, followerDirectoryId2);
+        VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower1, bootstrapFollower2));
+        VoterSet staticVoterSet = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
         RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, localDirectoryId)
             .withKip853Rpc(withKip853Rpc);
 
         if (withBootstrapSnapshot) {
-            builder.withBootstrapSnapshot(Optional.of(voterSet));
+            builder.withBootstrapSnapshot(Optional.of(bootstrapVoterSet));
         } else {
-            builder.withStaticVoters(voters);
+            builder.withStaticVoters(staticVoterSet);
         }
         RaftClientTestContext context = builder.build();
 
@@ -2830,19 +2837,19 @@ public class KafkaRaftClientTest {
         List<ReplicaState> expectedVoterStates = Arrays.asList(
             new ReplicaState()
                 .setReplicaId(localId)
-                .setReplicaDirectoryId(withKip853Rpc && withBootstrapSnapshot ? localDirectoryId : ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaDirectoryId(withBootstrapSnapshot ? context.localReplicaKey().directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
                 .setLogEndOffset(withBootstrapSnapshot ? 3L : 1L)
                 .setLastFetchTimestamp(context.time.milliseconds())
                 .setLastCaughtUpTimestamp(context.time.milliseconds()),
             new ReplicaState()
-                .setReplicaId(follower1.id())
-                .setReplicaDirectoryId(withKip853Rpc && withBootstrapSnapshot ? followerDirectoryId1 : ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaId(followerId1)
+                .setReplicaDirectoryId(withBootstrapSnapshot ? follower1.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
                 .setLogEndOffset(-1L)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1),
             new ReplicaState()
-                .setReplicaId(follower2.id())
-                .setReplicaDirectoryId(ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaId(followerId2)
+                .setReplicaDirectoryId(withBootstrapSnapshot ? follower2.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
                 .setLogEndOffset(-1L)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1));
@@ -2908,19 +2915,22 @@ public class KafkaRaftClientTest {
     @CsvSource({ "true, true", "true, false", "false, false" })
     public void testDescribeQuorumWithObserver(boolean withKip853Rpc, boolean withBootstrapSnapshot) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey local = replicaKey(localId, true);
-        Uuid localDirectoryId = local.directoryId().get();
-        ReplicaKey follower = replicaKey(localId + 1, true);
-        Uuid followerDirectoryId = follower.directoryId().get();
-        VoterSet voterSet = VoterSetTest.voterSet(Stream.of(local, follower));
+        int followerId = localId + 1;
+        ReplicaKey local = replicaKey(localId, withBootstrapSnapshot);
+        Uuid localDirectoryId = local.directoryId().orElse(Uuid.randomUuid());
+        ReplicaKey bootstrapFollower = replicaKey(followerId, withBootstrapSnapshot);
+        Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(withKip853Rpc ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
+        ReplicaKey follower = ReplicaKey.of(followerId, followerDirectoryId);
+        VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower));
+        VoterSet staticVoterSet = VoterSetTest.voterSet(Stream.of(local, follower));
 
         RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, localDirectoryId)
             .withKip853Rpc(withKip853Rpc);
 
         if (withBootstrapSnapshot) {
-            builder.withBootstrapSnapshot(Optional.of(voterSet));
+            builder.withBootstrapSnapshot(Optional.of(bootstrapVoterSet));
         } else {
-            builder.withStaticVoters(voterSet);
+            builder.withStaticVoters(staticVoterSet);
         }
         RaftClientTestContext context = builder.build();
 
@@ -2937,11 +2947,11 @@ public class KafkaRaftClientTest {
         context.assertSentFetchPartitionResponse(expectedHW, epoch);
 
         // Create observer
-        ReplicaKey observerId = replicaKey(localId + 2, withKip853Rpc);
-        Uuid observerDirectoryId = observerId.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID);
+        ReplicaKey observer = replicaKey(localId + 2, withKip853Rpc);
+        Uuid observerDirectoryId = observer.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID);
         context.time.sleep(100);
         long observerFetchTime = context.time.milliseconds();
-        context.deliverRequest(context.fetchRequest(epoch, observerId, 0L, 0, 0));
+        context.deliverRequest(context.fetchRequest(epoch, observer, 0L, 0, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(expectedHW, epoch);
 
@@ -2952,7 +2962,7 @@ public class KafkaRaftClientTest {
         List<ReplicaState> expectedVoterStates = Arrays.asList(
             new ReplicaState()
                 .setReplicaId(localId)
-                .setReplicaDirectoryId(withKip853Rpc && withBootstrapSnapshot ? localDirectoryId : ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaDirectoryId(withBootstrapSnapshot ? localDirectoryId : ReplicaKey.NO_DIRECTORY_ID)
                 // As we are appending the records directly to the log,
                 // the leader end offset hasn't been updated yet.
                 .setLogEndOffset(fetchOffset)
@@ -2960,13 +2970,13 @@ public class KafkaRaftClientTest {
                 .setLastCaughtUpTimestamp(context.time.milliseconds()),
             new ReplicaState()
                 .setReplicaId(follower.id())
-                .setReplicaDirectoryId(withKip853Rpc && withBootstrapSnapshot ? followerDirectoryId : ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaDirectoryId(withBootstrapSnapshot ? followerDirectoryId : ReplicaKey.NO_DIRECTORY_ID)
                 .setLogEndOffset(fetchOffset)
                 .setLastFetchTimestamp(followerFetchTime)
                 .setLastCaughtUpTimestamp(followerFetchTime));
         List<ReplicaState> expectedObserverStates = singletonList(
             new ReplicaState()
-                .setReplicaId(observerId.id())
+                .setReplicaId(observer.id())
                 .setReplicaDirectoryId(observerDirectoryId)
                 .setLogEndOffset(0L)
                 .setLastFetchTimestamp(observerFetchTime)
@@ -2976,7 +2986,7 @@ public class KafkaRaftClientTest {
         // Update observer fetch state
         context.time.sleep(100);
         observerFetchTime = context.time.milliseconds();
-        context.deliverRequest(context.fetchRequest(epoch, observerId, fetchOffset, epoch, 0));
+        context.deliverRequest(context.fetchRequest(epoch, observer, fetchOffset, epoch, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(expectedHW, epoch);
 
@@ -3047,16 +3057,21 @@ public class KafkaRaftClientTest {
     @CsvSource({ "true, true", "true, false", "false, false" })
     public void testDescribeQuorumNonMonotonicFollowerFetch(boolean withKip853Rpc, boolean withBootstrapSnapshot) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey local = replicaKey(localId, true);
-        ReplicaKey follower = replicaKey(localId + 1, true);
-        VoterSet voterSet = VoterSetTest.voterSet(Stream.of(local, follower));
+        ReplicaKey local = replicaKey(localId, withBootstrapSnapshot);
+        Uuid localDirectoryId = local.directoryId().orElse(Uuid.randomUuid());
+        int followerId = localId + 1;
+        ReplicaKey bootstrapFollower = replicaKey(followerId, withBootstrapSnapshot);
+        Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(withKip853Rpc ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
+        ReplicaKey follower = ReplicaKey.of(followerId, followerDirectoryId);
+        VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower));
+        VoterSet staticVoterSet = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, local.directoryId().get())
+        RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, localDirectoryId)
             .withKip853Rpc(withKip853Rpc);
         if (withBootstrapSnapshot) {
-            builder.withBootstrapSnapshot(Optional.of(voterSet));
+            builder.withBootstrapSnapshot(Optional.of(bootstrapVoterSet));
         } else {
-            builder.withStaticVoters(voterSet);
+            builder.withStaticVoters(staticVoterSet);
         }
         RaftClientTestContext context = builder.build();
 
@@ -3081,13 +3096,13 @@ public class KafkaRaftClientTest {
         List<ReplicaState> expectedVoterStates = Arrays.asList(
             new ReplicaState()
                 .setReplicaId(localId)
-                .setReplicaDirectoryId(withKip853Rpc && withBootstrapSnapshot ? local.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaDirectoryId(withBootstrapSnapshot ? local.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
                 .setLogEndOffset(fetchOffset)
                 .setLastFetchTimestamp(context.time.milliseconds())
                 .setLastCaughtUpTimestamp(context.time.milliseconds()),
             new ReplicaState()
                 .setReplicaId(follower.id())
-                .setReplicaDirectoryId(withKip853Rpc && withBootstrapSnapshot ? follower.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaDirectoryId(withBootstrapSnapshot ? follower.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
                 .setLogEndOffset(fetchOffset)
                 .setLastFetchTimestamp(followerFetchTime)
                 .setLastCaughtUpTimestamp(followerFetchTime));
