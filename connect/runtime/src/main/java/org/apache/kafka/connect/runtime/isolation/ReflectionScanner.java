@@ -84,13 +84,11 @@ public class ReflectionScanner extends PluginScanner {
     protected PluginScanResult scanPlugins(PluginSource source) {
         Set<URL> urls = new HashSet<>();
         Collections.addAll(urls, source.urls());
-        ClassGraph classGraphBuilder = new ClassGraph().enableClassInfo()
+        ClassGraph classGraphBuilder = new ClassGraph()
                 .addClassLoader(source.loader())
                 .filterClasspathElementsByURL(urls::contains)
                 .enableExternalClasses()
-                .enableInterClassDependencies()
-                .enableAllInfo()
-                .ignoreParentClassLoaders();
+                .enableInterClassDependencies();
         // List<URL> urls = classGraphBuilder.getClasspathURLs();
         // urls.addAll(Arrays.asList(source.urls()));
         // if (!urls.isEmpty()) {
@@ -99,7 +97,7 @@ public class ReflectionScanner extends PluginScanner {
         try (ScanResult classGraph = classGraphBuilder.scan()) {
             if (source.urls().length > 0) { //&& source.urls()[0].toString().contains("subclass-of-classpath")) {
                 log.info("sx ScanResult size");
-                log.info("%s", classGraph.getAllClasses().size());
+                log.info("" + classGraph.getAllClasses().size());
                 log.info("sx scan result each");
                 for (ClassInfo ci : classGraph.getAllClasses()) {
                     log.info(ci.getName());
@@ -146,7 +144,7 @@ public class ReflectionScanner extends PluginScanner {
                 plugins = classGraph.getClassesImplementing(kclass.getName());
             }
             log.info(kclass.getName());
-            log.info("%s", plugins.size());
+            log.info("" + plugins.size());
             for (ClassInfo ci : plugins) {
                 log.info("sx plugin each");
                 log.info(ci.getName());
