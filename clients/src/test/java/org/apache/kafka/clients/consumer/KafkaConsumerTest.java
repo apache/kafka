@@ -100,7 +100,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
@@ -145,6 +147,7 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.internals.LegacyKafkaConsumer.DEFAULT_REASON;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
+import static org.apache.kafka.common.requests.FetchMetadata.log;
 import static org.apache.kafka.common.utils.Utils.propsToMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -2451,12 +2454,24 @@ public class KafkaConsumerTest {
         assertThrows(IllegalStateException.class, consumer::groupMetadata);
     }
 
+    private static Stream<Arguments> groupProtocolArgument() {
+        List<Arguments> g = new ArrayList<>();
+        for (int i = 0; i < 25; ++i) {
+            g.add(Arguments.of(GroupProtocol.CLASSIC));
+        }
+        for (int i = 0; i < 25; ++i) {
+            g.add(Arguments.of(GroupProtocol.CONSUMER));
+        }
+        return g.stream();
+    }
+
+
     // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
     //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @MethodSource("groupProtocolArgument")
     @SuppressWarnings("unchecked")
-    public void testCurrentLag(GroupProtocol groupProtocol) {
+    public void testCurrentLag(GroupProtocol groupProtocol) throws InterruptedException {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
 
@@ -2471,17 +2486,43 @@ public class KafkaConsumerTest {
 
         // poll once to update with the current metadata
         consumer.poll(Duration.ofMillis(0));
+
+        TestUtils.waitForCondition(() -> client.inFlightRequestCount() == 1,
+                "Consumer can't wait find coordinator request.");
+
         client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, metadata.fetch().nodes().get(0)));
 
         // no error for no current position
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
-        assertEquals(0, client.inFlightRequestCount());
 
         // poll once again, which should send the list-offset request
         consumer.seek(tp0, 50L);
         consumer.poll(Duration.ofMillis(0));
-        // requests: list-offset, fetch
-        assertEquals(2, client.inFlightRequestCount());
+
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            // requests: list-offset, fetch
+            // There is additional OffsetFetch request for consumer protocol
+            // The offsetFetch request comes from commitManger, need to dig it deep.
+            TestUtils.waitForCondition(() -> client.inFlightRequestCount() == 3,
+                    "AsyncConsumer does not need wait offsetFetch request comes from CommitManger");
+            client.requests().remove(
+                    client.requests().stream().filter(s -> s.requestBuilder().apiKey() == ApiKeys.OFFSET_FETCH).
+                            findFirst().get()
+            );
+        }
+
+        // A problem for asyncConsumer is it's out of order requests
+        // if background get listOffset request first, the test will pass
+        // otherwise, it will fail.
+        final AtomicBoolean show = new AtomicBoolean(true);
+
+        TestUtils.waitForCondition(() -> {
+            if (show.get()) {
+                client.requests().stream().forEach(s -> log.error("consumer request seq " + s.requestBuilder()));
+                show.set(false);
+            }
+            return client.inFlightRequestCount() == 2;
+        }, "Consumer get unexcepted in flightRequestCount");
 
         // no error for no end offset (so unknown lag)
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
@@ -2491,7 +2532,8 @@ public class KafkaConsumerTest {
         client.respond(listOffsetsResponse(singletonMap(tp0, 90L)));
         consumer.poll(Duration.ofMillis(0));
 
-        assertEquals(OptionalLong.of(40L), consumer.currentLag(tp0));
+        TestUtils.waitForCondition(() -> OptionalLong.of(40L).equals(consumer.currentLag(tp0)),
+                "Consumer can't get excepted lag.");
         // requests: fetch
         assertEquals(1, client.inFlightRequestCount());
 
