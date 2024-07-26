@@ -57,6 +57,7 @@ import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.connect.util.clusters.UngracefulShutdownException;
 
+import org.apache.kafka.test.TestCondition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -301,12 +302,30 @@ public class MirrorConnectorsIntegrationBaseTest {
         MirrorClient primaryClient = new MirrorClient(mm2Config.clientConfig(PRIMARY_CLUSTER_ALIAS));
         MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS));
 
-        // make sure the topic is auto-created in the other cluster
-        waitForTopicCreated(primary, reverseTopic1);
-        waitForTopicCreated(backup, backupTopic1);
         waitForTopicCreated(primary, "mm2-offset-syncs.backup.internal");
-        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, getTopicConfig(backup.kafka(), backupTopic1, TopicConfig.CLEANUP_POLICY_CONFIG),
-                "topic config was not synced");
+
+        TestCondition assertBackupTopicConfig = () -> {
+            String compactPolicy = getTopicConfig(backup.kafka(), backupTopic1, TopicConfig.CLEANUP_POLICY_CONFIG);
+            assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, compactPolicy, "topic config was not synced");
+            return true;
+        };
+
+        if (replicateBackupToPrimary) {
+            // make sure the topics are auto-created in the other cluster
+            waitForTopicCreated(primary, reverseTopic1);
+            waitForTopicCreated(backup, backupTopic1);
+            assertBackupTopicConfig.conditionMet();
+        } else {
+            // The backup and reverse topics are identical to the topics we created while setting up the test;
+            // we don't have to wait for them to be created, but there might be a small delay between
+            // now and when MM2 is able to sync the config for the backup topic
+            waitForCondition(
+                    assertBackupTopicConfig,
+                    10_000, // Topic config sync interval is one second; this should be plenty of time
+                    "topic config was not synced in time"
+            );
+        }
+
         createAndTestNewTopicWithConfigFilter();
 
         assertEquals(NUM_RECORDS_PRODUCED, primary.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
