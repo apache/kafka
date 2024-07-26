@@ -101,7 +101,8 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public static final Class<?> CONFIG_PROPERTY_FILTER_CLASS_DEFAULT = DefaultConfigPropertyFilter.class;
 
     public static final String OFFSET_LAG_MAX = "offset.lag.max";
-    private static final String OFFSET_LAG_MAX_DOC = "How out-of-sync a remote partition can be before it is resynced.";
+    private static final String OFFSET_LAG_MAX_DOC = "How out-of-sync a remote partition can be before it is resynced. A lower value, even as low as 0, " +
+            "can be set to trigger more frequent offset syncs, which will help in scenarios when records may not flow constantly.";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
 
     public static final String ADD_SOURCE_ALIAS_TO_METRICS = "add.source.alias.to.metrics";
