@@ -16,20 +16,43 @@
  */
 package org.apache.kafka.tools.consumer;
 
+import kafka.test.ClusterInstance;
+import kafka.test.annotation.ClusterTest;
+import kafka.test.junit.ClusterTestExtensions;
+
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.RangeAssignor;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogKeyJsonConverter;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogValueJsonConverter;
 import org.apache.kafka.server.util.MockTime;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.time.Duration;
@@ -37,9 +60,24 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.regex.Pattern;
 
+import static java.util.Collections.singleton;
+import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -49,7 +87,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@ExtendWith(ClusterTestExtensions.class)
 public class ConsoleConsumerTest {
+
+    private final String topic = "test-topic";
+    private final String transactionId = "transactional-id";
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     public void setup() {
@@ -238,5 +281,79 @@ public class ConsoleConsumerTest {
 
         verify(mockConsumer).subscribe(any(Pattern.class));
         consumer.cleanup();
+    }
+
+    @ClusterTest(brokers = 3)
+    public void testTransactionLogMessageFormatter(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.createAdminClient()) {
+
+            NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
+            admin.createTopics(singleton(newTopic));
+            produceMessages(cluster);
+
+            String[] transactionLogMessageFormatter = new String[]{
+                "--bootstrap-server", cluster.bootstrapServers(),
+                "--topic", Topic.TRANSACTION_STATE_TOPIC_NAME,
+                "--formatter", "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter",
+                "--from-beginning"
+            };
+
+            ConsoleConsumerOptions options = new ConsoleConsumerOptions(transactionLogMessageFormatter);
+            ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createConsumer(cluster));
+            
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+                 PrintStream output = new PrintStream(out)) {
+                ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
+                
+                JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
+                JsonNode keyNode = jsonNode.get("key");
+
+                TransactionLogKey logKey =
+                        TransactionLogKeyJsonConverter.read(keyNode.get("data"), TransactionLogKey.HIGHEST_SUPPORTED_VERSION);
+                assertNotNull(logKey);
+                assertEquals(transactionId, logKey.transactionalId());
+
+                JsonNode valueNode = jsonNode.get("value");
+                TransactionLogValue logValue =
+                        TransactionLogValueJsonConverter.read(valueNode.get("data"), TransactionLogValue.HIGHEST_SUPPORTED_VERSION);
+                assertNotNull(logValue);
+                assertEquals(0, logValue.producerId());
+                assertEquals(0, logValue.transactionStatus());
+            } finally {
+                consumerWrapper.cleanup();
+            }
+        }
+    }
+
+    private void produceMessages(ClusterInstance cluster) {
+        try (Producer<byte[], byte[]> producer = createProducer(cluster)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+            producer.send(new ProducerRecord<>(topic, new byte[1_000 * 100]));
+            producer.commitTransaction();
+        }
+    }
+
+    private Producer<byte[], byte[]> createProducer(ClusterInstance cluster) {
+        Properties props = new Properties();
+        props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(ENABLE_IDEMPOTENCE_CONFIG, "true");
+        props.put(ACKS_CONFIG, "all");
+        props.put(TRANSACTIONAL_ID_CONFIG, transactionId);
+        props.put(KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        return new KafkaProducer<>(props);
+    }
+
+    private Consumer<byte[], byte[]> createConsumer(ClusterInstance cluster) {
+        Properties props = new Properties();
+        props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
+        props.put(ISOLATION_LEVEL_CONFIG, "read_committed");
+        props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(GROUP_ID_CONFIG, "test-group");
+        return new KafkaConsumer<>(props);
     }
 }

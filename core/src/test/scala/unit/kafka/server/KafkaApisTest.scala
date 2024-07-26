@@ -860,7 +860,7 @@ class KafkaApisTest extends Logging {
 
     when(controller.isActive).thenReturn(true)
 
-    val topics = new CreateTopicsRequestData.CreatableTopicCollection(2)
+    val topics = new CreateTopicsRequestData.CreatableTopicCollection(3)
     val topicToCreate = new CreateTopicsRequestData.CreatableTopic()
       .setName(authorizedTopic)
     topics.add(topicToCreate)
@@ -868,6 +868,10 @@ class KafkaApisTest extends Logging {
     val topicToFilter = new CreateTopicsRequestData.CreatableTopic()
       .setName(unauthorizedTopic)
     topics.add(topicToFilter)
+
+    val topicToProhibited = new CreateTopicsRequestData.CreatableTopic()
+      .setName(Topic.CLUSTER_METADATA_TOPIC_NAME)
+    topics.add(topicToProhibited)
 
     val timeout = 10
     val createTopicsRequest = new CreateTopicsRequest.Builder(
@@ -898,8 +902,13 @@ class KafkaApisTest extends Logging {
     capturedCallback.getValue.apply(Map(authorizedTopic -> ApiError.NONE))
 
     val capturedResponse = verifyNoThrottling[CreateTopicsResponse](request)
-    verifyCreateTopicsResult(capturedResponse, Map(authorizedTopic -> Errors.NONE,
-        unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED))
+    verifyCreateTopicsResult(capturedResponse,
+      Map(authorizedTopic -> Errors.NONE,
+        unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED,
+        Topic.CLUSTER_METADATA_TOPIC_NAME -> Errors.INVALID_REQUEST),
+      Map(authorizedTopic -> Errors.NONE,
+        unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED,
+        Topic.CLUSTER_METADATA_TOPIC_NAME -> Errors.NONE))
   }
 
   @Test
@@ -1062,12 +1071,19 @@ class KafkaApisTest extends Logging {
   }
 
   private def verifyCreateTopicsResult(response: CreateTopicsResponse,
-                                       expectedResults: Map[String, Errors]): Unit = {
-    val responseMap = response.data.topics().asScala.map { topicResponse =>
+                                       expectedErrorCodes: Map[String, Errors],
+                                       expectedTopicConfigErrorCodes: Map[String, Errors]): Unit = {
+    val actualErrorCodes = response.data.topics().asScala.map { topicResponse =>
       topicResponse.name() -> Errors.forCode(topicResponse.errorCode)
     }.toMap
 
-    assertEquals(expectedResults, responseMap)
+    assertEquals(expectedErrorCodes, actualErrorCodes)
+
+    val actualTopicConfigErrorCodes = response.data.topics().asScala.map { topicResponse =>
+      topicResponse.name() -> Errors.forCode(topicResponse.topicConfigErrorCode())
+    }.toMap
+
+    assertEquals(expectedTopicConfigErrorCodes, actualTopicConfigErrorCodes)
   }
 
   @Test
