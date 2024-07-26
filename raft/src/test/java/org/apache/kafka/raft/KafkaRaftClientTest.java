@@ -3171,7 +3171,6 @@ public class KafkaRaftClientTest {
         context.assertSentDescribeQuorumResponse(localId, epoch, -1L, expectedVoterStates, Collections.emptyList());
     }
 
-    // TODO: with KAFKA-16535 we can test describe quorum output following voter removal and addition
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
