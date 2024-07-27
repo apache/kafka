@@ -72,7 +72,8 @@ class OfflinePartitionsFromDeletedTopicTest extends IntegrationTestHarness {
       assertEquals(0, offlinePartitionsCount(controllerId), "Non zero offline partitions")
 
       // Shut down one of the brokers that is not a controller
-      killBroker(if (controllerId == 2) 1 else 2)
+      val brokerToKill = if (controllerId == 2) 1 else 2
+      killBroker(brokerToKill)
       TestUtils.waitUntilTrue(() => offlinePartitionsCount(controllerId) == 1, "Expected one partition to be offline after broker shutdown")
 
       // Now elect a new controller
@@ -85,6 +86,11 @@ class OfflinePartitionsFromDeletedTopicTest extends IntegrationTestHarness {
       // Elect a controller again, this must be the original controller that the test started with
       controllerId = electNewController(zkClient)
       TestUtils.waitUntilTrue(() => offlinePartitionsCount(controllerId) == 0, "Non zero offline partitions after topic deletion and old controller re-elected")
+
+      // Bring the killed broker back up again. The topic should get deleted eventually.
+      startBroker(brokerToKill)
+      TestUtils.waitUntilTrue(() => !zkClient.isTopicMarkedForDeletion(topic), "Topic is still pending deletion after broker comes back up")
+      assertEquals(0, offlinePartitionsCount(controllerId))
     } finally {
       if (producer != null) {
         producer.close(Duration.ofSeconds(30))
