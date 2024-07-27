@@ -2152,34 +2152,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }, "Expected to see the broker properties we just removed to be deleted", pause=25)
   }
 
-  // The remote storage config validation on controller level only works in KRaft
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDisablingRemoteStorageIncrementalAlterConfigs(quorum: String): Unit = {
-    client = createAdminClient
-
-    // Create a topic with remote storage enabled
-    val topic = "incremental-alter-configs-topic-1"
-    val topicCreateConfigs = new Properties
-    topicCreateConfigs.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
-    createTopic(topic, numPartitions = 1, replicationFactor = 1, topicCreateConfigs)
-
-    // Try to disable remote storage
-    val topicAlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"), AlterConfigOp.OpType.SET),
-    ).asJavaCollection
-
-    val alterResult = client.incrementalAlterConfigs(Map(
-      topicResource -> topicAlterConfigs
-    ).asJava)
-    assertEquals(Set(topicResource).asJava, alterResult.values.keySet)
-
-    // InvalidConfigurationException exception thrown with expected message.
-    assertFutureExceptionTypeEquals(alterResult.values().get(topicResource), classOf[InvalidConfigurationException],
-      Some("Disabling remote storage feature on the topic level is not supported."))
-  }
-
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidIncrementalAlterConfigs(quorum: String): Unit = {

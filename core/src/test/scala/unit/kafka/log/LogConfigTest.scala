@@ -22,6 +22,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
 import org.apache.kafka.common.config.{ConfigException, SslConfigs, TopicConfig}
+import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.{assertTrue, _}
 import org.junit.jupiter.api.Test
@@ -352,7 +353,7 @@ class LogConfigTest {
     val logProps = new Properties()
     logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false")
     if (wasRemoteStorageEnabled) {
-      val message = assertThrows(classOf[ConfigException],
+      val message = assertThrows(classOf[InvalidConfigurationException],
         () => LogConfig.validate(Collections.singletonMap(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"),
           logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled()))
       assertTrue(message.getMessage.contains("Disabling remote storage feature on the topic level is not supported."))
