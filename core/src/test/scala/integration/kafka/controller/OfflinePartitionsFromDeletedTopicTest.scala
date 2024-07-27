@@ -32,7 +32,7 @@ import org.slf4j.{Logger, LoggerFactory}
 
 import java.time.Duration
 import java.util.concurrent.TimeUnit
-import scala.jdk.CollectionConverters.{MapHasAsScala, SeqHasAsJava}
+import scala.jdk.CollectionConverters._
 
 
 class OfflinePartitionsFromDeletedTopicTest extends IntegrationTestHarness {
@@ -111,7 +111,7 @@ class OfflinePartitionsFromDeletedTopicTest extends IntegrationTestHarness {
       tries -= 1
     }
     assertNotEquals(oldController, newController, "Failed to elect a different controller")
-    log.info(s"Controller changed from ${oldController} to ${newController}")
+    log.info(s"Controller changed from $oldController to $newController")
     newController.get
   }
 

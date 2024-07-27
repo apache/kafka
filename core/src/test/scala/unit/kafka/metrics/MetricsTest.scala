@@ -121,8 +121,15 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @ValueSource(strings = Array("zk", "kraft"))
   def testJMXFilter(quorum: String): Unit = {
     // Check if cluster id metrics is not exposed in JMX
-    assertTrue(ManagementFactory.getPlatformMBeanServer
-                 .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount")))
+    if (quorum == "zk") {
+      assertTrue(ManagementFactory.getPlatformMBeanServer
+        .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount,brokerId=0")))
+      assertTrue(ManagementFactory.getPlatformMBeanServer
+        .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount,brokerId=1")))
+    } else {
+      assertTrue(ManagementFactory.getPlatformMBeanServer
+        .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount")))
+    }
     assertFalse(ManagementFactory.getPlatformMBeanServer
                   .isRegistered(new ObjectName(s"$requiredKafkaServerPrefix=ClusterId")))
   }
@@ -218,22 +225,24 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   def testZkControllerMetrics(quorum: String): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
 
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ActiveControllerCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=OfflinePartitionsCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalTopicCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalPartitionCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=TopicsToDeleteCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ReplicasToDeleteCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=TopicsIneligibleToDeleteCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ActiveBrokerCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=FencedBrokerCount"), 1)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ZkMigrationState"), 1)
+    assertEquals(numNodes, metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=ActiveControllerCount")))
+    assertEquals(numNodes, metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=OfflinePartitionsCount")))
+    assertEquals(numNodes, metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount")))
+    assertEquals(numNodes, metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=GlobalTopicCount")))
+    assertEquals(numNodes, metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=GlobalPartitionCount")))
+    assertEquals(numNodes, metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=TopicsToDeleteCount")))
+    assertEquals(numNodes, metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=ReplicasToDeleteCount")))
+    assertEquals(numNodes, metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=TopicsIneligibleToDeleteCount")))
+    assertEquals(numNodes, metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount")))
+    assertEquals(numNodes, metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=ActiveBrokerCount")))
+    assertEquals(numNodes, metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=FencedBrokerCount")))
+    assertEquals(numNodes, metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=ZkMigrationState")))
 
-    val zkStateMetricName = metrics.keySet.asScala.filter(_.getMBeanName == "kafka.controller:type=KafkaController,name=ZkMigrationState").head
-    val zkStateGauge = metrics.get(zkStateMetricName).asInstanceOf[Gauge[Int]]
-    assertEquals(ZkMigrationState.ZK.value().intValue(), zkStateGauge.value())
+    metrics.keySet.asScala.filter(_.getMBeanName.startsWith("kafka.controller:type=KafkaController,name=ZkMigrationState"))
+      .foreach { zkStateMetricName =>
+        val zkStateGauge = metrics.get(zkStateMetricName).asInstanceOf[Gauge[Int]]
+        assertEquals(ZkMigrationState.ZK.value().intValue(), zkStateGauge.value())
+      }
   }
 
   @ParameterizedTest
