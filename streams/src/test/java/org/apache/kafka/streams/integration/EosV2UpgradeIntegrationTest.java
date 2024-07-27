@@ -861,56 +861,57 @@ public class EosV2UpgradeIntegrationTest {
 
         final KStream<Long, Long> input = builder.stream(MULTI_PARTITION_INPUT_TOPIC);
         input.process(() -> new Processor<Long, Long, Long, Long>() {
-            ProcessorContext<Long, Long> context;
-            KeyValueStore<Long, Long> state = null;
-            AtomicBoolean crash;
-            AtomicInteger sharedCommit;
+                ProcessorContext<Long, Long> context;
+                KeyValueStore<Long, Long> state = null;
+                AtomicBoolean crash;
+                AtomicInteger sharedCommit;
 
-            @Override
-            public void init(final ProcessorContext<Long, Long> context) {
-                this.context = context;
-                state = context.getStateStore(storeName);
-                final String clientId = context.appConfigs().get(StreamsConfig.CLIENT_ID_CONFIG).toString();
-                if (APP_DIR_1.equals(clientId)) {
-                    crash = errorInjectedClient1;
-                    sharedCommit = commitCounterClient1;
-                } else {
-                    crash = errorInjectedClient2;
-                    sharedCommit = commitCounterClient2;
-                }
-            }
-
-            @Override
-            public void process(final Record<Long, Long> record) {
-                final long key = record.key();
-                final long value = record.value();
-
-                if ((value + 1) % 10 == 0) {
-                    if (sharedCommit.get() < 0 ||
-                        sharedCommit.incrementAndGet() == 2) {
-
-                        context.commit();
+                @Override
+                public void init(final ProcessorContext<Long, Long> context) {
+                    this.context = context;
+                    state = context.getStateStore(storeName);
+                    final String clientId = context.appConfigs().get(StreamsConfig.CLIENT_ID_CONFIG).toString();
+                    if (APP_DIR_1.equals(clientId)) {
+                        crash = errorInjectedClient1;
+                        sharedCommit = commitCounterClient1;
+                    } else {
+                        crash = errorInjectedClient2;
+                        sharedCommit = commitCounterClient2;
                     }
-                    commitRequested.incrementAndGet();
                 }
 
-                Long sum = state.get(key);
-                if (sum == null) {
-                    sum = value;
-                } else {
-                    sum += value;
-                }
-                state.put(key, sum);
-                state.flush();
+                @Override
+                public void process(final Record<Long, Long> record) {
+                    final long key = record.key();
+                    final long value = record.value();
 
-                if (value % 10 == 4 && // potentially crash when processing 5th, 15th, or 25th record (etc.)
-                    crash != null && crash.compareAndSet(true, false)) {
-                    // only crash a single task
-                    throw new RuntimeException("Injected test exception.");
-                }
+                    if ((value + 1) % 10 == 0) {
+                        if (sharedCommit.get() < 0 ||
+                            sharedCommit.incrementAndGet() == 2) {
 
-                context.forward(record.withValue(state.get(key)));
-            }}, storeNames)
+                            context.commit();
+                        }
+                        commitRequested.incrementAndGet();
+                    }
+
+                    Long sum = state.get(key);
+                    if (sum == null) {
+                        sum = value;
+                    } else {
+                        sum += value;
+                    }
+                    state.put(key, sum);
+                    state.flush();
+
+                    if (value % 10 == 4 && // potentially crash when processing 5th, 15th, or 25th record (etc.)
+                        crash != null && crash.compareAndSet(true, false)) {
+                        // only crash a single task
+                        throw new RuntimeException("Injected test exception.");
+                    }
+
+                    context.forward(record.withValue(state.get(key)));
+                }
+            }, storeNames)
             .to(MULTI_PARTITION_OUTPUT_TOPIC);
 
         final Properties properties = new Properties();
