@@ -757,7 +757,7 @@ public class ConsumerHeartbeatRequestManagerTest {
         Set<String> set = Collections.singleton(topic);
         when(subscriptions.subscription()).thenReturn(set);
         subscriptions.subscribe(set, Optional.empty());
-        mockJoiningMemberData(DEFAULT_GROUP_INSTANCE_ID);
+        mockReconcilingMemberData();
         // 2. send heartbeat1 to ack assignment tp0
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
@@ -775,7 +775,6 @@ public class ConsumerHeartbeatRequestManagerTest {
         ConsumerGroupHeartbeatRequest heartbeatRequest =
                 (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
         
-        assertTrue(heartbeatRequest.data().memberId().isEmpty());
         assertEquals(Collections.singletonList(topic), heartbeatRequest.data().subscribedTopicNames());
     }
 
@@ -921,6 +920,16 @@ public class ConsumerHeartbeatRequestManagerTest {
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
         when(membershipManager.memberId()).thenReturn(DEFAULT_MEMBER_ID);
         when(membershipManager.memberEpoch()).thenReturn(DEFAULT_MEMBER_EPOCH);
+        when(membershipManager.serverAssignor()).thenReturn(Optional.of(DEFAULT_REMOTE_ASSIGNOR));
+    }
+    
+    private void mockReconcilingMemberData() {
+        when(membershipManager.state()).thenReturn(MemberState.RECONCILING);
+        when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
+        when(membershipManager.memberId()).thenReturn(DEFAULT_MEMBER_ID);
+        when(membershipManager.memberEpoch()).thenReturn(DEFAULT_MEMBER_EPOCH);
+        when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
+        when(membershipManager.currentAssignment()).thenReturn(new LocalAssignment(0, Collections.emptyMap()));
         when(membershipManager.serverAssignor()).thenReturn(Optional.of(DEFAULT_REMOTE_ASSIGNOR));
     }
 }
