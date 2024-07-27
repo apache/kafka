@@ -719,6 +719,7 @@ public class KStreamAggregationIntegrationTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountSessionWindows() throws Exception {
         final long sessionGap = 5 * 60 * 1000L;
