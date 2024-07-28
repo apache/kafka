@@ -27,6 +27,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -106,7 +107,12 @@ public class StandbyTaskCreationIntegrationTest {
                                         Serdes.Integer()).withLoggingDisabled();
         builder.addStateStore(keyValueStoreBuilder);
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-            .process(() -> (Processor<Integer, Integer, Integer, Integer>) record -> {
+            // don't use method reference below as it won't create a new `Processor` instance but re-use the same object
+            .process(() -> new Processor<Integer, Integer, Object, Object>() {
+                @Override
+                public void process(Record<Integer, Integer> record) {
+                    // no-op
+                }
             }, stateStoreName);
 
         final Topology topology = builder.build();
