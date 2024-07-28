@@ -61,7 +61,13 @@ public class LoginManager {
         loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
         loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
         login.configure(configs, jaasContext.name(), jaasContext.configuration(), loginCallbackHandler);
-        login.login();
+        try {
+            login.login();
+        } catch (Exception e) {
+            this.login.close();
+            this.loginCallbackHandler.close();
+            throw new LoginException(e.getMessage());
+        }
     }
 
     /**
