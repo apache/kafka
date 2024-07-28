@@ -28,7 +28,9 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.RemoveVoterHandlerState;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -46,6 +48,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -71,6 +74,9 @@ public class LeaderState<T> implements EpochState {
 
     private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
     private Map<Integer, ReplicaState> voterStates = new HashMap<>();
+    private Optional<AddVoterHandlerState> addVoterHandlerState = Optional.empty();
+    private Optional<RemoveVoterHandlerState> removeVoterHandlerState = Optional.empty();
+
     private final Map<ReplicaKey, ReplicaState> observerStates = new HashMap<>();
     private final Logger log;
     private final BatchAccumulator<T> accumulator;
@@ -198,7 +204,75 @@ public class LeaderState<T> implements EpochState {
     }
 
     public BatchAccumulator<T> accumulator() {
-        return this.accumulator;
+        return accumulator;
+    }
+
+    public Optional<AddVoterHandlerState> addVoterHandlerState() {
+        return addVoterHandlerState;
+    }
+
+    public void resetAddVoterHandlerState(
+        Errors error,
+        String message,
+        Optional<AddVoterHandlerState> state
+    ) {
+        addVoterHandlerState.ifPresent(
+            handlerState -> handlerState
+                .future()
+                .complete(RaftUtil.addVoterResponse(error, message))
+        );
+        addVoterHandlerState = state;
+    }
+
+    public Optional<RemoveVoterHandlerState> removeVoterHandlerState() {
+        return removeVoterHandlerState;
+    }
+
+    public void resetRemoveVoterHandlerState(
+        Errors error,
+        String message,
+        Optional<RemoveVoterHandlerState> state
+    ) {
+        removeVoterHandlerState.ifPresent(
+            handlerState -> handlerState
+                .future()
+                .complete(RaftUtil.removeVoterResponse(error, message))
+        );
+        removeVoterHandlerState = state;
+    }
+
+    public long maybeExpirePendingOperation(long currentTimeMs) {
+        // First abort any expired operation
+        long timeUntilAddVoterExpiration = addVoterHandlerState()
+            .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+            .orElse(Long.MAX_VALUE);
+
+        if (timeUntilAddVoterExpiration == 0) {
+            resetAddVoterHandlerState(Errors.REQUEST_TIMED_OUT, null, Optional.empty());
+        }
+
+        long timeUntilRemoveVoterExpiration = removeVoterHandlerState()
+            .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+            .orElse(Long.MAX_VALUE);
+
+        if (timeUntilRemoveVoterExpiration == 0) {
+            resetRemoveVoterHandlerState(Errors.REQUEST_TIMED_OUT, null, Optional.empty());
+        }
+
+        // Reread the timeouts and return the smaller of the two
+        return Math.min(
+            addVoterHandlerState()
+                .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+                .orElse(Long.MAX_VALUE),
+            removeVoterHandlerState()
+                .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+                .orElse(Long.MAX_VALUE)
+        );
+    }
+
+    public boolean isOperationPending(long currentTimeMs) {
+        maybeExpirePendingOperation(currentTimeMs);
+        return addVoterHandlerState.isPresent() || removeVoterHandlerState.isPresent();
     }
 
     private static List<Voter> convertToVoters(Set<Integer> voterIds) {
@@ -273,8 +347,28 @@ public class LeaderState<T> implements EpochState {
         accumulator.forceDrain();
     }
 
+    public long appendVotersRecord(VoterSet voters, long currentTimeMs) {
+        return accumulator.appendVotersRecord(
+            voters.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION),
+            currentTimeMs
+        );
+    }
+
     public boolean isResignRequested() {
         return resignRequested;
+    }
+
+    public boolean isReplicaCaughtUp(ReplicaKey replicaKey, long currentTimeMs) {
+        // In summary, let's consider a replica caughed up for add voter, if they
+        // have fetched within the last hour
+        long anHourInMs = TimeUnit.HOURS.toMillis(1);
+        return Optional.ofNullable(observerStates.get(replicaKey))
+            .map(state ->
+                state.lastCaughtUpTimestamp > 0 &&
+                state.lastFetchTimestamp > 0 &&
+                state.lastFetchTimestamp > currentTimeMs - anHourInMs
+            )
+            .orElse(false);
     }
 
     public void requestResign() {
@@ -309,8 +403,9 @@ public class LeaderState<T> implements EpochState {
     Set<ReplicaKey> nonAcknowledgingVoters() {
         Set<ReplicaKey> nonAcknowledging = new HashSet<>();
         for (ReplicaState state : voterStates.values()) {
-            if (!state.hasAcknowledgedLeader)
+            if (!state.hasAcknowledgedLeader) {
                 nonAcknowledging.add(state.replicaKey);
+            }
         }
         return nonAcknowledging;
     }
@@ -510,7 +605,7 @@ public class LeaderState<T> implements EpochState {
         return state;
     }
 
-    private Optional<ReplicaState> getReplicaState(ReplicaKey replicaKey) {
+    public Optional<ReplicaState> getReplicaState(ReplicaKey replicaKey) {
         ReplicaState state = voterStates.get(replicaKey.id());
         if (state == null || !state.matchesKey(replicaKey)) {
             state = observerStates.get(replicaKey);
@@ -749,6 +844,12 @@ public class LeaderState<T> implements EpochState {
 
     @Override
     public void close() {
+        addVoterHandlerState.ifPresent(AddVoterHandlerState::close);
+        addVoterHandlerState = Optional.empty();
+
+        removeVoterHandlerState.ifPresent(RemoveVoterHandlerState::close);
+        removeVoterHandlerState = Optional.empty();
+
         accumulator.close();
     }
 }

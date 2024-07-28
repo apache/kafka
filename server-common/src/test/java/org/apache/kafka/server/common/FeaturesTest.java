@@ -103,8 +103,13 @@ public class FeaturesTest {
     @EnumSource(Features.class)
     public void testDefaultValueAllFeatures(Features feature) {
         for (FeatureVersion featureImpl : feature.featureVersions()) {
-            assertEquals(feature.defaultValue(featureImpl.bootstrapMetadataVersion()), featureImpl.featureLevel(),
-                    "Failed to get the correct default for " + featureImpl);
+            // If features have the same bootstrapMetadataVersion, the highest level feature should be chosen.
+            short defaultLevel = feature.defaultValue(featureImpl.bootstrapMetadataVersion());
+            if (defaultLevel != featureImpl.featureLevel()) {
+                FeatureVersion otherFeature = feature.fromFeatureLevel(defaultLevel, true);
+                assertEquals(featureImpl.bootstrapMetadataVersion(), otherFeature.bootstrapMetadataVersion());
+                assertTrue(defaultLevel > featureImpl.featureLevel());
+            }
         }
     }
 

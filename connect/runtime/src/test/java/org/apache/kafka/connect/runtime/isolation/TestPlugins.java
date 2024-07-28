@@ -130,9 +130,17 @@ public class TestPlugins {
          */
         BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONNECTOR(TestPackage.BAD_PACKAGING, "test.plugins.DefaultConstructorThrowsConnector", false),
         /**
+         * A plugin which is incorrectly packaged, which throws an exception from default constructor.
+         */
+        BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER(TestPackage.BAD_PACKAGING, "test.plugins.DefaultConstructorThrowsConverter", false),
+        /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
         BAD_PACKAGING_INNER_CLASS_CONNECTOR(TestPackage.BAD_PACKAGING, "test.plugins.OuterClass$InnerClass", false),
+        /**
+         * A valid plugin, that can be used to test other (possibly-invalid) plugins in the same package.
+         */
+        BAD_PACKAGING_INNOCUOUS_CONNECTOR(TestPackage.BAD_PACKAGING, "test.plugins.InnocuousSinkConnector", true),
         /**
          * A plugin which is incorrectly packaged, and is missing a superclass definition.
          */
