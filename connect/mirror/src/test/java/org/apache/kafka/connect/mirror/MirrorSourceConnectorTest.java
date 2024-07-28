@@ -42,6 +42,7 @@ import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 
+import org.apache.log4j.Level;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -202,7 +203,7 @@ public class MirrorSourceConnectorTest {
         when(sourceAdmin.describeAcls(any())).thenReturn(describeAclsResult);
 
         try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorSourceConnector.class)) {
-            connectorLogs.setClassLoggerToTrace(MirrorSourceConnector.class);
+            connectorLogs.setClassLogger(MirrorSourceConnector.class, Level.TRACE);
             connector.syncTopicAcls();
             long aclSyncDisableMessages = connectorLogs.getMessages().stream()
                     .filter(m -> m.contains("Consider disabling topic ACL syncing"))
@@ -250,7 +251,7 @@ public class MirrorSourceConnectorTest {
         when(sourceAdmin.describeConfigs(any())).thenReturn(describeConfigsResult);
 
         try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorUtils.class)) {
-            connectorLogs.setClassLoggerToTrace(MirrorUtils.class);
+            connectorLogs.setClassLogger(MirrorUtils.class, Level.TRACE);
             Set<String> topics = new HashSet<>();
             topics.add("topic1");
             topics.add("topic2");

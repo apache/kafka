@@ -90,16 +90,15 @@ object BrokerFeatures extends Logging {
           } else {
             MetadataVersion.latestProduction.featureLevel
           }))
-    PRODUCTION_FEATURES.forEach { feature => features.put(feature.featureName,
-          new SupportedVersionRange(0,
-            if (unstableFeatureVersionsEnabled) {
-              feature.latestTesting
-            } else {
-              feature.latestProduction
-            }))
-    }
-    if (unstableFeatureVersionsEnabled) {
-      features.put("kraft.version", new SupportedVersionRange(0, 1))
+    PRODUCTION_FEATURES.forEach {
+      feature =>
+        val maxVersion = if (unstableFeatureVersionsEnabled)
+          feature.latestTesting
+        else
+          feature.latestProduction
+        if (maxVersion > 0) {
+          features.put(feature.featureName, new SupportedVersionRange(feature.minimumProduction(), maxVersion))
+        }
     }
     Features.supportedFeatures(features)
   }

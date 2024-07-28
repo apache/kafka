@@ -20,6 +20,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.clients.consumer.ShareConsumer;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -39,7 +40,13 @@ public class ShareConsumerDelegateCreator {
     public <K, V> ShareConsumerDelegate<K, V> create(final ConsumerConfig config,
                                                      final Deserializer<K> keyDeserializer,
                                                      final Deserializer<V> valueDeserializer) {
-        throw new UnsupportedOperationException("Not implemented");
+        try {
+            return new ShareConsumerImpl<>(config, keyDeserializer, valueDeserializer);
+        } catch (KafkaException e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new KafkaException("Failed to construct Kafka share consumer", t);
+        }
     }
 
     public <K, V> ShareConsumerDelegate<K, V> create(final LogContext logContext,
@@ -52,6 +59,23 @@ public class ShareConsumerDelegateCreator {
                                                      final KafkaClient client,
                                                      final SubscriptionState subscriptions,
                                                      final ConsumerMetadata metadata) {
-        throw new UnsupportedOperationException("Not implemented");
+        try {
+            return new ShareConsumerImpl<>(
+                    logContext,
+                    clientId,
+                    groupId,
+                    config,
+                    keyDeserializer,
+                    valueDeserializer,
+                    time,
+                    client,
+                    subscriptions,
+                    metadata
+            );
+        } catch (KafkaException e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new KafkaException("Failed to construct Kafka share consumer", t);
+        }
     }
 }

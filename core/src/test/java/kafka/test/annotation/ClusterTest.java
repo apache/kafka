@@ -20,6 +20,7 @@ package kafka.test.annotation;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestTemplate;
 
 import java.lang.annotation.Documented;
@@ -33,6 +34,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Target({METHOD})
 @Retention(RUNTIME)
 @TestTemplate
+@Tag("integration")
 public @interface ClusterTest {
     Type[] types() default {};
     int brokers() default 0;

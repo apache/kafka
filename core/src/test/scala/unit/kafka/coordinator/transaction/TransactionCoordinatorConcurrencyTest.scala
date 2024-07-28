@@ -35,6 +35,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordBatch, 
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, TransactionVersion}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -75,7 +76,23 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     when(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
       .thenReturn(Some(numPartitions))
 
-    txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, txnConfig, time,
+    val brokerNode = new Node(0, "host", 10)
+    val metadataCache: MetadataCache = mock(classOf[MetadataCache])
+    when(metadataCache.getPartitionLeaderEndpoint(
+      anyString,
+      anyInt,
+      any[ListenerName])
+    ).thenReturn(Some(brokerNode))
+    when(metadataCache.features()).thenReturn {
+      new FinalizedFeatures(
+        MetadataVersion.latestTesting(),
+        Collections.singletonMap(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
+        0,
+        true
+      )
+    }
+
+    txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, metadataCache, txnConfig, time,
       new Metrics())
     txnStateManager.startup(() => zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME).get,
       enableTransactionalIdExpiration = true)
@@ -89,13 +106,6 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       } else {
         Success(producerId)
       })
-    val brokerNode = new Node(0, "host", 10)
-    val metadataCache: MetadataCache = mock(classOf[MetadataCache])
-    when(metadataCache.getPartitionLeaderEndpoint(
-      anyString,
-      anyInt,
-      any[ListenerName])
-    ).thenReturn(Some(brokerNode))
     val networkClient: NetworkClient = mock(classOf[NetworkClient])
     txnMarkerChannelManager = new TransactionMarkerChannelManager(
       KafkaConfig.fromProps(serverProps),
@@ -451,10 +461,10 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     addPartitionsOp.awaitAndVerify(txn)
 
     val txnMetadata = transactionMetadata(txn).getOrElse(throw new IllegalStateException(s"Transaction not found $txn"))
-    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit()))
+    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), true))
 
     txnMetadata.state = PrepareCommit
-    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit()))
+    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), true))
 
     prepareTxnLog(partitionId)
   }
