@@ -684,7 +684,7 @@ public class ProducerStateManager {
         ByteUtils.writeUnsignedInt(buffer, CRC_OFFSET, crc);
 
         try (FileChannel fileChannel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
-            fileChannel.write(buffer);
+            Utils.writeFully(fileChannel, buffer);
             if (sync) {
                 fileChannel.force(true);
             }
