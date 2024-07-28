@@ -684,7 +684,6 @@ public final class RaftClientTestContext {
                     .setNodeId(voterState.replicaId())
                     .setListeners(startingVoters.listeners(voterState.replicaId()).toDescribeQuorumResponseListeners()));
             }
-            nodes.sort(Comparator.comparingInt(DescribeQuorumResponseData.Node::nodeId));
         }
 
         DescribeQuorumResponseData expectedResponse = DescribeQuorumResponse.singletonResponse(
@@ -703,6 +702,7 @@ public final class RaftClientTestContext {
             .sorted(Comparator.comparingInt(ReplicaState::replicaId))
             .collect(Collectors.toList());
         response.topics().get(0).partitions().get(0).setCurrentVoters(sortedVoters);
+        response.nodes().sort(Comparator.comparingInt(DescribeQuorumResponseData.Node::nodeId));
 
         assertEquals(expectedResponse, response);
     }
