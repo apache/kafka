@@ -55,6 +55,7 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
@@ -607,6 +608,7 @@ public class KStreamAggregationIntegrationTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAggregateSlidingWindows(final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
