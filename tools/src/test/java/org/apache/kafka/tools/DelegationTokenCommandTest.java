@@ -19,9 +19,13 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
+import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -79,6 +83,25 @@ public class DelegationTokenCommandTest {
         // try describing tokens for unknown owner
         assertTrue(DelegationTokenCommand.describeToken(adminClient, getDescribeOpts("User:Unknown")).isEmpty());
 
+    }
+
+    @Test
+    public void testConflictingBootstrapOptions() throws IOException {
+        File file = TestUtils.tempFile();
+        String[] args = {
+            "--bootstrap-server", "localhost:9092",
+            "--bootstrap-controller", "localhost:9092",
+            "--command-config", file.getAbsolutePath(),
+            "--create",
+        };
+
+        try {
+            Exit.setExitProcedure((statusCode, message) -> { });
+            String standardError = ToolsTestUtils.captureStandardErr(() -> DelegationTokenCommand.mainNoExit(args));
+            assertTrue(standardError.startsWith("Only one of --bootstrap-server or --bootstrap-controller must be specified"));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     private DelegationTokenCommand.DelegationTokenCommandOptions getCreateOpts(String renewer) {
