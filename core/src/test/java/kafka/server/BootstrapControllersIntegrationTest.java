@@ -228,6 +228,17 @@ public class BootstrapControllersIntegrationTest {
         testIncrementalAlterConfigs(clusterInstance, false);
     }
 
+    @ClusterTest(brokers = 2)
+    public void testUnregisterBroker(ClusterInstance clusterInstance) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, true))) {
+            int brokerToBeUnregistered = 1;
+            clusterInstance.shutdownBroker(brokerToBeUnregistered);
+            TestUtils.retryOnExceptionWithTimeout(() -> admin.unregisterBroker(brokerToBeUnregistered).all().get(10, TimeUnit.SECONDS));
+            TestUtils.retryOnExceptionWithTimeout(() -> assertThrows(ExecutionException.class,
+                () -> admin.unregisterBroker(brokerToBeUnregistered).all().get()));
+        }
+    }
+
     private void testIncrementalAlterConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             int nodeId = usingBootstrapControllers ?
