@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.IsolationLevel;
@@ -106,7 +107,7 @@ public class OffsetsRequestManagerTest {
     public void setup() {
         LogContext logContext = new LogContext();
         backgroundEventQueue = new LinkedBlockingQueue<>();
-        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, mock(KafkaConsumerMetrics.class), null);
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
         time = new MockTime(0);

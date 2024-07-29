@@ -252,6 +252,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
+            this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
 
             this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
             this.currentFetch = ShareFetch.empty();
@@ -266,7 +267,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             ShareFetchMetricsManager shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
-            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, null, kafkaShareConsumerMetrics);
             final NetworkThreadMetricsManager networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
 
             // This FetchBuffer is shared between the application and network threads.
@@ -324,8 +325,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     new FetchConfig(config),
                     deserializers);
 
-            this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
-
             config.logUnused();
             AppInfoParser.registerAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka share consumer initialized");
@@ -377,7 +376,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         final BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+        final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, null, kafkaShareConsumerMetrics);
         final NetworkThreadMetricsManager networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
 
         final Supplier<NetworkClientDelegate> networkClientDelegateSupplier =

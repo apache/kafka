@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
@@ -117,7 +118,7 @@ public class MembershipManagerImplTest {
         subscriptionState = mock(SubscriptionState.class);
         commitRequestManager = mock(CommitRequestManager.class);
         backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, mock(KafkaConsumerMetrics.class), null);
         time = new MockTime(0);
         metrics = new Metrics(time);
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);

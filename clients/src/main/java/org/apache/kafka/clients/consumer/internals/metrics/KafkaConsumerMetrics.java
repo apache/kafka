@@ -49,7 +49,7 @@ public class KafkaConsumerMetrics implements AutoCloseable {
     private long lastPollMs;
     private long pollStartMs;
     private long timeSinceLastPollMs;
-    private HashMap<Uuid, Long> backgroundEventQueueMap = new HashMap<>();
+    private final HashMap<Uuid, Long> backgroundEventQueueMap;
 
     public KafkaConsumerMetrics(Metrics metrics, String metricGrpPrefix) {
         this.metrics = metrics;
@@ -126,6 +126,8 @@ public class KafkaConsumerMetrics implements AutoCloseable {
             "The maximum time spent processing background events.");
         this.backgroundEventProcessingSensor.add(this.backgroundEventQueueProcessingAvg, new Avg());
         this.backgroundEventProcessingSensor.add(this.backgroundEventQueueProcessingMax, new Max());
+
+        this.backgroundEventQueueMap = new HashMap<>();
     }
 
     public void recordPollStart(long pollStartMs) {

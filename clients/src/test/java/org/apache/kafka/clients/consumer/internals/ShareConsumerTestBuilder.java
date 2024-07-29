@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.NetworkThreadMetricsManager;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
@@ -101,7 +102,7 @@ public class ShareConsumerTestBuilder implements Closeable {
         this.time = enableAutoTick ? new MockTime(1) : new MockTime();
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue));
+        this.backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue, null, spy(KafkaShareConsumerMetrics.class)));
 
         Properties properties = new Properties();
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
