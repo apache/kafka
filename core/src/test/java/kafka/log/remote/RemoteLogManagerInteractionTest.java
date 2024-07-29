@@ -83,7 +83,7 @@ public class RemoteLogManagerInteractionTest {
 
     private KafkaConfig config;
     private final String clusterId = "dummyId";
-    private final int retentionSize = 1000;
+    private final int retentionSize = 10_000_000;
     private final File logDir = TestUtils.tempDirectory("kafka-");
     private final File partitionDir = kafka.utils.TestUtils.randomPartitionLogDir(logDir);
     private BrokerTopicStats brokerTopicStats;
@@ -172,30 +172,43 @@ public class RemoteLogManagerInteractionTest {
      * Each segment has some overhead of around 70bytes which impact log retention policy.
      *
      * @param size size of the segment to create
+     * @param count number of messages to create in the segment
+     */
+    private void buildSegment(int size, int count) {
+        byte[] bytes = new byte[size / count];
+        for (int i = 0; i < count; i++) {
+            RANDOM.nextBytes(bytes);
+            MemoryRecords records = MemoryRecords.withRecords(
+                RecordBatch.MAGIC_VALUE_V2, 0, Compression.NONE, TimestampType.CREATE_TIME,
+                new SimpleRecord(bytes)
+            );
+            log.appendAsLeader(records, 0, AppendOrigin.CLIENT,
+                MetadataVersion.latestTesting(), RequestLocal.NoCaching(), VerificationGuard.SENTINEL
+            );
+        }
+        log.roll(Option.empty());
+    }
+
+    /**
+     * Builds a segment of the given size with a default of 100 messages and append it to the log
+     * then roll the segment after.
+     * Each segment has some overhead of around 70bytes which impact log retention policy.
+     *
+     * @param size size of the segment to create
      */
     private void buildSegment(int size) {
-        byte[] bytes = new byte[size];
-        RANDOM.nextBytes(bytes);
-        MemoryRecords records = MemoryRecords.withRecords(
-            RecordBatch.MAGIC_VALUE_V2, 0, Compression.NONE, TimestampType.CREATE_TIME,
-            new SimpleRecord(bytes)
-        );
-        log.appendAsLeader(records, 0, AppendOrigin.CLIENT,
-            MetadataVersion.latestTesting(), RequestLocal.NoCaching(), VerificationGuard.SENTINEL
-        );
-        log.roll(Option.empty());
+        buildSegment(size, 100);
     }
 
     @Test
     void nonActiveSegmentsAreCorrectlyWritten() throws RemoteStorageException {
-        buildSegment(100);
-        buildSegment(100);
-        buildSegment(100);
-
-        log.lastStableOffset();
-        log.maybeUpdateHighWatermark(3L);
-
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMCopyTask(topicIdPartition, 128);
+
+        buildSegment(retentionSize);
+        buildSegment(retentionSize);
+        buildSegment(retentionSize);
+        log.maybeUpdateHighWatermark(log.logEndOffset());
+
         task.run();
 
         verify(remoteStorageManager, times(3)).copyLogSegmentData(any(), any());
@@ -203,18 +216,17 @@ public class RemoteLogManagerInteractionTest {
 
     @Test
     void failedSegmentAreRetried() throws RemoteStorageException {
-        buildSegment(100);
-        buildSegment(100);
-        buildSegment(100);
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMCopyTask(topicIdPartition, 128);
 
-        log.lastStableOffset();
-        log.maybeUpdateHighWatermark(3L);
+        buildSegment(retentionSize);
+        buildSegment(retentionSize);
+        buildSegment(retentionSize);
+        log.maybeUpdateHighWatermark(log.logEndOffset());
 
         when(remoteStorageManager.copyLogSegmentData(any(), any()))
             .thenThrow(new RemoteStorageException(""))
             .thenReturn(Optional.empty());
 
-        RemoteLogManager.RLMTask task = remoteLogManager.new RLMCopyTask(topicIdPartition, 128);
         task.run();
         task.run();
 
@@ -229,13 +241,13 @@ public class RemoteLogManagerInteractionTest {
         RemoteLogManager.RLMTask copyTask = remoteLogManager.new RLMCopyTask(topicIdPartition, 128);
         RemoteLogManager.RLMTask cleanupTask = remoteLogManager.new RLMExpirationTask(topicIdPartition);
 
-        buildSegment(200);
-        log.maybeUpdateHighWatermark(1L);
+        buildSegment(retentionSize /  3);
+        log.maybeUpdateHighWatermark(log.logEndOffset());
         when(remoteStorageManager.copyLogSegmentData(any(), any())).thenReturn(Optional.empty());
         copyTask.run();
 
-        buildSegment(200);
-        log.maybeUpdateHighWatermark(2L);
+        buildSegment(retentionSize /  3);
+        log.maybeUpdateHighWatermark(log.logEndOffset());
         when(remoteStorageManager.copyLogSegmentData(any(), any())).thenThrow(new RemoteStorageException(""));
         for (int i = 0; i < 4; i++) {
             copyTask.run();
@@ -243,8 +255,8 @@ public class RemoteLogManagerInteractionTest {
         doReturn(Optional.empty()).when(remoteStorageManager).copyLogSegmentData(any(), any());
         copyTask.run();
 
-        buildSegment(200);
-        log.maybeUpdateHighWatermark(3L);
+        buildSegment(retentionSize /  3);
+        log.maybeUpdateHighWatermark(log.logEndOffset());
         copyTask.run();
         cleanupTask.run();
 
@@ -264,7 +276,7 @@ public class RemoteLogManagerInteractionTest {
         RemoteLogManager.RLMTask cleanupTask = remoteLogManager.new RLMExpirationTask(topicIdPartition);
 
         buildSegment(retentionSize - 100);
-        log.maybeUpdateHighWatermark(1L);
+        log.maybeUpdateHighWatermark(log.logEndOffset());
         when(remoteStorageManager.copyLogSegmentData(any(), any())).thenThrow(new RemoteStorageException(""));
         for (int i = 0; i < 4; i++) {
             copyTask.run();
@@ -273,7 +285,7 @@ public class RemoteLogManagerInteractionTest {
         copyTask.run();
 
         buildSegment(retentionSize - 100);
-        log.maybeUpdateHighWatermark(2L);
+        log.maybeUpdateHighWatermark(log.logEndOffset());
         copyTask.run();
         cleanupTask.run();
 
@@ -292,9 +304,9 @@ public class RemoteLogManagerInteractionTest {
         RemoteLogManager.RLMTask copyTask = remoteLogManager.new RLMCopyTask(topicIdPartition, 128);
         RemoteLogManager.RLMTask cleanupTask = remoteLogManager.new RLMExpirationTask(topicIdPartition);
 
-        buildSegment(500);
-        buildSegment(500);
-        log.maybeUpdateHighWatermark(2L);
+        buildSegment(retentionSize);
+        buildSegment(retentionSize);
+        log.maybeUpdateHighWatermark(log.logEndOffset());
         copyTask.run();
 
         when(remoteStorageManager.copyLogSegmentData(any(), any())).thenReturn(Optional.empty());
