@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.File;
@@ -45,11 +46,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ExtendWith(value = ClusterTestExtensions.class)
 class MetadataQuorumCommandTest {
 
-    private final ClusterInstance cluster;
-    public MetadataQuorumCommandTest(ClusterInstance cluster) {
-        this.cluster = cluster;
-    }
-
     /**
      * 1. The same number of broker controllers
      * 2. More brokers than controllers
@@ -60,7 +56,7 @@ class MetadataQuorumCommandTest {
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 1),
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1, controllers = 2),
     })
-    public void testDescribeQuorumReplicationSuccessful() throws InterruptedException {
+    public void testDescribeQuorumReplicationSuccessful(ClusterInstance cluster) throws InterruptedException {
         cluster.waitForReadyBrokers();
         String describeOutput = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
@@ -87,7 +83,6 @@ class MetadataQuorumCommandTest {
             assertEquals(cluster.config().numBrokers(), outputs.stream().filter(o -> observerPattern.matcher(o).find()).count());
     }
 
-
     /**
      * 1. The same number of broker controllers
      * 2. More brokers than controllers
@@ -98,7 +93,7 @@ class MetadataQuorumCommandTest {
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 1),
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1, controllers = 2),
     })
-    public void testDescribeQuorumStatusSuccessful() throws InterruptedException {
+    public void testDescribeQuorumStatusSuccessful(ClusterInstance cluster) throws InterruptedException {
         cluster.waitForReadyBrokers();
         String describeOutput = ToolsTestUtils.captureStandardOut(
             () -> MetadataQuorumCommand.mainNoExit(
@@ -134,7 +129,7 @@ class MetadataQuorumCommandTest {
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
-    public void testOnlyOneBrokerAndOneController() {
+    public void testOnlyOneBrokerAndOneController(ClusterInstance cluster) {
         String statusOutput = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
         );
@@ -147,16 +142,16 @@ class MetadataQuorumCommandTest {
         assertEquals("0", replicationOutput.split("\n")[1].split("\\s+")[2]);
     }
 
-    @ClusterTest(types = {Type.CO_KRAFT})
+    @Test
     public void testCommandConfig() throws IOException {
         // specifying a --command-config containing properties that would prevent login must fail
         File tmpfile = TestUtils.tempFile(AdminClientConfig.SECURITY_PROTOCOL_CONFIG + "=SSL_PLAINTEXT");
-        assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+        assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
                         "--command-config", tmpfile.getAbsolutePath(), "describe", "--status"));
     }
 
     @ClusterTest(types = {Type.ZK})
-    public void testDescribeQuorumInZkMode() {
+    public void testDescribeQuorumInZkMode(ClusterInstance cluster) {
         assertInstanceOf(UnsupportedVersionException.class, assertThrows(
                 ExecutionException.class,
                 () -> MetadataQuorumCommand.execute("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
@@ -166,11 +161,10 @@ class MetadataQuorumCommandTest {
                 ExecutionException.class,
                 () -> MetadataQuorumCommand.execute("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
         ).getCause());
-
     }
 
     @ClusterTest(types = {Type.CO_KRAFT})
-    public void testHumanReadableOutput() {
+    public void testHumanReadableOutput(ClusterInstance cluster) {
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--human-readable"));
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status", "--human-readable"));
         String out0 = ToolsTestUtils.captureStandardOut(() ->
