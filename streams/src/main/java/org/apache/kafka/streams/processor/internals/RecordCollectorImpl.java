@@ -200,12 +200,10 @@ public class RecordCollectorImpl implements RecordCollector {
         try {
             keyBytes = keySerializer.serialize(topic, headers, key);
         } catch (final ClassCastException exception) {
-            throw createStreamsExceptionForClassCastException(
+            throw createStreamsExceptionForKeyClassCastException(
                 topic,
                 key,
-                value,
                 keySerializer,
-                valueSerializer,
                 exception);
         } catch (final Exception exception) {
             handleException(
@@ -225,11 +223,9 @@ public class RecordCollectorImpl implements RecordCollector {
         try {
             valBytes = valueSerializer.serialize(topic, headers, value);
         } catch (final ClassCastException exception) {
-            throw createStreamsExceptionForClassCastException(
+            throw createStreamsExceptionForValueClassCastException(
                 topic,
-                key,
                 value,
-                keySerializer,
                 valueSerializer,
                 exception);
         } catch (final Exception exception) {
@@ -339,28 +335,39 @@ public class RecordCollectorImpl implements RecordCollector {
 
         droppedRecordsSensor.record();
     }
-
-    private <K, V> StreamsException createStreamsExceptionForClassCastException(final String topic,
+    private <K> StreamsException createStreamsExceptionForKeyClassCastException(final String topic,
                                                                                 final K key,
-                                                                                final V value,
                                                                                 final Serializer<K> keySerializer,
-                                                                                final Serializer<V> valueSerializer,
                                                                                 final ClassCastException exception) {
         final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
+        return new StreamsException(
+                String.format(
+                        "ClassCastException while producing data to topic %s. " +
+                                "The key serializer %s is not compatible to the actual key type: %s. " +
+                                "Change the default key serde in StreamConfig or provide the correct key serde via method parameters " +
+                                "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with " +
+                                "`Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
+                        topic,
+                        keySerializer.getClass().getName(),
+                        keyClass),
+                exception);
+    }
+
+    private <V> StreamsException createStreamsExceptionForValueClassCastException(final String topic,
+                                                                                  final V value,
+                                                                                  final Serializer<V> valueSerializer,
+                                                                                  final ClassCastException exception) {
         final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
         return new StreamsException(
-            String.format(
-                "ClassCastException while producing data to topic %s. " +
-                    "A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
-                    "(key type: %s / value type: %s). " +
-                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
-                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with " +
-                    "`Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
-                    topic,
-                keySerializer.getClass().getName(),
-                valueSerializer.getClass().getName(),
-                keyClass,
-                valueClass),
+                String.format(
+                        "ClassCastException while producing data to topic %s. " +
+                                "The value serializer %s is not compatible to the actual value type: %s. " +
+                                "Change the default value serde in StreamConfig or provide the correct value serde via method parameters " +
+                                "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with " +
+                                "`Produced.valueSerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
+                        topic,
+                        valueSerializer.getClass().getName(),
+                        valueClass),
                 exception);
     }
 

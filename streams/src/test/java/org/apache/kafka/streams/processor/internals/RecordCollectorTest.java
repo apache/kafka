@@ -920,11 +920,11 @@ public class RecordCollectorTest {
             expected.getMessage(),
             equalTo(
                 "ClassCastException while producing data to topic topic. " +
-                    "A serializer (key: org.apache.kafka.common.serialization.LongSerializer / value: org.apache.kafka.common.serialization.StringSerializer) " +
-                    "is not compatible to the actual key or value type (key type: java.lang.String / value type: java.lang.String). " +
-                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
+                    "The key serializer org.apache.kafka.common.serialization.LongSerializer " +
+                    "is not compatible to the actual key type: java.lang.String. " +
+                    "Change the default key serde in StreamConfig or provide the correct key serde via method parameters " +
                     "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
-        );
+    );
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -948,9 +948,9 @@ public class RecordCollectorTest {
             expected.getMessage(),
             equalTo(
                 "ClassCastException while producing data to topic topic. " +
-                    "A serializer (key: org.apache.kafka.common.serialization.LongSerializer / value: org.apache.kafka.common.serialization.StringSerializer) " +
-                    "is not compatible to the actual key or value type (key type: java.lang.String / value type: unknown because value is null). " +
-                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
+                    "The key serializer org.apache.kafka.common.serialization.LongSerializer " +
+                    "is not compatible to the actual key type: java.lang.String. " +
+                    "Change the default key serde in StreamConfig or provide the correct key serde via method parameters " +
                     "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
         );
     }
@@ -976,10 +976,10 @@ public class RecordCollectorTest {
             expected.getMessage(),
             equalTo(
                 "ClassCastException while producing data to topic topic. " +
-                    "A serializer (key: org.apache.kafka.common.serialization.StringSerializer / value: org.apache.kafka.common.serialization.LongSerializer) " +
-                    "is not compatible to the actual key or value type (key type: java.lang.String / value type: java.lang.String). " +
-                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
-                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
+                    "The value serializer org.apache.kafka.common.serialization.LongSerializer " +
+                    "is not compatible to the actual value type: java.lang.String. " +
+                    "Change the default value serde in StreamConfig or provide the correct value serde via method parameters " +
+                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.valueSerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
         );
     }
 
@@ -1004,10 +1004,10 @@ public class RecordCollectorTest {
             expected.getMessage(),
             equalTo(
                 "ClassCastException while producing data to topic topic. " +
-                    "A serializer (key: org.apache.kafka.common.serialization.StringSerializer / value: org.apache.kafka.common.serialization.LongSerializer) " +
-                    "is not compatible to the actual key or value type (key type: unknown because key is null / value type: java.lang.String). " +
-                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
-                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
+                    "The value serializer org.apache.kafka.common.serialization.LongSerializer " +
+                    "is not compatible to the actual value type: java.lang.String. " +
+                    "Change the default value serde in StreamConfig or provide the correct value serde via method parameters " +
+                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.valueSerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
         );
     }
 
