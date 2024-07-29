@@ -651,18 +651,40 @@ public final class RaftClientTestContext {
         List<ReplicaState> voterStates,
         List<ReplicaState> observerStates
     ) {
+        assertSentDescribeQuorumResponse(Errors.NONE, leaderId, leaderEpoch, highWatermark, voterStates, observerStates);
+    }
+
+    void assertSentDescribeQuorumResponse(
+        Errors error,
+        int leaderId,
+        int leaderEpoch,
+        long highWatermark,
+        List<ReplicaState> voterStates,
+        List<ReplicaState> observerStates
+    ) {
         DescribeQuorumResponseData response = collectDescribeQuorumResponse();
 
         DescribeQuorumResponseData.PartitionData partitionData = new DescribeQuorumResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(error.code())
             .setLeaderId(leaderId)
             .setLeaderEpoch(leaderEpoch)
             .setHighWatermark(highWatermark)
             .setCurrentVoters(voterStates)
             .setObservers(observerStates);
 
-        // KAFKA-16953 will add support for including the node listeners in the node collection
-        DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection();
+        if (!error.equals(Errors.NONE)) {
+            partitionData.setErrorMessage(error.message());
+        }
+
+        DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection(0);
+        if (describeQuorumRpcVersion() >= 2) {
+            nodes = new DescribeQuorumResponseData.NodeCollection(voterStates.size());
+            for (ReplicaState voterState : voterStates) {
+                nodes.add(new DescribeQuorumResponseData.Node()
+                    .setNodeId(voterState.replicaId())
+                    .setListeners(startingVoters.listeners(voterState.replicaId()).toDescribeQuorumResponseListeners()));
+            }
+        }
 
         DescribeQuorumResponseData expectedResponse = DescribeQuorumResponse.singletonResponse(
             metadataPartition,
@@ -680,6 +702,7 @@ public final class RaftClientTestContext {
             .sorted(Comparator.comparingInt(ReplicaState::replicaId))
             .collect(Collectors.toList());
         response.topics().get(0).partitions().get(0).setCurrentVoters(sortedVoters);
+        response.nodes().sort(Comparator.comparingInt(DescribeQuorumResponseData.Node::nodeId));
 
         assertEquals(expectedResponse, response);
     }

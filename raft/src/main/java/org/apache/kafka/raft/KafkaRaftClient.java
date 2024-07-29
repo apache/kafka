@@ -1706,8 +1706,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return RaftUtil.singletonDescribeQuorumResponse(
             requestMetadata.apiVersion(),
             log.topicPartition(),
-            leaderState.describeQuorum(currentTimeMs),
-            leaderState.nodes(currentTimeMs)
+            quorum.localIdOrThrow(),
+            leaderState.epoch(),
+            leaderState.highWatermark().map(LogOffsetMetadata::offset).orElse(-1L),
+            leaderState.voterStates().values(),
+            leaderState.observerStates(currentTimeMs).values(),
+            currentTimeMs
         );
     }
 
