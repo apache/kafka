@@ -110,7 +110,7 @@ public class StandbyTaskCreationIntegrationTest {
             // don't use method reference below as it won't create a new `Processor` instance but re-use the same object
             .process(() -> new Processor<Integer, Integer, Object, Object>() {
                 @Override
-                public void process(Record<Integer, Integer> record) {
+                public void process(final Record<Integer, Integer> record) {
                     // no-op
                 }
             }, stateStoreName);
