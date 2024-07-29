@@ -37,7 +37,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -208,8 +207,6 @@ public class RecordDeserializerTest {
             assertEquals(expectedRecord.topic(), context.topic());
             assertEquals(expectedRecord.partition(), context.partition());
             assertEquals(expectedRecord.offset(), context.offset());
-            assertArrayEquals(expectedRecord.key(), context.sourceRawKey());
-            assertArrayEquals(expectedRecord.value(), context.sourceRawValue());
             assertEquals(expectedProcessorNodeId, context.processorNodeId());
             assertEquals(expectedTaskId, context.taskId());
             assertEquals(expectedRecord, record);

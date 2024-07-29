@@ -58,7 +58,6 @@ import java.util.Properties;
 import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -337,8 +336,6 @@ public class ProcessorNodeTest {
             assertEquals(internalProcessorContext.topic(), context.topic());
             assertEquals(internalProcessorContext.partition(), context.partition());
             assertEquals(internalProcessorContext.offset(), context.offset());
-            assertArrayEquals(internalProcessorContext.recordContext().rawRecord().key(), context.sourceRawKey());
-            assertArrayEquals(internalProcessorContext.recordContext().rawRecord().value(), context.sourceRawValue());
             assertEquals(internalProcessorContext.currentNode().name(), context.processorNodeId());
             assertEquals(internalProcessorContext.taskId(), context.taskId());
             assertEquals(KEY, record.key());

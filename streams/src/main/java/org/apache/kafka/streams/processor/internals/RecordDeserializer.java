@@ -99,8 +99,6 @@ public class RecordDeserializer {
                 rawRecord.partition(),
                 rawRecord.offset(),
                 rawRecord.headers(),
-                rawRecord.key(),
-                rawRecord.value(),
                 sourceNodeName,
                 processorContext.taskId());
             response = deserializationExceptionHandler.handle(errorHandlerContext, rawRecord, deserializationException);
