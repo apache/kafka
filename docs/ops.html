@@ -3946,6 +3946,7 @@ inter.broker.listener.name=PLAINTEXT
   </p>
 
   <ul>
+    <li><a href="#brokerconfigs_broker.id">broker.id</a>: Ensure <code>broker.id</code> is set to a non-negative integer even if <code>broker.id.generation.enable</code> is enabled (default is enabled). Additionally, ensure <code>broker.id</code> does not exceed <code>reserved.broker.max.id</code> to avoid failure.</li>
     <li><a href="#brokerconfigs_controller.quorum.voters">controller.quorum.voters</a></li>
     <li><a href="#brokerconfigs_controller.listener.names">controller.listener.names</a></li>
     <li>The controller.listener.name should also be added to <a href="#brokerconfigs_listener.security.protocol.map">listener.security.property.map</a></li>

@@ -36,7 +36,7 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, 
 import org.apache.kafka.image.loader.LogDeltaManifest
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.LeaderAndEpoch
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion}
 import org.apache.kafka.server.fault.FaultHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -181,7 +181,7 @@ class BrokerMetadataPublisherTest {
   @Test
   def testNewImagePushedToGroupCoordinator(): Unit = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, ""))
-    val metadataCache = new KRaftMetadataCache(0)
+    val metadataCache = new KRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_1)
     val logManager = mock(classOf[LogManager])
     val replicaManager = mock(classOf[ReplicaManager])
     val groupCoordinator = mock(classOf[GroupCoordinator])

@@ -286,6 +286,7 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(new MemberSubscriptionAndAssignmentImpl(
             Optional.of("rackId"),
+            Optional.of("instanceId"),
             new TopicIds(mkSet("bar", "foo", "zar"), topicsImage),
             assignment
         ), subscriptionSpec);

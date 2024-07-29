@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
@@ -62,6 +64,10 @@ public final class Endpoints {
         return endpoints.size();
     }
 
+    public boolean isEmpty() {
+        return endpoints.isEmpty();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -95,6 +101,34 @@ public final class Endpoints {
         }
 
         return leaderEndpoints;
+    }
+
+    public AddRaftVoterRequestData.ListenerCollection toAddVoterRequest() {
+        AddRaftVoterRequestData.ListenerCollection listeners =
+            new AddRaftVoterRequestData.ListenerCollection(endpoints.size());
+        for (Map.Entry<ListenerName, InetSocketAddress> entry : endpoints.entrySet()) {
+            listeners.add(
+                new AddRaftVoterRequestData.Listener()
+                    .setName(entry.getKey().value())
+                    .setHost(entry.getValue().getHostString())
+                    .setPort(entry.getValue().getPort())
+            );
+        }
+        return listeners;
+    }
+
+    public DescribeQuorumResponseData.ListenerCollection toDescribeQuorumResponseListeners() {
+        DescribeQuorumResponseData.ListenerCollection listeners =
+            new DescribeQuorumResponseData.ListenerCollection(endpoints.size());
+        for (Map.Entry<ListenerName, InetSocketAddress> entry : endpoints.entrySet()) {
+            listeners.add(
+                new DescribeQuorumResponseData.Listener()
+                    .setName(entry.getKey().value())
+                    .setHost(entry.getValue().getHostString())
+                    .setPort(entry.getValue().getPort())
+            );
+        }
+        return listeners;
     }
 
     private static final Endpoints EMPTY = new Endpoints(Collections.emptyMap());
@@ -132,17 +166,19 @@ public final class Endpoints {
 
     public static Endpoints fromBeginQuorumEpochResponse(
         ListenerName listenerName,
+        int leaderId,
         BeginQuorumEpochResponseData.NodeEndpointCollection endpoints
     ) {
-        Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(endpoints.size());
-        for (BeginQuorumEpochResponseData.NodeEndpoint endpoint : endpoints) {
-            listeners.put(
-                listenerName,
-                InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
-            );
-        }
-
-        return new Endpoints(listeners);
+        return Optional.ofNullable(endpoints.find(leaderId))
+            .map(endpoint ->
+                new Endpoints(
+                    Collections.singletonMap(
+                        listenerName,
+                        InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+                    )
+                )
+            )
+            .orElse(Endpoints.empty());
     }
 
     public static Endpoints fromEndQuorumEpochRequest(EndQuorumEpochRequestData.LeaderEndpointCollection endpoints) {
@@ -159,57 +195,77 @@ public final class Endpoints {
 
     public static Endpoints fromEndQuorumEpochResponse(
         ListenerName listenerName,
+        int leaderId,
         EndQuorumEpochResponseData.NodeEndpointCollection endpoints
     ) {
-        Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(endpoints.size());
-        for (EndQuorumEpochResponseData.NodeEndpoint endpoint : endpoints) {
-            listeners.put(
-                listenerName,
-                InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
-            );
-        }
-
-        return new Endpoints(listeners);
+        return Optional.ofNullable(endpoints.find(leaderId))
+            .map(endpoint ->
+                new Endpoints(
+                    Collections.singletonMap(
+                        listenerName,
+                        InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+                    )
+                )
+            )
+            .orElse(Endpoints.empty());
     }
 
     public static Endpoints fromVoteResponse(
         ListenerName listenerName,
+        int leaderId,
         VoteResponseData.NodeEndpointCollection endpoints
     ) {
-        Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(endpoints.size());
-        for (VoteResponseData.NodeEndpoint endpoint : endpoints) {
-            listeners.put(
-                listenerName,
-                InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
-            );
-        }
-
-        return new Endpoints(listeners);
+        return Optional.ofNullable(endpoints.find(leaderId))
+            .map(endpoint ->
+                new Endpoints(
+                    Collections.singletonMap(
+                        listenerName,
+                        InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+                    )
+                )
+            )
+            .orElse(Endpoints.empty());
     }
 
     public static Endpoints fromFetchResponse(
         ListenerName listenerName,
+        int leaderId,
         FetchResponseData.NodeEndpointCollection endpoints
     ) {
-        Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(endpoints.size());
-        for (FetchResponseData.NodeEndpoint endpoint : endpoints) {
-            listeners.put(
-                listenerName,
-                InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
-            );
-        }
-
-        return new Endpoints(listeners);
+        return Optional.ofNullable(endpoints.find(leaderId))
+            .map(endpoint ->
+                new Endpoints(
+                    Collections.singletonMap(
+                        listenerName,
+                        InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+                    )
+                )
+            )
+            .orElse(Endpoints.empty());
     }
 
     public static Endpoints fromFetchSnapshotResponse(
         ListenerName listenerName,
+        int leaderId,
         FetchSnapshotResponseData.NodeEndpointCollection endpoints
     ) {
+        return Optional.ofNullable(endpoints.find(leaderId))
+            .map(endpoint ->
+                new Endpoints(
+                    Collections.singletonMap(
+                        listenerName,
+                        InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+                    )
+                )
+            )
+            .orElse(Endpoints.empty());
+    }
+
+    public static Endpoints fromAddVoterRequest(AddRaftVoterRequestData.ListenerCollection endpoints) {
         Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(endpoints.size());
-        for (FetchSnapshotResponseData.NodeEndpoint endpoint : endpoints) {
+        for (AddRaftVoterRequestData.Listener endpoint : endpoints) {
             listeners.put(
-                listenerName,
+                ListenerName.normalised(endpoint.name()),
                 InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
             );
         }

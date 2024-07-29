@@ -77,6 +77,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -1576,6 +1578,52 @@ public class DistributedHerderTest {
         herder.tick(); // do rebalance
 
         verify(worker).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), onStart.capture());
+        verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
+    }
+
+    @ParameterizedTest
+    @ValueSource(shorts = {CONNECT_PROTOCOL_V0, CONNECT_PROTOCOL_V1, CONNECT_PROTOCOL_V2})
+    public void testConnectorConfigDetectedAfterLeaderAlreadyAssigned(short protocolVersion) {
+        connectProtocolVersion = protocolVersion;
+
+        // If a connector was added, we need to rebalance
+        when(worker.isSinkConnector(CONN1)).thenReturn(Boolean.TRUE);
+        when(member.memberId()).thenReturn("member");
+        when(member.currentProtocolVersion()).thenReturn(protocolVersion);
+
+        // join, no configs so no need to catch up on config topic
+        expectRebalance(-1, Collections.emptyList(), Collections.emptyList());
+        expectMemberPoll();
+
+        herder.tick(); // join
+
+        // Checks for config updates and starts rebalance
+        configUpdateListener.onConnectorConfigUpdate(CONN1); // read updated config
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        // Rebalance will be triggered when the new config is detected
+        // This rebalance is unnecessary and only the result of a mostly-benign bug;
+        // see https://issues.apache.org/jira/browse/KAFKA-17155
+        doNothing().when(member).requestRejoin();
+
+        // Rebalance will be triggered when the new config is detected
+        // Performs rebalance and gets new assignment
+        // Important--we're simulating a scenario where the leader has already detected the new
+        // connector, and assigns it to our herder at the top of its tick thread
+        expectRebalance(Collections.emptyList(), Collections.emptyList(),
+                ConnectProtocol.Assignment.NO_ERROR, 1, singletonList(CONN1), Collections.emptyList());
+
+        ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            onStart.getValue().onCompletion(null, TargetState.STARTED);
+            return true;
+        }).when(worker).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), onStart.capture());
+        expectExecuteTaskReconfiguration(true, conn1SinkConfig, invocation -> TASK_CONFIGS);
+
+        herder.tick(); // assigned connector
+
+        // We should only start the connector once; if we start it several times, that's probably a bug
+        verify(worker, times(1)).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), onStart.capture());
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
     }
 

@@ -309,7 +309,7 @@ public class ClientQuotaControlManager {
     }
 
     private ApiError validateEntity(ClientQuotaEntity entity, Map<String, String> validatedEntityMap) {
-        // Given a quota entity (which is a mapping of entity type to entity name), validate it's types
+        // Given a quota entity (which is a mapping of entity type to entity name), validate its types
         if (entity.entries().isEmpty()) {
             return new ApiError(Errors.INVALID_REQUEST, "Invalid empty client quota entity");
         }

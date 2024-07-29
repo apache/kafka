@@ -20,6 +20,9 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.processor.TaskId;
 
+/**
+ * Default implementation of {@link ErrorHandlerContext} that provides access to the metadata of the record that caused the error.
+ */
 public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     private final String topic;
     private final int partition;
@@ -50,41 +53,41 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
 
     @Override
     public String topic() {
-        return this.topic;
+        return topic;
     }
 
     @Override
     public int partition() {
-        return this.partition;
+        return partition;
     }
 
     @Override
     public long offset() {
-        return this.offset;
+        return offset;
     }
 
     @Override
     public Headers headers() {
-        return this.headers;
+        return headers;
     }
 
     @Override
     public byte[] sourceRawKey() {
-        return this.sourceRawKey;
+        return sourceRawKey;
     }
 
     @Override
     public byte[] sourceRawValue() {
-        return this.sourceRawValue;
+        return sourceRawValue;
     }
 
     @Override
     public String processorNodeId() {
-        return this.processorNodeId;
+        return processorNodeId;
     }
 
     @Override
     public TaskId taskId() {
-        return this.taskId;
+        return taskId;
     }
 }

@@ -64,7 +64,7 @@ class TestRaftRequestHandler(
   }
 
   private def handleApiVersions(request: RequestChannel.Request): Unit = {
-    requestChannel.sendResponse(request, apiVersionManager.apiVersionResponse(throttleTimeMs = 0), None)
+    requestChannel.sendResponse(request, apiVersionManager.apiVersionResponse(throttleTimeMs = 0, request.header.apiVersion() < 4), None)
   }
 
   private def handleVote(request: RequestChannel.Request): Unit = {
