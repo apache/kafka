@@ -20,19 +20,33 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
 
+import javax.security.auth.Subject;
+import javax.security.auth.callback.Callback;
+import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.auth.login.Configuration;
+import javax.security.auth.login.LoginContext;
+import javax.security.auth.login.LoginException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mockConstruction;
 
 public class LoginManagerTest {
 
@@ -153,6 +167,19 @@ public class LoginManagerTest {
         verifyLoginManagerRelease(staticLogin2, 2, staticContext, configs2);
     }
 
+    @Test
+    public void testLoginException() throws LoginException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        Map<String, Object> config = new HashMap<>();
+        config.put("sasl.jaas.config", dynamicPlainContext);
+        config.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, ErrorLoginCallbackHandler.class);
+        JaasContext dynamicContext = JaasContext.loadClientContext(config);
+        MockedConstruction<ErrorLogin> mocked = mockConstruction(ErrorLogin.class);
+
+        assertThrows(LoginException.class,
+                () -> LoginManager.acquireLoginManager(dynamicContext, "PLAIN", ErrorLogin.class, config));
+        assertNotNull(mocked);
+    }
+
     private void verifyLoginManagerRelease(LoginManager loginManager, int acquireCount, JaasContext jaasContext,
                                            Map<String, ?> configs) throws Exception {
 
@@ -169,5 +196,61 @@ public class LoginManagerTest {
                 DefaultLogin.class, configs);
         assertNotSame(loginManager, newLoginManager);
         newLoginManager.release();
+    }
+
+    public class ErrorLogin implements Login {
+        Configuration configuration;
+        boolean closed = false;
+
+        public ErrorLogin() {}
+        @Override
+        public void configure(Map<String, ?> configs, String contextName, Configuration configuration,
+                              AuthenticateCallbackHandler callbackHandler) {
+            this.configuration = configuration;
+        }
+
+        @Override
+        public LoginContext login() throws LoginException {
+            throw new LoginException("Expecting LoginException");
+        }
+
+        @Override
+        public Subject subject() {
+            return null;
+        }
+
+        @Override
+        public String serviceName() {
+            return "kafka";
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+
+        protected String contextName() {
+            return "context";
+        }
+
+        protected Configuration configuration() {
+            return configuration;
+        }
+    }
+
+    public class ErrorLoginCallbackHandler implements AuthenticateCallbackHandler {
+        boolean closed = false;
+        @Override
+        public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        }
+
+        @Override
+        public void handle(Callback[] callbacks) {
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
     }
 }
