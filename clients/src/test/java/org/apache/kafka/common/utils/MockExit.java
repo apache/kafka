@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Objects;
@@ -33,6 +36,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * hooks and assertions.
  */
 public class MockExit extends Exit implements AutoCloseable {
+
+    private static final Logger log = LoggerFactory.getLogger(MockExit.class);
 
     @FunctionalInterface
     public interface Procedure extends Exit.Procedure {
@@ -173,7 +178,9 @@ public class MockExit extends Exit implements AutoCloseable {
         for (Thread t : hooks) {
             try {
                 t.join(timer.remainingMs());
-            } catch (InterruptedException ignored) {
+            } catch (InterruptedException e) {
+                log.warn("Unable to complete shutdown hook within {}ms", SHUTDOWN_HOOKS_MILLIS, e);
+                Thread.currentThread().interrupt();
             }
             timer.update();
             if (timer.isExpired()) {

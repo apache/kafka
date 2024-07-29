@@ -19,6 +19,11 @@ package org.apache.kafka.common.utils;
 /**
  * Internal class that should be used instead of `System.exit()` and `Runtime.getRuntime().halt()` so that tests can
  * easily change the behaviour.
+ * <p>Instances of this class and subclasses must be thread-safe. Some static methods are thread-unsafe, and their
+ * javadocs will indicate whether they are thread-safe or thread-unsafe.
+ * <p>Most static methods of this class will be deprecated and removed in the future, and replaced with instance-method
+ * counterparts. Rather than accessing the static methods deep in the call-tree, objects should maintain an instance of
+ * this class to use at a later time. Tests should provide implementations of the methods as necessary to mock behavior.
  */
 public abstract class Exit {
 
@@ -32,16 +37,11 @@ public abstract class Exit {
         void addShutdownHook(String name, Runnable runnable);
     }
 
-    private static final Procedure DEFAULT_HALT_PROCEDURE = (statusCode, message) -> Runtime.getRuntime().halt(statusCode);
+    private static final Procedure DEFAULT_HALT_PROCEDURE = system()::haltOrThrow;
 
-    private static final Procedure DEFAULT_EXIT_PROCEDURE = (statusCode, message) -> System.exit(statusCode);
+    private static final Procedure DEFAULT_EXIT_PROCEDURE = system()::exitOrThrow;
 
-    private static final ShutdownHookAdder DEFAULT_SHUTDOWN_HOOK_ADDER = (name, runnable) -> {
-        if (name != null)
-            Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon(name, runnable));
-        else
-            Runtime.getRuntime().addShutdownHook(new Thread(runnable));
-    };
+    private static final ShutdownHookAdder DEFAULT_SHUTDOWN_HOOK_ADDER = system()::addShutdownRunnable;
 
     private static final Procedure NOOP_HALT_PROCEDURE = (statusCode, message) -> {
         throw new IllegalStateException("Halt called after resetting procedures; possible race condition present in test");
@@ -56,95 +56,113 @@ public abstract class Exit {
     private static volatile ShutdownHookAdder shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
 
     /**
-     * Use of this method is discouraged, and should be replaced with {@link #exitOrThrow(int)}
+     * Maybe exit the currently running JVM.
+     * <p>This method is thread-unsafe.
+     * <p>This method will be deprecated and removed, and {@link #exitOrThrow(int)} should be used instead.
      */
     public static void exit(int statusCode) {
         exit(statusCode, null);
     }
 
     /**
-     * Use of this method is discouraged, and should be replaced with {@link #exitOrThrow(int, String)}
+     * Maybe exit the currently running JVM.
+     * <p>This method is thread-unsafe.
+     * <p>This method will be deprecated and removed, and {@link #exitOrThrow(int, String)} should be used instead.
      */
     public static void exit(int statusCode, String message) {
         exitProcedure.execute(statusCode, message);
     }
 
     /**
-     * Use of this method is discouraged, and should be replaced with {@link #haltOrThrow(int)}
+     * Maybe halt the currently running JVM.
+     * <p>This method is thread-unsafe.
+     * <p>This method will be deprecated and removed, and {@link #haltOrThrow(int)} should be used instead.
      */
     public static void halt(int statusCode) {
         halt(statusCode, null);
     }
 
     /**
-     * Use of this method is discouraged, and should be replaced with {@link #haltOrThrow(int, String)}
+     * Maybe halt the currently running JVM.
+     * <p>This method is thread-unsafe.
+     * <p>This method will be deprecated and removed, and {@link #haltOrThrow(int, String)} should be used instead.
      */
     public static void halt(int statusCode, String message) {
         haltProcedure.execute(statusCode, message);
     }
 
     /**
-     * Use of this method is discouraged, and should be replaced with {@link #addShutdownRunnable(String, Runnable)}}
+     * Add a runnable that will be executed during JVM shutdown.
+     * <p>This method is thread-unsafe.
+     * <p>This method will be deprecated and removed, and {@link #addShutdownRunnable(String, Runnable)}should be used instead.
      */
     public static void addShutdownHook(String name, Runnable runnable) {
         shutdownHookAdder.addShutdownHook(name, runnable);
     }
 
     /**
-     * For testing only, do not call in main code.
+     * <p>This method is thread-unsafe.
+     * <p>This method will be deprecated and removed, tests should override {@link #exitOrThrow(int, String)}.
      */
     public static void setExitProcedure(Procedure procedure) {
         exitProcedure = procedure;
     }
 
     /**
-     * For testing only, do not call in main code.
+     * <p>This method is thread-unsafe.
+     * <p>This method will be deprecated and removed, tests should override {@link #haltOrThrow(int, String)}.
      */
     public static void setHaltProcedure(Procedure procedure) {
         haltProcedure = procedure;
     }
 
     /**
-     * For testing only, do not call in main code.
+     * <p>This method is thread-unsafe.
+     * <p>This method will be deprecated and removed, tests should override {@link #addShutdownRunnable(String, Runnable)}.
      */
     public static void setShutdownHookAdder(ShutdownHookAdder shutdownHookAdder) {
         Exit.shutdownHookAdder = shutdownHookAdder;
     }
 
     /**
-     * For testing only, do not call in main code.
-     * <p>Clears the procedure set in {@link #setExitProcedure(Procedure)}, but does not restore system default behavior of exiting the JVM.
+     * Clears the procedure set in {@link #setExitProcedure(Procedure)}, but does not restore system default behavior of exiting the JVM.
+     * <p>This method is thread-unsafe.
+     * <p>This method will be deprecated and removed, with no replacement.
      */
     public static void resetExitProcedure() {
         exitProcedure = NOOP_EXIT_PROCEDURE;
     }
 
     /**
-     * For testing only, do not call in main code.
-     * <p>Clears the procedure set in {@link #setHaltProcedure(Procedure)}, but does not restore system default behavior of exiting the JVM.
+     * Clears the procedure set in {@link #setHaltProcedure(Procedure)}, but does not restore system default behavior of exiting the JVM.
+     * <p>This method is thread-unsafe.
+     * <p>This method will be deprecated and removed, with no replacement.
      */
     public static void resetHaltProcedure() {
         haltProcedure = NOOP_HALT_PROCEDURE;
     }
 
     /**
-     * For testing only, do not call in main code.
-     * <p>Restores the system default shutdown hook behavior.
+     * Restores the system default shutdown hook behavior.
+     * <p>This method is thread-unsafe.
+     * <p>This method will be deprecated and removed, with no replacement.
      */
     public static void resetShutdownHookAdder() {
         shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
     }
 
     /**
+     * <p>This method is thread-safe.
      * @return the default system exit behavior. Using this grants the ability to stop the JVM at any time.
      */
     public static Exit system() {
-        return SystemExit.SYSTEM;
+        return SystemExit.instance();
     }
 
     /**
      * @return an immutable reference to exit behavior that is active at the time this method is evaluated.
      * <p>This may grant the ability to stop the JVM at any time if the static exit behavior has not been changed.
+     * <p>This method is thread-unsafe, but the returned instance is thread-safe.
      * <p>Note: changes to the static exit behavior made after this method will not apply to the returned object.
      * This is used as a temporary shim between the mutable-static and immutable-instance forms of the Exit class.
      * This is intended to be called as early as possible on the same thread that calls
@@ -214,32 +232,6 @@ public abstract class Exit {
      * @see #haltOrThrow
      */
     public abstract void addShutdownRunnable(String name, Runnable runnable);
-
-    private static final class SystemExit extends Exit {
-
-        private static final Exit SYSTEM = new SystemExit();
-
-        private SystemExit() {
-        }
-
-        @Override
-        public void exitOrThrow(int statusCode, String message) {
-            System.exit(statusCode);
-        }
-
-        @Override
-        public void haltOrThrow(int statusCode, String message) {
-            Runtime.getRuntime().halt(statusCode);
-        }
-
-        @Override
-        public void addShutdownRunnable(String name, Runnable runnable) {
-            if (name != null)
-                Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon(name, runnable));
-            else
-                Runtime.getRuntime().addShutdownHook(new Thread(runnable));
-        }
-    }
 
     private static final class StaticContext extends Exit {
 
