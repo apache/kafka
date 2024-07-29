@@ -25,6 +25,7 @@
   // Version 3 enables flexible versions.
   //
   // Version 4 enables bumping epoch on every transaction (KIP-890 Part 2)
+  "latestVersionUnstable": true,
   "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [

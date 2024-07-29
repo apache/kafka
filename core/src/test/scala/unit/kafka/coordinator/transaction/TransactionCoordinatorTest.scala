@@ -531,7 +531,7 @@ class TransactionCoordinatorTest {
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def shouldAppendPrepareCommitToLogOnEndTxnWhenStatusIsOngoingAndResultIsCommit(isTransactionsV2: Boolean): Unit = {
-    mockPrepare(PrepareCommit)
+    mockPrepare(PrepareCommit, isTransactionsV2)
 
     coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, isTransactionsV2, endTxnCallback)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
@@ -547,7 +547,7 @@ class TransactionCoordinatorTest {
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def shouldAppendPrepareAbortToLogOnEndTxnWhenStatusIsOngoingAndResultIsAbort(isTransactionsV2: Boolean): Unit = {
-    mockPrepare(PrepareAbort)
+    mockPrepare(PrepareAbort, isTransactionsV2)
 
     coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.ABORT, isTransactionsV2, endTxnCallback)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
@@ -775,8 +775,9 @@ class TransactionCoordinatorTest {
       any())
   }
 
-  @Test
-  def shouldUseLastEpochToFenceWhenEpochsAreExhausted(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def shouldUseLastEpochToFenceWhenEpochsAreExhausted(isTransactionsV2: Boolean): Unit = {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds())
     assertTrue(txnMetadata.isProducerEpochExhausted)
@@ -804,7 +805,8 @@ class TransactionCoordinatorTest {
         txnState = PrepareAbort,
         topicPartitions = partitions.toSet,
         txnStartTimestamp = time.milliseconds(),
-        txnLastUpdateTimestamp = time.milliseconds())),
+        txnLastUpdateTimestamp = time.milliseconds(),
+        isTransactionsV2 = isTransactionsV2)),
       capturedErrorsCallback.capture(),
       any(),
       any())
@@ -829,7 +831,8 @@ class TransactionCoordinatorTest {
         txnState = PrepareAbort,
         topicPartitions = partitions.toSet,
         txnStartTimestamp = time.milliseconds(),
-        txnLastUpdateTimestamp = time.milliseconds())),
+        txnLastUpdateTimestamp = time.milliseconds(),
+        isTransactionsV2 = isTransactionsV2)),
       any(),
       any(),
       any())
@@ -1031,8 +1034,9 @@ class TransactionCoordinatorTest {
     verify(transactionMarkerChannelManager).removeMarkersForTxnTopicPartition(0)
   }
 
-  @Test
-  def shouldAbortExpiredTransactionsInOngoingStateAndBumpEpoch(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def shouldAbortExpiredTransactionsInOngoingStateAndBumpEpoch(isTransactionsV2: Boolean): Unit = {
     val now = time.milliseconds()
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId,
       RecordBatch.NO_PRODUCER_EPOCH, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, now, now)
@@ -1043,7 +1047,8 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
     val expectedTransition = TxnTransitMetadata(producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, (producerEpoch + 1).toShort,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, PrepareAbort, partitions.toSet, now, now + TransactionStateManagerConfig.DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS)
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, PrepareAbort, partitions.toSet, now,
+      now + TransactionStateManagerConfig.DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS, isTransactionsV2)
 
     when(transactionManager.appendTransactionToLog(ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(coordinatorEpoch),
@@ -1109,8 +1114,9 @@ class TransactionCoordinatorTest {
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
-  @Test
-  def shouldNotBumpEpochWhenAbortingExpiredTransactionIfAppendToLogFails(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def shouldNotBumpEpochWhenAbortingExpiredTransactionIfAppendToLogFails(isTransactionsV2: Boolean): Unit = {
     val now = time.milliseconds()
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId,
       RecordBatch.NO_PRODUCER_EPOCH, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, now, now)
@@ -1127,7 +1133,8 @@ class TransactionCoordinatorTest {
 
     val bumpedEpoch = (producerEpoch + 1).toShort
     val expectedTransition = TxnTransitMetadata(producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, bumpedEpoch,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, PrepareAbort, partitions.toSet, now, now + TransactionStateManagerConfig.DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS)
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, PrepareAbort, partitions.toSet, now,
+      now + TransactionStateManagerConfig.DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS, isTransactionsV2)
 
     when(transactionManager.appendTransactionToLog(ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(coordinatorEpoch),
@@ -1283,13 +1290,13 @@ class TransactionCoordinatorTest {
     assertEquals(producerId, metadata.producerId)
   }
 
-  private def mockPrepare(transactionState: TransactionState, runCallback: Boolean = false): TransactionMetadata = {
+  private def mockPrepare(transactionState: TransactionState, isTransactionsV2: Boolean, runCallback: Boolean = false): TransactionMetadata = {
     val now = time.milliseconds()
     val originalMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH,
       producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, now, now)
 
     val transition = TxnTransitMetadata(producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, producerEpoch,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, transactionState, partitions.toSet, now, now)
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, transactionState, partitions.toSet, now, now, isTransactionsV2)
 
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, originalMetadata))))
