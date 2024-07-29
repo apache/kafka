@@ -57,6 +57,7 @@ class KStreamKStreamJoinRightSide<K, VLeft, VRight, VOut> extends KStreamKStream
             return TimestampedKeyAndJoinSide.makeLeft(key, timestamp);
         }
 
+        @Override
         public VRight thisValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue) {
             return leftOrRightValue.rightValue();
         }
