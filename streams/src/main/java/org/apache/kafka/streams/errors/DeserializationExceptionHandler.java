@@ -37,7 +37,7 @@ public interface DeserializationExceptionHandler extends Configurable {
      * @param context processor context
      * @param record record that failed deserialization
      * @param exception the actual exception
-     * @deprecated Please {@link #handle(ErrorHandlerContext, ConsumerRecord, Exception)}
+     * @deprecated Since 3.9. Use Please {@link #handle(ErrorHandlerContext, ConsumerRecord, Exception)}
      */
     @Deprecated
     default DeserializationHandlerResponse handle(final ProcessorContext context,
@@ -56,7 +56,7 @@ public interface DeserializationExceptionHandler extends Configurable {
     default DeserializationHandlerResponse handle(final ErrorHandlerContext context,
                                                   final ConsumerRecord<byte[], byte[]> record,
                                                   final Exception exception) {
-        return handle(((DefaultErrorHandlerContext) context).processorContext(), record, exception);
+        return handle(((DefaultErrorHandlerContext) context).processorContext().orElse(null), record, exception);
     }
 
     /**

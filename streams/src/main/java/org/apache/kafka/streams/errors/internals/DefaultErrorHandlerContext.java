@@ -21,6 +21,8 @@ import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Optional;
+
 /**
  * Default implementation of {@link ErrorHandlerContext} that provides access to the metadata of the record that caused the error.
  */
@@ -35,7 +37,8 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     private final TaskId taskId;
     private ProcessorContext processorContext;
 
-    public DefaultErrorHandlerContext(final String topic,
+    public DefaultErrorHandlerContext(final ProcessorContext processorContext,
+                                      final String topic,
                                       final int partition,
                                       final long offset,
                                       final Headers headers,
@@ -51,18 +54,6 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
         this.sourceRawValue = sourceRawValue;
         this.processorNodeId = processorNodeId;
         this.taskId = taskId;
-    }
-
-    public DefaultErrorHandlerContext(final ProcessorContext processorContext,
-                                      final String topic,
-                                      final int partition,
-                                      final long offset,
-                                      final Headers headers,
-                                      final byte[] sourceRawKey,
-                                      final byte[] sourceRawValue,
-                                      final String processorNodeId,
-                                      final TaskId taskId) {
-        this(topic, partition, offset, headers, sourceRawKey, sourceRawValue, processorNodeId, taskId);
         this.processorContext = processorContext;
     }
 
@@ -106,7 +97,7 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
         return taskId;
     }
 
-    public ProcessorContext processorContext() {
-        return this.processorContext;
+    public Optional<ProcessorContext> processorContext() {
+        return Optional.ofNullable(processorContext);
     }
 }
