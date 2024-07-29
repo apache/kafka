@@ -24,15 +24,20 @@ import kafka.test.junit.ClusterTestExtensions;
 
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -189,6 +194,66 @@ class MetadataQuorumCommandTest {
         assertHumanReadable(out2);
     }
 
+    /**
+     * 1. The same number of broker controllers
+     * 2. More brokers than controllers
+     * 3. Fewer brokers than controllers
+     */
+    @ClusterTests({
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 2),
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 1),
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1, controllers = 2),
+    })
+    public void testAddRemoveControllerSuccessful() throws InterruptedException {
+        cluster.waitForReadyBrokers();
+        File tempServerPropertiesDirectory = TestUtils.tempDirectory();
+        File tempMetaPropertiesDirectory = TestUtils.tempDirectory();
+        String metaPropsFile = tempMetaPropertiesDirectory + "/" + "meta.properties";
+        String serverPropsFile = tempServerPropertiesDirectory + "/" + "server.properties";
+
+        Properties metaProperties = new Properties();
+        metaProperties.put("directory.id", "XcZZOzUqS4yHOjhMQB6JLQ");
+
+        try (FileOutputStream out1 = new FileOutputStream(metaPropsFile)) {
+            metaProperties.store(out1, "meta props");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        Properties serverProperties = newSelfManagedProperties(tempMetaPropertiesDirectory.getAbsolutePath());
+        try (FileOutputStream out2 = new FileOutputStream(serverPropsFile)) {
+            serverProperties.store(out2, "server props");
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        String controllerAdded = ToolsTestUtils.captureStandardOut(() ->
+            MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+                "add-controller", "--config", serverPropsFile)
+        );
+
+        assertTrue(controllerAdded.contains("Controller added."));
+
+        String controllerRemoved = ToolsTestUtils.captureStandardOut(() ->
+            MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+                "remove-controller", "--config", serverPropsFile)
+        );
+
+        assertTrue(controllerRemoved.contains("Controller removed."));
+
+        try {
+            if (tempMetaPropertiesDirectory.exists()) {
+                Utils.delete(tempMetaPropertiesDirectory);
+            }
+            if (tempServerPropertiesDirectory.exists()) {
+                Utils.delete(tempServerPropertiesDirectory);
+            }
+        } catch (IOException e) {
+            // ignore
+        }
+    }
+
     private static void assertHumanReadable(String output) {
         String dataRow = output.split("\n")[1];
         String lastFetchTimestamp = dataRow.split("\t")[3];
@@ -199,5 +264,15 @@ class MetadataQuorumCommandTest {
         assertTrue(lastFetchTimestampValue.matches("\\d*"));
         assertTrue(lastCaughtUpTimestamp.contains("ms ago"));
         assertTrue(lastCaughtUpTimestampValue.matches("\\d*"));
+    }
+
+    private Properties newSelfManagedProperties(String metaPropertiesPath) {
+        Properties properties = new Properties();
+        properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, metaPropertiesPath);
+        properties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller");
+        properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2");
+        properties.setProperty("controller.quorum.voters", "2@localhost:9092");
+        properties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT");
+        return properties;
     }
 }

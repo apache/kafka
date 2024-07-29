@@ -16,9 +16,14 @@
  */
 package org.apache.kafka.tools;
 
+import kafka.cluster.EndPoint;
+import kafka.server.KafkaConfig;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.QuorumInfo;
+import org.apache.kafka.clients.admin.RaftVoterEndpoint;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -38,10 +43,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -58,6 +65,9 @@ public class MetadataQuorumCommand {
     public static void main(String... args) {
         Exit.exit(mainNoExit(args));
     }
+
+    static final String DIRECTORY_ID_PROP = "directory.id";
+    static final String META_PROPERTIES_NAME = "meta.properties";
 
     static int mainNoExit(String... args) {
         try {
@@ -87,6 +97,8 @@ public class MetadataQuorumCommand {
             .type(Arguments.fileType())
             .help("Property file containing configs to be passed to Admin Client.");
         addDescribeSubParser(parser);
+        addAddControllerSubParser(parser);
+        addRemoveControllerSubParser(parser);
 
         Admin admin = null;
         try {
@@ -100,22 +112,40 @@ public class MetadataQuorumCommand {
                 Optional.ofNullable(namespace.getString("bootstrap_controller")));
             admin = Admin.create(props);
 
-            if (command.equals("describe")) {
-                if (namespace.getBoolean("status") && namespace.getBoolean("replication")) {
-                    throw new TerseException("Only one of --status or --replication should be specified with describe sub-command");
-                } else if (namespace.getBoolean("replication")) {
-                    boolean humanReadable = Optional.of(namespace.getBoolean("human_readable")).orElse(false);
-                    handleDescribeReplication(admin, humanReadable);
-                } else if (namespace.getBoolean("status")) {
-                    if (namespace.getBoolean("human_readable")) {
-                        throw new TerseException("The option --human-readable is only supported along with --replication");
+            switch (command) {
+                case "describe":
+                    if (namespace.getBoolean("status") && namespace.getBoolean("replication")) {
+                        throw new TerseException("Only one of --status or --replication should be specified with describe sub-command");
+                    } else if (namespace.getBoolean("replication")) {
+                        boolean humanReadable = Optional.of(namespace.getBoolean("human_readable")).orElse(false);
+                        handleDescribeReplication(admin, humanReadable);
+                    } else if (namespace.getBoolean("status")) {
+                        if (namespace.getBoolean("human_readable")) {
+                            throw new TerseException("The option --human-readable is only supported along with --replication");
+                        }
+                        handleDescribeStatus(admin);
+                    } else {
+                        throw new TerseException("One of --status or --replication must be specified with describe sub-command");
                     }
-                    handleDescribeStatus(admin);
-                } else {
-                    throw new TerseException("One of --status or --replication must be specified with describe sub-command");
+                    break;
+                case "add-controller": {
+                    String configPath = namespace.getString("config");
+                    if (configPath != null) {
+                        KafkaConfig kafkaConfig = new KafkaConfig(Utils.loadProps(configPath));
+                        handleAddController(admin, kafkaConfig);
+                    }
+                    break;
                 }
-            } else {
-                throw new IllegalStateException(format("Unknown command: %s, only 'describe' is supported", command));
+                case "remove-controller": {
+                    String configPath = namespace.getString("config");
+                    if (configPath != null) {
+                        KafkaConfig kafkaConfig = new KafkaConfig(Utils.loadProps(configPath));
+                        handleRemoveController(admin, kafkaConfig);
+                    }
+                    break;
+                }
+                default:
+                    throw new IllegalStateException(format("Unknown command: %s, only 'describe' is supported", command));
             }
         } finally {
             if (admin != null)
@@ -235,6 +265,92 @@ public class MetadataQuorumCommand {
             "\nCurrentVoters:          " + quorumInfo.voters().stream().map(QuorumInfo.ReplicaState::replicaId).map(Object::toString).collect(Collectors.joining(",", "[", "]")) +
             "\nCurrentObservers:       " + quorumInfo.observers().stream().map(QuorumInfo.ReplicaState::replicaId).map(Objects::toString).collect(Collectors.joining(",", "[", "]"))
         );
+    }
+
+    private static void addAddControllerSubParser(ArgumentParser parser) {
+        Subparsers subparsers = parser.addSubparsers().dest("command");
+        Subparser controllerParser = subparsers
+            .addParser("add-controller")
+            .help("Add controllers to the KRaft cluster metadata partition");
+
+        ArgumentGroup statusArgs = controllerParser.addArgumentGroup("Config");
+        statusArgs
+            .addArgument("--config")
+            .help("From the provided server.properties, read the replica id, the endpoints, and the meta.properties for the directory id.")
+            .action(Arguments.store());
+    }
+
+    private static void addRemoveControllerSubParser(ArgumentParser parser) {
+        Subparsers subparsers = parser.addSubparsers().dest("command");
+        Subparser controllerParser = subparsers
+            .addParser("remove-controller")
+            .help("Remove controllers from KRaft cluster metadata partition");
+
+        ArgumentGroup statusArgs = controllerParser.addArgumentGroup("Config");
+        statusArgs
+            .addArgument("--config")
+            .help("From the provided server.properties, read the replica id and the meta.properties for the directory id.")
+            .action(Arguments.store());
+    }
+
+    private static void handleAddController(Admin admin, KafkaConfig kafkaConfig) {
+        int nodeId = kafkaConfig.nodeId();
+        scala.collection.Seq<EndPoint> endPointSeq = kafkaConfig.effectiveAdvertisedControllerListeners();
+
+        Set<RaftVoterEndpoint> raftVoterEndpoints  = new HashSet<>();
+        for (int i = 0; i < endPointSeq.length(); i++) {
+            EndPoint endPoint = endPointSeq.apply(i);
+            String host = Optional.ofNullable(endPoint.host()).orElse("localhost");
+
+            RaftVoterEndpoint raftVoterEndpoint = new RaftVoterEndpoint(endPoint.listenerName().value(), host, endPoint.port());
+            raftVoterEndpoints.add(raftVoterEndpoint);
+        }
+
+        Optional<Uuid> directoryId = getDirectoryId(kafkaConfig.metadataLogDir());
+        if (directoryId.isPresent()) {
+            admin.addRaftVoter(nodeId, directoryId.get(), raftVoterEndpoints);
+            System.out.println("Controller added." +
+                    "\nVoterId:              " + nodeId +
+                    "\nDirectoryId:     " + directoryId.get() +
+                    "\nVoterEndpoints:  " + raftVoterEndpoints.stream().map(Object::toString).collect(Collectors.joining(",", "[", "]"))
+            );
+        } else {
+            throw new RuntimeException("Unable to fetch directory id from meta properties file.");
+        }
+    }
+
+    private static void handleRemoveController(Admin admin, KafkaConfig kafkaConfig) {
+        int nodeId = kafkaConfig.nodeId();
+        Optional<Uuid> directoryId = getDirectoryId(kafkaConfig.metadataLogDir());
+        if (directoryId.isPresent()) {
+            admin.removeRaftVoter(nodeId, directoryId.get());
+            System.out.println("Controller removed." +
+                "\nVoterId:              " + nodeId +
+                "\nDirectoryId:     " + directoryId.get()
+            );
+        } else {
+            throw new RuntimeException("Unable to fetch directory id from meta properties file.");
+        }
+    }
+
+    private static Optional<Uuid> getDirectoryId(String logDir) {
+        Optional<Uuid> optionalDirectoryId;
+        try {
+            Properties metaProps = Utils.loadProps(logDir + "/" + META_PROPERTIES_NAME);
+            if (metaProps.containsKey(DIRECTORY_ID_PROP)) {
+                try {
+                    optionalDirectoryId = Optional.of(Uuid.fromString(metaProps.getProperty(DIRECTORY_ID_PROP)));
+                } catch (Exception e) {
+                    throw new RuntimeException("Unable to read " + DIRECTORY_ID_PROP + " as a Uuid: " +
+                        e.getMessage(), e);
+                }
+            } else {
+                optionalDirectoryId = Optional.empty();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to read meta properties file ", e);
+        }
+        return optionalDirectoryId;
     }
 
 }
