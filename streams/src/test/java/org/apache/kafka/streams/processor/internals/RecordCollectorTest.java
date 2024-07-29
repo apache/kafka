@@ -93,7 +93,6 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1823,8 +1822,6 @@ public class RecordCollectorTest {
             assertEquals(expectedContext.recordContext().topic(), context.topic());
             assertEquals(expectedContext.recordContext().partition(), context.partition());
             assertEquals(expectedContext.recordContext().offset(), context.offset());
-            assertArrayEquals(expectedContext.recordContext().rawRecord().key(), context.sourceRawKey());
-            assertArrayEquals(expectedContext.recordContext().rawRecord().value(), context.sourceRawValue());
             assertEquals(expectedProcessorNodeId, context.processorNodeId());
             assertEquals(expectedTaskId, context.taskId());
             assertInstanceOf(RuntimeException.class, exception);

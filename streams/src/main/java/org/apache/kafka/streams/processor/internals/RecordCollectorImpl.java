@@ -305,8 +305,6 @@ public class RecordCollectorImpl implements RecordCollector {
                 context.recordContext().partition(),
                 context.recordContext().offset(),
                 context.recordContext().headers(),
-                context.recordContext().rawRecord().key(),
-                context.recordContext().rawRecord().value(),
                 processorNodeId,
                 taskId);
             response = productionExceptionHandler.handleSerializationException(errorHandlerContext, record, exception, origin);
@@ -401,8 +399,6 @@ public class RecordCollectorImpl implements RecordCollector {
                     context.recordContext().partition(),
                     context.recordContext().offset(),
                     context.recordContext().headers(),
-                    context.recordContext().rawRecord().key(),
-                    context.recordContext().rawRecord().value(),
                     processorNodeId,
                     taskId);
 
