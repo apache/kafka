@@ -55,7 +55,6 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
@@ -998,14 +997,14 @@ public class KStreamAggregationIntegrationTest {
         final CountDownLatch latch = new CountDownLatch(5);
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
-           .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-           .windowedBy(UnlimitedWindows.of().startOn(ofEpochMilli(startTime)))
-           .count()
-           .toStream()
-           .process(() -> (Processor<Windowed<String>, Long, Object, Object>) record -> {
-               results.put(record.key(), KeyValue.pair(record.value(), record.timestamp()));
-               latch.countDown();
-           });
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(UnlimitedWindows.of().startOn(ofEpochMilli(startTime)))
+            .count()
+            .toStream()
+            .process(() -> (Processor<Windowed<String>, Long, Object, Object>) record -> {
+                results.put(record.key(), KeyValue.pair(record.value(), record.timestamp()));
+                latch.countDown();
+            });
         startStreams();
         assertTrue(latch.await(30, TimeUnit.SECONDS));
 
