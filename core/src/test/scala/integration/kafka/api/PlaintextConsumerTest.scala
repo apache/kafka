@@ -20,7 +20,7 @@ import java.util.Arrays.asList
 import java.util.{Collections, Locale, Optional, Properties}
 import kafka.server.{KafkaBroker, QuotaType}
 import kafka.utils.{TestInfoUtils, TestUtils}
-import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
+import org.apache.kafka.clients.admin.{Admin, NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
 
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 
@@ -918,13 +918,26 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestWithParameterizedValuesForCloseLeavesGroup)
   @MethodSource(Array("getCloseTestParameters"))
   def testCloseLeavesGroup(quorum: String, groupProtocol: String, closeTimeoutSec: Int, shouldInterrupt: Boolean): Unit = {
+    val adminClient = createAdminClient()
     val consumer = createConsumer()
+    val groupId = consumerConfig.getProperty("group.id")
     val listener = new TestConsumerReassignmentListener()
     consumer.subscribe(List(topic).asJava, listener)
     awaitRebalance(consumer, listener)
 
+    def hasMembers: Boolean = {
+      try {
+        val groupDescription = adminClient.describeConsumerGroups (Collections.singletonList (groupId) ).describedGroups.get (groupId).get
+        groupDescription.members.size() > 0
+      } catch {
+        case _: ExecutionException | _: InterruptedException =>
+          false
+      }
+    }
+
     assertEquals(1, listener.callsToAssigned)
     assertEquals(0, listener.callsToRevoked)
+    TestUtils.waitUntilTrue(() => hasMembers, s"Consumer did not join the consumer group")
 
     if (shouldInterrupt) {
       try {
@@ -940,6 +953,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     assertEquals(1, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
+    TestUtils.waitUntilTrue(() => !hasMembers, s"Consumer did not leave the consumer group")
+  }
+
+  def getMemberCount(adminClient: Admin, groupId: String): Int = {
+    try {
+      val groupDescription = adminClient.describeConsumerGroups (Collections.singletonList (groupId) ).describedGroups.get (groupId).get
+      groupDescription.members.size
+    } catch {
+      case _: ExecutionException | _: InterruptedException =>
+      -1
+    }
   }
 }
 
@@ -952,7 +976,7 @@ object PlaintextConsumerTest {
   // * KRaft and the classic group protocol
   // * KRaft with the new group coordinator enabled and the classic group protocol
   // * KRaft with the new group coordinator enabled and the consumer group protocol
-  def getCloseTestParameters() : java.util.stream.Stream[Arguments] = {
+  def getCloseTestParameters: java.util.stream.Stream[Arguments] = {
     val list = ListBuffer[Arguments]()
 
     for (quorumAndGroupProtocol <- List(Array("zk", "classic"), Array("kraft", "classic"), Array("kraft+kip848", "classic"), Array("kraft+kip848", "consumer"))) {
