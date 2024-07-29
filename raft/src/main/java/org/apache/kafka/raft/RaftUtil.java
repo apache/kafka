@@ -41,6 +41,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.raft.internals.ReplicaKey;
 
 import java.net.InetSocketAddress;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -481,8 +482,12 @@ public class RaftUtil {
     public static DescribeQuorumResponseData singletonDescribeQuorumResponse(
         short apiVersion,
         TopicPartition topicPartition,
-        DescribeQuorumResponseData.PartitionData partitionData,
-        DescribeQuorumResponseData.NodeCollection nodes
+        int leaderId,
+        int leaderEpoch,
+        long highWatermark,
+        Collection<LeaderState.ReplicaState> voters,
+        Collection<LeaderState.ReplicaState> observers,
+        long currentTimeMs
     ) {
         DescribeQuorumResponseData response = new DescribeQuorumResponseData()
             .setTopics(
@@ -491,16 +496,25 @@ public class RaftUtil {
                         .setTopicName(topicPartition.topic())
                         .setPartitions(
                             Collections.singletonList(
-                                partitionData.setPartitionIndex(topicPartition.partition())
-                            )
-                        )
-                )
-            );
-
+                                new DescribeQuorumResponseData.PartitionData()
+                                    .setPartitionIndex(topicPartition.partition())
+                                    .setErrorCode(Errors.NONE.code())
+                                    .setLeaderId(leaderId)
+                                    .setLeaderEpoch(leaderEpoch)
+                                    .setHighWatermark(highWatermark)
+                                    .setCurrentVoters(toReplicaStates(apiVersion, leaderId, voters, currentTimeMs))
+                                    .setObservers(toReplicaStates(apiVersion, leaderId, observers, currentTimeMs))))));
         if (apiVersion >= 2) {
+            DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection(voters.size());
+            for (LeaderState.ReplicaState voter : voters) {
+                nodes.add(
+                    new DescribeQuorumResponseData.Node()
+                        .setNodeId(voter.replicaKey().id())
+                        .setListeners(voter.listeners().toDescribeQuorumResponseListeners())
+                );
+            }
             response.setNodes(nodes);
         }
-
         return response;
     }
 
@@ -528,7 +542,7 @@ public class RaftUtil {
             .setErrorCode(error.code())
             .setErrorMessage(errorMessage);
     }
-
+    
     public static RemoveRaftVoterRequestData removeVoterRequest(
         String clusterId,
         ReplicaKey voter
@@ -548,6 +562,45 @@ public class RaftUtil {
         return new RemoveRaftVoterResponseData()
             .setErrorCode(error.code())
             .setErrorMessage(errorMessage);
+    }
+
+    private static List<DescribeQuorumResponseData.ReplicaState> toReplicaStates(
+        short apiVersion,
+        int leaderId,
+        Collection<LeaderState.ReplicaState> states,
+        long currentTimeMs
+    ) {
+        return states
+            .stream()
+            .map(replicaState -> toReplicaState(apiVersion, leaderId, replicaState, currentTimeMs))
+            .collect(Collectors.toList());
+    }
+
+    private static DescribeQuorumResponseData.ReplicaState toReplicaState(
+        short apiVersion,
+        int leaderId,
+        LeaderState.ReplicaState replicaState,
+        long currentTimeMs
+    ) {
+        final long lastCaughtUpTimestamp;
+        final long lastFetchTimestamp;
+        if (replicaState.replicaKey().id() == leaderId) {
+            lastCaughtUpTimestamp = currentTimeMs;
+            lastFetchTimestamp = currentTimeMs;
+        } else {
+            lastCaughtUpTimestamp = replicaState.lastCaughtUpTimestamp();
+            lastFetchTimestamp = replicaState.lastFetchTimestamp();
+        }
+        DescribeQuorumResponseData.ReplicaState replicaStateData = new DescribeQuorumResponseData.ReplicaState()
+            .setReplicaId(replicaState.replicaKey().id())
+            .setLogEndOffset(replicaState.endOffset().map(LogOffsetMetadata::offset).orElse(-1L))
+            .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
+            .setLastFetchTimestamp(lastFetchTimestamp);
+
+        if (apiVersion >= 2) {
+            replicaStateData.setReplicaDirectoryId(replicaState.replicaKey().directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID));
+        }
+        return replicaStateData;
     }
 
     public static Optional<ReplicaKey> voteRequestVoterKey(
