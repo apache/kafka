@@ -69,6 +69,8 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
     private static final Map<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS = new EnumMap<>(Schema.Type.class);
 
+    // if a schema is provided in config, this schema will 
+    // be used for all messages
     private Schema schema = null;
 
     static {
@@ -297,13 +299,13 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
         toConnectSchemaCache = new SynchronizedCache<>(new LRUCache<>(config.schemaCacheSize()));
                 
         try {
-            byte[] schemaContent = config.schemaFileContent();
+            final byte[] schemaContent = config.schemaContent();
             if (schemaContent != null && schemaContent.length > 0) {
-                JsonNode schemaNode = deserializer.deserialize("", schemaContent);
+                final JsonNode schemaNode = deserializer.deserialize("", schemaContent);
                 this.schema = asConnectSchema(schemaNode);
             }
         } catch (SerializationException e) {
-            throw new DataException("Provided schema is invalid , please recheck the schema you have provided", e);
+            throw new DataException("Failed to parse schema in converter config due to serialization error: ", e);
         }
             
     }
@@ -703,7 +705,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
                 }
             }
 
-            throw new DataException("Couldn't  " + value + " to JSON.");
+            throw new DataException("Couldn't convert " + value + " to JSON.");
         } catch (ClassCastException e) {
             String schemaTypeStr = (schema != null) ? schema.type().toString() : "unknown schema";
             throw new DataException("Invalid type for " + schemaTypeStr + ": " + value.getClass());
