@@ -56,7 +56,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.taskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
 
 /**
@@ -108,7 +108,7 @@ public class StreamsProducer {
             }
             case EXACTLY_ONCE_ALPHA: {
                 producerConfigs = config.getProducerConfigs(
-                    getTaskProducerClientId(
+                    taskProducerClientId(
                         threadId,
                         Objects.requireNonNull(taskId, "taskId cannot be null for exactly-once alpha")
                     )

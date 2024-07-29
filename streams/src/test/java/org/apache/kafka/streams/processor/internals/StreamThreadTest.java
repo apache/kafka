@@ -139,7 +139,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.adminClientId;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
@@ -1404,7 +1404,7 @@ public class StreamThreadTest {
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata)
-            .updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+            .updateThreadMetadata(adminClientId(CLIENT_ID));
         thread.setStateListener(
             (t, newState, oldState) -> {
                 if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.STARTING) {
@@ -1478,7 +1478,7 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null
-        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         final StreamsException thrown = assertThrows(StreamsException.class, thread::run);
 
@@ -1504,7 +1504,7 @@ public class StreamThreadTest {
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata)
-            .updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+            .updateThreadMetadata(adminClientId(CLIENT_ID));
         thread.shutdown();
 
         verify(taskManager).shutdown(true);
@@ -1524,7 +1524,7 @@ public class StreamThreadTest {
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata)
-            .updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+            .updateThreadMetadata(adminClientId(CLIENT_ID));
         thread.shutdown();
         // Execute the run method. Verification of the mock will check that shutdown was only done once
         thread.run();
@@ -2628,7 +2628,7 @@ public class StreamThreadTest {
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata)
-            .updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+            .updateThreadMetadata(adminClientId(CLIENT_ID));
 
         consumer.schedulePollTask(() -> {
             thread.setState(StreamThread.State.PARTITIONS_REVOKED);
@@ -2658,7 +2658,7 @@ public class StreamThreadTest {
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata)
-            .updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+            .updateThreadMetadata(adminClientId(CLIENT_ID));
 
         consumer.schedulePollTask(() -> {
             thread.setState(StreamThread.State.PARTITIONS_REVOKED);
@@ -2720,7 +2720,7 @@ public class StreamThreadTest {
                 setState(State.PENDING_SHUTDOWN);
                 throw new TaskCorruptedException(corruptedTasks);
             }
-        }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+        }.updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.run();
 
@@ -2778,7 +2778,7 @@ public class StreamThreadTest {
                 setState(State.PENDING_SHUTDOWN);
                 throw new TaskCorruptedException(corruptedTasks);
             }
-        }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+        }.updateThreadMetadata(adminClientId(CLIENT_ID));
 
         final AtomicBoolean exceptionHandlerInvoked = new AtomicBoolean(false);
 
@@ -2845,7 +2845,7 @@ public class StreamThreadTest {
                 setState(State.PENDING_SHUTDOWN);
                 throw new TaskCorruptedException(corruptedTasks);
             }
-        }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+        }.updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(StreamThread.State.STARTING);
         thread.runLoop();
@@ -2908,7 +2908,7 @@ public class StreamThreadTest {
                 setState(State.PENDING_SHUTDOWN);
                 throw new TaskCorruptedException(corruptedTasks);
             }
-        }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+        }.updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(StreamThread.State.STARTING);
         thread.runLoop();
@@ -2968,7 +2968,7 @@ public class StreamThreadTest {
                 setState(State.PENDING_SHUTDOWN);
                 throw new TaskCorruptedException(corruptedTasks);
             }
-        }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+        }.updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(StreamThread.State.STARTING);
         thread.runLoop();

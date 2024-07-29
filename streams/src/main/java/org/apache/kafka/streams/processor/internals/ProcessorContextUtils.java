@@ -37,14 +37,14 @@ public final class ProcessorContextUtils {
     /**
      * Should be removed as part of KAFKA-10217
      */
-    public static StreamsMetricsImpl getMetricsImpl(final ProcessorContext context) {
+    public static StreamsMetricsImpl metricsImpl(final ProcessorContext context) {
         return (StreamsMetricsImpl) context.metrics();
     }
 
     /**
      * Should be removed as part of KAFKA-10217
      */
-    public static StreamsMetricsImpl getMetricsImpl(final StateStoreContext context) {
+    public static StreamsMetricsImpl metricsImpl(final StateStoreContext context) {
         return (StreamsMetricsImpl) context.metrics();
     }
 
