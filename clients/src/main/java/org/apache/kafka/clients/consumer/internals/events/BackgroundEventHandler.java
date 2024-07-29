@@ -34,11 +34,21 @@ public class BackgroundEventHandler {
     private final Queue<BackgroundEvent> backgroundEventQueue;
     private final KafkaConsumerMetrics kafkaConsumerMetrics;
     private final KafkaShareConsumerMetrics kafkaShareConsumerMetrics;
+    private boolean isShareConsumer;
 
-    public BackgroundEventHandler(final Queue<BackgroundEvent> backgroundEventQueue, KafkaConsumerMetrics kafkaConsumerMetrics, KafkaShareConsumerMetrics kafkaShareConsumerMetrics) {
+    public BackgroundEventHandler(final Queue<BackgroundEvent> backgroundEventQueue, KafkaConsumerMetrics kafkaConsumerMetrics) {
         this.backgroundEventQueue = backgroundEventQueue;
         this.kafkaConsumerMetrics = kafkaConsumerMetrics;
+        this.kafkaShareConsumerMetrics = null;
+        isShareConsumer = false;
+        recordInitialEvents();
+    }
+
+    public BackgroundEventHandler(final Queue<BackgroundEvent> backgroundEventQueue, KafkaShareConsumerMetrics kafkaShareConsumerMetrics) {
+        this.backgroundEventQueue = backgroundEventQueue;
         this.kafkaShareConsumerMetrics = kafkaShareConsumerMetrics;
+        this.kafkaConsumerMetrics = null;
+        isShareConsumer = true;
         recordInitialEvents();
     }
 
@@ -50,12 +60,19 @@ public class BackgroundEventHandler {
     public void add(BackgroundEvent event) {
         Objects.requireNonNull(event, "BackgroundEvent provided to add must be non-null");
         backgroundEventQueue.add(event);
-        kafkaConsumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
+
+        if (!isShareConsumer)
+            kafkaConsumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
+        else
+            kafkaShareConsumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
     }
 
     private void recordInitialEvents() {
         for (BackgroundEvent event : backgroundEventQueue) {
-            kafkaConsumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
+            if (!isShareConsumer)
+                kafkaConsumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
+            else
+                kafkaShareConsumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
         }
     }
 }

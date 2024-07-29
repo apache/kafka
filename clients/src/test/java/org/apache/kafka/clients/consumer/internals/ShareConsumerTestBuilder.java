@@ -102,7 +102,7 @@ public class ShareConsumerTestBuilder implements Closeable {
         this.time = enableAutoTick ? new MockTime(1) : new MockTime();
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue, null, spy(KafkaShareConsumerMetrics.class)));
+        this.backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue, spy(KafkaShareConsumerMetrics.class)));
 
         Properties properties = new Properties();
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);

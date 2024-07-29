@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.NetworkThreadMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
@@ -109,7 +110,7 @@ public class ConsumerTestBuilder implements Closeable {
         this.time = enableAutoTick ? new MockTime(1) : new MockTime();
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue, null, null));
+        this.backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue, mock(KafkaConsumerMetrics.class)));
         this.offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
             100,

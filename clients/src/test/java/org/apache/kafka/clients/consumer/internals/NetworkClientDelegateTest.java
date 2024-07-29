@@ -214,7 +214,7 @@ public class NetworkClientDelegateTest {
         doThrow(authException).when(metadata).maybeThrowAnyException();
 
         LinkedList<BackgroundEvent> backgroundEventQueue = new LinkedList<>();
-        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, mock(KafkaConsumerMetrics.class), null);
+        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, mock(KafkaConsumerMetrics.class));
         NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate();
 
         assertEquals(0, backgroundEventQueue.size());

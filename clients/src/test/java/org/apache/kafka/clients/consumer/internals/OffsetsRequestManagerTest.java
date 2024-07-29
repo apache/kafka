@@ -107,7 +107,7 @@ public class OffsetsRequestManagerTest {
     public void setup() {
         LogContext logContext = new LogContext();
         backgroundEventQueue = new LinkedBlockingQueue<>();
-        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, mock(KafkaConsumerMetrics.class), null);
+        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, mock(KafkaConsumerMetrics.class));
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
         time = new MockTime(0);

@@ -267,7 +267,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             ShareFetchMetricsManager shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
-            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, null, kafkaShareConsumerMetrics);
+            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, kafkaShareConsumerMetrics);
             final NetworkThreadMetricsManager networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
 
             // This FetchBuffer is shared between the application and network threads.
@@ -376,7 +376,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         final BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, null, kafkaShareConsumerMetrics);
+        final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, kafkaShareConsumerMetrics);
         final NetworkThreadMetricsManager networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
 
         final Supplier<NetworkClientDelegate> networkClientDelegateSupplier =

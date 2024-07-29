@@ -118,7 +118,7 @@ public class MembershipManagerImplTest {
         subscriptionState = mock(SubscriptionState.class);
         commitRequestManager = mock(CommitRequestManager.class);
         backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, mock(KafkaConsumerMetrics.class), null);
+        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, mock(KafkaConsumerMetrics.class));
         time = new MockTime(0);
         metrics = new Metrics(time);
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);

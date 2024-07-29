@@ -322,7 +322,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
-            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, kafkaConsumerMetrics, null);
+            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, kafkaConsumerMetrics);
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
@@ -496,7 +496,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, kafkaConsumerMetrics, null);
+        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, kafkaConsumerMetrics);
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
             logContext,
             subscriptions,
