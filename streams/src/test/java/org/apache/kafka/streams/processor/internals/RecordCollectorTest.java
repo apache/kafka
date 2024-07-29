@@ -924,7 +924,7 @@ public class RecordCollectorTest {
                     "is not compatible to the actual key type: java.lang.String. " +
                     "Change the default key serde in StreamConfig or provide the correct key serde via method parameters " +
                     "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).")
-    );
+        );
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
