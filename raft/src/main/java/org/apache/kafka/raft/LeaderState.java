@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.RemoveVoterHandlerState;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -74,6 +75,8 @@ public class LeaderState<T> implements EpochState {
     private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
     private Map<Integer, ReplicaState> voterStates = new HashMap<>();
     private Optional<AddVoterHandlerState> addVoterHandlerState = Optional.empty();
+    private Optional<RemoveVoterHandlerState> removeVoterHandlerState = Optional.empty();
+
     private final Map<ReplicaKey, ReplicaState> observerStates = new HashMap<>();
     private final Logger log;
     private final BatchAccumulator<T> accumulator;
@@ -221,6 +224,57 @@ public class LeaderState<T> implements EpochState {
         addVoterHandlerState = state;
     }
 
+    public Optional<RemoveVoterHandlerState> removeVoterHandlerState() {
+        return removeVoterHandlerState;
+    }
+
+    public void resetRemoveVoterHandlerState(
+        Errors error,
+        String message,
+        Optional<RemoveVoterHandlerState> state
+    ) {
+        removeVoterHandlerState.ifPresent(
+            handlerState -> handlerState
+                .future()
+                .complete(RaftUtil.removeVoterResponse(error, message))
+        );
+        removeVoterHandlerState = state;
+    }
+
+    public long maybeExpirePendingOperation(long currentTimeMs) {
+        // First abort any expired operation
+        long timeUntilAddVoterExpiration = addVoterHandlerState()
+            .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+            .orElse(Long.MAX_VALUE);
+
+        if (timeUntilAddVoterExpiration == 0) {
+            resetAddVoterHandlerState(Errors.REQUEST_TIMED_OUT, null, Optional.empty());
+        }
+
+        long timeUntilRemoveVoterExpiration = removeVoterHandlerState()
+            .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+            .orElse(Long.MAX_VALUE);
+
+        if (timeUntilRemoveVoterExpiration == 0) {
+            resetRemoveVoterHandlerState(Errors.REQUEST_TIMED_OUT, null, Optional.empty());
+        }
+
+        // Reread the timeouts and return the smaller of the two
+        return Math.min(
+            addVoterHandlerState()
+                .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+                .orElse(Long.MAX_VALUE),
+            removeVoterHandlerState()
+                .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+                .orElse(Long.MAX_VALUE)
+        );
+    }
+
+    public boolean isOperationPending(long currentTimeMs) {
+        maybeExpirePendingOperation(currentTimeMs);
+        return addVoterHandlerState.isPresent() || removeVoterHandlerState.isPresent();
+    }
+
     private static List<Voter> convertToVoters(Set<Integer> voterIds) {
         return voterIds.stream()
             .map(follower -> new Voter().setVoterId(follower))
@@ -349,8 +403,9 @@ public class LeaderState<T> implements EpochState {
     Set<ReplicaKey> nonAcknowledgingVoters() {
         Set<ReplicaKey> nonAcknowledging = new HashSet<>();
         for (ReplicaState state : voterStates.values()) {
-            if (!state.hasAcknowledgedLeader)
+            if (!state.hasAcknowledgedLeader) {
                 nonAcknowledging.add(state.replicaKey);
+            }
         }
         return nonAcknowledging;
     }
@@ -791,6 +846,9 @@ public class LeaderState<T> implements EpochState {
     public void close() {
         addVoterHandlerState.ifPresent(AddVoterHandlerState::close);
         addVoterHandlerState = Optional.empty();
+
+        removeVoterHandlerState.ifPresent(RemoveVoterHandlerState::close);
+        removeVoterHandlerState = Optional.empty();
 
         accumulator.close();
     }
