@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -314,8 +313,7 @@ public class ProcessorNodeTest {
                 OFFSET,
                 PARTITION,
                 TOPIC,
-                new RecordHeaders(),
-                new ConsumerRecord<>(TOPIC, PARTITION, OFFSET, KEY.getBytes(), VALUE.getBytes())));
+                new RecordHeaders()));
         when(internalProcessorContext.currentNode()).thenReturn(new ProcessorNode<>(NAME));
 
         return internalProcessorContext;
