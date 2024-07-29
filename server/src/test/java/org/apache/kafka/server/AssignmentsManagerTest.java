@@ -292,7 +292,7 @@ public class AssignmentsManagerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"invalidRequest", "disconnection"})
+    @ValueSource(strings = {"invalidRequest", "timeout"})
     public void testUnSuccessfulRequestCausesRetransmission(String failureType) throws Exception {
         try (TestEnv testEnv = new TestEnv()) {
             testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
@@ -304,7 +304,7 @@ public class AssignmentsManagerTest {
                     return mockClientResponse(new AssignReplicasToDirsResponseData().
                         setErrorCode(Errors.INVALID_REQUEST.code()));
                 });
-            } else if (failureType.equals("disconnection")) {
+            } else if (failureType.equals("timeout")) {
                 testEnv.channelManager.completeCallback(req -> Optional.empty());
             }
             TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
@@ -390,16 +390,6 @@ public class AssignmentsManagerTest {
                 assertEquals(0, testEnv.assignmentsManager.previousGlobalFailures());
             });
         }
-    }
-
-    @Test
-    public void testBrokerEpoch() {
-        assertEquals(123L, AssignmentsManager.brokerEpoch(TEST_IMAGE, 0));
-    }
-
-    @Test
-    public void testBrokerEpochForNonExistentBroker() {
-        assertEquals(-1L, AssignmentsManager.brokerEpoch(TEST_IMAGE, 100));
     }
 
     @Test

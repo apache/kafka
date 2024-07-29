@@ -327,17 +327,8 @@ public final class AssignmentsManager {
         log.info("maybeSendAssignments: sending {} assignments; invalidated {} assignments " +
             "prior to sending.", newInFlight.size(), numInvalid);
         if (!newInFlight.isEmpty()) {
-            long brokerEpoch = brokerEpoch(image, nodeId);
-            sendAssignments(brokerEpoch, newInFlight);
+            sendAssignments(image.cluster().brokerEpoch(nodeId), newInFlight);
         }
-    }
-
-    static long brokerEpoch(MetadataImage image, int nodeId) {
-        BrokerRegistration brokerRegistration = image.cluster().broker(nodeId);
-        if (brokerRegistration == null) {
-            return -1L;
-        }
-        return brokerRegistration.epoch();
     }
 
     void sendAssignments(long brokerEpoch, Map<TopicIdPartition, Assignment> newInflight) {
