@@ -148,7 +148,8 @@ public class CustomHandlerIntegrationTest {
         TestUtils.waitForCondition(
             () -> kafkaStreams.state() == State.RUNNING,
             timeoutMs,
-            () -> "Kafka Streams application did not reach state RUNNING in " + timeoutMs + " ms");
+            () -> "Kafka Streams application did not reach state RUNNING in " + timeoutMs + " ms"
+        );
 
         TestUtils.waitForCondition(
             this::receivedUnknownTopicOrPartitionException,
@@ -156,6 +157,11 @@ public class CustomHandlerIntegrationTest {
             () -> "Did not receive UnknownTopicOrPartitionException"
         );
 
+        TestUtils.waitForCondition(
+            () -> kafkaStreams.state() == State.ERROR,
+            timeoutMs,
+            () -> "Kafka Streams application did not reach state ERROR in " + timeoutMs + " ms"
+        );
         closeApplication(streamsConfiguration);
     }
 
