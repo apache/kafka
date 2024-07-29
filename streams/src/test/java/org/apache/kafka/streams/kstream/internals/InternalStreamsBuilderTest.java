@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
@@ -35,8 +31,8 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignTableJoinProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionSendProcessorSupplier;
-import org.apache.kafka.streams.kstream.internals.graph.ForeignTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ForeignJoinSubscriptionSendNode;
+import org.apache.kafka.streams.kstream.internals.graph.ForeignTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
@@ -53,27 +49,33 @@ import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
 
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.Topology.AutoOffsetReset;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class InternalStreamsBuilderTest {
 
@@ -1186,40 +1188,40 @@ public class InternalStreamsBuilderTest {
 
     private void verifyVersionedSemantics(final TableFilterNode<?, ?> filterNode, final boolean expectedValue) {
         final ProcessorSupplier<?, ?, ?, ?> processorSupplier = filterNode.processorParameters().processorSupplier();
-        assertTrue(processorSupplier instanceof KTableFilter);
+        assertInstanceOf(KTableFilter.class, processorSupplier);
         final KTableFilter<?, ?> tableFilter = (KTableFilter<?, ?>) processorSupplier;
         assertEquals(expectedValue, tableFilter.isUseVersionedSemantics());
     }
 
     private void verifyVersionedSemantics(final TableRepartitionMapNode<?, ?> repartitionMapNode, final boolean expectedValue) {
         final ProcessorSupplier<?, ?, ?, ?> processorSupplier = repartitionMapNode.processorParameters().processorSupplier();
-        assertTrue(processorSupplier instanceof KTableRepartitionMap);
+        assertInstanceOf(KTableRepartitionMap.class, processorSupplier);
         final KTableRepartitionMap<?, ?, ?, ?> repartitionMap = (KTableRepartitionMap<?, ?, ?, ?>) processorSupplier;
         assertEquals(expectedValue, repartitionMap.isUseVersionedSemantics());
     }
 
     private void verifyVersionedSemantics(final KTableKTableJoinNode<?, ?, ?, ?> joinNode, final boolean expectedValueLeft, final boolean expectedValueRight) {
         final ProcessorSupplier<?, ?, ?, ?> thisProcessorSupplier = joinNode.thisProcessorParameters().processorSupplier();
-        assertTrue(thisProcessorSupplier instanceof KTableKTableAbstractJoin);
+        assertInstanceOf(KTableKTableAbstractJoin.class, thisProcessorSupplier);
         final KTableKTableAbstractJoin<?, ?, ?, ?> thisJoin = (KTableKTableAbstractJoin<?, ?, ?, ?>) thisProcessorSupplier;
         assertEquals(expectedValueLeft, thisJoin.isUseVersionedSemantics());
 
         final ProcessorSupplier<?, ?, ?, ?> otherProcessorSupplier = joinNode.otherProcessorParameters().processorSupplier();
-        assertTrue(otherProcessorSupplier instanceof KTableKTableAbstractJoin);
+        assertInstanceOf(KTableKTableAbstractJoin.class, otherProcessorSupplier);
         final KTableKTableAbstractJoin<?, ?, ?, ?> otherJoin = (KTableKTableAbstractJoin<?, ?, ?, ?>) otherProcessorSupplier;
         assertEquals(expectedValueRight, otherJoin.isUseVersionedSemantics());
     }
 
     private void verifyVersionedSemantics(final ForeignJoinSubscriptionSendNode<?, ?> joinThisNode, final boolean expectedValue) {
         final ProcessorSupplier<?, ?, ?, ?> thisProcessorSupplier = joinThisNode.processorParameters().processorSupplier();
-        assertTrue(thisProcessorSupplier instanceof SubscriptionSendProcessorSupplier);
+        assertInstanceOf(SubscriptionSendProcessorSupplier.class, thisProcessorSupplier);
         final SubscriptionSendProcessorSupplier<?, ?, ?> joinThis = (SubscriptionSendProcessorSupplier<?, ?, ?>) thisProcessorSupplier;
         assertEquals(expectedValue, joinThis.isUseVersionedSemantics());
     }
 
     private void verifyVersionedSemantics(final ForeignTableJoinNode<?, ?> joinOtherNode, final boolean expectedValue) {
         final ProcessorSupplier<?, ?, ?, ?> otherProcessorSupplier = joinOtherNode.processorParameters().processorSupplier();
-        assertTrue(otherProcessorSupplier instanceof ForeignTableJoinProcessorSupplier);
+        assertInstanceOf(ForeignTableJoinProcessorSupplier.class, otherProcessorSupplier);
         final ForeignTableJoinProcessorSupplier<?, ?, ?> joinThis = (ForeignTableJoinProcessorSupplier<?, ?, ?>) otherProcessorSupplier;
         assertEquals(expectedValue, joinThis.isUseVersionedSemantics());
     }

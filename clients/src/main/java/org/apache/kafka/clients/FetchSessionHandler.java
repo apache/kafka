@@ -25,7 +25,7 @@ import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
@@ -392,14 +393,14 @@ public class FetchSessionHandler {
         if (!log.isTraceEnabled()) {
             return String.format("%d partition(s)", partitions.size());
         }
-        return "(" + Utils.join(partitions, ", ") + ")";
+        return "(" + partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")) + ")";
     }
 
     private String topicIdPartitionsToLogString(Collection<TopicIdPartition> partitions) {
         if (!log.isTraceEnabled()) {
             return String.format("%d partition(s)", partitions.size());
         }
-        return "(" + Utils.join(partitions, ", ") + ")";
+        return "(" + partitions.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", ")) + ")";
     }
 
     /**
@@ -438,16 +439,16 @@ public class FetchSessionHandler {
             extraIds = findMissing(ids, sessionTopicNames.keySet());
         }
         if (!omitted.isEmpty()) {
-            bld.append("omittedPartitions=(").append(Utils.join(omitted, ", ")).append("), ");
+            bld.append("omittedPartitions=(").append(omitted.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))).append("), ");
         }
         if (!extra.isEmpty()) {
-            bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append("), ");
+            bld.append("extraPartitions=(").append(extra.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))).append("), ");
         }
         if (!extraIds.isEmpty()) {
-            bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append("), ");
+            bld.append("extraIds=(").append(extraIds.stream().map(Uuid::toString).collect(Collectors.joining(", "))).append("), ");
         }
         if ((!omitted.isEmpty()) || (!extra.isEmpty()) || (!extraIds.isEmpty())) {
-            bld.append("response=(").append(Utils.join(topicPartitions, ", ")).append(")");
+            bld.append("response=(").append(topicPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))).append(")");
             return bld.toString();
         }
         return null;
@@ -470,11 +471,11 @@ public class FetchSessionHandler {
             findMissing(topicPartitions, sessionPartitions.keySet());
         StringBuilder bld = new StringBuilder();
         if (!extra.isEmpty())
-            bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append("), ");
+            bld.append("extraPartitions=(").append(extra.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))).append("), ");
         if (!extraIds.isEmpty())
-            bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append("), ");
+            bld.append("extraIds=(").append(extraIds.stream().map(Uuid::toString).collect(Collectors.joining(", "))).append("), ");
         if ((!extra.isEmpty()) || (!extraIds.isEmpty())) {
-            bld.append("response=(").append(Utils.join(topicPartitions, ", ")).append(")");
+            bld.append("response=(").append(topicPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))).append(")");
             return bld.toString();
         }
         return null;
@@ -499,7 +500,7 @@ public class FetchSessionHandler {
         }
         StringBuilder bld = new StringBuilder();
         bld.append(" with response=(").
-            append(Utils.join(topicPartitions, ", ")).
+            append(topicPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))).
             append(")");
         String prefix = ", implied=(";
         String suffix = "";
@@ -599,7 +600,9 @@ public class FetchSessionHandler {
      * The client will initiate the session close on next fetch request.
      */
     public void notifyClose() {
-        log.debug("Set the metadata for next fetch request to close the existing session ID={}", nextMetadata.sessionId());
+        if (log.isDebugEnabled()) {
+            log.debug("Set the metadata for next fetch request to close the existing session ID={}", nextMetadata.sessionId());
+        }
         nextMetadata = nextMetadata.nextCloseExisting();
     }
 

@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -80,7 +81,7 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
   private def createConfig(nodeId: Int, interBrokerVersion: MetadataVersion): KafkaConfig = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerVersion.version)
+    props.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, interBrokerVersion.version)
     KafkaConfig.fromProps(props)
   }
 

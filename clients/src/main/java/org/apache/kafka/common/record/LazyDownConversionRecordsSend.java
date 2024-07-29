@@ -39,7 +39,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     private final RecordValidationStats recordValidationStats;
     private final Iterator<ConvertedRecords<?>> convertedRecordsIterator;
 
-    private RecordsSend convertedRecordsWriter;
+    private RecordsSend<MemoryRecords> convertedRecordsWriter;
 
     public LazyDownConversionRecordsSend(LazyDownConversionRecords records) {
         super(records, records.sizeInBytes());

@@ -38,6 +38,7 @@ import org.apache.kafka.server.mutable.BoundedListTooLongException;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -47,7 +48,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
@@ -174,7 +174,7 @@ public class AclControlManager {
                 results.add(new AclDeleteResult(ApiError.fromThrowable(e).exception()));
             }
         }
-        return ControllerResult.atomicOf(records.stream().collect(Collectors.toList()), results);
+        return ControllerResult.atomicOf(new ArrayList<>(records), results);
     }
 
     AclDeleteResult deleteAclsForFilter(AclBindingFilter filter,

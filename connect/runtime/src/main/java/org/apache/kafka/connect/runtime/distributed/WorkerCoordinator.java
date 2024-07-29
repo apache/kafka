@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -265,6 +266,12 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         if (generation != null)
             return generation.memberId;
         return JoinGroupRequest.UNKNOWN_MEMBER_ID;
+    }
+
+    @Override
+    protected void handlePollTimeoutExpiry() {
+        listener.onPollTimeoutExpiry();
+        maybeLeaveGroup("worker poll timeout has expired.");
     }
 
     /**

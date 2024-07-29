@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.KafkaException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +62,6 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
     /**
      * Create a wrapped trust manager factory
      * @param kmfAlgorithm the algorithm
-     * @return A wrapped trust manager factory
      * @throws NoSuchAlgorithmException
      */
     protected CommonNameLoggingTrustManagerFactoryWrapper(String kmfAlgorithm) throws NoSuchAlgorithmException {
@@ -113,9 +113,9 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
      */
     static class CommonNameLoggingTrustManager implements X509TrustManager {
 
-        final private X509TrustManager origTm;
+        private final X509TrustManager origTm;
         final int nrOfRememberedBadCerts;
-        final private LinkedHashMap<ByteBuffer, String> previouslyRejectedClientCertChains;
+        private final LinkedHashMap<ByteBuffer, String> previouslyRejectedClientCertChains;
 
         public CommonNameLoggingTrustManager(X509TrustManager originalTrustManager, int nrOfRememberedBadCerts) {
             this.origTm = originalTrustManager;
@@ -213,7 +213,6 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
          * @param origChain The original (unsorted) certificate chain
          * @return The sorted and wrapped certificate chain
          * @throws CertificateException
-         * @throws NoSuchAlgorithmException
          */
         public static X509Certificate[] sortChainAnWrapEndCertificate(X509Certificate[] origChain) throws CertificateException {
             if (origChain == null || origChain.length < 1) {
@@ -312,10 +311,8 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
         }
 
         @Override
-        public void checkValidity(Date date)
-                throws CertificateExpiredException, CertificateNotYetValidException {
-            // We do not check validity at all. 
-            return;
+        public void checkValidity(Date date) {
+            // We do not check validity at all.
         }
 
         @Override

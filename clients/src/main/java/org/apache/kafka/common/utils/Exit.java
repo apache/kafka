@@ -43,9 +43,17 @@ public class Exit {
             Runtime.getRuntime().addShutdownHook(new Thread(runnable));
     };
 
-    private volatile static Procedure exitProcedure = DEFAULT_EXIT_PROCEDURE;
-    private volatile static Procedure haltProcedure = DEFAULT_HALT_PROCEDURE;
-    private volatile static ShutdownHookAdder shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
+    private static final Procedure NOOP_HALT_PROCEDURE = (statusCode, message) -> {
+        throw new IllegalStateException("Halt called after resetting procedures; possible race condition present in test");
+    };
+
+    private static final Procedure NOOP_EXIT_PROCEDURE = (statusCode, message) -> {
+        throw new IllegalStateException("Exit called after resetting procedures; possible race condition present in test");
+    };
+
+    private static volatile Procedure exitProcedure = DEFAULT_EXIT_PROCEDURE;
+    private static volatile Procedure haltProcedure = DEFAULT_HALT_PROCEDURE;
+    private static volatile ShutdownHookAdder shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
 
     public static void exit(int statusCode) {
         exit(statusCode, null);
@@ -67,26 +75,47 @@ public class Exit {
         shutdownHookAdder.addShutdownHook(name, runnable);
     }
 
+    /**
+     * For testing only, do not call in main code.
+     */
     public static void setExitProcedure(Procedure procedure) {
         exitProcedure = procedure;
     }
 
+    /**
+     * For testing only, do not call in main code.
+     */
     public static void setHaltProcedure(Procedure procedure) {
         haltProcedure = procedure;
     }
 
+    /**
+     * For testing only, do not call in main code.
+     */
     public static void setShutdownHookAdder(ShutdownHookAdder shutdownHookAdder) {
         Exit.shutdownHookAdder = shutdownHookAdder;
     }
 
+    /**
+     * For testing only, do not call in main code.
+     * <p>Clears the procedure set in {@link #setExitProcedure(Procedure)}, but does not restore system default behavior of exiting the JVM.
+     */
     public static void resetExitProcedure() {
-        exitProcedure = DEFAULT_EXIT_PROCEDURE;
+        exitProcedure = NOOP_EXIT_PROCEDURE;
     }
 
+    /**
+     * For testing only, do not call in main code.
+     * <p>Clears the procedure set in {@link #setHaltProcedure(Procedure)}, but does not restore system default behavior of exiting the JVM.
+     */
     public static void resetHaltProcedure() {
-        haltProcedure = DEFAULT_HALT_PROCEDURE;
+        haltProcedure = NOOP_HALT_PROCEDURE;
     }
 
+    /**
+     * For testing only, do not call in main code.
+     * <p>Restores the system default shutdown hook behavior.
+     */
     public static void resetShutdownHookAdder() {
         shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
     }

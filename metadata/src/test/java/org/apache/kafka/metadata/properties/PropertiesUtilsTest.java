@@ -17,20 +17,21 @@
 
 package org.apache.kafka.metadata.properties;
 
+import org.apache.kafka.test.TestUtils;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Properties;
 
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class PropertiesUtilsTest {
+public final class PropertiesUtilsTest {
     @Test
     public void testReadPropertiesFile() throws IOException {
         File tempFile = TestUtils.tempFile();
@@ -65,14 +66,14 @@ final public class PropertiesUtilsTest {
     }
 
     @Test
-    public void loadRequiredIntProp() throws IOException {
+    public void loadRequiredIntProp() {
         Properties props = new Properties();
         props.setProperty("foo.bar", "123");
         assertEquals(123, PropertiesUtils.loadRequiredIntProp(props, "foo.bar"));
     }
 
     @Test
-    public void loadMissingRequiredIntProp() throws IOException {
+    public void loadMissingRequiredIntProp() {
         Properties props = new Properties();
         assertEquals("Failed to find foo.bar",
             assertThrows(RuntimeException.class,
@@ -81,7 +82,7 @@ final public class PropertiesUtilsTest {
     }
 
     @Test
-    public void loadNonIntegerRequiredIntProp() throws IOException {
+    public void loadNonIntegerRequiredIntProp() {
         Properties props = new Properties();
         props.setProperty("foo.bar", "b");
         assertEquals("Unable to read foo.bar as a base-10 number.",

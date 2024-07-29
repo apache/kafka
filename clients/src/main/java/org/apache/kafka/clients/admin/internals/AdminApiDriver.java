@@ -26,6 +26,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoor
 import org.apache.kafka.common.requests.OffsetFetchRequest.NoBatchedOffsetFetchRequestException;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;

@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import kafka.utils.Exit;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.CreatePartitionsResult;
@@ -34,6 +35,7 @@ import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -50,6 +52,7 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -58,13 +61,13 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @Timeout(value = 60)
 public class TopicCommandTest {
-    private String bootstrapServer = "localhost:9092";
-    private String topicName = "topicName";
+    private final String bootstrapServer = "localhost:9092";
+    private final String topicName = "topicName";
 
     @Test
     public void testIsNotUnderReplicatedWhenAdding() {
@@ -172,6 +175,16 @@ public class TopicCommandTest {
         assertEquals(topicName, opts.topic().get());
     }
 
+    @Test
+    public void testDescribeWithDescribeTopicsApiShouldSucceed() {
+        TopicCommand.TopicCommandOptions opts = new TopicCommand.TopicCommandOptions(
+            new String[] {"--bootstrap-server", bootstrapServer,
+                "--describe",
+                "--topic", topicName});
+        assertTrue(opts.hasDescribeOption());
+        assertEquals(topicName, opts.topic().get());
+    }
+
 
     @Test
     public void testParseAssignmentDuplicateEntries() {
@@ -233,7 +246,7 @@ public class TopicCommandTest {
                 "--delete", "--topic", topicName
             })));
 
-        assertTrue(exception.getCause() instanceof ThrottlingQuotaExceededException);
+        assertInstanceOf(ThrottlingQuotaExceededException.class, exception.getCause());
 
         verify(adminClient).deleteTopics(
             argThat((Collection<String> topics) -> topics.equals(Arrays.asList(topicName))),
@@ -262,7 +275,7 @@ public class TopicCommandTest {
                 "--alter", "--topic", topicName, "--partitions", "3",
                 "--bootstrap-server", bootstrapServer
             })));
-        assertTrue(exception.getCause() instanceof ThrottlingQuotaExceededException);
+        assertInstanceOf(ThrottlingQuotaExceededException.class, exception.getCause());
 
         verify(adminClient, times(1)).createPartitions(
             argThat(newPartitions -> newPartitions.get(topicName).totalCount() == 3),

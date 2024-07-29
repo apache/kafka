@@ -90,7 +90,7 @@ object TestPurgatoryPerformance {
     val pct50 = options.valueOf(pct50Opt).doubleValue
     val verbose = options.valueOf(verboseOpt).booleanValue
 
-    val gcMXBeans = ManagementFactory.getGarbageCollectorMXBeans().asScala.sortBy(_.getName)
+    val gcMXBeans = ManagementFactory.getGarbageCollectorMXBeans.asScala.sortBy(_.getName)
     val osMXBean = ManagementFactory.getOperatingSystemMXBean
     val latencySamples = new LatencySamples(1000000, pct75, pct50)
     val intervalSamples = new IntervalSamples(1000000, requestRate)
@@ -172,7 +172,7 @@ object TestPurgatoryPerformance {
   //   mu: the mean of the underlying normal distribution (not the mean of this log-normal distribution)
   //   sigma: the standard deviation of the underlying normal distribution (not the stdev of this log-normal distribution)
   private class LogNormalDistribution(mu: Double, sigma: Double) {
-    val rand = new Random
+    private val rand = new Random
     def next(): Double = {
       val n = rand.nextGaussian() * sigma + mu
       math.exp(n)
@@ -182,7 +182,7 @@ object TestPurgatoryPerformance {
   // exponential distribution (http://en.wikipedia.org/wiki/Exponential_distribution)
   //  lambda : the rate parameter of the exponential distribution
   private class ExponentialDistribution(lambda: Double) {
-    val rand = new Random
+    private val rand = new Random
     def next(): Double = {
       math.log(1d - rand.nextDouble()) / (- lambda)
     }
@@ -269,7 +269,7 @@ object TestPurgatoryPerformance {
       delayQueue.offer(new Scheduled(operation))
     }
 
-    def shutdown() = {
+    def shutdown(): Unit = {
       thread.shutdown()
     }
 

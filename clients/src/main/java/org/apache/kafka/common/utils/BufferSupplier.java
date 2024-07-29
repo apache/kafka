@@ -79,12 +79,8 @@ public abstract class BufferSupplier implements AutoCloseable {
         @Override
         public void release(ByteBuffer buffer) {
             buffer.clear();
-            Deque<ByteBuffer> bufferQueue = bufferMap.get(buffer.capacity());
-            if (bufferQueue == null) {
-                // We currently keep a single buffer in flight, so optimise for that case
-                bufferQueue = new ArrayDeque<>(1);
-                bufferMap.put(buffer.capacity(), bufferQueue);
-            }
+            // We currently keep a single buffer in flight, so optimise for that case
+            Deque<ByteBuffer> bufferQueue = bufferMap.computeIfAbsent(buffer.capacity(), k -> new ArrayDeque<>(1));
             bufferQueue.addLast(buffer);
         }
 

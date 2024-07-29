@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.util.stream.Stream;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.StreamsConfig;
@@ -25,13 +24,13 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -95,20 +94,12 @@ public class SmokeTestDriverIntegrationTest {
 
     }
 
-    private static Stream<Arguments> parameters() {
-        return Stream.of(
-            Arguments.of(false, false),
-            Arguments.of(true, false),
-            Arguments.of(true, true)
-        );
-    }
-
     // In this test, we try to keep creating new stream, and closing the old one, to maintain only 3 streams alive.
     // During the new stream added and old stream left, the stream process should still complete without issue.
     // We set 2 timeout condition to fail the test before passing the verification:
     // (1) 10 min timeout, (2) 30 tries of polling without getting any data
     @ParameterizedTest
-    @MethodSource("parameters")
+    @CsvSource({"false, false", "true, false", "true, true"})
     public void shouldWorkWithRebalance(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws InterruptedException {
         Exit.setExitProcedure((statusCode, message) -> {
             throw new AssertionError("Test called exit(). code:" + statusCode + " message:" + message);

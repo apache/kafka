@@ -21,37 +21,40 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDef
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.junit.jupiter.api.Assertions.fail
-import org.junit.jupiter.api.{Tag, Timeout}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.KRAFT, brokers = 1)
-@Tag("integration")
+@ClusterTestDefaults(types = Array(Type.KRAFT))
 class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
-    new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
-    new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
+      new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+    )
+  )
   def testOffsetCommitWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
     testOffsetCommit(true)
   }
 
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+    )
+  )
   def testOffsetCommitWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
     testOffsetCommit(false)
   }
 
-  @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
+  @ClusterTest(types = Array(Type.ZK, Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
@@ -88,7 +91,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         topic = "foo",
         partition = 0,
         offset = 100L,
-        expectedError = Errors.NONE,
+        expectedError = if (useNewProtocol && version < 9) Errors.UNSUPPORTED_VERSION else Errors.NONE,
         version = version.toShort
       )
 

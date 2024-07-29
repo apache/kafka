@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,8 +73,8 @@ import java.util.function.Function;
  * in the port which is chosen at runtime. The withEphemeralPortsCorrected resolves this by filling
  * in the missing information for ephemeral ports.
  */
-final public class ListenerInfo {
-    private final static Logger log = LoggerFactory.getLogger(ListenerInfo.class);
+public final class ListenerInfo {
+    private static final Logger log = LoggerFactory.getLogger(ListenerInfo.class);
 
     /**
      * Create a ListenerInfo from data in a ControllerRegistrationRequest RPC.

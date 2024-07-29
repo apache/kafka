@@ -45,6 +45,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.LegacySubscriptionInfoSerde;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -201,7 +202,7 @@ public class StreamsUpgradeTest {
             } else {
                 return new FutureSubscriptionInfo(
                     usedSubscriptionMetadataVersion,
-                    taskManager.processId(),
+                    taskManager.processId().id(),
                     SubscriptionInfo.getActiveTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
                     SubscriptionInfo.getStandbyTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
                     userEndPoint())

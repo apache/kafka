@@ -17,6 +17,11 @@
 
 package org.apache.kafka.metadata.properties;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.test.TestUtils;
+
+import org.junit.jupiter.api.Test;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -34,10 +39,7 @@ import java.util.OptionalInt;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.EMPTY;
 import static org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.META_PROPERTIES_NAME;
@@ -49,12 +51,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class MetaPropertiesEnsembleTest {
+public final class MetaPropertiesEnsembleTest {
     private static final MetaPropertiesEnsemble FOO =
         new MetaPropertiesEnsemble(
             new HashSet<>(Arrays.asList("/tmp/empty1", "/tmp/empty2")),
-            new HashSet<>(Arrays.asList("/tmp/error3")),
-            Arrays.asList(
+            new HashSet<>(Collections.singletonList("/tmp/error3")),
+            Stream.of(
                 new SimpleImmutableEntry<>("/tmp/dir4",
                     new MetaProperties.Builder().
                         setVersion(MetaPropertiesVersion.V1).
@@ -66,7 +68,7 @@ final public class MetaPropertiesEnsembleTest {
                         setVersion(MetaPropertiesVersion.V1).
                         setClusterId("fooClusterId").
                         setNodeId(2).
-                        build())).stream().collect(Collectors.
+                        build())).collect(Collectors.
                             toMap(Entry::getKey, Entry::getValue)),
                 Optional.of("/tmp/dir4"));
 
@@ -77,7 +79,7 @@ final public class MetaPropertiesEnsembleTest {
         return logDir.getAbsolutePath();
     }
 
-    private static String createEmptyLogDir() throws IOException {
+    private static String createEmptyLogDir() {
         File logDir = TestUtils.tempDirectory();
         return logDir.getAbsolutePath();
     }
@@ -103,7 +105,7 @@ final public class MetaPropertiesEnsembleTest {
 
     @Test
     public void testErrorLogDirsForFoo() {
-        assertEquals(new HashSet<>(Arrays.asList("/tmp/error3")), FOO.errorLogDirs());
+        assertEquals(new HashSet<>(Collections.singletonList("/tmp/error3")), FOO.errorLogDirs());
     }
 
     @Test
@@ -126,9 +128,9 @@ final public class MetaPropertiesEnsembleTest {
     @Test
     public void testNonFailedDirectoryPropsForFoo() {
         Map<String, Optional<MetaProperties>> results = new HashMap<>();
-        FOO.nonFailedDirectoryProps().forEachRemaining(entry -> {
-            results.put(entry.getKey(), entry.getValue());
-        });
+        FOO.nonFailedDirectoryProps().forEachRemaining(entry ->
+            results.put(entry.getKey(), entry.getValue())
+        );
         assertEquals(Optional.empty(), results.get("/tmp/empty1"));
         assertEquals(Optional.empty(), results.get("/tmp/empty2"));
         assertNull(results.get("/tmp/error3"));
@@ -222,7 +224,7 @@ final public class MetaPropertiesEnsembleTest {
     }
 
     @Test
-    public void testVerificationFailureOnLackOfMetadataLogDir() throws IOException {
+    public void testVerificationFailureOnLackOfMetadataLogDir() {
         MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
             Collections.singleton("/tmp/foo1"),
             Collections.emptySet(),
@@ -237,7 +239,7 @@ final public class MetaPropertiesEnsembleTest {
     }
 
     @Test
-    public void testVerificationFailureOnMetadataLogDirWithError() throws IOException {
+    public void testVerificationFailureOnMetadataLogDirWithError() {
         MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
             Collections.emptySet(),
             Collections.singleton("/tmp/foo1"),
@@ -283,17 +285,17 @@ final public class MetaPropertiesEnsembleTest {
     public void testMetaPropertiesEnsembleLoadError() throws IOException {
         MetaPropertiesEnsemble.Loader loader = new MetaPropertiesEnsemble.Loader();
         loader.addMetadataLogDir(createErrorLogDir());
-        loader.addLogDir(createLogDir(new MetaProperties.Builder().
+        loader.addLogDirs(Collections.singletonList(createLogDir(new MetaProperties.Builder().
             setVersion(MetaPropertiesVersion.V1).
             setClusterId("AtgGav8yQjiaJ3rTXE7VCA").
             setNodeId(1).
-            build()));
+            build())));
         MetaPropertiesEnsemble metaPropertiesEnsemble = loader.load();
         assertEquals(1, metaPropertiesEnsemble.errorLogDirs().size());
         assertEquals(1, metaPropertiesEnsemble.logDirProps().size());
     }
 
-    static private void verifyCopy(
+    private static void verifyCopy(
         MetaPropertiesEnsemble expected,
         MetaPropertiesEnsemble.Copier copier
     ) {
@@ -314,16 +316,14 @@ final public class MetaPropertiesEnsembleTest {
         MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(EMPTY);
         copier.setMetaLogDir(FOO.metadataLogDir());
         FOO.emptyLogDirs().forEach(e -> copier.emptyLogDirs().add(e));
-        FOO.logDirProps().entrySet().
-            forEach(e -> copier.logDirProps().put(e.getKey(), e.getValue()));
+        FOO.logDirProps().forEach((key, value) -> copier.logDirProps().put(key, value));
         FOO.errorLogDirs().forEach(e -> copier.errorLogDirs().add(e));
         verifyCopy(FOO, copier);
     }
 
     static class MetaPropertiesMockRandom extends Random {
         private final AtomicInteger index = new AtomicInteger(0);
-
-        private List<Long> results = Arrays.asList(
+        private final List<Long> results = Arrays.asList(
             0L,
             0L,
             2336837413447398698L,
@@ -372,7 +372,7 @@ final public class MetaPropertiesEnsembleTest {
         copier.emptyLogDirs().add("/tmp/foo");
         copier.errorLogDirs().add("/tmp/foo");
         assertEquals("Error: log directory /tmp/foo is in both emptyLogDirs and errorLogDirs.",
-            assertThrows(RuntimeException.class, () -> copier.verify()).getMessage());
+            assertThrows(RuntimeException.class, copier::verify).getMessage());
     }
 
     @Test
@@ -381,7 +381,7 @@ final public class MetaPropertiesEnsembleTest {
         copier.emptyLogDirs().add("/tmp/foo");
         copier.logDirProps().put("/tmp/foo", new MetaProperties.Builder().build());
         assertEquals("Error: log directory /tmp/foo is in both emptyLogDirs and logDirProps.",
-            assertThrows(RuntimeException.class, () -> copier.verify()).getMessage());
+            assertThrows(RuntimeException.class, copier::verify).getMessage());
     }
 
     @Test
@@ -390,10 +390,10 @@ final public class MetaPropertiesEnsembleTest {
         copier.errorLogDirs().add("/tmp/foo");
         copier.logDirProps().put("/tmp/foo", new MetaProperties.Builder().build());
         assertEquals("Error: log directory /tmp/foo is in both errorLogDirs and logDirProps.",
-            assertThrows(RuntimeException.class, () -> copier.verify()).getMessage());
+            assertThrows(RuntimeException.class, copier::verify).getMessage());
     }
 
-    private final static List<MetaProperties> SAMPLE_META_PROPS_LIST = Arrays.asList(
+    private static final List<MetaProperties> SAMPLE_META_PROPS_LIST = Arrays.asList(
         new MetaProperties.Builder().
             setVersion(MetaPropertiesVersion.V1).
             setClusterId("AtgGav8yQjiaJ3rTXE7VCA").
@@ -435,9 +435,8 @@ final public class MetaPropertiesEnsembleTest {
         MetaPropertiesEnsemble.Loader loader = new MetaPropertiesEnsemble.Loader();
         String dir0 = createLogDir(SAMPLE_META_PROPS_LIST.get(0));
         loader.addMetadataLogDir(dir0);
-        loader.addLogDir(dir0);
         String dir1 = createLogDir(SAMPLE_META_PROPS_LIST.get(1));
-        loader.addLogDir(dir1);
+        loader.addLogDirs(Arrays.asList(dir0, dir1));
         MetaPropertiesEnsemble ensemble = loader.load();
         MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(ensemble);
         copier.setLogDirProps(dir0, SAMPLE_META_PROPS_LIST.get(2));

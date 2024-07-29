@@ -17,8 +17,9 @@
 
 package org.apache.kafka.tools.reassign;
 
-import joptsimple.OptionSpec;
 import org.apache.kafka.server.util.CommandDefaultOptions;
+
+import joptsimple.OptionSpec;
 
 public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     // Actions

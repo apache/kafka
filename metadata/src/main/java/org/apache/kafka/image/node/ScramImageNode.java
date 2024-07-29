@@ -31,7 +31,7 @@ public class ScramImageNode implements MetadataNode {
     /**
      * The name of this node.
      */
-    public final static String NAME = "scram";
+    public static final String NAME = "scram";
 
     /**
      * The SCRAM image.

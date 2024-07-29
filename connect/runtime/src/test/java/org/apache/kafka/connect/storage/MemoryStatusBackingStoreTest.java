@@ -19,12 +19,13 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.connect.runtime.ConnectorStatus;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class MemoryStatusBackingStoreTest {
 

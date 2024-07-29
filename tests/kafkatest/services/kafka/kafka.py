@@ -806,7 +806,13 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return s
 
     def start_cmd(self, node):
-        cmd = "export JMX_PORT=%d; " % self.jmx_port
+        """
+        To bring up kafka using native image, pass following in ducktape options
+        --globals '{"kafka_mode": "native"}'
+        """
+        kafka_mode = self.context.globals.get("kafka_mode", "")
+        cmd = f"export KAFKA_MODE={kafka_mode}; "
+        cmd += "export JMX_PORT=%d; " % self.jmx_port
         cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
         heap_kafka_opts = "-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % \
                           self.logs["kafka_heap_dump_file"]["path"]
@@ -926,7 +932,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
-            cmd = "jcmd | grep -e %s | awk '{print $1}'" % self.java_class_name()
+            cmd = "ps ax | grep -i %s | grep -v grep | awk '{print $1}'" % self.java_class_name()
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
         except (RemoteCommandError, ValueError) as e:
@@ -994,7 +1000,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def clean_node(self, node):
         JmxMixin.clean_node(self, node)
         self.security_config.clean_node(node)
-        node.account.kill_java_processes(self.java_class_name(),
+        node.account.kill_process(self.java_class_name(),
                                          clean_shutdown=False, allow_fail=True)
         node.account.ssh("sudo rm -rf -- %s" % KafkaService.PERSISTENT_ROOT, allow_fail=False)
 
@@ -1396,12 +1402,13 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 continue
 
             fields = line.split("\t")
-            # ["Partition: 4", "Leader: 0"] -> ["4", "0"]
-            fields = list(map(lambda x: x.split(" ")[1], fields))
+            fields = dict([field.split(": ") for field in fields if len(field.split(": ")) == 2])
             partitions.append(
-                {"topic": fields[0],
-                 "partition": int(fields[1]),
-                 "replicas": list(map(int, fields[3].split(',')))})
+                {"topic": fields["Topic"],
+                 "partition": int(fields["Partition"]),
+                 "replicas": list(map(int, fields["Replicas"].split(',')))
+                 })
+
         return {"partitions": partitions}
 
 

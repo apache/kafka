@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -27,6 +29,7 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class DescribeTopicPartitionsResponse extends AbstractResponse {
     private final DescribeTopicPartitionsResponseData data;
@@ -79,5 +82,17 @@ public class DescribeTopicPartitionsResponse extends AbstractResponse {
     public static DescribeTopicPartitionsResponse parse(ByteBuffer buffer, short version) {
         return new DescribeTopicPartitionsResponse(
             new DescribeTopicPartitionsResponseData(new ByteBufferAccessor(buffer), version));
+    }
+
+    public static TopicPartitionInfo partitionToTopicPartitionInfo(
+        DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition partition,
+        Map<Integer, Node> nodes) {
+        return new TopicPartitionInfo(
+            partition.partitionIndex(),
+            nodes.get(partition.leaderId()),
+            partition.replicaNodes().stream().map(id -> nodes.getOrDefault(id, new Node(id, "", -1))).collect(Collectors.toList()),
+            partition.isrNodes().stream().map(id -> nodes.getOrDefault(id, new Node(id, "", -1))).collect(Collectors.toList()),
+            partition.eligibleLeaderReplicas().stream().map(id -> nodes.getOrDefault(id, new Node(id, "", -1))).collect(Collectors.toList()),
+            partition.lastKnownElr().stream().map(id -> nodes.getOrDefault(id, new Node(id, "", -1))).collect(Collectors.toList()));
     }
 }

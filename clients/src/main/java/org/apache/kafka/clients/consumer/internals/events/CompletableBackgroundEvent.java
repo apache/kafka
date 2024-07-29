@@ -27,43 +27,29 @@ import java.util.concurrent.CompletableFuture;
 public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent implements CompletableEvent<T> {
 
     private final CompletableFuture<T> future;
+    private final long deadlineMs;
 
-    protected CompletableBackgroundEvent(Type type) {
+    /**
+     * <em>Note</em>: the {@code deadlineMs} is the future time of expiration, <em>not</em> a timeout.
+     */
+    protected CompletableBackgroundEvent(final Type type, final long deadlineMs) {
         super(type);
         this.future = new CompletableFuture<>();
+        this.deadlineMs = deadlineMs;
     }
 
+    @Override
     public CompletableFuture<T> future() {
         return future;
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        CompletableBackgroundEvent<?> that = (CompletableBackgroundEvent<?>) o;
-
-        return future.equals(that.future);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + future.hashCode();
-        return result;
+    public long deadlineMs() {
+        return deadlineMs;
     }
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", future=" + future;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "{" +
-                toStringBase() +
-                '}';
+        return super.toStringBase() + ", future=" + future + ", deadlineMs=" + deadlineMs;
     }
 }

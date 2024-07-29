@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopi
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -101,7 +102,7 @@ public class LeaderAndIsrRequestTest {
 
     /**
      * Verifies the logic we have in LeaderAndIsrRequest to present a unified interface across the various versions
-     * works correctly. For example, `LeaderAndIsrPartitionState.topicName` is not serialiazed/deserialized in
+     * works correctly. For example, `LeaderAndIsrPartitionState.topicName` is not serialized/deserialized in
      * recent versions, but we set it manually so that we can always present the ungrouped partition states
      * independently of the version.
      */
@@ -118,8 +119,8 @@ public class LeaderAndIsrRequestTest {
                     .setIsr(asList(0, 1))
                     .setPartitionEpoch(10)
                     .setReplicas(asList(0, 1, 2))
-                    .setAddingReplicas(asList(3))
-                    .setRemovingReplicas(asList(2)),
+                    .setAddingReplicas(Collections.singletonList(3))
+                    .setRemovingReplicas(Collections.singletonList(2)),
                 new LeaderAndIsrPartitionState()
                     .setTopicName("topic0")
                     .setPartitionIndex(1)

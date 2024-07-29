@@ -24,14 +24,16 @@ import java.util.Properties
 import kafka.server.BrokerTopicStats
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, FetchIsolation, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, LogSegment, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex}
@@ -58,14 +60,14 @@ object LogTestUtils {
                       segmentBytes: Int = LogConfig.DEFAULT_SEGMENT_BYTES,
                       retentionMs: Long = LogConfig.DEFAULT_RETENTION_MS,
                       localRetentionMs: Long = LogConfig.DEFAULT_LOCAL_RETENTION_MS,
-                      retentionBytes: Long = LogConfig.DEFAULT_RETENTION_BYTES,
+                      retentionBytes: Long = ServerLogConfigs.LOG_RETENTION_BYTES_DEFAULT,
                       localRetentionBytes: Long = LogConfig.DEFAULT_LOCAL_RETENTION_BYTES,
                       segmentJitterMs: Long = LogConfig.DEFAULT_SEGMENT_JITTER_MS,
-                      cleanupPolicy: String = LogConfig.DEFAULT_CLEANUP_POLICY,
+                      cleanupPolicy: String = ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT,
                       maxMessageBytes: Int = LogConfig.DEFAULT_MAX_MESSAGE_BYTES,
-                      indexIntervalBytes: Int = LogConfig.DEFAULT_INDEX_INTERVAL_BYTES,
-                      segmentIndexBytes: Int = LogConfig.DEFAULT_SEGMENT_INDEX_BYTES,
-                      fileDeleteDelayMs: Long = LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
+                      indexIntervalBytes: Int = ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT,
+                      segmentIndexBytes: Int = ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT,
+                      fileDeleteDelayMs: Long = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
                       remoteLogStorageEnable: Boolean = LogConfig.DEFAULT_REMOTE_STORAGE_ENABLE): LogConfig = {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs: java.lang.Long)
@@ -92,8 +94,8 @@ object LogTestUtils {
                 logStartOffset: Long = 0L,
                 recoveryPoint: Long = 0L,
                 maxTransactionTimeoutMs: Int = 5 * 60 * 1000,
-                producerStateManagerConfig: ProducerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, false),
-                producerIdExpirationCheckIntervalMs: Int = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
+                producerStateManagerConfig: ProducerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+                producerIdExpirationCheckIntervalMs: Int = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT,
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
                 keepPartitionMetadataFile: Boolean = true,
@@ -155,12 +157,12 @@ object LogTestUtils {
         new SimpleRecord(data, data)
       }
 
-      segment.append(MemoryRecords.withRecords(baseOffset, CompressionType.NONE, 0,
+      segment.append(MemoryRecords.withRecords(baseOffset, Compression.NONE, 0,
         record(baseOffset)))
-      segment.append(MemoryRecords.withRecords(baseOffset + 1, CompressionType.NONE, 0,
+      segment.append(MemoryRecords.withRecords(baseOffset + 1, Compression.NONE, 0,
         record(baseOffset + 1),
         record(baseOffset + 2)))
-      segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
+      segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, Compression.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
       // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
       Files.createFile(LogFileUtils.offsetIndexFile(logDir, baseOffset).toPath)
@@ -264,7 +266,7 @@ object LogTestUtils {
     val simpleRecords = (0 until numRecords).map { seq =>
       new SimpleRecord(s"$seq".getBytes)
     }
-    val records = MemoryRecords.withRecords(CompressionType.NONE, simpleRecords: _*)
+    val records = MemoryRecords.withRecords(Compression.NONE, simpleRecords: _*)
     log.appendAsLeader(records, leaderEpoch = 0)
   }
 
@@ -287,10 +289,10 @@ object LogTestUtils {
       }
 
       val records = if (isTransactional) {
-        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
+        MemoryRecords.withTransactionalRecords(Compression.NONE, producerId,
           producerEpoch, sequence, simpleRecords: _*)
       } else {
-        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId,
+        MemoryRecords.withIdempotentRecords(Compression.NONE, producerId,
           producerEpoch, sequence, simpleRecords: _*)
       }
 

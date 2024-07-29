@@ -25,7 +25,9 @@
   // Version 3 adds ProducerId and ProducerEpoch, allowing producers to try to resume after an INVALID_PRODUCER_EPOCH error
   //
   // Version 4 adds the support for new error code PRODUCER_FENCED.
-  "validVersions": "0-4",
+  //
+  // Verison 5 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
+  "validVersions": "0-5",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "nullableVersions": "0+", "entityType": "transactionalId",

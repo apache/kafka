@@ -30,6 +30,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
@@ -38,11 +39,13 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -50,7 +53,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -60,11 +62,11 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CHANGELOG_END_OFFSETS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -75,7 +77,8 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class HighAvailabilityStreamsPartitionAssignorTest {
 
     private final List<PartitionInfo> infos = asList(
@@ -147,7 +150,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
     private void createMockTaskManager() {
         when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
-        when(taskManager.processId()).thenReturn(UUID_1);
+        when(taskManager.processId()).thenReturn(PID_1);
         topologyMetadata.buildAndRewriteTopology();
     }
 
@@ -161,14 +164,9 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
     }
 
-    @Before
-    public void setUp() {
-        adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS);
-    }
-
-
     @Test
     public void shouldReturnAllActiveTasksToPreviousOwnerRegardlessOfBalanceAndTriggerRebalanceIfEndOffsetFetchFailsAndHighAvailabilityEnabled() {
+        adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS, true);
         final long rebalanceInterval = 5 * 60 * 1000L;
 
         builder.addSource(null, "source1", null, null, null, "topic1");
@@ -186,12 +184,12 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         subscriptions.put(firstConsumer,
                           new Subscription(
                               singletonList("source1"),
-                              getInfo(UUID_1, allTasks).encode()
+                              getInfo(PID_1, allTasks).encode()
                           ));
         subscriptions.put(newConsumer,
                           new Subscription(
                               singletonList("source1"),
-                              getInfo(UUID_2, EMPTY_TASKS).encode()
+                              getInfo(PID_2, EMPTY_TASKS).encode()
                           ));
 
         final Map<String, Assignment> assignments = partitionAssignor
@@ -230,8 +228,9 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
         createMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-            singletonList(APPLICATION_ID + "-store1-changelog"),
-            singletonList(3)));
+                singletonList(APPLICATION_ID + "-store1-changelog"),
+                singletonList(3)),
+            true);
         configurePartitionAssignorWith(singletonMap(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, rebalanceInterval));
 
         final String firstConsumer = "consumer1";
@@ -240,12 +239,12 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         subscriptions.put(firstConsumer,
                           new Subscription(
                               singletonList("source1"),
-                              getInfo(UUID_1, allTasks).encode()
+                              getInfo(PID_1, allTasks).encode()
                           ));
         subscriptions.put(newConsumer,
                           new Subscription(
                               singletonList("source1"),
-                              getInfo(UUID_2, EMPTY_TASKS).encode()
+                              getInfo(PID_2, EMPTY_TASKS).encode()
                           ));
 
         final Map<String, Assignment> assignments = partitionAssignor
@@ -297,7 +296,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         return changelogEndOffsets;
     }
 
-    private static SubscriptionInfo getInfo(final UUID processId,
+    private static SubscriptionInfo getInfo(final ProcessId processId,
                                             final Set<TaskId> prevTasks) {
         return new SubscriptionInfo(
             LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks), (byte) 0, 0, Collections.emptyMap());

@@ -754,7 +754,7 @@ public interface Admin extends AutoCloseable {
      * </ul>
      *
      * @param options The options to use when creating delegation token.
-     * @return The DeleteRecordsResult.
+     * @return The CreateDelegationTokenResult.
      */
     CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options);
 
@@ -901,7 +901,7 @@ public interface Admin extends AutoCloseable {
      * List the consumer groups available in the cluster.
      *
      * @param options The options to use when listing the consumer groups.
-     * @return The ListGroupsResult.
+     * @return The ListConsumerGroupsResult.
      */
     ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
 
@@ -911,7 +911,7 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for {@link #listConsumerGroups(ListConsumerGroupsOptions)} with default options.
      * See the overload for more details.
      *
-     * @return The ListGroupsResult.
+     * @return The ListConsumerGroupsResult.
      */
     default ListConsumerGroupsResult listConsumerGroups() {
         return listConsumerGroups(new ListConsumerGroupsOptions());
@@ -921,7 +921,7 @@ public interface Admin extends AutoCloseable {
      * List the consumer group offsets available in the cluster.
      *
      * @param options The options to use when listing the consumer group offsets.
-     * @return The ListGroupOffsetsResult
+     * @return The ListConsumerGroupOffsetsResult
      */
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
         @SuppressWarnings("deprecation")
@@ -939,7 +939,7 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for {@link #listConsumerGroupOffsets(Map, ListConsumerGroupOffsetsOptions)}
      * to list offsets of all partitions of one group with default options.
      *
-     * @return The ListGroupOffsetsResult.
+     * @return The ListConsumerGroupOffsetsResult.
      */
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId) {
         return listConsumerGroupOffsets(groupId, new ListConsumerGroupOffsetsOptions());
@@ -1634,7 +1634,7 @@ public interface Admin extends AutoCloseable {
      * should typically attempt to reduce the size of the result set using
      * {@link ListTransactionsOptions#filterProducerIds(Collection)} or
      * {@link ListTransactionsOptions#filterStates(Collection)} or
-     * {@link ListTransactionsOptions#durationFilter(Long)}
+     * {@link ListTransactionsOptions#filterOnDuration(long)}.
      *
      * @param options Options to control the method behavior (including filters)
      * @return The result
@@ -1710,6 +1710,62 @@ public interface Admin extends AutoCloseable {
      * @return The client's assigned instance id used for metrics collection.
      */
     Uuid clientInstanceId(Duration timeout);
+
+    /**
+     * Add a new voter node to the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     * @param endpoints         The endpoints that the new voter has.
+     */
+    default AddRaftVoterResult addRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        Set<RaftVoterEndpoint> endpoints
+    ) {
+        return addRaftVoter(voterId, voterDirectoryId, endpoints, new AddRaftVoterOptions());
+    }
+
+    /**
+     * Add a new voter node to the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     * @param endpoints         The endpoints that the new voter has.
+     * @param options           The options to use when adding the new voter node.
+     */
+    AddRaftVoterResult addRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        Set<RaftVoterEndpoint> endpoints,
+        AddRaftVoterOptions options
+    );
+
+    /**
+     * Remove a voter node from the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     */
+    default RemoveRaftVoterResult removeRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId
+    ) {
+        return removeRaftVoter(voterId, voterDirectoryId, new RemoveRaftVoterOptions());
+    }
+
+    /**
+     * Remove a voter node from the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     * @param options           The options to use when removing the voter node.
+     */
+    RemoveRaftVoterResult removeRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        RemoveRaftVoterOptions options
+    );
 
     /**
      * Get the metrics kept by the adminClient

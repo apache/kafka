@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -120,7 +121,7 @@ public class RelaxedNullKeyRequirementJoinTest {
             .to(OUT);
         initTopology();
         left.pipeInput(null, "leftValue", 1);
-        assertEquals(Collections.<KeyValue<String, String>>emptyList(), out.readKeyValuesToList());
+        assertEquals(Collections.emptyList(), out.readKeyValuesToList());
     }
 
     private void initTopology() {

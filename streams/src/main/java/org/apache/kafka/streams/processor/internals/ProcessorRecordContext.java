@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -37,17 +38,28 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     private final String topic;
     private final int partition;
     private final Headers headers;
+    private final ConsumerRecord<byte[], byte[]> rawRecord;
 
     public ProcessorRecordContext(final long timestamp,
                                   final long offset,
                                   final int partition,
                                   final String topic,
                                   final Headers headers) {
+        this(timestamp, offset, partition, topic, headers, null);
+    }
+
+    public ProcessorRecordContext(final long timestamp,
+                                  final long offset,
+                                  final int partition,
+                                  final String topic,
+                                  final Headers headers,
+                                  final ConsumerRecord<byte[], byte[]> rawRecord) {
         this.timestamp = timestamp;
         this.offset = offset;
         this.topic = topic;
         this.partition = partition;
         this.headers = Objects.requireNonNull(headers);
+        this.rawRecord = rawRecord;
     }
 
     @Override
@@ -73,6 +85,10 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     @Override
     public Headers headers() {
         return headers;
+    }
+
+    public ConsumerRecord<byte[], byte[]> rawRecord() {
+        return rawRecord;
     }
 
     public long residentMemorySizeEstimate() {
@@ -173,7 +189,7 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
             headers = new RecordHeaders(headerArr);
         }
 
-        return new ProcessorRecordContext(timestamp, offset, partition, topic, headers);
+        return new ProcessorRecordContext(timestamp, offset, partition, topic, headers, null);
     }
 
     @Override
@@ -193,12 +209,14 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     }
 
     /**
-     * Equality is implemented in support of tests, *not* for use in Hash collections, since this class is mutable.
+     * Equality is implemented in support of tests, *not* for use in Hash collections, since this class is mutable
+     * due to the {@link Headers} field it contains.
      */
     @Deprecated
     @Override
     public int hashCode() {
-        throw new UnsupportedOperationException("ProcessorRecordContext is unsafe for use in Hash collections");
+        throw new UnsupportedOperationException("ProcessorRecordContext is unsafe for use in Hash collections "
+                                                    + "due to the mutable Headers field");
     }
 
     @Override

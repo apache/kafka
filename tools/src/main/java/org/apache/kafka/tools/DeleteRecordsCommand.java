@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.tools;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import joptsimple.OptionSpec;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
@@ -33,6 +31,9 @@ import org.apache.kafka.server.util.Json;
 import org.apache.kafka.server.util.json.DecodeJson;
 import org.apache.kafka.server.util.json.JsonObject;
 import org.apache.kafka.server.util.json.JsonValue;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -48,6 +49,8 @@ import java.util.StringJoiner;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+import joptsimple.OptionSpec;
+
 /**
  * A command for delete records of the given partitions down to the specified offset.
  */
@@ -61,7 +64,18 @@ public class DeleteRecordsCommand {
     private static final DecodeJson.DecodeString STRING = new DecodeJson.DecodeString();
 
     public static void main(String[] args) throws Exception {
-        execute(args, System.out);
+        Exit.exit(mainNoExit(args));
+    }
+
+    static int mainNoExit(String... args) {
+        try {
+            execute(args, System.out);
+            return 0;
+        } catch (Exception e) {
+            System.err.println(e.getMessage());
+            System.err.println(Utils.stackTrace(e));
+            return 1;
+        }
     }
 
     static Map<TopicPartition, List<Long>> parseOffsetJsonStringWithoutDedup(String jsonData) throws JsonProcessingException {

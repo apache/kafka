@@ -19,7 +19,7 @@ from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 from ducktape.errors import TimeoutError
 
-from kafkatest.services.kafka import quorum
+from kafkatest.services.kafka import quorum, consumer_group
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.security.security_config import SslStores
 from kafkatest.tests.end_to_end import EndToEndTest
@@ -61,28 +61,30 @@ class SecurityTest(EndToEndTest):
     @matrix(
         security_protocol=['PLAINTEXT'],
         interbroker_security_protocol=['SSL'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         security_protocol=['PLAINTEXT'],
         interbroker_security_protocol=['SSL'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
     @matrix(
         security_protocol=['SSL'],
         interbroker_security_protocol=['PLAINTEXT'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         security_protocol=['SSL'],
         interbroker_security_protocol=['PLAINTEXT'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_client_ssl_endpoint_validation_failure(self, security_protocol, interbroker_security_protocol, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_client_ssl_endpoint_validation_failure(self, security_protocol, interbroker_security_protocol, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Test that invalid hostname in certificate results in connection failures.
         When security_protocol=SSL, client SSL handshakes are expected to fail due to hostname verification failure.
@@ -120,11 +122,11 @@ class SecurityTest(EndToEndTest):
             # the inter-broker security protocol using TLS with a hostname verification failure
             # doesn't impact a producer in case of a single broker with a KRaft Controller,
             # so confirm that this is in fact the observed behavior
-            self.create_and_start_clients(log_level="INFO")
+            self.create_and_start_clients(log_level="INFO", group_protocol=group_protocol)
             self.run_validation()
         else:
             # We need more verbose logging to catch the expected errors
-            self.create_and_start_clients(log_level="DEBUG")
+            self.create_and_start_clients(log_level="DEBUG", group_protocol=group_protocol)
 
             try:
                 wait_until(lambda: self.producer.num_acked > 0, timeout_sec=30)
@@ -143,26 +145,27 @@ class SecurityTest(EndToEndTest):
 
             SecurityConfig.ssl_stores.valid_hostname = True
             self.kafka.restart_cluster()
-            self.create_and_start_clients(log_level="INFO")
+            self.create_and_start_clients(log_level="INFO", group_protocol=group_protocol)
             self.run_validation()
 
-    def create_and_start_clients(self, log_level):
+    def create_and_start_clients(self, log_level, group_protocol):
         self.create_producer(log_level=log_level)
         self.producer.start()
 
-        self.create_consumer(log_level=log_level)
+        self.create_consumer(log_level=log_level, group_protocol=group_protocol)
         self.consumer.start()
 
     @cluster(num_nodes=2)
     @matrix(
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_quorum_ssl_endpoint_validation_failure(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_quorum_ssl_endpoint_validation_failure(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Test that invalid hostname in ZooKeeper or KRaft Controller results in broker inability to start.
         """

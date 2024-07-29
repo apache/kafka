@@ -22,7 +22,6 @@ import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.security.authorizer.AclAuthorizer.{NoAcls, VersionedAcls}
-import kafka.security.authorizer.AclEntry
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
@@ -34,7 +33,8 @@ import org.apache.kafka.common.security.token.delegation.{DelegationToken, Token
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.server.config.{ConfigType, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
@@ -60,8 +60,12 @@ case class SuccessfulRegistrationResult(zkControllerEpoch: Int, controllerEpochZ
  * easier to migrate away from `ZkUtils` (since removed). We should revisit this. We should also consider whether a
  * monolithic [[kafka.zk.ZkData]] is the way to go.
  */
-class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends AutoCloseable with
-  Logging {
+class KafkaZkClient private[zk] (
+  zooKeeperClient: ZooKeeperClient,
+  isSecure: Boolean,
+  time: Time,
+  enableEntityConfigControllerCheck: Boolean
+) extends AutoCloseable with Logging {
 
   private val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup(this.getClass) {
     override def metricName(name: String, metricTags: util.Map[String, String]): MetricName = {
@@ -459,6 +463,14 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Sets or creates the entity znode path with the given configs depending
    * on whether it already exists or not.
    *
+   * If enableEntityConfigControllerCheck is set, this method will ensure that a ZK controller is defined and
+   * that it is not modified within the duration of this call. This is done to prevent configs from being
+   * created or modified while the ZK to KRaft migration is taking place.
+   *
+   * The only case where enableEntityConfigControllerCheck should be false is when being called by ConfigCommand,
+   * i.e., "kafka-configs.sh --zookeeper". This is an old behavior we have kept around to allow users to setup
+   * SCRAM credentials and other configs before the cluster is started for the first time.
+   *
    * If this is method is called concurrently, the last writer wins. In cases where we update configs and then
    * partition assignment (i.e. create topic), it's possible for one thread to set this and the other to set the
    * partition assignment. As such, the recommendation is to never call create topic for the same topic with different
@@ -467,13 +479,50 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param rootEntityType entity type
    * @param sanitizedEntityName entity name
    * @throws KeeperException if there is an error while setting or creating the znode
+   * @throws ControllerMovedException if no controller is defined, or a KRaft controller is defined
    */
   def setOrCreateEntityConfigs(rootEntityType: String, sanitizedEntityName: String, config: Properties): Unit = {
+    val controllerZkVersionOpt: Option[Int] = if (enableEntityConfigControllerCheck) {
+      val controllerRegistration = getControllerRegistration match {
+        case Some(registration) => registration
+        case None =>
+          // This case is mainly here to make tests less flaky (by virtue of retries).
+          // In practice, we always expect a /controller ZNode to exist
+          throw new ControllerMovedException(s"Cannot set entity configs for $rootEntityType $sanitizedEntityName " +
+            s"when there is no controller.")
+      }
+
+      // If there is a KRaft controller defined, don't even attempt this write. The broker will soon get a UMR
+      // from the new KRaft controller that lets it know about the new controller. It will then forward
+      // IncrementalAlterConfig requests instead of processing directly.
+      if (controllerRegistration.kraftEpoch.exists(epoch => epoch > 0)) {
+        throw new ControllerMovedException(s"Cannot set entity configs for $rootEntityType $sanitizedEntityName " +
+          s"directly when there is a KRaft controller.")
+      }
+
+      Some(controllerRegistration.zkVersion)
+    } else {
+      logger.warn("Setting entity configs without any checks on the controller.")
+      None
+    }
 
     def set(configData: Array[Byte]): SetDataResponse = {
-      val setDataRequest = SetDataRequest(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName),
-        configData, ZkVersion.MatchAnyVersion)
-      retryRequestUntilConnected(setDataRequest)
+      // Since we're guarding against the controller switching to KRaft, we need to check that the controller hasn't
+      // changed during this method. We do that here by adding a CheckOp on the controller ZNode. The reason we
+      // don't use the controller epoch zkVersion here is that we can't consistently read the controller and
+      // controller epoch. This does _not_ guard against the existing "last writer wins" behavior of this method.
+      controllerZkVersionOpt match {
+        case Some(controllerZkVersion) =>
+          val multi = MultiRequest(Seq(
+            CheckOp(ControllerZNode.path, controllerZkVersion),
+            SetDataOp(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName), configData, ZkVersion.MatchAnyVersion)
+          ))
+          val results = retryRequestUntilConnected(multi)
+          unwrapResponseWithControllerEpochCheck(results).asInstanceOf[SetDataResponse]
+        case None =>
+          val setDataRequest = SetDataRequest(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName), configData, ZkVersion.MatchAnyVersion)
+          retryRequestUntilConnected(setDataRequest)
+      }
     }
 
     def createOrSet(configData: Array[Byte]): Unit = {
@@ -1292,7 +1341,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   def createAclPaths(): Unit = {
     ZkAclStore.stores.foreach(store => {
       createRecursive(store.aclPath, throwIfPathExists = false)
-      AclEntry.ResourceTypes.foreach(resourceType => createRecursive(store.path(resourceType), throwIfPathExists = false))
+      AclEntry.RESOURCE_TYPES.forEach(resourceType => createRecursive(store.path(resourceType), throwIfPathExists = false))
     })
 
     ZkAclChangeStore.stores.foreach(store => createRecursive(store.aclChangePath, throwIfPathExists = false))
@@ -1994,10 +2043,10 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
                 case Some(value) =>
                   val failedPayload = MigrationZNode.decode(value, version, -1)
                   throw new RuntimeException(
-                    s"Conditional update on KRaft Migration ZNode failed. Expected zkVersion = $version. The failed " +
+                    s"Conditional update on KRaft Migration ZNode failed. Sent zkVersion = $version. The failed " +
                     s"write was: $failedPayload. This indicates that another KRaft controller is making writes to ZooKeeper.")
                 case None =>
-                  throw new RuntimeException(s"Check op on KRaft Migration ZNode failed. Expected zkVersion = $version. " +
+                  throw new RuntimeException(s"Check op on KRaft Migration ZNode failed. Sent zkVersion = $version. " +
                     s"This indicates that another KRaft controller is making writes to ZooKeeper.")
               }
             } else if (errorCode == Code.OK) {
@@ -2230,7 +2279,8 @@ object KafkaZkClient {
             zkClientConfig: ZKClientConfig,
             metricGroup: String = "kafka.server",
             metricType: String = "SessionExpireListener",
-            createChrootIfNecessary: Boolean = false
+            createChrootIfNecessary: Boolean = false,
+            enableEntityConfigControllerCheck: Boolean = true
   ): KafkaZkClient = {
 
     /* ZooKeeper 3.6.0 changed the default configuration for JUTE_MAXBUFFER from 4 MB to 1 MB.
@@ -2265,7 +2315,7 @@ object KafkaZkClient {
     }
     val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
       time, metricGroup, metricType, zkClientConfig, name)
-    new KafkaZkClient(zooKeeperClient, isSecure, time)
+    new KafkaZkClient(zooKeeperClient, isSecure, time, enableEntityConfigControllerCheck)
   }
 
   // A helper function to transform a regular request into a MultiRequest
@@ -2349,9 +2399,9 @@ object KafkaZkClient {
 
     if (secureAclsEnabled && !isZkSecurityEnabled)
       throw new java.lang.SecurityException(
-        s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least " +
-          s"${KafkaConfig.ZkSslClientEnableProp}, ${KafkaConfig.ZkClientCnxnSocketProp}, and " +
-          s"${KafkaConfig.ZkSslKeyStoreLocationProp} was not present and the verification of the JAAS login file failed " +
+        s"${ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG} is true, but ZooKeeper client TLS configuration identifying at least " +
+          s"${ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG}, ${ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG}, and " +
+          s"${ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG} was not present and the verification of the JAAS login file failed " +
           s"${JaasUtils.zkSecuritySysConfigString}")
 
     KafkaZkClient(config.zkConnect, secureAclsEnabled, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,

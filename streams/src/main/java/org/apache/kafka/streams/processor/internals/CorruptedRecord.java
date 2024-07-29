@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+
+import java.util.Objects;
 
 /**
  * This class represents a version of a {@link StampedRecord} that failed to deserialize. We need
@@ -27,7 +28,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 public class CorruptedRecord extends StampedRecord {
 
     CorruptedRecord(final ConsumerRecord<byte[], byte[]> rawRecord) {
-        super(rawRecord, ConsumerRecord.NO_TIMESTAMP);
+        super(rawRecord, ConsumerRecord.NO_TIMESTAMP, rawRecord);
     }
 
     @Override

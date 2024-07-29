@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -30,6 +30,7 @@ import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -37,6 +38,7 @@ import java.util.Collections;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -114,10 +116,10 @@ public class CoordinatorRequestManagerTest {
         expectFindCoordinatorRequest(coordinatorManager, Errors.GROUP_AUTHORIZATION_FAILED);
 
         verify(backgroundEventHandler).add(argThat(backgroundEvent -> {
-            if (!(backgroundEvent instanceof ErrorBackgroundEvent))
+            if (!(backgroundEvent instanceof ErrorEvent))
                 return false;
 
-            RuntimeException exception = ((ErrorBackgroundEvent) backgroundEvent).error();
+            RuntimeException exception = ((ErrorEvent) backgroundEvent).error();
 
             if (!(exception instanceof GroupAuthorizationException))
                 return false;
@@ -188,7 +190,6 @@ public class CoordinatorRequestManagerTest {
 
     private CoordinatorRequestManager setupCoordinatorManager(String groupId) {
         return new CoordinatorRequestManager(
-            time,
             new LogContext(),
             RETRY_BACKOFF_MS,
             RETRY_BACKOFF_MS,
@@ -202,7 +203,7 @@ public class CoordinatorRequestManagerTest {
         Errors error
     ) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof FindCoordinatorRequest);
+        assertInstanceOf(FindCoordinatorRequest.class, abstractRequest);
         FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) abstractRequest;
 
         FindCoordinatorResponse findCoordinatorResponse =

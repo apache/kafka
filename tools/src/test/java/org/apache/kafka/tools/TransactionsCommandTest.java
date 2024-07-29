@@ -42,6 +42,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -443,13 +444,7 @@ public class TransactionsCommandTest {
         AbortTransactionResult abortTransactionResult = Mockito.mock(AbortTransactionResult.class);
         KafkaFuture<Void> abortFuture = completedFuture(null);
 
-        final int expectedCoordinatorEpoch;
-        if (coordinatorEpoch < 0) {
-            expectedCoordinatorEpoch = 0;
-        } else {
-            expectedCoordinatorEpoch = coordinatorEpoch;
-        }
-
+        int expectedCoordinatorEpoch = Math.max(coordinatorEpoch, 0);
         AbortTransactionSpec expectedAbortSpec = new AbortTransactionSpec(
             topicPartition, producerId, producerEpoch, expectedCoordinatorEpoch);
 

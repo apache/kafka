@@ -20,7 +20,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
-import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -36,8 +35,6 @@ import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.SharedTopicAdmin;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -54,8 +51,7 @@ import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
  * stopping worker instances.
  * </p>
  */
-public class ConnectDistributed extends AbstractConnectCli<DistributedConfig> {
-    private static final Logger log = LoggerFactory.getLogger(ConnectDistributed.class);
+public class ConnectDistributed extends AbstractConnectCli<DistributedHerder, DistributedConfig> {
 
     public ConnectDistributed(String... args) {
         super(args);
@@ -67,7 +63,7 @@ public class ConnectDistributed extends AbstractConnectCli<DistributedConfig> {
     }
 
     @Override
-    protected Herder createHerder(DistributedConfig config, String workerId, Plugins plugins,
+    protected DistributedHerder createHerder(DistributedConfig config, String workerId, Plugins plugins,
                                   ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                                   RestServer restServer, RestClient restClient) {
 

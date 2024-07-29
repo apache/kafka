@@ -34,6 +34,7 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,6 +77,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                 false
             );
             // register the store
+            open = true;
+
             context.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {

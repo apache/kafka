@@ -348,7 +348,7 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
       DeleteRequest(DeleteTopicsTopicZNode.path(topicName), ZkVersion.MatchAnyVersion)
     }.toSeq
 
-    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(deleteRequests.toSeq, state)
+    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(deleteRequests, state)
     val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
     if (resultCodes.forall { case (_, code) => code.equals(Code.OK) }) {
       state.withMigrationZkVersion(migrationZkVersion)

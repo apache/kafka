@@ -40,7 +40,9 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesVersion}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion}
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
@@ -82,7 +84,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
   def testIsrExpandAndShrinkWithConcurrentProduce(): Unit = {
     val localId = 0
     val remoteId = 1
-    val metadataCache = MetadataCache.kRaftMetadataCache(localId)
+    val metadataCache = MetadataCache.kRaftMetadataCache(localId, () => KRaftVersion.KRAFT_VERSION_0)
     channel = new ControllerChannel
     replicaManager = buildReplicaManager(localId, channel, metadataCache)
 
@@ -165,12 +167,12 @@ class ReplicaManagerConcurrencyTest extends Logging {
     TestUtils.formatDirectories(immutable.Seq(logDir.getAbsolutePath), metaProperties, MetadataVersion.latestTesting(), None)
 
     val props = new Properties
-    props.put(KafkaConfig.QuorumVotersProp, "100@localhost:12345")
-    props.put(KafkaConfig.ProcessRolesProp, "broker")
-    props.put(KafkaConfig.NodeIdProp, localId.toString)
-    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
-    props.put(KafkaConfig.LogDirProp, logDir.getAbsolutePath)
-    props.put(KafkaConfig.ReplicaLagTimeMaxMsProp, 5000.toString)
+    props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "100@localhost:12345")
+    props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    props.put(KRaftConfigs.NODE_ID_CONFIG, localId.toString)
+    props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
+    props.put(ServerLogConfigs.LOG_DIR_CONFIG, logDir.getAbsolutePath)
+    props.put(ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG, 5000.toString)
 
     val config = new KafkaConfig(props, doLog = false)
 
@@ -490,7 +492,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       setLeaderRecoveryState(leaderRecoveryState).
       setLeaderEpoch(leaderEpoch).
       setPartitionEpoch(partitionEpoch).
-      build();
+      build()
   }
 
   private def defaultBrokerEpoch(brokerId: Int): Long = {

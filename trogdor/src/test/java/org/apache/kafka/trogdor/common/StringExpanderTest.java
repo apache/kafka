@@ -17,17 +17,16 @@
 
 package org.apache.kafka.trogdor.common;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import org.junit.jupiter.api.Timeout;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+@Timeout(value = 120)
 public class StringExpanderTest {
 
     @Test

@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+
+import org.junit.jupiter.api.Test;
+
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.configProps;
-
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
-
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
-import org.junit.jupiter.api.Test;
 
 public class RackAwareGraphConstructorFactoryTest {
 

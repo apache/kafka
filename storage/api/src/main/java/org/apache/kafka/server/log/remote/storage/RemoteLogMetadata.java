@@ -32,7 +32,7 @@ public abstract class RemoteLogMetadata {
     private final int brokerId;
 
     /**
-     * Epoch time in milli seconds at which this event is generated.
+     * Epoch time in milliseconds at which this event is generated.
      */
     private final long eventTimestampMs;
 
@@ -42,7 +42,7 @@ public abstract class RemoteLogMetadata {
     }
 
     /**
-     * @return Epoch time in milli seconds at which this event is occurred.
+     * @return Epoch time in milliseconds at which this event is occurred.
      */
     public long eventTimestampMs() {
         return eventTimestampMs;

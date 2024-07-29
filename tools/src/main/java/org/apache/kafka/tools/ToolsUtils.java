@@ -19,6 +19,7 @@ package org.apache.kafka.tools;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.PrintStream;
 import java.util.Arrays;
@@ -28,6 +29,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
+
+import joptsimple.OptionParser;
 
 public class ToolsUtils {
     /**
@@ -155,4 +158,17 @@ public class ToolsUtils {
         return res;
     }
 
+    /**
+     * This is a simple wrapper around `CommandLineUtils.printUsageAndExit`.
+     * It is needed for tools migration (KAFKA-14525), as there is no Java equivalent for return type `Nothing`.
+     * Can be removed once [[kafka.tools.ConsoleConsumer]]
+     * and [[kafka.tools.ConsoleProducer]] are migrated.
+     *
+     * @param parser Command line options parser.
+     * @param message Error message.
+     */
+    public static void printUsageAndExit(OptionParser parser, String message) {
+        CommandLineUtils.printUsageAndExit(parser, message);
+        throw new AssertionError("printUsageAndExit should not return, but it did.");
+    }
 }

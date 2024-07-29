@@ -22,10 +22,11 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,11 +36,11 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
-import java.security.NoSuchAlgorithmException;
-import java.security.KeyStoreException;
 import java.security.Key;
 import java.security.KeyFactory;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.cert.Certificate;
@@ -69,8 +70,8 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
-import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
 
 public class DefaultSslEngineFactory implements SslEngineFactory {
 
@@ -93,12 +94,12 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
 
     @Override
     public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
-        return createSslEngine(Mode.CLIENT, peerHost, peerPort, endpointIdentification);
+        return createSslEngine(ConnectionMode.CLIENT, peerHost, peerPort, endpointIdentification);
     }
 
     @Override
     public SSLEngine createServerSslEngine(String peerHost, int peerPort) {
-        return createSslEngine(Mode.SERVER, peerHost, peerPort, null);
+        return createSslEngine(ConnectionMode.SERVER, peerHost, peerPort, null);
     }
 
     @Override
@@ -109,10 +110,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         if (truststore != null && truststore.modified()) {
             return true;
         }
-        if (keystore != null && keystore.modified()) {
-            return true;
-        }
-        return false;
+        return keystore != null && keystore.modified();
     }
 
     @Override
@@ -186,12 +184,12 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         return this.sslContext;
     }
 
-    private SSLEngine createSslEngine(Mode mode, String peerHost, int peerPort, String endpointIdentification) {
+    private SSLEngine createSslEngine(ConnectionMode connectionMode, String peerHost, int peerPort, String endpointIdentification) {
         SSLEngine sslEngine = sslContext.createSSLEngine(peerHost, peerPort);
         if (cipherSuites != null) sslEngine.setEnabledCipherSuites(cipherSuites);
         if (enabledProtocols != null) sslEngine.setEnabledProtocols(enabledProtocols);
 
-        if (mode == Mode.SERVER) {
+        if (connectionMode == ConnectionMode.SERVER) {
             sslEngine.setUseClientMode(false);
             switch (sslClientAuth) {
                 case REQUIRED:
@@ -220,8 +218,8 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         }
         log.warn("Unrecognized client authentication configuration {}.  Falling " +
                 "back to NONE.  Recognized client authentication configurations are {}.",
-                key, String.join(", ", SslClientAuth.VALUES.stream().
-                        map(Enum::name).collect(Collectors.toList())));
+                key, SslClientAuth.VALUES.stream().
+                        map(Enum::name).collect(Collectors.joining(", ")));
         return SslClientAuth.NONE;
     }
 

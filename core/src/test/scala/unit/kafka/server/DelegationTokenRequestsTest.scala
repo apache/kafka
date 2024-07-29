@@ -18,12 +18,13 @@ package kafka.server
 
 import kafka.api.IntegrationTestHarness
 import kafka.api.{KafkaSasl, SaslSetup}
-import kafka.utils.{JaasTestUtils, TestUtils, TestInfoUtils}
+import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
 import org.apache.kafka.common.errors.InvalidPrincipalTypeException
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.SecurityUtils
+import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -43,11 +44,11 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
 
   override def brokerCount = 1
 
-  this.serverConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
-  this.controllerConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
+  this.serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "testKey")
+  this.controllerConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "testKey")
   // Remove expired tokens every minute.
-  this.serverConfig.setProperty(KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp, "60000")
-  this.controllerConfig.setProperty(KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp, "60000")
+  this.serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_CONFIG, "5000")
+  this.controllerConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_CONFIG, "5000")
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -64,7 +65,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     config
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testDelegationTokenRequests(quorum: String): Unit = {
     adminClient = Admin.create(createAdminConfig)
@@ -150,13 +151,13 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     // Create a DelegationToken with a short lifetime to validate the expire code
     val createResult5 = adminClient.createDelegationToken(new CreateDelegationTokenOptions()
       .renewers(renewer1)
-      .maxlifeTimeMs(60 * 1000))
+      .maxlifeTimeMs(1 * 1000))
     val token5 = createResult5.delegationToken().get()
 
     TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 1),
           "Timed out waiting for token to propagate to all servers")
-    
-    Thread.sleep(2 * 60 *1000)
+
+    Thread.sleep(2 * 5 * 1000)
 
     tokens = adminClient.describeDelegationToken().delegationTokens().get()
     assertTrue(tokens.size == 0)
