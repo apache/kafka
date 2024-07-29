@@ -1032,13 +1032,21 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         LinkedList<BackgroundEvent> events = new LinkedList<>();
         backgroundEventQueue.drainTo(events);
+        kafkaShareConsumerMetrics.recordBackgroundEventQueueSize(backgroundEventQueue.size());
 
+        long totalProcessingTime = 0;
         for (BackgroundEvent event : events) {
             try {
                 if (event instanceof CompletableEvent)
                     backgroundEventReaper.add((CompletableEvent<?>) event);
 
+                long startMs = time.milliseconds();
                 backgroundEventProcessor.process(event);
+                long processingTime = time.milliseconds() - startMs;
+                totalProcessingTime += processingTime;
+
+                kafkaShareConsumerMetrics.recordBackgroundEventQueueChange(event.id(), startMs - totalProcessingTime, false);
+                kafkaShareConsumerMetrics.recordBackgroundEventQueueProcessingTime(processingTime);
             } catch (Throwable t) {
                 KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
 
