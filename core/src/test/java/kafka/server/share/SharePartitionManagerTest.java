@@ -1732,7 +1732,7 @@ public class SharePartitionManagerTest {
         Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
         partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
 
-        final Time time = new MockTime(0, System.currentTimeMillis(), 0);
+        final Time time = new MockTime();
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
         SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData1 = new SharePartitionManager.ShareFetchPartitionData(
