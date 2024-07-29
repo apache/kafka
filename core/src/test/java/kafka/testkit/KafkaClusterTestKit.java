@@ -149,14 +149,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public static class Builder {
         private TestKitNodes nodes;
-        private Map<String, String> configProps = new HashMap<>();
-        private SimpleFaultHandlerFactory faultHandlerFactory = new SimpleFaultHandlerFactory();
+        private final Map<String, Object> configProps = new HashMap<>();
+        private final SimpleFaultHandlerFactory faultHandlerFactory = new SimpleFaultHandlerFactory();
 
         public Builder(TestKitNodes nodes) {
             this.nodes = nodes;
         }
 
-        public Builder setConfigProp(String key, String value) {
+        public Builder setConfigProp(String key, Object value) {
             this.configProps.put(key, value);
             return this;
         }
@@ -165,7 +165,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             BrokerNode brokerNode = nodes.brokerNodes().get(node.id());
             ControllerNode controllerNode = nodes.controllerNodes().get(node.id());
 
-            Map<String, String> props = new HashMap<>(configProps);
+            Map<String, Object> props = new HashMap<>(configProps);
             props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
                     Long.toString(TimeUnit.MINUTES.toMillis(10)));
             props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, roles(node.id()));
@@ -188,13 +188,16 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 props.put(LOG_DIRS_CONFIG,
                     controllerNode.metadataDirectory());
             }
-            props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
-                    "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
-            props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners(node.id()));
-            props.put(INTER_BROKER_LISTENER_NAME_CONFIG,
-                    nodes.interBrokerListenerName().value());
-            props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG,
-                    "CONTROLLER");
+
+            // We allow configuring the listeners and related properties via Builder::setConfigProp,
+            // and they shouldn't be overridden here
+            props.putIfAbsent(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
+                "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
+            props.putIfAbsent(SocketServerConfigs.LISTENERS_CONFIG, listeners(node.id()));
+            props.putIfAbsent(INTER_BROKER_LISTENER_NAME_CONFIG,
+                nodes.interBrokerListenerName().value());
+            props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
+
             // Note: we can't accurately set controller.quorum.voters yet, since we don't
             // yet know what ports each controller will pick.  Set it to a dummy string
             // for now as a placeholder.
@@ -257,7 +260,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 nodes.bootstrapMetadata());
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
-                        Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", () -> sharedServer.stopForController());
+                        Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", sharedServer::stopForController);
                         throw e;
                     }
                     controllers.put(node.id(), controller);
@@ -288,7 +291,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         broker = new BrokerServer(sharedServer);
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
-                        Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", () -> sharedServer.stopForBroker());
+                        Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", sharedServer::stopForBroker);
                         throw e;
                     }
                     brokers.put(node.id(), broker);

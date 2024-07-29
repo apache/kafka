@@ -592,6 +592,7 @@
         <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="kafka.cluster" />
         <allow pkg="kafka.server" />
+        <allow pkg="kafka.testkit" />
         <allow pkg="kafka.zk" />
         <allow pkg="kafka.utils" />
         <allow class="javax.servlet.http.HttpServletResponse" />
@@ -612,6 +613,8 @@
       <allow pkg="org.eclipse.jetty.util"/>
       <!-- for tests -->
       <allow pkg="org.apache.kafka.server.util" />
+      <allow pkg="org.apache.kafka.server.config" />
+      <allow pkg="kafka.server"/>
     </subpackage>
 
     <subpackage name="json">
