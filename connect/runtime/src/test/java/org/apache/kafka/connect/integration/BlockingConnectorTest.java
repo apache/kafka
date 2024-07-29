@@ -123,7 +123,7 @@ public class BlockingConnectorTest {
 
     @BeforeEach
     public void setup() throws Exception {
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -138,7 +138,7 @@ public class BlockingConnectorTest {
 
     @AfterEach
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
         // unblock everything so that we don't leak threads after each test run
         Block.reset();

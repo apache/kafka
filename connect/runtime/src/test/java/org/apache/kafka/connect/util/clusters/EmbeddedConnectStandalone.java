@@ -47,7 +47,7 @@ import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_C
 import static org.apache.kafka.connect.runtime.standalone.StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG;
 
 /**
- * Start a standalone embedded connect worker. Internally, this class will spin up a Kafka and Zk cluster,
+ * Start a standalone embedded connect worker. Internally, this class will spin up a Kafka cluster,
  * set up any tmp directories. and clean them up on exit. Methods on the same
  * {@code EmbeddedConnectStandalone} are not guaranteed to be thread-safe.
  */

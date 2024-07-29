@@ -64,7 +64,7 @@ public class InternalTopicsIntegrationTest {
 
     @AfterEach
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect workers and Kafka brokers.
         connect.stop();
     }
 

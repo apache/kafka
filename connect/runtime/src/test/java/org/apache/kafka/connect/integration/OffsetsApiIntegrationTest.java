@@ -120,7 +120,6 @@ public class OffsetsApiIntegrationTest {
 
     @AfterAll
     public static void close() {
-        // stop all Connect, Kafka and Zk threads.
         CONNECT_CLUSTERS.values().forEach(EmbeddedConnectCluster::stop);
         // wait for all blocked threads created while testing zombie task scenarios to finish
         BlockingConnectorTest.Block.join();
