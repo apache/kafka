@@ -244,8 +244,7 @@ public class InternalMockProcessorContext<KOut, VOut>
                 0,
                 0,
                 "topic",
-                new RecordHeaders(),
-                new ConsumerRecord<>("topic", 0, 0, new byte[0], new byte[0])
+                new RecordHeaders()
         );
     }
 
