@@ -368,6 +368,10 @@ config.providers.customProvider.param.param2=value2</code></pre>
 <pre><code>config.providers=dirProvider
 config.providers.dirProvider.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider
 config.providers.dirProvider.param.allowed.paths=/path/to/dir1,/path/to/dir2</code></pre>
+  <p>
+    To reference a value supplied by the <code>DirectoryConfigProvider</code>, use the correct placeholder syntax:
+  </p>
+<pre><code>${dirProvider:&lt;path_to_file&gt;:&lt;file_name&gt;}</code></pre>
   
   <h4 class="anchor-heading">
     <a id="env_var_config_provider" class="anchor-link"></a>
@@ -381,6 +385,10 @@ config.providers.dirProvider.param.allowed.paths=/path/to/dir1,/path/to/dir2</co
 <pre><code>config.providers=envVarProvider
 config.providers.envVarProvider.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider
 config.providers.envVarProvider.param.allowlist.pattern=^MY_ENVAR1_.*</code></pre>
+  <p>
+    To reference a value supplied by the <code>EnvVarConfigProvider</code>, use the correct placeholder syntax:
+  </p>
+<pre><code>${envVarProvider:&lt;enVar_name&gt;}</code></pre>
   
   <h4 class="anchor-heading">
     <a id="file_config_provider" class="anchor-link"></a>
@@ -393,29 +401,15 @@ config.providers.envVarProvider.param.allowlist.pattern=^MY_ENVAR1_.*</code></pr
 <pre><code>config.providers=fileProvider
 config.providers.fileProvider.class=org.apache.kafka.common.config.provider.FileConfigProvider
 config.providers.fileProvider.param.allowed.paths=/path/to/config1,/path/to/config2</code></pre>
+  <p>
+   To reference a value supplied by the <code>FileConfigProvider</code>, use the correct placeholder syntax:
+  </p>
+<pre><code>${fileProvider:&lt;path_and_filename&gt;:&lt;property&gt;}</code></pre>
   
   <h4 class="anchor-heading">
     <a id="ref_config_provider" class="anchor-link"></a>
-    <a href="#ref_config_provider">Referencing Configuration Providers</a>
+    <a href="#ref_config_provider">Example: Referencing files</a>
   </h4>
-  <p>
-    To reference a property value supplied by a configuration provider, use the correct placeholder syntax:
-  </p>
-  <dl>
-    <dt><b><code>DirectoryConfigProvider</code></b></dt>
-    <dd>
-      <p><code>${dirProvider:&lt;path_to_file&gt;:&lt;file_name&gt;}</code></p>
-    </dd>
-    <dt><code><b>EnvVarConfigProvider</code></b></dt>
-    <dd>
-      <p><code>${envVarProvider:&lt;enVar_name&gt;}</code></p>
-    </dd>
-    
-    <dt><b><code>FileConfigProvider</code></b></dt>
-    <dd>
-      <p><code>${fileProvider:&lt;path_and_filename&gt;:&lt;property&gt;}</code></p>
-    </dd>
-  </dl>
   <p>
     Here’s an example that uses a file configuration provider with Kafka Connect to provide authentication credentials to a database for a connector.
   </p>
@@ -427,11 +421,9 @@ dbPassword=my-password</code></pre>
   <p>
     Specify a <code>FileConfigProvider</code> in the Kafka Connect configuration:
   </p>
-  
   <p><b>Example Kafka Connect configuration with a <code>FileConfigProvider</code></b></p>
   <pre><code>config.providers=fileProvider
 config.providers.fileProvider.class=org.apache.kafka.common.config.provider.FileConfigProvider</code></pre>
-  
   <p>Next, reference the properties from the file in the connector configuration.</p>
   <p><b>Example connector configuration referencing file properties</b></p>
   <pre><code>database.user=${fileProvider:/path/to/connector-credentials.properties:dbUsername}
