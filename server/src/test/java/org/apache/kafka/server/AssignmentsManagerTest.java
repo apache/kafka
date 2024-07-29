@@ -192,7 +192,8 @@ public class AssignmentsManagerTest {
             this.backoff = new ExponentialBackoff(1, 2, 4, 0);
             this.channelManager = new MockNodeToControllerChannelManager();
             this.assignmentsManager = new AssignmentsManager(
-                    backoff, Time.SYSTEM, channelManager, 1, () -> TEST_IMAGE, metricsRegistry);
+                    backoff, Time.SYSTEM, channelManager, 1, () -> TEST_IMAGE,
+                        d -> d.toString(), t -> t.toString(), metricsRegistry);
             this.successes = new HashMap<>();
         }
 

@@ -31,7 +31,6 @@ import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.TopicIdPartition;
@@ -53,6 +52,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.common.requests.AssignReplicasToDirsRequest.MAX_ASSIGNMENTS_PER_REQUEST;
@@ -111,6 +111,16 @@ public final class AssignmentsManager {
     private final Supplier<MetadataImage> metadataImageSupplier;
 
     /**
+     * Maps directory IDs to descriptions for logging purposes.
+     */
+    private final Function<Uuid, String> directoryIdToDescription;
+
+    /**
+     * Maps topic IDs to descriptions for logging purposes.
+     */
+    private final Function<Uuid, String> topicIdToDescription;
+
+    /**
      * Maps partitions to assignments that are ready to send.
      */
     private final ConcurrentHashMap<TopicIdPartition, Assignment> ready;
@@ -143,13 +153,17 @@ public final class AssignmentsManager {
         Time time,
         NodeToControllerChannelManager channelManager,
         int nodeId,
-        Supplier<MetadataImage> metadataImageSupplier
+        Supplier<MetadataImage> metadataImageSupplier,
+        Function<Uuid, String> directoryIdToDescription,
+        Function<Uuid, String> topicIdToDescription
     ) {
         this(STANDARD_BACKOFF,
             time,
             channelManager,
             nodeId,
             metadataImageSupplier,
+            directoryIdToDescription,
+            topicIdToDescription,
             KafkaYammerMetrics.defaultRegistry());
     }
 
@@ -159,6 +173,8 @@ public final class AssignmentsManager {
         NodeToControllerChannelManager channelManager,
         int nodeId,
         Supplier<MetadataImage> metadataImageSupplier,
+        Function<Uuid, String> directoryIdToDescription,
+        Function<Uuid, String> topicIdToDescription,
         MetricsRegistry metricsRegistry
     ) {
         this.log = new LogContext("[AssignmentsManager id=" + nodeId + "] ").
@@ -167,6 +183,8 @@ public final class AssignmentsManager {
         this.time = time;
         this.channelManager = channelManager;
         this.nodeId = nodeId;
+        this.directoryIdToDescription = directoryIdToDescription;
+        this.topicIdToDescription = topicIdToDescription;
         this.metadataImageSupplier = metadataImageSupplier;
         this.ready = new ConcurrentHashMap<>();
         this.inflight = Collections.emptyMap();
@@ -204,7 +222,11 @@ public final class AssignmentsManager {
                 topicIdPartition, directoryId, nowNs, successCallback);
         ready.put(topicIdPartition, assignment);
         if (log.isTraceEnabled()) {
-            log.trace("Registered assignment {}: {}", assignment, reason);
+            log.trace("Registered assignment {}: {}, moving {} into {}",
+                assignment,
+                reason,
+                topicIdToDescription.apply(assignment.topicIdPartition().topicId()),
+                directoryIdToDescription.apply(assignment.directoryId()));
         }
         rescheduleMaybeSendAssignmentsEvent(nowNs);
     }
