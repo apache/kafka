@@ -717,14 +717,16 @@ public class KafkaAdminClientTest {
 
     private static ApiVersionsResponse prepareApiVersionsResponseForDescribeFeatures(Errors error) {
         if (error == Errors.NONE) {
-            return ApiVersionsResponse.createApiVersionsResponse(
-                0,
-                ApiVersionsResponse.filterApis(RecordVersion.current(), ApiMessageType.ListenerType.ZK_BROKER, false, false),
-                convertSupportedFeaturesMap(defaultFeatureMetadata().supportedFeatures()),
-                Collections.singletonMap("test_feature_1", (short) 2),
-                defaultFeatureMetadata().finalizedFeaturesEpoch().get(),
-                false
-            );
+            return new ApiVersionsResponse.Builder().
+                setApiVersions(ApiVersionsResponse.filterApis(
+                    RecordVersion.current(), ApiMessageType.ListenerType.ZK_BROKER, false, false)).
+                setSupportedFeatures(
+                    convertSupportedFeaturesMap(defaultFeatureMetadata().supportedFeatures())).
+                setFinalizedFeatures(
+                    Collections.singletonMap("test_feature_1", (short) 2)).
+                setFinalizedFeaturesEpoch(
+                    defaultFeatureMetadata().finalizedFeaturesEpoch().get()).
+                build();
         }
         return new ApiVersionsResponse(
             new ApiVersionsResponseData()

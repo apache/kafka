@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -43,6 +44,7 @@ import org.apache.kafka.connect.mirror.Checkpoint;
 import org.apache.kafka.connect.mirror.DefaultConfigPropertyFilter;
 import org.apache.kafka.connect.mirror.MirrorCheckpointConnector;
 import org.apache.kafka.connect.mirror.MirrorClient;
+import org.apache.kafka.connect.mirror.MirrorConnectorConfig;
 import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
 import org.apache.kafka.connect.mirror.MirrorMakerConfig;
 import org.apache.kafka.connect.mirror.MirrorSourceConnector;
@@ -72,6 +74,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -85,6 +88,8 @@ import java.util.function.LongUnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.OFFSET_SYNCS_CLIENT_ROLE_PREFIX;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.OFFSET_SYNCS_TOPIC_CONFIG_PREFIX;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -535,6 +540,49 @@ public class MirrorConnectorsIntegrationBaseTest {
     }
 
     @Test
+    public void testReplicationWithoutOffsetSyncWillNotCreateOffsetSyncsTopic() throws Exception {
+        produceMessages(primaryProducer, "test-topic-1");
+        String backupTopic1 = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
+        if (replicateBackupToPrimary) {
+            produceMessages(backupProducer, "test-topic-1");
+        }
+        String consumerGroupName = "consumer-group-testReplication";
+        Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
+        // warm up consumers before starting the connectors, so we don't need to wait for discovery
+        warmUpConsumer(consumerProps);
+
+        mm2Props.keySet().removeIf(prop -> prop.startsWith(OFFSET_SYNCS_CLIENT_ROLE_PREFIX) || prop.startsWith(OFFSET_SYNCS_TOPIC_CONFIG_PREFIX));
+        mm2Props.put(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED, "false");
+
+        mm2Config = new MirrorMakerConfig(mm2Props);
+
+        waitUntilMirrorMakerIsRunning(backup, Arrays.asList(MirrorSourceConnector.class, MirrorHeartbeatConnector.class), mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
+
+        MirrorClient primaryClient = new MirrorClient(mm2Config.clientConfig(PRIMARY_CLUSTER_ALIAS));
+        MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS));
+
+        // make sure the topic is auto-created in the other cluster
+        waitForTopicCreated(backup, backupTopic1);
+
+        assertEquals(NUM_RECORDS_PRODUCED, primary.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
+                "Records were not produced to primary cluster.");
+        assertEquals(NUM_RECORDS_PRODUCED, backup.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, backupTopic1).count(),
+                "Records were not replicated to backup cluster.");
+        assertEquals(NUM_RECORDS_PRODUCED, backup.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
+                "Records were not produced to backup cluster.");
+
+        List<TopicDescription> offsetSyncTopic = primary.kafka().describeTopics("mm2-offset-syncs.backup.internal").values()
+                .stream()
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .collect(Collectors.toList());
+        assertTrue(offsetSyncTopic.isEmpty());
+
+        primaryClient.close();
+        backupClient.close();
+    }
+
+    @Test
     public void testOffsetSyncsTopicsOnTarget() throws Exception {
         // move offset-syncs topics to target
         mm2Props.put(PRIMARY_CLUSTER_ALIAS + "->" + BACKUP_CLUSTER_ALIAS + ".offset-syncs.topic.location", "target");
@@ -884,6 +932,9 @@ public class MirrorConnectorsIntegrationBaseTest {
         String topic = "test-topic-1";
         produceMessages(primaryProducer, topic, NUM_PARTITIONS);
 
+        String sentinelTopic = "test-topic-sentinel";
+        primary.kafka().createTopic(sentinelTopic);
+
         // consume from the ends of topics when no committed offsets are found
         mm2Props.put(PRIMARY_CLUSTER_ALIAS + ".consumer." + AUTO_OFFSET_RESET_CONFIG, "latest");
         // one way replication from primary to backup
@@ -891,18 +942,44 @@ public class MirrorConnectorsIntegrationBaseTest {
         mm2Config = new MirrorMakerConfig(mm2Props);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
 
+        String backupSentinelTopic = remoteTopicName(sentinelTopic, PRIMARY_CLUSTER_ALIAS);
+        waitForTopicCreated(backup, backupSentinelTopic);
+
+        // wait for proof that the task has managed to poll its consumers at least once;
+        // this should also mean that it knows the proper end offset of the other test topic,
+        // and will consume exactly the expected number of records that we produce after
+        // this assertion passes
+        // NOTE: this assumes that there is a single MirrorSourceTask instance running;
+        // if there are multiple tasks, the logic will need to be updated to ensure that each
+        // task has managed to poll its consumer before continuing
+        waitForCondition(
+                () -> {
+                    primary.kafka().produce(sentinelTopic, "sentinel-value");
+                    int sentinelValues = backup.kafka().consumeAll(1_000, backupSentinelTopic).count();
+                    return sentinelValues > 0;
+                },
+                RECORD_TRANSFER_DURATION_MS,
+                "Records were not produced to sentinel topic in time"
+        );
+
         // produce some more messages to the topic, now that MM2 is running and replication should be taking place
         produceMessages(primaryProducer, topic, NUM_PARTITIONS);
 
         String backupTopic = remoteTopicName(topic, PRIMARY_CLUSTER_ALIAS);
         // wait for at least the expected number of records to be replicated to the backup cluster
-        backup.kafka().consume(NUM_PARTITIONS * NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, backupTopic);
+        backup.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, backupTopic);
+
         // consume all records from backup cluster
         ConsumerRecords<byte[], byte[]> replicatedRecords = backup.kafka().consumeAll(RECORD_TRANSFER_DURATION_MS, backupTopic);
+
         // ensure that we only replicated the records produced after startup
         replicatedRecords.partitions().forEach(topicPartition -> {
             int replicatedCount = replicatedRecords.records(topicPartition).size();
-            assertEquals(NUM_RECORDS_PER_PARTITION, replicatedCount);
+            assertEquals(
+                    NUM_RECORDS_PER_PARTITION,
+                    replicatedCount,
+                    "Unexpected number of replicated records for partition " + topicPartition.partition()
+            );
         });
     }
 
@@ -1276,7 +1353,6 @@ public class MirrorConnectorsIntegrationBaseTest {
     private static Map<String, String> basicMM2Config() {
         Map<String, String> mm2Props = new HashMap<>();
         mm2Props.put("clusters", PRIMARY_CLUSTER_ALIAS + ", " + BACKUP_CLUSTER_ALIAS);
-        mm2Props.put("max.tasks", "10");
         mm2Props.put("groups", "consumer-group-.*");
         mm2Props.put("sync.topic.acls.enabled", "false");
         mm2Props.put("emit.checkpoints.interval.seconds", String.valueOf(CHECKPOINT_INTERVAL_DURATION_MS / 1000));

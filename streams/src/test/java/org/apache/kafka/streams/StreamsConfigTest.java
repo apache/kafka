@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 
+import org.apache.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -1096,7 +1097,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLoggerToDebug(StreamsConfig.class);
+            appender.setClassLogger(StreamsConfig.class, Level.DEBUG);
             new StreamsConfig(props);
 
             assertThat(
@@ -1116,7 +1117,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLoggerToDebug(StreamsConfig.class);
+            appender.setClassLogger(StreamsConfig.class, Level.DEBUG);
             new StreamsConfig(props);
 
             assertThat(
@@ -1134,7 +1135,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.RETRIES_CONFIG, 0);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLoggerToDebug(StreamsConfig.class);
+            appender.setClassLogger(StreamsConfig.class, Level.DEBUG);
             new StreamsConfig(props);
 
             assertThat(

@@ -674,6 +674,7 @@ public class ConsumerConfig extends AbstractConfig {
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);
+        checkGroupRemoteAssignor();
         return refinedConfigs;
     }
 
@@ -717,6 +718,12 @@ public class ConsumerConfig extends AbstractConfig {
             } else if (enableAutoCommit) {
                 throw new InvalidConfigurationException(ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
             }
+        }
+    }
+
+    private void checkGroupRemoteAssignor() {
+        if (getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.CLASSIC.name()) && getString(GROUP_REMOTE_ASSIGNOR_CONFIG) != null && !getString(GROUP_REMOTE_ASSIGNOR_CONFIG).isEmpty()) {
+            throw new ConfigException(GROUP_REMOTE_ASSIGNOR_CONFIG + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CLASSIC.name());
         }
     }
 

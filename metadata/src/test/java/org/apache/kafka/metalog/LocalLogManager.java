@@ -33,6 +33,7 @@ import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
@@ -491,7 +492,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
      * An offset that the log manager will not read beyond. This exists only for testing
      * purposes.
      */
-    private long maxReadOffset = Long.MAX_VALUE;
+    private long maxReadOffset;
 
     /**
      * The listener objects attached to this local log manager.
@@ -853,9 +854,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     public List<RaftClient.Listener<ApiMessageAndVersion>> listeners() {
         final CompletableFuture<List<RaftClient.Listener<ApiMessageAndVersion>>> future = new CompletableFuture<>();
-        eventQueue.append(() -> {
-            future.complete(listeners.values().stream().map(l -> l.listener).collect(Collectors.toList()));
-        });
+        eventQueue.append(() ->
+            future.complete(listeners.values().stream().map(l -> l.listener).collect(Collectors.toList()))
+        );
         try {
             return future.get();
         } catch (ExecutionException | InterruptedException e) {
@@ -880,5 +881,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     public void resignAfterNonAtomicCommit() {
         resignAfterNonAtomicCommit.set(true);
+    }
+
+    @Override
+    public KRaftVersion kraftVersion() {
+        return KRaftVersion.KRAFT_VERSION_0;
     }
 }

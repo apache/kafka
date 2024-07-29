@@ -33,15 +33,20 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
+import static org.apache.kafka.common.utils.Utils.require;
 
 /**
  * The group coordinator configurations.
+ * This configuration utilizes several local variables instead of calling AbstractConfig#get.... as all configs here
+ * are static and non-dynamic, with some being accessed extremely frequently (e.g., offsets.commit.timeout.ms).
+ * Using local variable is advantageous as it avoids the overhead of repeatedly looking up these configurations in AbstractConfig.
  */
 public class GroupCoordinatorConfig {
     /** ********* Group coordinator configuration ***********/
@@ -125,6 +130,35 @@ public class GroupCoordinatorConfig {
             ConsumerGroupMigrationPolicy.DOWNGRADE + ": only downgrade from consumer group to classic group is enabled, " +
             ConsumerGroupMigrationPolicy.DISABLED + ": neither upgrade nor downgrade is enabled.";
 
+    /** Share group configs */
+    public static final String SHARE_GROUP_MAX_SIZE_CONFIG = "group.share.max.size";
+    public static final int SHARE_GROUP_MAX_SIZE_DEFAULT = 200;
+    public static final String SHARE_GROUP_MAX_SIZE_DOC = "The maximum number of members that a single share group can accommodate.";
+
+    public static final String SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG = "group.share.session.timeout.ms";
+    public static final int SHARE_GROUP_SESSION_TIMEOUT_MS_DEFAULT = 45000;
+    public static final String SHARE_GROUP_SESSION_TIMEOUT_MS_DOC = "The timeout to detect client failures when using the share group protocol.";
+
+    public static final String SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG = "group.share.min.session.timeout.ms";
+    public static final int SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT = 45000;
+    public static final String SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_DOC = "The minimum allowed session timeout for share group members.";
+
+    public static final String SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG = "group.share.max.session.timeout.ms";
+    public static final int SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT = 60000;
+    public static final String SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_DOC = "The maximum allowed session timeout for share group members.";
+
+    public static final String SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG = "group.share.heartbeat.interval.ms";
+    public static final int SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT = 5000;
+    public static final String SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DOC = "The heartbeat interval given to the members of a share group.";
+
+    public static final String SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG = "group.share.min.heartbeat.interval.ms";
+    public static final int SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT = 5000;
+    public static final String SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DOC = "The minimum heartbeat interval for share group members.";
+
+    public static final String SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG = "group.share.max.heartbeat.interval.ms";
+    public static final int SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT = 15000;
+    public static final String SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC = "The maximum heartbeat interval for share group members.";
+
     public static final String OFFSET_METADATA_MAX_SIZE_CONFIG = "offset.metadata.max.bytes";
     public static final int OFFSET_METADATA_MAX_SIZE_DEFAULT = 4096;
     public static final String OFFSET_METADATA_MAX_SIZE_DOC = "The maximum size for a metadata entry associated with an offset commit.";
@@ -207,23 +241,137 @@ public class GroupCoordinatorConfig {
             .define(CONSUMER_GROUP_MAX_SIZE_CONFIG, INT, CONSUMER_GROUP_MAX_SIZE_DEFAULT, atLeast(1), MEDIUM, CONSUMER_GROUP_MAX_SIZE_DOC)
             .define(CONSUMER_GROUP_ASSIGNORS_CONFIG, LIST, CONSUMER_GROUP_ASSIGNORS_DEFAULT, null, MEDIUM, CONSUMER_GROUP_ASSIGNORS_DOC)
             .defineInternal(CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, STRING, CONSUMER_GROUP_MIGRATION_POLICY_DEFAULT, ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(ConsumerGroupMigrationPolicy.class)), MEDIUM, CONSUMER_GROUP_MIGRATION_POLICY_DOC);
+    public static final ConfigDef SHARE_GROUP_CONFIG_DEF =  new ConfigDef()
+            .define(SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, INT, SHARE_GROUP_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_SESSION_TIMEOUT_MS_DOC)
+            .define(SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, INT, SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_DOC)
+            .define(SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, INT, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_DOC)
+            .define(SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
+            .define(SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DOC)
+            .define(SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC)
+            .define(SHARE_GROUP_MAX_SIZE_CONFIG, INT, SHARE_GROUP_MAX_SIZE_DEFAULT, between(10, 1000), MEDIUM, SHARE_GROUP_MAX_SIZE_DOC);
 
     /**
      * The timeout used to wait for a new member in milliseconds.
      */
     public static final int CLASSIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS = 5 * 60 * 1000;
 
-    private final AbstractConfig config;
+    private final int numThreads;
+    private final int appendLingerMs;
+    private final int consumerGroupSessionTimeoutMs;
+    private final int consumerGroupHeartbeatIntervalMs;
+    private final int consumerGroupMaxSize;
+    private final List<ConsumerGroupPartitionAssignor> consumerGroupAssignors;
+    private final int offsetsTopicSegmentBytes;
+    private final int offsetMetadataMaxSize;
+    private final int classicGroupMaxSize;
+    private final int classicGroupInitialRebalanceDelayMs;
+    private final int classicGroupMinSessionTimeoutMs;
+    private final int classicGroupMaxSessionTimeoutMs;
+    private final long offsetsRetentionCheckIntervalMs;
+    private final long offsetsRetentionMs;
+    private final int offsetCommitTimeoutMs;
+    private final ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy;
+    private final CompressionType offsetTopicCompressionType;
+    private final int offsetsLoadBufferSize;
+    private final int offsetsTopicPartitions;
+    private final short offsetsTopicReplicationFactor;
+    private final short offsetCommitRequiredAcks;
+    private final int consumerGroupMinSessionTimeoutMs;
+    private final int consumerGroupMaxSessionTimeoutMs;
+    private final int consumerGroupMinHeartbeatIntervalMs;
+    private final int consumerGroupMaxHeartbeatIntervalMs;
+    // Share group configurations
+    private final int shareGroupMaxSize;
+    private final int shareGroupSessionTimeoutMs;
+    private final int shareGroupMinSessionTimeoutMs;
+    private final int shareGroupMaxSessionTimeoutMs;
+    private final int shareGroupHeartbeatIntervalMs;
+    private final int shareGroupMinHeartbeatIntervalMs;
+    private final int shareGroupMaxHeartbeatIntervalMs;
 
     public GroupCoordinatorConfig(AbstractConfig config) {
-        this.config = config;
+        this.numThreads = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG);
+        this.appendLingerMs = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG);
+        this.consumerGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG);
+        this.consumerGroupHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.consumerGroupMaxSize = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG);
+        this.consumerGroupAssignors = Collections.unmodifiableList(
+                config.getConfiguredInstances(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, ConsumerGroupPartitionAssignor.class));
+        this.offsetsTopicSegmentBytes = config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG);
+        this.offsetMetadataMaxSize = config.getInt(GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_CONFIG);
+        this.classicGroupMaxSize = config.getInt(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG);
+        this.classicGroupInitialRebalanceDelayMs = config.getInt(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG);
+        this.classicGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+        this.classicGroupMaxSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+        this.offsetsRetentionCheckIntervalMs = config.getLong(GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG);
+        this.offsetsRetentionMs = config.getInt(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG) * 60L * 1000L;
+        this.offsetCommitTimeoutMs = config.getInt(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
+        this.consumerGroupMigrationPolicy = ConsumerGroupMigrationPolicy.parse(
+                config.getString(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG));
+        this.offsetTopicCompressionType = Optional.ofNullable(config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG))
+                .map(CompressionType::forId)
+                .orElse(null);
+        this.offsetsLoadBufferSize = config.getInt(GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG);
+        this.offsetsTopicPartitions = config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG);
+        this.offsetsTopicReplicationFactor = config.getShort(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG);
+        this.offsetCommitRequiredAcks = config.getShort(GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG);
+        this.consumerGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+        this.consumerGroupMaxSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+        this.consumerGroupMinHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.consumerGroupMaxHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
+        // Share group configurations
+        this.shareGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG);
+        this.shareGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+        this.shareGroupMaxSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+        this.shareGroupHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.shareGroupMinHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.shareGroupMaxHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.shareGroupMaxSize = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG);
+
+        require(offsetCommitRequiredAcks >= -1 && offsetCommitRequiredAcks <= offsetsTopicReplicationFactor,
+                String.format("%s must be greater or equal to -1 and less or equal to %s", OFFSET_COMMIT_REQUIRED_ACKS_CONFIG, OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG));
+
+        // New group coordinator configs validation.
+        require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
+                String.format("%s must be greater than or equals to %s", CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
+        require(consumerGroupHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
+                String.format("%s must be greater than or equals to %s", CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
+        require(consumerGroupHeartbeatIntervalMs <= consumerGroupMaxHeartbeatIntervalMs,
+                String.format("%s must be less than or equals to %s", CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG));
+
+        require(consumerGroupMaxSessionTimeoutMs >= consumerGroupMinSessionTimeoutMs,
+                String.format("%s must be greater than or equals to %s", CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
+        require(consumerGroupSessionTimeoutMs >= consumerGroupMinSessionTimeoutMs,
+                String.format("%s must be greater than or equals to %s", CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
+        require(consumerGroupSessionTimeoutMs <= consumerGroupMaxSessionTimeoutMs,
+                String.format("%s must be less than or equals to %s", CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
+        // Share group configs validation.
+        require(shareGroupMaxHeartbeatIntervalMs >= shareGroupMinHeartbeatIntervalMs,
+            String.format("%s must be greater than or equals to %s",
+                SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
+        require(shareGroupHeartbeatIntervalMs >= shareGroupMinHeartbeatIntervalMs,
+            String.format("%s must be greater than or equals to %s",
+                SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
+        require(shareGroupHeartbeatIntervalMs <= shareGroupMaxHeartbeatIntervalMs,
+            String.format("%s must be less than or equals to %s",
+                SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG));
+
+        require(shareGroupMaxSessionTimeoutMs >= shareGroupMinSessionTimeoutMs,
+            String.format("%s must be greater than or equals to %s",
+                SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
+        require(shareGroupSessionTimeoutMs >= shareGroupMinSessionTimeoutMs,
+            String.format("%s must be greater than or equals to %s",
+                SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
+        require(shareGroupSessionTimeoutMs <= shareGroupMaxSessionTimeoutMs,
+            String.format("%s must be less than or equals to %s",
+                SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
     }
 
     /**
      * The number of threads or event loops running.
      */
     public int numThreads() {
-        return config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG);
+        return numThreads;
     }
 
     /**
@@ -231,35 +379,35 @@ public class GroupCoordinatorConfig {
      * accumulate before flushing them to disk.
      */
     public int appendLingerMs() {
-        return config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG);
+        return appendLingerMs;
     }
 
     /**
      * The consumer group session timeout in milliseconds.
      */
     public int consumerGroupSessionTimeoutMs() {
-        return config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG);
+        return consumerGroupSessionTimeoutMs;
     }
 
     /**
      * The consumer group heartbeat interval in milliseconds.
      */
     public int consumerGroupHeartbeatIntervalMs() {
-        return config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG);
+        return consumerGroupHeartbeatIntervalMs;
     }
 
     /**
      * The consumer group maximum size.
      */
     public int consumerGroupMaxSize() {
-        return config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG);
+        return consumerGroupMaxSize;
     }
 
     /**
      * The consumer group assignors.
      */
     public List<ConsumerGroupPartitionAssignor> consumerGroupAssignors() {
-        return config.getConfiguredInstances(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, ConsumerGroupPartitionAssignor.class);
+        return consumerGroupAssignors;
     }
 
     /**
@@ -267,28 +415,28 @@ public class GroupCoordinatorConfig {
      * log compaction and faster offset loads.
      */
     public int offsetsTopicSegmentBytes() {
-        return config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG);
+        return offsetsTopicSegmentBytes;
     }
 
     /**
      * The maximum size for a metadata entry associated with an offset commit.
      */
     public int offsetMetadataMaxSize() {
-        return config.getInt(GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_CONFIG);
+        return offsetMetadataMaxSize;
     }
 
     /**
      * The classic group maximum size.
      */
     public int classicGroupMaxSize() {
-        return config.getInt(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG);
+        return classicGroupMaxSize;
     }
 
     /**
      * The delay in milliseconds introduced for the first rebalance of a classic group.
      */
     public int classicGroupInitialRebalanceDelayMs() {
-        return config.getInt(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG);
+        return classicGroupInitialRebalanceDelayMs;
     }
 
     /**
@@ -302,21 +450,21 @@ public class GroupCoordinatorConfig {
      * The classic group minimum session timeout.
      */
     public int classicGroupMinSessionTimeoutMs() {
-        return config.getInt(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+        return classicGroupMinSessionTimeoutMs;
     }
 
     /**
      * The classic group maximum session timeout.
      */
     public int classicGroupMaxSessionTimeoutMs() {
-        return config.getInt(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+        return classicGroupMaxSessionTimeoutMs;
     }
 
     /**
      * Frequency at which to check for expired offsets.
      */
     public long offsetsRetentionCheckIntervalMs() {
-        return config.getLong(GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG);
+        return offsetsRetentionCheckIntervalMs;
     }
 
     /**
@@ -334,7 +482,7 @@ public class GroupCoordinatorConfig {
      *     committed offsets for that topic will also be deleted without extra retention period.
      */
     public long offsetsRetentionMs() {
-        return config.getInt(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG) * 60L * 1000L;
+        return offsetsRetentionMs;
     }
 
     /**
@@ -342,24 +490,21 @@ public class GroupCoordinatorConfig {
      * or this timeout is reached
      */
     public int offsetCommitTimeoutMs() {
-        return config.getInt(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
+        return offsetCommitTimeoutMs;
     }
 
     /**
      * The config indicating whether group protocol upgrade/downgrade are allowed.
      */
     public ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy() {
-        return ConsumerGroupMigrationPolicy.parse(
-                config.getString(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG));
+        return consumerGroupMigrationPolicy;
     }
 
     /**
      * The compression type used to compress records in batches.
      */
     public CompressionType offsetTopicCompressionType() {
-        return Optional.ofNullable(config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG))
-                .map(CompressionType::forId)
-                .orElse(null);
+        return offsetTopicCompressionType;
     }
 
     /**
@@ -367,14 +512,14 @@ public class GroupCoordinatorConfig {
      * the cache (soft-limit, overridden if records are too large).
      */
     public int offsetsLoadBufferSize() {
-        return config.getInt(GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG);
+        return offsetsLoadBufferSize;
     }
 
     /**
      * The number of partitions for the offset commit topic (should not change after deployment).
      */
     public int offsetsTopicPartitions() {
-        return config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG);
+        return offsetsTopicPartitions;
     }
 
     /**
@@ -382,7 +527,7 @@ public class GroupCoordinatorConfig {
      * Internal topic creation will fail until the cluster size meets this replication factor requirement.
      */
     public short offsetsTopicReplicationFactor() {
-        return config.getShort(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG);
+        return offsetsTopicReplicationFactor;
     }
 
     /**
@@ -391,34 +536,83 @@ public class GroupCoordinatorConfig {
      */
     @Deprecated // since 3.8
     public short offsetCommitRequiredAcks() {
-        return config.getShort(GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG);
+        return offsetCommitRequiredAcks;
     }
 
     /**
      * The minimum allowed session timeout for registered consumers.
      */
     public int consumerGroupMinSessionTimeoutMs() {
-        return config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+        return consumerGroupMinSessionTimeoutMs;
     }
 
     /**
      * The maximum allowed session timeout for registered consumers.
      */
     public int consumerGroupMaxSessionTimeoutMs() {
-        return config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+        return consumerGroupMaxSessionTimeoutMs;
     }
 
     /**
      * The minimum heartbeat interval for registered consumers.
      */
     public int consumerGroupMinHeartbeatIntervalMs() {
-        return config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
+        return consumerGroupMinHeartbeatIntervalMs;
     }
 
     /**
      * The maximum heartbeat interval for registered consumers.
      */
     public int consumerGroupMaxHeartbeatIntervalMs() {
-        return config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
+        return consumerGroupMaxHeartbeatIntervalMs;
+    }
+
+    /**
+     * The share group session timeout in milliseconds.
+     */
+    public int shareGroupSessionTimeoutMs() {
+        return shareGroupSessionTimeoutMs;
+    }
+
+    /**
+     * The consumer group heartbeat interval in milliseconds.
+     */
+    public int shareGroupHeartbeatIntervalMs() {
+        return shareGroupHeartbeatIntervalMs;
+    }
+
+    /**
+     * The share group maximum size.
+     */
+    public int shareGroupMaxSize() {
+        return shareGroupMaxSize;
+    }
+
+    /**
+     * The minimum allowed session timeout for registered share consumers.
+     */
+    public int shareGroupMinSessionTimeoutMs() {
+        return shareGroupMinSessionTimeoutMs;
+    }
+
+    /**
+     * The maximum allowed session timeout for registered share consumers.
+     */
+    public int shareGroupMaxSessionTimeoutMs() {
+        return shareGroupMaxSessionTimeoutMs;
+    }
+
+    /**
+     * The minimum heartbeat interval for registered share consumers.
+     */
+    public int shareGroupMinHeartbeatIntervalMs() {
+        return shareGroupMinHeartbeatIntervalMs;
+    }
+
+    /**
+     * The maximum heartbeat interval for registered share consumers.
+     */
+    public int shareGroupMaxHeartbeatIntervalMs() {
+        return shareGroupMaxHeartbeatIntervalMs;
     }
 }
