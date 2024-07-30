@@ -205,6 +205,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             throw e;
         } catch (final Exception e) {
             final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
+                null,
                 internalProcessorContext.topic(),
                 internalProcessorContext.partition(),
                 internalProcessorContext.offset(),
