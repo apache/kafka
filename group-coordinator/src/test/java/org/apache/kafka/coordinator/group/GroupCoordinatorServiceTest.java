@@ -2172,7 +2172,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         ShareGroupHeartbeatRequestData request = new ShareGroupHeartbeatRequestData()
@@ -2193,7 +2194,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         ShareGroupHeartbeatRequestData request = new ShareGroupHeartbeatRequestData()
@@ -2230,7 +2232,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         ShareGroupHeartbeatRequestData request = new ShareGroupHeartbeatRequestData()
