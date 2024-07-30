@@ -19,7 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 
 import java.util.Collection;
@@ -137,7 +137,7 @@ public class NewTopic {
         if (configs != null) {
             for (Entry<String, String> entry : configs.entrySet()) {
                 creatableTopic.configs().add(
-                    new CreateableTopicConfig().
+                    new CreatableTopicConfig().
                         setName(entry.getKey()).
                         setValue(entry.getValue()));
             }

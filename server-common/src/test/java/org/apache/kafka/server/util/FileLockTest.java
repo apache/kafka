@@ -14,11 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.utils;
+package org.apache.kafka.server.util;
+
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.channels.OverlappingFileLockException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -28,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FileLockTest {
     @Test
-    void testLock() {
+    void testLock() throws IOException {
         File tempFile = TestUtils.tempFile();
         FileLock lock1 = new FileLock(tempFile);
         try {
@@ -45,7 +48,7 @@ class FileLockTest {
     }
 
     @Test
-    void testTryLock() {
+    void testTryLock() throws IOException {
         File tempFile = TestUtils.tempFile();
         FileLock lock1 = new FileLock(tempFile);
         try {
@@ -62,7 +65,7 @@ class FileLockTest {
     }
 
     @Test
-    void testUnlock() {
+    void testUnlock() throws IOException {
         File tempFile = TestUtils.tempFile();
         FileLock lock1 = new FileLock(tempFile);
         try {
@@ -87,7 +90,7 @@ class FileLockTest {
     }
 
     @Test
-    void testDestroy() {
+    void testDestroy() throws IOException {
         File tempFile = TestUtils.tempFile();
         FileLock lock1 = new FileLock(tempFile);
         lock1.destroy();

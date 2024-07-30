@@ -999,27 +999,36 @@ public class EosIntegrationTest {
     }
 
     private void verifyChangelogMaxRecordOffsetMatchesCheckpointedOffset(final TopicPartition tp, final long checkpointedOffset) {
-        final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerConfig(CLUSTER.bootstrapServers(), Serdes.ByteArray().deserializer().getClass(), Serdes.ByteArray().deserializer().getClass()));
-        final List<TopicPartition> partitions = Collections.singletonList(tp);
-        consumer.assign(partitions);
-        consumer.seekToEnd(partitions);
-        final long topicEndOffset = consumer.position(tp);
+        try (
+            KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
+                consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    Serdes.ByteArray().deserializer().getClass(),
+                    Serdes.ByteArray().deserializer().getClass()
+                )
+            )
+        ) {
+            final List<TopicPartition> partitions = Collections.singletonList(tp);
+            consumer.assign(partitions);
+            consumer.seekToEnd(partitions);
+            final long topicEndOffset = consumer.position(tp);
 
-        assertTrue(topicEndOffset >= checkpointedOffset,
-                "changelog topic end " + topicEndOffset + " is less than checkpointed offset " + checkpointedOffset);
+            assertTrue(topicEndOffset >= checkpointedOffset,
+                    "changelog topic end " + topicEndOffset + " is less than checkpointed offset " + checkpointedOffset);
 
-        consumer.seekToBeginning(partitions);
+            consumer.seekToBeginning(partitions);
 
-        Long maxRecordOffset = null;
-        while (consumer.position(tp) != topicEndOffset) {
-            final List<ConsumerRecord<String, String>> records = consumer.poll(Duration.ofMillis(0)).records(tp);
-            if (!records.isEmpty()) {
-                maxRecordOffset = records.get(records.size() - 1).offset();
+            Long maxRecordOffset = null;
+            while (consumer.position(tp) != topicEndOffset) {
+                final List<ConsumerRecord<String, String>> records = consumer.poll(Duration.ofMillis(0)).records(tp);
+                if (!records.isEmpty()) {
+                    maxRecordOffset = records.get(records.size() - 1).offset();
+                }
             }
-        }
 
-        assertEquals(maxRecordOffset, (Long) checkpointedOffset,
+            assertEquals(maxRecordOffset, (Long) checkpointedOffset,
                 "Checkpointed offset does not match end of changelog");
+        }
     }
 
     private List<KeyValue<Long, Long>> prepareData(final long fromInclusive,

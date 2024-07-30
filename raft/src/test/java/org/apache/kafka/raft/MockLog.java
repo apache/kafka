@@ -499,9 +499,9 @@ public class MockLog implements ReplicatedLog {
             return Optional.empty();
         } else {
             return Optional.of(
-                new MockRawSnapshotWriter(snapshotId, buffer -> {
-                    snapshots.putIfAbsent(snapshotId, new MockRawSnapshotReader(snapshotId, buffer));
-                })
+                new MockRawSnapshotWriter(snapshotId, buffer ->
+                    snapshots.putIfAbsent(snapshotId, new MockRawSnapshotReader(snapshotId, buffer))
+                )
             );
         }
     }
@@ -569,12 +569,10 @@ public class MockLog implements ReplicatedLog {
                 return false;
             });
 
-            last.get().ifPresent(epochStartOffset -> {
-                epochStartOffsets.add(
-                    0,
-                    new EpochStartOffset(epochStartOffset.epoch, snapshotId.offset())
-                );
-            });
+            last.get().ifPresent(epochStartOffset ->
+                epochStartOffsets.add(0, new EpochStartOffset(epochStartOffset.epoch, snapshotId.offset())
+                )
+            );
 
             updated = true;
         }

@@ -588,6 +588,10 @@ subprojects {
       from "$rootDir/LICENSE"
       from "$rootDir/NOTICE"
       from sourceSets.test.output
+      // The junit-platform.properties file is used for configuring and customizing the behavior of the JUnit platform.
+      // It should only apply to Kafka's own JUnit tests, and should not exist in the test JAR.
+      // If we include it in the test JAR, it could lead to conflicts with user configurations.
+      exclude 'junit-platform.properties'
     }
 
     task testSrcJar(type: Jar, dependsOn: testJar) {
@@ -913,10 +917,6 @@ project(':core') {
     archivesName = "kafka_${versions.baseScala}"
   }
 
-  configurations {
-    generator
-  }
-
   dependencies {
     // `core` is often used in users' tests, define the following dependencies as `api` for backwards compatibility
     // even though the `core` module doesn't expose any public API
@@ -993,8 +993,6 @@ project(':core') {
     testImplementation libs.caffeine
 
     testRuntimeOnly libs.junitPlatformLanucher
-
-    generator project(':generator')
   }
 
   if (userEnableTestCoverage) {
@@ -1033,24 +1031,6 @@ project(':core') {
     into "$buildDir/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
   }
-
-  task processMessages(type:JavaExec) {
-    mainClass = "org.apache.kafka.message.MessageGenerator"
-    classpath = configurations.generator
-    args = [ "-p", "kafka.internals.generated",
-             "-o", "src/generated/java/kafka/internals/generated",
-             "-i", "src/main/resources/common/message",
-             "-m", "MessageDataGenerator"
-    ]
-    inputs.dir("src/main/resources/common/message")
-        .withPropertyName("messages")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-    outputs.cacheIf { true }
-    outputs.dir("src/generated/java/kafka/internals/generated")
-  }
-
-  compileJava.dependsOn 'processMessages'
-  srcJar.dependsOn 'processMessages'
 
   task genProtocolErrorDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
@@ -1211,6 +1191,9 @@ project(':core') {
     //By default gradle does not handle test dependencies between the sub-projects
     //This line is to include clients project test jar to dependant-testlibs
     from (project(':clients').testJar ) { "$buildDir/dependant-testlibs" }
+    // log4j-appender is not in core dependencies, 
+    // so we add it to dependant-testlibs to avoid ClassNotFoundException in running kafka_log4j_appender.py
+    from (project(':log4j-appender').jar ) { "$buildDir/dependant-testlibs" }
     duplicatesStrategy 'exclude'
   }
 
@@ -1412,7 +1395,7 @@ project(':group-coordinator') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
@@ -1449,10 +1432,16 @@ project(':transaction-coordinator') {
     archivesName = "kafka-transaction-coordinator"
   }
 
-  dependencies {
-    implementation project(':clients')
-
+  configurations {
+    generator
   }
+
+  dependencies {
+    implementation libs.jacksonDatabind
+    implementation project(':clients')
+    generator project(':generator')
+  }
+  
   sourceSets {
     main {
       java {
@@ -1461,7 +1450,7 @@ project(':transaction-coordinator') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
@@ -1469,6 +1458,24 @@ project(':transaction-coordinator') {
   checkstyle {
     configProperties = checkstyleConfigProperties("import-control-transaction-coordinator.xml")
   }
+
+  task processMessages(type:JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", "org.apache.kafka.coordinator.transaction.generated",
+             "-o", "src/generated/java/org/apache/kafka/coordinator/transaction/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
+    ]
+    inputs.dir("src/main/resources/common/message")
+            .withPropertyName("messages")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("src/generated/java/org/apache/kafka/coordinator/transaction/generated")
+  }
+
+  compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   javadoc {
     enabled = false
@@ -1931,7 +1938,10 @@ project(':storage') {
     implementation project(':storage:storage-api')
     implementation project(':server-common')
     implementation project(':clients')
-    implementation libs.caffeine
+    implementation project(':transaction-coordinator')
+    implementation(libs.caffeine) {
+      exclude group: 'org.checkerframework', module: 'checker-qual'
+    }
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
     implementation libs.metrics
@@ -2106,6 +2116,7 @@ project(':tools') {
     implementation project(':server-common')
     implementation project(':connect:runtime')
     implementation project(':tools:tools-api')
+    implementation project(':transaction-coordinator')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
@@ -2516,10 +2527,6 @@ project(':streams:test-utils') {
 
     testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.junitPlatformLanucher
-  }
-
-  javadoc {
-    include "**/org/apache/kafka/streams/test/**"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -3186,13 +3193,14 @@ project(':connect:runtime') {
     testImplementation project(':core')
     testImplementation project(':server')
     testImplementation project(':metadata')
+    testImplementation project(':server-common')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server')
     testImplementation project(':group-coordinator')
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
-    testImplementation project(':group-coordinator')
+    testImplementation project(':server-common').sourceSets.test.output
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
@@ -3310,6 +3318,7 @@ project(':connect:file') {
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
   }
 
   javadoc {
@@ -3411,6 +3420,7 @@ project(':connect:mirror') {
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server')
+    testImplementation project(':server-common').sourceSets.test.output
 
     testRuntimeOnly project(':connect:runtime')
     testRuntimeOnly libs.slf4jReload4j

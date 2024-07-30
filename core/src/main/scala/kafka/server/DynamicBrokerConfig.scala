@@ -99,7 +99,7 @@ object DynamicBrokerConfig {
     DynamicProducerStateManagerConfig ++
     DynamicRemoteLogConfig.ReconfigurableConfigs
 
-  private val ClusterLevelListenerConfigs = Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, ServerConfigs.NUM_NETWORK_THREADS_CONFIG)
+  private val ClusterLevelListenerConfigs = Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG)
   private val PerBrokerConfigs = (DynamicSecurityConfigs ++ DynamicListenerConfig.ReconfigurableConfigs).diff(
     ClusterLevelListenerConfigs)
   private val ListenerMechanismConfigs = Set(SaslConfigs.SASL_JAAS_CONFIG,
@@ -683,7 +683,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
 
     def validateLogLocalRetentionMs(): Unit = {
       val logRetentionMs = newConfig.logRetentionTimeMillis
-      val logLocalRetentionMs: java.lang.Long = newConfig.logLocalRetentionMs
+      val logLocalRetentionMs: java.lang.Long = newConfig.remoteLogManagerConfig.logLocalRetentionMs
       if (logRetentionMs != -1L && logLocalRetentionMs != -2L) {
         if (logLocalRetentionMs == -1L) {
           throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs,
@@ -698,7 +698,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
 
     def validateLogLocalRetentionBytes(): Unit = {
       val logRetentionBytes = newConfig.logRetentionBytes
-      val logLocalRetentionBytes: java.lang.Long = newConfig.logLocalRetentionBytes
+      val logLocalRetentionBytes: java.lang.Long = newConfig.remoteLogManagerConfig.logLocalRetentionBytes
       if (logRetentionBytes > -1 && logLocalRetentionBytes != -2) {
         if (logLocalRetentionBytes == -1) {
           throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes,
@@ -999,7 +999,7 @@ object DynamicListenerConfig {
     SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
 
     // Network threads
-    ServerConfigs.NUM_NETWORK_THREADS_CONFIG
+    SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG
   )
 }
 

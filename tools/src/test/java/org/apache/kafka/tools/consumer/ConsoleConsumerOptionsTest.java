@@ -673,4 +673,26 @@ public class ConsoleConsumerOptionsTest {
         };
         assertInstanceOf(NoOpMessageFormatter.class, new ConsoleConsumerOptions(deprecatedNoOpMessageFormatter).formatter());
     }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testNewAndDeprecateTransactionLogMessageFormatter() throws Exception {
+        String[] deprecatedTransactionLogMessageFormatter = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--formatter", "kafka.coordinator.transaction.TransactionLog$TransactionLogMessageFormatter",
+        };
+        assertInstanceOf(kafka.coordinator.transaction.TransactionLog.TransactionLogMessageFormatter.class, 
+                new ConsoleConsumerOptions(deprecatedTransactionLogMessageFormatter).formatter());
+
+        String[] transactionLogMessageFormatter = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--formatter", "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter",
+        };
+        assertInstanceOf(TransactionLogMessageFormatter.class, 
+                new ConsoleConsumerOptions(transactionLogMessageFormatter).formatter());
+    }
 }
