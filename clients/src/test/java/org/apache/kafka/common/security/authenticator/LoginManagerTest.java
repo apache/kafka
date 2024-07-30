@@ -167,7 +167,7 @@ public class LoginManagerTest {
     @Test
     public void testLoginException() throws Exception {
         Map<String, Object> config = new HashMap<>();
-        config.put("sasl.jaas.config", dynamicPlainContext);
+        config.put(SaslConfigs.SASL_JAAS_CONFIG, dynamicPlainContext);
         config.put(SaslConfigs.SASL_LOGIN_CLASS, Login.class);
         config.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, AuthenticateCallbackHandler.class);
         JaasContext dynamicContext = JaasContext.loadClientContext(config);
