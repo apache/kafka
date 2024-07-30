@@ -515,8 +515,7 @@ public class TaskManager {
     private void handleTasksPendingInitialization() {
         // All tasks pending initialization are not part of the usual bookkeeping
         for (final Task task : tasks.drainPendingTasksToInit()) {
-            task.suspend();
-            task.closeClean();
+            closeTaskClean(task, Collections.emptySet(), Collections.emptyMap());
         }
     }
 
