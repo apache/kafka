@@ -138,7 +138,7 @@ public class MembershipManagerImpl implements MembershipManager {
     private final Optional<String> groupInstanceId;
 
     /**
-     * Reconciliation commit timeout . To be used as time limit for the commit request issued
+     * Reconciliation commit timeout. To be used as time limit for the commit request issued
      * when a new assignment is received, that is retried until it succeeds, fails with a
      * non-retriable error, it the time limit expires.
      */
