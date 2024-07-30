@@ -61,11 +61,9 @@ public class LoginManager {
         loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
         loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
         login.configure(configs, jaasContext.name(), jaasContext.configuration(), loginCallbackHandler);
-        try {
+        try (AutoCloseable loginResources = this::closeResources) {
             login.login();
         } catch (Exception e) {
-            this.login.close();
-            this.loginCallbackHandler.close();
             throw new LoginException(e.getMessage());
         }
     }
@@ -172,6 +170,11 @@ public class LoginManager {
                 // subject.toString() exposes private credentials, so we can't use it
                 ", publicCredentials=" + subject().getPublicCredentials() +
                 ", refCount=" + refCount + ')';
+    }
+
+    private void closeResources() {
+        if (login != null) login.close();
+        if (loginCallbackHandler != null) loginCallbackHandler.close();
     }
 
     /* Should only be used in tests. */
