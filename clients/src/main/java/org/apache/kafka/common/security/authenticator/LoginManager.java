@@ -63,9 +63,9 @@ public class LoginManager {
         this.loginMetadata = loginMetadata;
         this.login = Utils.newInstance(loginMetadata.loginClass);
         loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
-        loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
-        login.configure(configs, jaasContext.name(), jaasContext.configuration(), loginCallbackHandler);
         try (AutoCloseable loginResources = this::closeResources) {
+            loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
+            login.configure(configs, jaasContext.name(), jaasContext.configuration(), loginCallbackHandler);
             login.login();
         } catch (Exception e) {
             throw new LoginException(e.getMessage());
