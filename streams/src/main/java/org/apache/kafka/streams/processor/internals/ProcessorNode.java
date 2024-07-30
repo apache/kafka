@@ -218,7 +218,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             try {
                 response = processingExceptionHandler.handle(errorHandlerContext, record, e);
             } catch (final Exception fatalUserException) {
-                throw new StreamsException("Fatal user code error in processing error callback", fatalUserException);
+                throw new FailedProcessingException(fatalUserException);
             }
             if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
                 log.error("Processing exception handler is set to fail upon" +
