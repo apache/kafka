@@ -469,6 +469,7 @@ public class ProducerPerformanceTest {
         ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
         assertTrue(configs.transactionsEnabled);
         assertEquals(5000, configs.transactionDurationMs);
-        assertEquals(ProducerPerformance.DEFAULT_TRANSACTION_ID, configs.producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
+        assertTrue(configs.producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG).toString()
+                .startsWith(ProducerPerformance.DEFAULT_TRANSACTION_ID_PREFIX));
     }
 }
