@@ -29,6 +29,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import javax.security.auth.login.LoginException;
 import java.util.Collections;
@@ -176,7 +177,7 @@ public class LoginManagerTest {
 
         doThrow(new LoginException("Expecting LoginException")).when(mockLogin).login();
 
-        try (MockedStatic<Utils> mockedUtils = mockStatic(Utils.class)) {
+        try (MockedStatic<Utils> mockedUtils = mockStatic(Utils.class, Mockito.CALLS_REAL_METHODS)) {
             mockedUtils.when(() -> Utils.newInstance(Login.class)).thenReturn(mockLogin);
             mockedUtils.when(() -> Utils.newInstance(AuthenticateCallbackHandler.class)).thenReturn(mockHandler);
 

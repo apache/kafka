@@ -33,11 +33,15 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Callable;
 
 import javax.security.auth.Subject;
 import javax.security.auth.login.LoginException;
+
+import static java.util.Arrays.asList;
 
 public class LoginManager {
 
@@ -172,9 +176,26 @@ public class LoginManager {
                 ", refCount=" + refCount + ')';
     }
 
+    /**
+     * Closes Login and AuthenticateCallbackHandler quietly.
+     * The function logs exceptions that are thrown during closing.
+     */
     private void closeResources() {
-        if (login != null) login.close();
-        if (loginCallbackHandler != null) loginCallbackHandler.close();
+        try {
+            List<Callable<Void>> tasks = asList(
+                    () -> {
+                        login.close();
+                        return null;
+                    },
+                    () -> {
+                        loginCallbackHandler.close();
+                        return null;
+                    }
+            );
+            Utils.tryAll(tasks);
+        } catch (Throwable t) {
+            LOGGER.info("Exception thrown during closing", t);
+        }
     }
 
     /* Should only be used in tests. */
