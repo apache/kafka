@@ -100,7 +100,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
@@ -2451,8 +2453,19 @@ public class KafkaConsumerTest {
         assertThrows(IllegalStateException.class, consumer::groupMetadata);
     }
 
+    private static Stream<Arguments> groupProtocolArgument() {
+        List<Arguments> g = new ArrayList<>();
+        for (int i = 0; i < 25; ++i) {
+            g.add(Arguments.of(GroupProtocol.CLASSIC));
+        }
+        for (int i = 0; i < 25; ++i) {
+            g.add(Arguments.of(GroupProtocol.CONSUMER));
+        }
+        return g.stream();
+    }
+
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class)
+    @MethodSource("groupProtocolArgument")
     @SuppressWarnings("unchecked")
     public void testCurrentLag(GroupProtocol groupProtocol) throws InterruptedException {
         final ConsumerMetadata metadata = createMetadata(subscription);
