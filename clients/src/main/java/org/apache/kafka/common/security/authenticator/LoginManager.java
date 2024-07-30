@@ -54,11 +54,11 @@ public class LoginManager {
     private final AuthenticateCallbackHandler loginCallbackHandler;
     private int refCount;
 
-    LoginManager(JaasContext jaasContext, String saslMechanism, Map<String, ?> configs,
+    private LoginManager(JaasContext jaasContext, String saslMechanism, Map<String, ?> configs,
                  LoginMetadata<?> loginMetadata) throws LoginException {
         this.loginMetadata = loginMetadata;
-        this.login = createLogin();
-        this.loginCallbackHandler = createLoginCallbackHandler();
+        this.login = Utils.newInstance(loginMetadata.loginClass);
+        loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
         loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
         login.configure(configs, jaasContext.name(), jaasContext.configuration(), loginCallbackHandler);
         try {
@@ -166,14 +166,6 @@ public class LoginManager {
         }
     }
 
-    protected Login createLogin() {
-        return Utils.newInstance(loginMetadata.loginClass);
-    }
-
-    protected AuthenticateCallbackHandler createLoginCallbackHandler() {
-        return Utils.newInstance(loginMetadata.loginCallbackClass);
-    }
-
     @Override
     public String toString() {
         return "LoginManager(serviceName=" + serviceName() +
@@ -210,7 +202,7 @@ public class LoginManager {
         return clazz;
     }
 
-    static class LoginMetadata<T> {
+    private static class LoginMetadata<T> {
         final T configInfo;
         final Class<? extends Login> loginClass;
         final Class<? extends AuthenticateCallbackHandler> loginCallbackClass;

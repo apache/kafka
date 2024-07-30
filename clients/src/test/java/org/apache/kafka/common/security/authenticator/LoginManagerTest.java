@@ -24,9 +24,11 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 
+import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 import javax.security.auth.login.LoginException;
 import java.util.Collections;
@@ -36,9 +38,10 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 
 public class LoginManagerTest {
@@ -164,6 +167,7 @@ public class LoginManagerTest {
     public void testLoginException() throws Exception {
         Map<String, Object> config = new HashMap<>();
         config.put("sasl.jaas.config", dynamicPlainContext);
+        config.put(SaslConfigs.SASL_LOGIN_CLASS, Login.class);
         config.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, AuthenticateCallbackHandler.class);
         JaasContext dynamicContext = JaasContext.loadClientContext(config);
 
@@ -172,23 +176,14 @@ public class LoginManagerTest {
 
         doThrow(new LoginException("Expecting LoginException")).when(mockLogin).login();
 
-        try {
-            new LoginManager(dynamicContext, "PLAIN", config,
-                    new LoginManager.LoginMetadata<>("test", Login.class,
-                            AuthenticateCallbackHandler.class, config)) {
-                @Override
-                protected Login createLogin() {
-                    return mockLogin;
-                }
+        try (MockedStatic<Utils> mockedUtils = mockStatic(Utils.class)) {
+            mockedUtils.when(() -> Utils.newInstance(Login.class)).thenReturn(mockLogin);
+            mockedUtils.when(() -> Utils.newInstance(AuthenticateCallbackHandler.class)).thenReturn(mockHandler);
 
-                @Override
-                protected AuthenticateCallbackHandler createLoginCallbackHandler() {
-                    return mockHandler;
-                }
-            };
-            fail("Expected LoginException to be thrown");
-        } catch (LoginException e) {
-            assertEquals("Expecting LoginException", e.getMessage());
+            assertThrows(LoginException.class, () ->
+                    LoginManager.acquireLoginManager(dynamicContext, "PLAIN", DefaultLogin.class, config)
+            );
+
             verify(mockLogin).close();
             verify(mockHandler).close();
         }
