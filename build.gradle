@@ -980,14 +980,8 @@ project(':core') {
       // It is safer to use from `apacheds` since that is the implementation.
       exclude module: 'mina-core'
     }
-    testImplementation libs.apachedsCoreApi
-    testImplementation libs.apachedsInterceptorKerberos
     testImplementation libs.apachedsProtocolShared
-    testImplementation libs.apachedsProtocolKerberos
-    testImplementation libs.apachedsProtocolLdap
-    testImplementation libs.apachedsLdifPartition
-    testImplementation libs.apachedsMavibotPartition
-    testImplementation libs.apachedsJdbmPartition
+    testImplementation libs.kerbSimpleKDC
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jReload4j
     testImplementation libs.caffeine

@@ -22,7 +22,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.server.BrokerTopicStats
 import kafka.utils._
-import org.apache.directory.api.util.FileUtils
+import org.apache.commons.io.FileUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
