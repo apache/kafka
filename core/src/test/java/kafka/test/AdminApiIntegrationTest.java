@@ -29,7 +29,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Uuid;
@@ -47,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class AdminApiIntegrationTest {
 
     @ClusterTest(types = Type.KRAFT,
-            serverProperties = @ClusterConfigProperty(key = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
+            serverProperties = @ClusterConfigProperty(key = AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     value = "kafka.test.AdminApiIntegrationTest$GetIdClientTelemetry"))
     public void testClientInstanceId(ClusterInstance clusterInstance) {
         Map<String, Object> configs = new HashMap<>();
