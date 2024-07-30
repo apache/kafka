@@ -56,7 +56,7 @@ public class RecordDeserializerTest {
         new byte[0],
         new byte[0],
         headers,
-        Optional.empty());
+        Optional.of(5));
 
     private final InternalProcessorContext<Void, Void> context = new InternalMockProcessorContext<>();
 
@@ -83,6 +83,7 @@ public class RecordDeserializerTest {
         assertEquals(rawRecord.timestamp(), record.timestamp());
         assertEquals(TimestampType.CREATE_TIME, record.timestampType());
         assertEquals(rawRecord.headers(), record.headers());
+        assertEquals(rawRecord.leaderEpoch(), record.leaderEpoch());
     }
 
     @ParameterizedTest
