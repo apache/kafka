@@ -27,26 +27,19 @@ import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedConstruction;
 
-import javax.security.auth.Subject;
-import javax.security.auth.callback.Callback;
-import javax.security.auth.login.AppConfigurationEntry;
-import javax.security.auth.login.Configuration;
-import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
-import java.lang.reflect.InvocationTargetException;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.mockConstruction;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 public class LoginManagerTest {
 
@@ -168,16 +161,37 @@ public class LoginManagerTest {
     }
 
     @Test
-    public void testLoginException() throws LoginException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    public void testLoginException() throws Exception {
         Map<String, Object> config = new HashMap<>();
         config.put("sasl.jaas.config", dynamicPlainContext);
-        config.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, ErrorLoginCallbackHandler.class);
+        config.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, AuthenticateCallbackHandler.class);
         JaasContext dynamicContext = JaasContext.loadClientContext(config);
-        MockedConstruction<ErrorLogin> mocked = mockConstruction(ErrorLogin.class);
 
-        assertThrows(LoginException.class,
-                () -> LoginManager.acquireLoginManager(dynamicContext, "PLAIN", ErrorLogin.class, config));
-        assertNotNull(mocked);
+        Login mockLogin = mock(Login.class);
+        AuthenticateCallbackHandler mockHandler = mock(AuthenticateCallbackHandler.class);
+
+        doThrow(new LoginException("Expecting LoginException")).when(mockLogin).login();
+
+        try {
+            new LoginManager(dynamicContext, "PLAIN", config,
+                    new LoginManager.LoginMetadata<>("test", Login.class,
+                            AuthenticateCallbackHandler.class, config)) {
+                @Override
+                protected Login createLogin() {
+                    return mockLogin;
+                }
+
+                @Override
+                protected AuthenticateCallbackHandler createLoginCallbackHandler() {
+                    return mockHandler;
+                }
+            };
+            fail("Expected LoginException to be thrown");
+        } catch (LoginException e) {
+            assertEquals("Expecting LoginException", e.getMessage());
+            verify(mockLogin).close();
+            verify(mockHandler).close();
+        }
     }
 
     private void verifyLoginManagerRelease(LoginManager loginManager, int acquireCount, JaasContext jaasContext,
@@ -196,61 +210,5 @@ public class LoginManagerTest {
                 DefaultLogin.class, configs);
         assertNotSame(loginManager, newLoginManager);
         newLoginManager.release();
-    }
-
-    public class ErrorLogin implements Login {
-        Configuration configuration;
-        boolean closed = false;
-
-        public ErrorLogin() {}
-        @Override
-        public void configure(Map<String, ?> configs, String contextName, Configuration configuration,
-                              AuthenticateCallbackHandler callbackHandler) {
-            this.configuration = configuration;
-        }
-
-        @Override
-        public LoginContext login() throws LoginException {
-            throw new LoginException("Expecting LoginException");
-        }
-
-        @Override
-        public Subject subject() {
-            return null;
-        }
-
-        @Override
-        public String serviceName() {
-            return "kafka";
-        }
-
-        @Override
-        public void close() {
-            closed = true;
-        }
-
-        protected String contextName() {
-            return "context";
-        }
-
-        protected Configuration configuration() {
-            return configuration;
-        }
-    }
-
-    public class ErrorLoginCallbackHandler implements AuthenticateCallbackHandler {
-        boolean closed = false;
-        @Override
-        public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        }
-
-        @Override
-        public void handle(Callback[] callbacks) {
-        }
-
-        @Override
-        public void close() {
-            closed = true;
-        }
     }
 }
