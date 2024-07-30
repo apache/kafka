@@ -79,9 +79,7 @@ final class EndpointsTest {
 
     @Test
     void testVotersRecordEndpointsWithEmptyEndpoint() {
-        Endpoints endpoints = Endpoints.empty();
-
-        assertFalse(endpoints.votersRecordEndpoints().hasNext());
+        assertFalse(Endpoints.empty().votersRecordEndpoints().hasNext());
     }
 
     @Test
@@ -147,9 +145,7 @@ final class EndpointsTest {
 
     @Test
     void testToBeginQuorumEpochRequestWithEmptyEndpoint() {
-        Endpoints endpoints = Endpoints.empty();
-
-        assertEquals(0, endpoints.toBeginQuorumEpochRequest().size());
+        assertEquals(0, Endpoints.empty().toBeginQuorumEpochRequest().size());
     }
 
     @Test
