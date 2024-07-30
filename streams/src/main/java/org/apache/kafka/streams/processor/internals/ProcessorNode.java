@@ -203,7 +203,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         } catch (final FailedProcessingException | TaskCorruptedException | TaskMigratedException e) {
             // Rethrow exceptions that should not be handled here
             throw e;
-        } catch (final Exception e) {
+        } catch (final RuntimeException e) {
             final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
                 null, // only required to pass for DeserializationExceptionHandler
                 internalProcessorContext.topic(),
@@ -226,10 +226,6 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 droppedRecordsSensor.record();
             }
         }
-    }
-
-    public void punctuate(final long timestamp, final Punctuator punctuator) {
-        punctuator.punctuate(timestamp);
     }
 
     public boolean isTerminalNode() {
