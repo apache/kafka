@@ -92,7 +92,7 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         }
         return size;
     }
-    
+
     public byte[] serialize() {
         final byte[] topicBytes = topic.getBytes(UTF_8);
         final byte[][] headerKeysBytes;
