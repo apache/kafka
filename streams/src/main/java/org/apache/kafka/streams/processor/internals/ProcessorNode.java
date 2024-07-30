@@ -205,7 +205,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             throw e;
         } catch (final Exception e) {
             final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
-                null,
+                null, // only required to pass for DeserializationExceptionHandler
                 internalProcessorContext.topic(),
                 internalProcessorContext.partition(),
                 internalProcessorContext.offset(),

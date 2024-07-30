@@ -301,12 +301,14 @@ public class RecordCollectorImpl implements RecordCollector {
 
         try {
             final DefaultErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
+                null, // only required to pass for DeserializationExceptionHandler
                 context.recordContext().topic(),
                 context.recordContext().partition(),
                 context.recordContext().offset(),
                 context.recordContext().headers(),
                 processorNodeId,
-                taskId);
+                taskId
+            );
             response = productionExceptionHandler.handleSerializationException(errorHandlerContext, record, exception, origin);
         } catch (final Exception e) {
             log.error("Fatal when handling serialization exception", e);
@@ -395,12 +397,14 @@ public class RecordCollectorImpl implements RecordCollector {
                 sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
                 final DefaultErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
+                    null, // only required to pass for DeserializationExceptionHandler
                     context.recordContext().topic(),
                     context.recordContext().partition(),
                     context.recordContext().offset(),
                     context.recordContext().headers(),
                     processorNodeId,
-                    taskId);
+                    taskId
+                );
 
                 if (productionExceptionHandler.handle(errorHandlerContext, serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
                     errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
