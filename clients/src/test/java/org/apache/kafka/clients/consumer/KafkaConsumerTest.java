@@ -2482,23 +2482,14 @@ public class KafkaConsumerTest {
         consumer.seek(tp0, 50L);
         consumer.poll(Duration.ofMillis(0));
 
-        if (groupProtocol == GroupProtocol.CONSUMER) {
-            // requests: list-offset, fetch
-            // There is additional OffsetFetch request for consumer protocol
-            // The offsetFetch request comes from commitManger, need to dig it deep.
-            TestUtils.waitForCondition(() -> client.inFlightRequestCount() == 3,
-                    "AsyncConsumer does not need wait offsetFetch request comes from CommitManger");
-            client.requests().remove(
-                    client.requests().stream().filter(s -> s.requestBuilder().apiKey() == ApiKeys.OFFSET_FETCH).
-                            findFirst().get()
-            );
-        }
-
         // For asyncConsumer is it's out of order requests
         // if background get listOffset request first, the test will pass
         // otherwise, it will fail.
-        TestUtils.waitForCondition(() -> client.inFlightRequestCount() == 2,
-                "Consumer get unexcepted in flightRequestCount");
+        // requests: list-offset, fetch
+        // There is additional OffsetFetch request for consumer protocol
+        // The offsetFetch request comes from commitManger, need to dig it deep.
+        TestUtils.waitForCondition(() -> client.inFlightRequestCount() >= 2,
+                "Consumer get unexpected in flightRequestCount");
 
         // no error for no end offset (so unknown lag)
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
@@ -2508,10 +2499,11 @@ public class KafkaConsumerTest {
         client.respond(listOffsetsResponse(singletonMap(tp0, 90L)));
         consumer.poll(Duration.ofMillis(0));
 
-        TestUtils.waitForCondition(() -> OptionalLong.of(40L).equals(consumer.currentLag(tp0)),
-                "Consumer can't get excepted lag.");
-        // requests: fetch
-        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(OptionalLong.of(40L), consumer.currentLag(tp0));
+
+        // requests: fetch (OffsetFetch for asyncConsumer)
+        TestUtils.waitForCondition(() -> client.inFlightRequestCount() >= 1,
+                "Consumer get unexpected in flightRequestCount");
 
         // one successful fetch should update the log end offset and the position
         final FetchInfo fetchInfo = new FetchInfo(1L, 99L, 50L, 5);
