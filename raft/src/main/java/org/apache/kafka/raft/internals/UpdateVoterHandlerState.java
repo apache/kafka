@@ -16,18 +16,29 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
+import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.raft.Endpoints;
+import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.raft.RaftUtil;
 
 import java.util.concurrent.CompletableFuture;
 
-public final class RemoveVoterHandlerState {
+public final class UpdateVoterHandlerState {
     private final long lastOffset;
+    private final ListenerName requestListenerName;
     private final Timer timeout;
-    private final CompletableFuture<RemoveRaftVoterResponseData> future = new CompletableFuture<>();
+    private final CompletableFuture<UpdateRaftVoterResponseData> future = new CompletableFuture<>();
 
-    RemoveVoterHandlerState(long lastOffset, Timer timeout) {
+    UpdateVoterHandlerState(
+        long lastOffset,
+        ListenerName requestListenerName,
+        Timer timeout
+    ) {
         this.lastOffset = lastOffset;
+        this.requestListenerName = requestListenerName;
         this.timeout = timeout;
     }
 
@@ -36,8 +47,23 @@ public final class RemoveVoterHandlerState {
         return timeout.remainingMs();
     }
 
-    public CompletableFuture<RemoveRaftVoterResponseData> future() {
+    public CompletableFuture<UpdateRaftVoterResponseData> future() {
         return future;
+    }
+
+    public void completeFuture(
+        Errors error,
+        LeaderAndEpoch leaderAndEpoch,
+        Endpoints leaderEndpoints
+    ) {
+        future.complete(
+            RaftUtil.updateVoterResponse(
+                error,
+                requestListenerName,
+                leaderAndEpoch,
+                leaderEndpoints
+            )
+        );
     }
 
     public long lastOffset() {
