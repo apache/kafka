@@ -22,6 +22,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,9 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class InFlightRequestsTest {
 
+    private final String dest = "dest";
     private InFlightRequests inFlightRequests;
     private int correlationId;
-    private String dest = "dest";
 
     @BeforeEach
     public void setup() {

@@ -341,13 +341,13 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     public boolean isInMutableState() {
-        //some requests do not require memory, so if we do not know what the current (or future) request is
-        //(receive == null) we dont mute. we also dont mute if whatever memory required has already been
-        //successfully allocated (if none is required for the currently-being-read request
-        //receive.memoryAllocated() is expected to return true)
+        // Some requests do not require memory, so if we do not know what the current (or future) request is
+        // (receive == null) we don't mute. We also don't mute if whatever memory required has already been
+        // successfully allocated (if none is required for the currently-being-read request
+        // receive.memoryAllocated() is expected to return true)
         if (receive == null || receive.memoryAllocated())
             return false;
-        //also cannot mute if underlying transport is not in the ready state
+        // also cannot mute if underlying transport is not in the ready state
         return transportLayer.ready();
     }
 

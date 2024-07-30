@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -101,7 +102,7 @@ public class DescribeAclsRequestTest {
 
     private static void assertRequestEquals(final DescribeAclsRequest original, final DescribeAclsRequest actual) {
         final AclBindingFilter originalFilter = original.filter();
-        final AclBindingFilter acttualFilter = actual.filter();
-        assertEquals(originalFilter, acttualFilter);
+        final AclBindingFilter actualFilter = actual.filter();
+        assertEquals(originalFilter, actualFilter);
     }
 }

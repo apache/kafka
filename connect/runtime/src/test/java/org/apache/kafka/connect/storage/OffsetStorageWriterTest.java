@@ -17,12 +17,15 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.connect.util.Callback;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -36,17 +39,18 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class OffsetStorageWriterTest {
     private static final String NAMESPACE = "namespace";
     // Connect format - any types should be accepted here
@@ -66,13 +70,13 @@ public class OffsetStorageWriterTest {
 
     private ExecutorService service;
 
-    @Before
+    @BeforeEach
     public void setup() {
         writer = new OffsetStorageWriter(store, NAMESPACE, keyConverter, valueConverter);
         service = Executors.newFixedThreadPool(1);
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         service.shutdownNow();
     }

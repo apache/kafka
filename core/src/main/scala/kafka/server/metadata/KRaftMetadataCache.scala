@@ -33,10 +33,11 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
 import java.util.concurrent.ThreadLocalRandom
+import java.util.function.Supplier
 import java.util.{Collections, Properties}
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, Seq, Set, mutable}
@@ -45,7 +46,10 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.Breaks._
 
 
-class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging with ConfigRepository {
+class KRaftMetadataCache(
+  val brokerId: Int,
+  val kraftVersionSupplier: Supplier[KRaftVersion]
+) extends MetadataCache with Logging with ConfigRepository {
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
 
   // This is the cache state. Every MetadataImage instance is immutable, and updates
@@ -171,8 +175,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
           topic.partitions().get(partitionId) match {
             case partition : PartitionRegistration => {
               val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas,
-                listenerName, false)
-              val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName, false)
+                listenerName, filterUnavailableEndpoints = false)
+              val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName, filterUnavailableEndpoints = false)
               val offlineReplicas = getOfflineReplicas(image, partition, listenerName)
               val maybeLeader = getAliveEndpoint(image, partition.leader, listenerName)
               maybeLeader match {
@@ -307,7 +311,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
             remaining -= partitions.size
           })
 
-          if (!ignoreTopicsWithExceptions && !partitionResponse.isDefined) {
+          if (!ignoreTopicsWithExceptions && partitionResponse.isEmpty) {
             val error = try {
               Topic.validate(topicName)
               Errors.UNKNOWN_TOPIC_OR_PARTITION
@@ -488,9 +492,9 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     val internalTopics = new util.HashSet[String]
 
     image.topics().topicsByName().values().forEach { topic =>
-      topic.partitions().entrySet().forEach { entry =>
-        val partitionId = entry.getKey
-        val partition = entry.getValue
+      topic.partitions().forEach { (key, value) =>
+        val partitionId = key
+        val partition = value
         partitionInfos.add(new PartitionInfo(topic.name(),
           partitionId,
           node(partition.leader),
@@ -539,10 +543,13 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   override def metadataVersion(): MetadataVersion = _currentImage.features().metadataVersion()
 
-  override def features(): Features = {
+  override def features(): FinalizedFeatures = {
     val image = _currentImage
-    new Features(image.features().metadataVersion(),
-      image.features().finalizedVersions(),
+    val finalizedFeatures = new java.util.HashMap[String, java.lang.Short](image.features().finalizedVersions())
+    finalizedFeatures.put(KRaftVersion.FEATURE_NAME, kraftVersionSupplier.get().featureLevel())
+
+    new FinalizedFeatures(image.features().metadataVersion(),
+      finalizedFeatures,
       image.highestOffsetAndEpoch().offset,
       true)
   }

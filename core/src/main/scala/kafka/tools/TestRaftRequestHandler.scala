@@ -64,7 +64,7 @@ class TestRaftRequestHandler(
   }
 
   private def handleApiVersions(request: RequestChannel.Request): Unit = {
-    requestChannel.sendResponse(request, apiVersionManager.apiVersionResponse(throttleTimeMs = 0), None)
+    requestChannel.sendResponse(request, apiVersionManager.apiVersionResponse(throttleTimeMs = 0, request.header.apiVersion() < 4), None)
   }
 
   private def handleVote(request: RequestChannel.Request): Unit = {
@@ -94,6 +94,7 @@ class TestRaftRequestHandler(
     val requestBody = request.body[AbstractRequest]
 
     val future = raftManager.handleRequest(
+      request.context,
       request.header,
       requestBody.data,
       time.milliseconds()

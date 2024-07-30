@@ -33,7 +33,6 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.Mockito.{mock, verify, when}
 
-import java.util.Optional
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -313,12 +312,10 @@ class AbstractFetcherManagerTest {
     override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(1L, 0)
   }
 
-  private class MockResizeFetcherTierStateMachine extends TierStateMachine {
+  private class MockResizeFetcherTierStateMachine extends TierStateMachine(null, null, false) {
     override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: PartitionData): PartitionFetchState = {
       throw new UnsupportedOperationException("Materializing tier state is not supported in this test.")
     }
-
-    override def maybeAdvanceState(tp: TopicPartition, currentFetchState: PartitionFetchState): Optional[PartitionFetchState] = Optional.empty[PartitionFetchState]
   }
 
   private class TestResizeFetcherThread(sourceBroker: BrokerEndPoint, failedPartitions: FailedPartitions, fetchTierStateMachine: TierStateMachine)

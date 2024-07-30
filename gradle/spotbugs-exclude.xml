@@ -122,7 +122,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <!-- false positive in Java 11, related to https://github.com/spotbugs/spotbugs/issues/756 but more complex -->
     <Match>
-        <Class name="org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream"/>
+        <Class name="org.apache.kafka.common.compress.Lz4BlockOutputStream"/>
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
     </Match>
 
@@ -296,6 +296,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Class name="org.apache.kafka.connect.runtime.rest.resources.LoggingResource" />
         <Method name="setLevel" />
         <Bug pattern="SF_SWITCH_FALLTHROUGH" />
+    </Match>
+
+    <Match>
+        <!-- Converting to an optional boolean intentionally returns null on null input. -->
+        <Class name="org.apache.kafka.connect.data.Values"/>
+        <Method name="convertToBoolean"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
     </Match>
 
     <Match>
@@ -484,18 +491,19 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Ignore spurious warning about inconsistent synchronization on a currentFetch.
+             Locking is consistent but does not use synchronized methods. All accesses
+             are performed in the application thread once it has acquired the lock. -->
+        <Package name="org.apache.kafka.clients.consumer.internals" />
+        <Source name="ShareConsumerImpl.java" />
+        <Bug pattern="IS2_INCONSISTENT_SYNC" />
+    </Match>
+
+    <Match>
         <!-- Suppress a spurious warning about an unreleased lock. -->
         <Class name="kafka.utils.timer.SystemTimer"/>
         <Method name="add"/>
         <Bug pattern="UL_UNRELEASED_LOCK_EXCEPTION_PATH"/>
-    </Match>
-
-    <Match>
-        <!-- Suppress a warning about an intentional infinite loop. -->
-        <Package name="kafka.utils"/>
-        <Source name="Throttler.scala"/>
-        <Method name="main"/>
-        <Bug pattern="IL_INFINITE_LOOP"/>
     </Match>
 
     <Match>

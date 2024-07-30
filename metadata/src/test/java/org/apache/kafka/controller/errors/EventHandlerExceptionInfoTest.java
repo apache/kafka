@@ -17,12 +17,14 @@
 
 package org.apache.kafka.controller.errors;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -38,14 +40,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(value = 40)
 public class EventHandlerExceptionInfoTest {
     private static final EventHandlerExceptionInfo TOPIC_EXISTS =
-        EventHandlerExceptionInfo.fromInternal(
-            new TopicExistsException("Topic exists."),
-            () -> OptionalInt.empty());
+        EventHandlerExceptionInfo.fromInternal(new TopicExistsException("Topic exists."), OptionalInt::empty);
 
     private static final EventHandlerExceptionInfo REJECTED_EXECUTION =
-        EventHandlerExceptionInfo.fromInternal(
-            new RejectedExecutionException(),
-            () -> OptionalInt.empty());
+        EventHandlerExceptionInfo.fromInternal(new RejectedExecutionException(), OptionalInt::empty);
 
     private static final EventHandlerExceptionInfo INTERRUPTED =
         EventHandlerExceptionInfo.fromInternal(
@@ -67,11 +65,6 @@ public class EventHandlerExceptionInfoTest {
             new UnexpectedBaseOffsetException("Wanted base offset 3, but the next offset was 4"),
             () -> OptionalInt.of(1));
 
-    private static final EventHandlerExceptionInfo TIMEOUT =
-        EventHandlerExceptionInfo.fromInternal(
-            new TimeoutException(),
-            () -> OptionalInt.of(1));
-
     @Test
     public void testTopicExistsExceptionInfo() {
         assertEquals(new EventHandlerExceptionInfo(false, false,
@@ -81,7 +74,7 @@ public class EventHandlerExceptionInfoTest {
 
     @Test
     public void testTopicExistsExceptionFailureMessage() {
-        assertEquals("event failed with TopicExistsException in 234 microseconds.",
+        assertEquals("event failed with TopicExistsException in 234 microseconds. Exception message: Topic exists.",
             TOPIC_EXISTS.failureMessage(123, OptionalLong.of(234L), true, 456L));
     }
 
@@ -158,7 +151,7 @@ public class EventHandlerExceptionInfoTest {
     public void testNotLeaderExceptionFailureMessage() {
         assertEquals("event unable to start processing because of NotLeaderException (treated as " +
             "NotControllerException) at epoch 123. Renouncing leadership and reverting to the " +
-            "last committed offset 456.",
+            "last committed offset 456. Exception message: Append failed",
             NOT_LEADER.failureMessage(123, OptionalLong.empty(), true, 456L));
     }
 
@@ -174,8 +167,19 @@ public class EventHandlerExceptionInfoTest {
     public void testUnexpectedBaseOffsetFailureMessage() {
         assertEquals("event failed with UnexpectedBaseOffsetException (treated as " +
             "NotControllerException) at epoch 123 in 90 microseconds. Renouncing leadership " +
-            "and reverting to the last committed offset 456.",
+            "and reverting to the last committed offset 456. Exception message: Wanted base offset 3, but the next offset was 4",
                 UNEXPECTED_END_OFFSET.failureMessage(123, OptionalLong.of(90L), true, 456L));
+    }
+
+    @Test
+    public void testFaultExceptionFailureMessage() {
+        EventHandlerExceptionInfo faultExceptionInfo = EventHandlerExceptionInfo.fromInternal(
+                new KafkaException("Custom kafka exception message"),
+                () -> OptionalInt.of(1));
+        String failureMessage = faultExceptionInfo.failureMessage(123, OptionalLong.of(90L), true, 456L);
+        assertEquals("event failed with KafkaException (treated as UnknownServerException) " +
+                "at epoch 123 in 90 microseconds. Renouncing leadership and reverting " +
+                "to the last committed offset 456.", failureMessage);
     }
 
     @Test
@@ -190,6 +194,9 @@ public class EventHandlerExceptionInfoTest {
 
     @Test
     public void testIsTimeoutException() {
-        assertTrue(TIMEOUT.isTimeoutException());
+        EventHandlerExceptionInfo timeoutExceptionInfo = EventHandlerExceptionInfo.fromInternal(
+                new TimeoutException(),
+                () -> OptionalInt.of(1));
+        assertTrue(timeoutExceptionInfo.isTimeoutException());
     }
 }

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -58,11 +59,10 @@ public class MirrorCheckpointConnectorTest {
 
         Set<String> knownConsumerGroups = new HashSet<>();
         knownConsumerGroups.add(CONSUMER_GROUP);
+
         // MirrorCheckpointConnector as minimum to run taskConfig()
-        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups,
-                                                                            config);
-        List<Map<String, String>> output = connector.taskConfigs(1);
         // expect no task will be created
+        List<Map<String, String>> output = new MirrorCheckpointConnector(knownConsumerGroups, config).taskConfigs(1);
         assertEquals(0, output.size(), "MirrorCheckpointConnector not disabled");
     }
 

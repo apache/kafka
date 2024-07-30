@@ -47,7 +47,7 @@ public class MockProcessorNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, 
     }
 
     private MockProcessorNode(final MockProcessor<KIn, VIn, KOut, VOut> mockProcessor) {
-        super(NAME + INDEX.getAndIncrement(), mockProcessor, Collections.<String>emptySet());
+        super(NAME + INDEX.getAndIncrement(), mockProcessor, Collections.emptySet());
 
         this.mockProcessor = mockProcessor;
     }

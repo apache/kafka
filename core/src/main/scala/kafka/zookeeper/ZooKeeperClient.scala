@@ -38,8 +38,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import java.util
 import scala.jdk.CollectionConverters._
-import scala.collection.Seq
-import scala.collection.mutable.Set
+import scala.collection.{Seq, mutable}
 
 object ZooKeeperClient {
   val RetryBackoffMs = 1000
@@ -52,8 +51,8 @@ object ZooKeeperClient {
  * @param sessionTimeoutMs session timeout in milliseconds
  * @param connectionTimeoutMs connection timeout in milliseconds
  * @param maxInFlightRequests maximum number of unacknowledged requests the client will send before blocking.
+ * @param clientConfig ZooKeeper client configuration, for TLS configs if desired
  * @param name name of the client instance
- * @param zkClientConfig ZooKeeper client configuration, for TLS configs if desired
  */
 class ZooKeeperClient(connectString: String,
                       sessionTimeoutMs: Int,
@@ -83,7 +82,7 @@ class ZooKeeperClient(connectString: String,
   private[zookeeper] val reinitializeScheduler = new KafkaScheduler(1, true, s"zk-client-${threadPrefix}reinit-")
   private var isFirstConnectionEstablished = false
 
-  private val metricNames = Set[String]()
+  private val metricNames = mutable.Set[String]()
 
   // The state map has to be created before creating ZooKeeper since it's needed in the ZooKeeper callback.
   private val stateToMeterMap = {

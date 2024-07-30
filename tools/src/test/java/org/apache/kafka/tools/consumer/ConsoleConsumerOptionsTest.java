@@ -21,6 +21,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.MockDeserializer;
 import org.apache.kafka.tools.ToolsTestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -32,6 +33,7 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -392,11 +394,11 @@ public class ConsoleConsumerOptionsTest {
 
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
 
-        assertTrue(config.formatter() instanceof DefaultMessageFormatter);
+        assertInstanceOf(DefaultMessageFormatter.class, config.formatter());
         assertTrue(config.formatterArgs().containsKey("key.deserializer.my-props"));
         DefaultMessageFormatter formatter = (DefaultMessageFormatter) config.formatter();
         assertTrue(formatter.keyDeserializer().isPresent());
-        assertTrue(formatter.keyDeserializer().get() instanceof MockDeserializer);
+        assertInstanceOf(MockDeserializer.class, formatter.keyDeserializer().get());
         MockDeserializer keyDeserializer = (MockDeserializer) formatter.keyDeserializer().get();
         assertEquals(1, keyDeserializer.configs.size());
         assertEquals("abc", keyDeserializer.configs.get("my-props"));
@@ -419,11 +421,11 @@ public class ConsoleConsumerOptionsTest {
 
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
 
-        assertTrue(config.formatter() instanceof DefaultMessageFormatter);
+        assertInstanceOf(DefaultMessageFormatter.class, config.formatter());
         assertTrue(config.formatterArgs().containsKey("key.deserializer.my-props"));
         DefaultMessageFormatter formatter = (DefaultMessageFormatter) config.formatter();
         assertTrue(formatter.keyDeserializer().isPresent());
-        assertTrue(formatter.keyDeserializer().get() instanceof MockDeserializer);
+        assertInstanceOf(MockDeserializer.class, formatter.keyDeserializer().get());
         MockDeserializer keyDeserializer = (MockDeserializer) formatter.keyDeserializer().get();
         assertEquals(1, keyDeserializer.configs.size());
         assertEquals("abc", keyDeserializer.configs.get("my-props"));
@@ -643,5 +645,54 @@ public class ConsoleConsumerOptionsTest {
             "--timeout-ms", "100"
         };
         assertEquals(100, new ConsoleConsumerOptions(validTimeoutMs).timeoutMs());
+    }
+
+    @Test
+    public void testParseDeprecatedFormatter() throws Exception {
+        String[] deprecatedDefaultMessageFormatter = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--formatter", "kafka.tools.DefaultMessageFormatter",
+        };
+        assertInstanceOf(DefaultMessageFormatter.class, new ConsoleConsumerOptions(deprecatedDefaultMessageFormatter).formatter());
+
+        String[] deprecatedLoggingMessageFormatter = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--formatter", "kafka.tools.LoggingMessageFormatter",
+        };
+        assertInstanceOf(LoggingMessageFormatter.class, new ConsoleConsumerOptions(deprecatedLoggingMessageFormatter).formatter());
+
+        String[] deprecatedNoOpMessageFormatter = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--formatter", "kafka.tools.NoOpMessageFormatter",
+        };
+        assertInstanceOf(NoOpMessageFormatter.class, new ConsoleConsumerOptions(deprecatedNoOpMessageFormatter).formatter());
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testNewAndDeprecateTransactionLogMessageFormatter() throws Exception {
+        String[] deprecatedTransactionLogMessageFormatter = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--formatter", "kafka.coordinator.transaction.TransactionLog$TransactionLogMessageFormatter",
+        };
+        assertInstanceOf(kafka.coordinator.transaction.TransactionLog.TransactionLogMessageFormatter.class, 
+                new ConsoleConsumerOptions(deprecatedTransactionLogMessageFormatter).formatter());
+
+        String[] transactionLogMessageFormatter = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--formatter", "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter",
+        };
+        assertInstanceOf(TransactionLogMessageFormatter.class, 
+                new ConsoleConsumerOptions(transactionLogMessageFormatter).formatter());
     }
 }

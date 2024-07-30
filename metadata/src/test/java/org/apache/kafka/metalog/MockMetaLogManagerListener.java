@@ -22,8 +22,8 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
-import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.SnapshotReader;
 
 import java.util.ArrayList;
 import java.util.List;

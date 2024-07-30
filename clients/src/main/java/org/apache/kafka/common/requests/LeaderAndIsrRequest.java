@@ -20,16 +20,15 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrLiveLeader;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrTopicState;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrTopicState;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.FlattenedIterator;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -113,16 +112,14 @@ public final class LeaderAndIsrRequest extends AbstractControlRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=LeaderAndIsRequest")
-                .append(", controllerId=").append(controllerId)
-                .append(", controllerEpoch=").append(controllerEpoch)
-                .append(", brokerEpoch=").append(brokerEpoch)
-                .append(", partitionStates=").append(partitionStates)
-                .append(", topicIds=").append(topicIds)
-                .append(", liveLeaders=(").append(Utils.join(liveLeaders, ", ")).append(")")
-                .append(")");
-            return bld.toString();
+            return "(type=LeaderAndIsRequest" +
+                    ", controllerId=" + controllerId +
+                    ", controllerEpoch=" + controllerEpoch +
+                    ", brokerEpoch=" + brokerEpoch +
+                    ", partitionStates=" + partitionStates +
+                    ", topicIds=" + topicIds +
+                    ", liveLeaders=(" + liveLeaders.stream().map(Node::toString).collect(Collectors.joining(", ")) + ")" +
+                    ")";
 
         }
     }

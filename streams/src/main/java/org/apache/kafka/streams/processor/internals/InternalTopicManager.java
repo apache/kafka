@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Map.Entry;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -45,6 +44,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.ClientUtils.QuietConsumerConfig;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -55,20 +55,20 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 
 
 public class InternalTopicManager {
-    private final static String BUG_ERROR_MESSAGE = "This indicates a bug. " +
+    private static final String BUG_ERROR_MESSAGE = "This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the dev-mailing list (https://kafka.apache.org/contact).";
-    private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. " + BUG_ERROR_MESSAGE;
+    private static final String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. " + BUG_ERROR_MESSAGE;
 
     private final Logger log;
 

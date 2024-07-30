@@ -23,6 +23,7 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.SampleSinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,7 +95,6 @@ public class MonitorableSinkConnector extends SampleSinkConnector {
 
     public static class MonitorableSinkTask extends SinkTask {
 
-        private String connectorName;
         private String taskId;
         TaskHandle taskHandle;
         Map<TopicPartition, Integer> committedOffsets;
@@ -113,7 +113,7 @@ public class MonitorableSinkConnector extends SampleSinkConnector {
         @Override
         public void start(Map<String, String> props) {
             taskId = props.get("task.id");
-            connectorName = props.get("connector.name");
+            String connectorName = props.get("connector.name");
             taskHandle = RuntimeHandles.get().connectorHandle(connectorName).taskHandle(taskId);
             log.debug("Starting task {}", taskId);
             taskHandle.recordTaskStart();

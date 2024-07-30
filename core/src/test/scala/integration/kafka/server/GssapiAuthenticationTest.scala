@@ -22,13 +22,13 @@ import java.net.InetSocketAddress
 import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
-
 import javax.security.auth.login.LoginContext
 import kafka.api.{Both, IntegrationTestHarness, SaslSetup}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.SaslConfigs
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network._
@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.{JaasContext, TestSecurityConfig}
 import org.apache.kafka.common.security.auth.{Login, SecurityProtocol}
 import org.apache.kafka.common.security.kerberos.KerberosLogin
 import org.apache.kafka.common.utils.{LogContext, MockTime}
+import org.apache.kafka.network.SocketServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -62,8 +63,8 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   override def setUp(testInfo: TestInfo): Unit = {
     TestableKerberosLogin.reset()
     startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
-    serverConfig.put(KafkaConfig.SslClientAuthProp, "required")
-    serverConfig.put(KafkaConfig.FailedAuthenticationDelayMsProp, failedAuthenticationDelayMs.toString)
+    serverConfig.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
+    serverConfig.put(SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG, failedAuthenticationDelayMs.toString)
     super.setUp(testInfo)
     serverAddr = new InetSocketAddress("localhost",
       servers.head.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)))
@@ -261,9 +262,9 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     clientConfig.setProperty(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN, "0")
     val config = new TestSecurityConfig(clientConfig)
     val jaasContexts = Collections.singletonMap("GSSAPI", JaasContext.loadClientContext(config.values()))
-    val channelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol,
+    val channelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts, securityProtocol,
       null, false, kafkaClientSaslMechanism, true, null, null, null, time, new LogContext(),
-      () => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.ZK_BROKER)) {
+      _ => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.ZK_BROKER)) {
       override protected def defaultLoginClass(): Class[_ <: Login] = classOf[TestableKerberosLogin]
     }
     channelBuilder.configure(config.values())

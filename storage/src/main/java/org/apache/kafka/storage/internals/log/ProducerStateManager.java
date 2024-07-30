@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -173,11 +174,6 @@ public class ProducerStateManager {
 
     private void addProducerId(long producerId, ProducerStateEntry entry) {
         producers.put(producerId, entry);
-        producerIdCount = producers.size();
-    }
-
-    private void removeProducerIds(List<Long> keys) {
-        keys.forEach(producers::remove);
         producerIdCount = producers.size();
     }
 
@@ -369,17 +365,12 @@ public class ProducerStateManager {
      * Also expire any verification state entries that are lingering as unverified.
      */
     public void removeExpiredProducers(long currentTimeMs) {
-        List<Long> keys = producers.entrySet().stream()
-                .filter(entry -> isProducerExpired(currentTimeMs, entry.getValue()))
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
-        removeProducerIds(keys);
+        producers.entrySet().removeIf(entry -> isProducerExpired(currentTimeMs, entry.getValue()));
+        producerIdCount = producers.size();
 
-        List<Long> verificationKeys = verificationStates.entrySet().stream()
-                .filter(entry -> currentTimeMs - entry.getValue().timestamp() >= producerStateManagerConfig.producerIdExpirationMs())
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
-        verificationKeys.forEach(verificationStates::remove);
+        verificationStates.entrySet().removeIf(entry ->
+            (currentTimeMs - entry.getValue().timestamp()) >= producerStateManagerConfig.producerIdExpirationMs()
+        );
     }
 
     /**
@@ -694,7 +685,8 @@ public class ProducerStateManager {
         }
     }
 
-    private static void writeSnapshot(File file, Map<Long, ProducerStateEntry> entries, boolean sync) throws IOException {
+    // visible for testing
+    public static void writeSnapshot(File file, Map<Long, ProducerStateEntry> entries, boolean sync) throws IOException {
         Struct struct = new Struct(PID_SNAPSHOT_MAP_SCHEMA);
         struct.set(VERSION_FIELD, PRODUCER_SNAPSHOT_VERSION);
         struct.set(CRC_FIELD, 0L); // we'll fill this after writing the entries

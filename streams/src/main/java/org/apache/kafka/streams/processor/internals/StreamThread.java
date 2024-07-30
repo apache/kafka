@@ -51,6 +51,7 @@ import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -59,23 +60,23 @@ import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager.DefaultTaskExecutorCreator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
-import java.util.HashMap;
-import java.util.Queue;
-import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
@@ -302,7 +303,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Sensor commitRatioSensor;
     private final Sensor failedStreamThreadSensor;
 
-    private static final long LOG_SUMMARY_INTERVAL_MS = 2 * 60 * 1000L; // log a summary of processing every 2 minutes
+    private final long logSummaryIntervalMs; // the count summary log output time interval
     private long lastLogSummaryMs = -1L;
     private long totalRecordsProcessedSinceLastSummary = 0L;
     private long totalPunctuatorsSinceLastSummary = 0L;
@@ -444,7 +445,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final TaskManager taskManager = new TaskManager(
             time,
             changelogReader,
-            processId,
+            new ProcessId(processId),
             logPrefix,
             activeTaskCreator,
             standbyTaskCreator,
@@ -642,6 +643,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.processingMode = processingMode(config);
         this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
         this.processingThreadsEnabled = InternalConfig.getProcessingThreadsEnabled(config.originals());
+        this.logSummaryIntervalMs = config.getLong(StreamsConfig.LOG_SUMMARY_INTERVAL_MS_CONFIG);
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -1068,8 +1070,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
         commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
 
-        final boolean logProcessingSummary = now - lastLogSummaryMs > LOG_SUMMARY_INTERVAL_MS;
-        if (logProcessingSummary) {
+        if (logSummaryIntervalMs > 0 && now - lastLogSummaryMs > logSummaryIntervalMs) {
             log.info("Processed {} total records, ran {} punctuators, and committed {} total tasks since the last update",
                  totalRecordsProcessedSinceLastSummary, totalPunctuatorsSinceLastSummary, totalCommittedSinceLastSummary);
 
@@ -1141,8 +1142,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
         commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
 
-        final boolean logProcessingSummary = now - lastLogSummaryMs > LOG_SUMMARY_INTERVAL_MS;
-        if (logProcessingSummary) {
+        if (logSummaryIntervalMs > 0 && now - lastLogSummaryMs > logSummaryIntervalMs) {
             log.info("Committed {} total tasks since the last update", totalCommittedSinceLastSummary);
 
             totalCommittedSinceLastSummary = 0L;

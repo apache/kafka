@@ -16,8 +16,7 @@
  */
 package org.apache.kafka.tiered.storage.actions;
 
-import org.apache.kafka.tiered.storage.TieredStorageTestAction;
-import org.apache.kafka.tiered.storage.TieredStorageTestContext;
+import org.apache.kafka.clients.admin.AlterPartitionReassignmentsResult;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.ElectionType;
@@ -26,6 +25,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tiered.storage.TieredStorageTestAction;
+import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -34,6 +35,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.describeTopic;
@@ -53,7 +56,7 @@ public final class ExpectLeaderAction implements TieredStorageTestAction {
     }
 
     @Override
-    public void doExecute(TieredStorageTestContext context) throws InterruptedException, ExecutionException {
+    public void doExecute(TieredStorageTestContext context) throws InterruptedException, ExecutionException, TimeoutException {
         String topic = topicPartition.topic();
         int partition = topicPartition.partition();
         TestUtils.waitForCondition(() -> {
@@ -88,7 +91,7 @@ public final class ExpectLeaderAction implements TieredStorageTestAction {
                 topicPartition, replicaId, electLeader);
     }
 
-    private void reassignPartition(TieredStorageTestContext context) throws ExecutionException, InterruptedException {
+    private void reassignPartition(TieredStorageTestContext context) throws ExecutionException, InterruptedException, TimeoutException {
         String topic = topicPartition.topic();
         TopicPartitionInfo partitionInfo = describeTopic(context, topic)
                 .partitions()
@@ -104,6 +107,7 @@ public final class ExpectLeaderAction implements TieredStorageTestAction {
 
         Map<TopicPartition, Optional<NewPartitionReassignment>> proposed =
                 Collections.singletonMap(topicPartition, Optional.of(new NewPartitionReassignment(targetReplicas)));
-        context.admin().alterPartitionReassignments(proposed);
+        AlterPartitionReassignmentsResult result = context.admin().alterPartitionReassignments(proposed);
+        result.all().get(30, TimeUnit.MINUTES);
     }
 }

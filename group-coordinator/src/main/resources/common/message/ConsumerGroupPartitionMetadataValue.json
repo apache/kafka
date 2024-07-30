@@ -20,8 +20,6 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "Epoch", "versions": "0+", "type": "int32",
-      "about": "The group epoch." },
     { "name": "Topics", "versions": "0+", "type": "[]TopicMetadata",
       "about": "The list of topic metadata.", "fields": [
       { "name": "TopicId", "versions": "0+", "type": "uuid",

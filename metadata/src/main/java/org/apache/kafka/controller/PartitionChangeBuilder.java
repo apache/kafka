@@ -17,6 +17,20 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.DirectoryId;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
+import org.apache.kafka.common.metadata.PartitionChangeRecord;
+import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.metadata.placement.DefaultDirProvider;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,18 +42,6 @@ import java.util.Set;
 import java.util.function.IntPredicate;
 import java.util.stream.Collectors;
 
-import org.apache.kafka.common.DirectoryId;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
-import org.apache.kafka.common.metadata.PartitionChangeRecord;
-import org.apache.kafka.metadata.LeaderRecoveryState;
-import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.metadata.Replicas;
-import org.apache.kafka.metadata.placement.DefaultDirProvider;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
@@ -58,8 +60,7 @@ public class PartitionChangeBuilder {
         if (record.removingReplicas() != null) return false;
         if (record.addingReplicas() != null) return false;
         if (record.leaderRecoveryState() != LeaderRecoveryState.NO_CHANGE) return false;
-        if (record.directories() != null) return false;
-        return true;
+        return record.directories() == null;
     }
 
     /**
@@ -143,7 +144,7 @@ public class PartitionChangeBuilder {
         return setTargetIsr(
             targetIsrWithEpoch
               .stream()
-              .map(brokerState -> brokerState.brokerId())
+              .map(BrokerState::brokerId)
               .collect(Collectors.toList())
         );
     }
@@ -214,6 +215,10 @@ public class PartitionChangeBuilder {
         }
     }
 
+    public List<Integer> targetIsr() {
+        return targetIsr;
+    }
+
     // VisibleForTesting
     /**
      * Perform leader election based on the partition state and leader election type.
@@ -280,7 +285,7 @@ public class PartitionChangeBuilder {
         if (election == Election.UNCLEAN) {
             // Attempt unclean leader election
             Optional<Integer> uncleanLeader = targetReplicas.stream()
-                .filter(replica -> isAcceptableLeader.test(replica))
+                .filter(isAcceptableLeader::test)
                 .findFirst();
             if (uncleanLeader.isPresent()) {
                 return new ElectionResult(uncleanLeader.get(), true);
@@ -365,41 +370,55 @@ public class PartitionChangeBuilder {
     }
 
     /**
-     * Trigger a leader epoch bump if one is needed.
+     * Trigger a leader epoch bump if one is needed because of replica reassignment.
      *
-     * We need to bump the leader epoch if:
-     * 1. The leader changed, or
-     * 2. The new replica list does not contain all the nodes that the old replica list did.
-     *
-     * Changes that do NOT fall in any of these categories will increase the partition epoch, but
-     * not the leader epoch. Note that if the leader epoch increases, the partition epoch will
-     * always increase as well; there is no case where the partition epoch increases more slowly
-     * than the leader epoch.
-     *
-     * If the PartitionChangeRecord sets the leader field to something other than
-     * NO_LEADER_CHANGE, a leader epoch bump will automatically occur. That takes care of
-     * case 1. In this function, we check for cases 2 and 3, and handle them by manually
-     * setting record.leader to the current leader.
-     *
-     * In MV before 3.6 there was a bug (KAFKA-15021) in the brokers' replica manager
-     * that required that the leader epoch be bump whenever the ISR shrank. In MV 3.6 this leader
-     * bump is not required when the ISR shrinks. Note, that the leader epoch is never increased if
-     * the ISR expanded.
-     *
-     * In MV 3.6 and beyond, if the controller is in ZK migration mode, the leader epoch must
-     * be bumped during ISR shrink for compatability with ZK brokers.
+     * Note that if the leader epoch increases, the partition epoch will always increase as well; there is no
+     * case where the partition epoch increases more slowly than the leader epoch.
      */
-    void triggerLeaderEpochBumpIfNeeded(PartitionChangeRecord record) {
-        if (record.leader() == NO_LEADER_CHANGE) {
-            boolean bumpLeaderEpochOnIsrShrink = metadataVersion.isLeaderEpochBumpRequiredOnIsrShrink() || zkMigrationEnabled;
+    void triggerLeaderEpochBumpForReplicaReassignmentIfNeeded(PartitionChangeRecord record) {
+        if (record.leader() != NO_LEADER_CHANGE) {
+            // The leader is already changing, so there will already be a leader epoch bump.
+            return;
+        }
+        if (!Replicas.contains(targetReplicas, partition.replicas)) {
+            // If the new replica list does not contain all the brokers that the old one did,
+            // ensure that there will be a leader epoch bump by setting the leader field.
+            record.setLeader(partition.leader);
+        }
+    }
 
-            if (!Replicas.contains(targetReplicas, partition.replicas)) {
-                // Reassignment
-                record.setLeader(partition.leader);
-            } else if (bumpLeaderEpochOnIsrShrink && !Replicas.contains(targetIsr, partition.isr)) {
-                // ISR shrink
-                record.setLeader(partition.leader);
-            }
+    /**
+     * Trigger a leader epoch bump if one is needed because of an ISR shrink.
+     *
+     * Note that it's important to call this function only after we have set the ISR field in
+     * the PartitionChangeRecord.
+     */
+    void triggerLeaderEpochBumpForIsrShrinkIfNeeded(PartitionChangeRecord record) {
+        if (!(metadataVersion.isLeaderEpochBumpRequiredOnIsrShrink() || zkMigrationEnabled)) {
+            // We only need to bump the leader epoch on an ISR shrink in two cases:
+            //
+            // 1. In older metadata versions before 3.6, there was a bug (KAFKA-15021) in the
+            //    broker replica manager that required that the leader epoch be bumped whenever
+            //    the ISR shrank. (This was never necessary for EXPANSIONS, only SHRINKS.)
+            //
+            // 2. During ZK migration, we bump the leader epoch during all ISR shrinks, in order
+            // to maintain compatibility with migrating brokers that are still in ZK mode.
+            //
+            // If we're not in either case, we can exit here.
+            return;
+        }
+        if (record.leader() != NO_LEADER_CHANGE) {
+            // The leader is already changing, so there will already be a leader epoch bump.
+            return;
+        }
+        if (record.isr() == null) {
+            // The ISR is not changing.
+            return;
+        }
+        if (!Replicas.contains(record.isr(), partition.isr)) {
+            // If the new ISR list does not contain all the brokers that the old one did,
+            // ensure that there will be a leader epoch bump by setting the leader field.
+            record.setLeader(partition.leader);
         }
     }
 
@@ -435,7 +454,7 @@ public class PartitionChangeBuilder {
 
         tryElection(record);
 
-        triggerLeaderEpochBumpIfNeeded(record);
+        triggerLeaderEpochBumpForReplicaReassignmentIfNeeded(record);
 
         maybeUpdateRecordElr(record);
 
@@ -448,6 +467,8 @@ public class PartitionChangeBuilder {
             }
             record.setIsr(targetIsr);
         }
+
+        triggerLeaderEpochBumpForIsrShrinkIfNeeded(record);
 
         maybeUpdateLastKnownLeader(record);
 
@@ -492,7 +513,11 @@ public class PartitionChangeBuilder {
         if (record.isr() != null && record.isr().isEmpty() && (partition.lastKnownElr.length != 1 ||
             partition.lastKnownElr[0] != partition.leader)) {
             // Only update the last known leader when the first time the partition becomes leaderless.
-            record.setLastKnownElr(Arrays.asList(partition.leader));
+            record.setLastKnownElr(Collections.singletonList(partition.leader));
+        } else if ((record.leader() >= 0 || (partition.leader != NO_LEADER && record.leader() != NO_LEADER))
+            && partition.lastKnownElr.length > 0) {
+            // Clear the LastKnownElr field if the partition will have or continues to have a valid leader.
+            record.setLastKnownElr(Collections.emptyList());
         }
     }
 
@@ -517,6 +542,10 @@ public class PartitionChangeBuilder {
             targetLastKnownElr = Replicas.toList(partition.lastKnownElr);
         }
 
+        // If the last known ELR is expected to store the last known leader, the lastKnownElr field should be updated
+        // later in maybeUpdateLastKnownLeader.
+        if (useLastKnownLeaderInBalancedRecovery) return;
+
         if (!targetLastKnownElr.equals(Replicas.toList(partition.lastKnownElr))) {
             record.setLastKnownElr(targetLastKnownElr);
         }
@@ -540,7 +569,7 @@ public class PartitionChangeBuilder {
         // To do that, we first union the current ISR and current elr, then filter out the target ISR and unclean shutdown
         // Replicas.
         Set<Integer> candidateSet = new HashSet<>(targetElr);
-        Arrays.stream(partition.isr).forEach(ii -> candidateSet.add(ii));
+        Arrays.stream(partition.isr).forEach(candidateSet::add);
         targetElr = candidateSet.stream()
             .filter(replica -> !targetIsrSet.contains(replica))
             .filter(replica -> uncleanShutdownReplicas == null || !uncleanShutdownReplicas.contains(replica))
@@ -548,7 +577,7 @@ public class PartitionChangeBuilder {
 
         // Calculate the new last known ELR. Includes any ISR members since the ISR size drops below min ISR.
         // In order to reduce the metadata usage, the last known ELR excludes the members in ELR and current ISR.
-        targetLastKnownElr.forEach(ii -> candidateSet.add(ii));
+        candidateSet.addAll(targetLastKnownElr);
         targetLastKnownElr = candidateSet.stream()
             .filter(replica -> !targetIsrSet.contains(replica))
             .filter(replica -> !targetElr.contains(replica))

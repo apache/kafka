@@ -34,6 +34,7 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConcreteSubClassValidator;
 import org.apache.kafka.connect.util.InstantiableClassValidator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -324,7 +325,7 @@ public class ConnectorConfig extends AbstractConfig {
                     @SuppressWarnings("unchecked")
                     Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
-                    transformations.add(new TransformationStage<>(predicate, negate == null ? false : Boolean.parseBoolean(negate.toString()), transformation));
+                    transformations.add(new TransformationStage<>(predicate, negate != null && Boolean.parseBoolean(negate.toString()), transformation));
                 } else {
                     transformations.add(new TransformationStage<>(transformation));
                 }
@@ -346,7 +347,7 @@ public class ConnectorConfig extends AbstractConfig {
         ConfigDef newDef = new ConfigDef(baseConfigDef);
         new EnrichablePlugin<Transformation<?>>("Transformation", TRANSFORMS_CONFIG, TRANSFORMS_GROUP, (Class) Transformation.class,
                 props, requireFullConfig) {
-            @SuppressWarnings("rawtypes")
+
             @Override
             protected Set<PluginDesc<Transformation<?>>> plugins() {
                 return plugins.transformations();
@@ -419,7 +420,7 @@ public class ConnectorConfig extends AbstractConfig {
      * The abstract method pattern is used to cope with this.
      * @param <T> The type of plugin (either {@code Transformation} or {@code Predicate}).
      */
-    static abstract class EnrichablePlugin<T> {
+    abstract static class EnrichablePlugin<T> {
 
         private final String aliasKind;
         private final String aliasConfig;
@@ -529,13 +530,13 @@ public class ConnectorConfig extends AbstractConfig {
             }
             Utils.ensureConcreteSubclass(baseClass, cls);
 
-            T transformation;
+            T pluginInstance;
             try {
-                transformation = Utils.newInstance(cls, baseClass);
+                pluginInstance = Utils.newInstance(cls, baseClass);
             } catch (Exception e) {
                 throw new ConfigException(key, String.valueOf(cls), "Error getting config definition from " + baseClass.getSimpleName() + ": " + e.getMessage());
             }
-            ConfigDef configDef = config(transformation);
+            ConfigDef configDef = config(pluginInstance);
             if (null == configDef) {
                 throw new ConnectException(
                     String.format(

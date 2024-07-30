@@ -36,6 +36,7 @@ import org.apache.kafka.coordinator.group.{Group, OffsetConfig}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.VerificationGuard
 
+import scala.annotation.nowarn
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.math.max
 
@@ -905,7 +906,8 @@ private[group] class GroupCoordinator(
                              generationId: Int,
                              offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                             requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                             requestLocal: RequestLocal = RequestLocal.NoCaching,
+                             apiVersion: Short): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
       case None =>
@@ -928,7 +930,7 @@ private[group] class GroupCoordinator(
               offsetTopicPartition, offsetMetadata, newRequestLocal, responseCallback, Some(verificationGuard))
           }
         }
-
+        val transactionSupportedOperation = if (apiVersion >= 4) genericError else defaultError
         groupManager.replicaManager.maybeStartTransactionVerificationForPartition(
           topicPartition = offsetTopicPartition,
           transactionalId,
@@ -941,7 +943,8 @@ private[group] class GroupCoordinator(
           KafkaRequestHandler.wrapAsyncCallback(
             postVerificationCallback,
             requestLocal
-          )
+          ),
+          transactionSupportedOperation
         )
     }
   }
@@ -1765,17 +1768,18 @@ object GroupCoordinator {
     GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, time, metrics)
   }
 
+  @nowarn("cat=deprecation")
   private[group] def offsetConfig(config: KafkaConfig) = new OffsetConfig(
-    config.offsetMetadataMaxSize,
-    config.offsetsLoadBufferSize,
-    config.offsetsRetentionMinutes * 60L * 1000L,
-    config.offsetsRetentionCheckIntervalMs,
-    config.offsetsTopicPartitions,
-    config.offsetsTopicSegmentBytes,
-    config.offsetsTopicReplicationFactor,
-    config.offsetsTopicCompressionType,
-    config.offsetCommitTimeoutMs,
-    config.offsetCommitRequiredAcks
+    config.groupCoordinatorConfig.offsetMetadataMaxSize,
+    config.groupCoordinatorConfig.offsetsLoadBufferSize,
+    config.groupCoordinatorConfig.offsetsRetentionMs,
+    config.groupCoordinatorConfig.offsetsRetentionCheckIntervalMs,
+    config.groupCoordinatorConfig.offsetsTopicPartitions,
+    config.groupCoordinatorConfig.offsetsTopicSegmentBytes,
+    config.groupCoordinatorConfig.offsetsTopicReplicationFactor,
+    config.groupCoordinatorConfig.offsetTopicCompressionType,
+    config.groupCoordinatorConfig.offsetCommitTimeoutMs,
+    config.groupCoordinatorConfig.offsetCommitRequiredAcks
   )
 
   private[group] def apply(
@@ -1787,10 +1791,10 @@ object GroupCoordinator {
     metrics: Metrics
   ): GroupCoordinator = {
     val offsetConfig = this.offsetConfig(config)
-    val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
-      groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs,
-      groupMaxSize = config.groupMaxSize,
-      groupInitialRebalanceDelayMs = config.groupInitialRebalanceDelay)
+    val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupCoordinatorConfig.classicGroupMinSessionTimeoutMs,
+      groupMaxSessionTimeoutMs = config.groupCoordinatorConfig.classicGroupMaxSessionTimeoutMs,
+      groupMaxSize = config.groupCoordinatorConfig.classicGroupMaxSize,
+      groupInitialRebalanceDelayMs = config.groupCoordinatorConfig.classicGroupInitialRebalanceDelayMs)
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
       offsetConfig, replicaManager, time, metrics)

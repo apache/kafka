@@ -116,8 +116,7 @@ public class ClientMetricsInstance {
         */
         boolean canAccept = lastGetRequestTimestamp > lastPushRequestTimestamp;
         if (!canAccept) {
-            long lastRequestTimestamp = Math.max(lastGetRequestTimestamp, lastPushRequestTimestamp);
-            long timeElapsedSinceLastMsg = currentTime - lastRequestTimestamp;
+            long timeElapsedSinceLastMsg = currentTime - lastPushRequestTimestamp;
             canAccept = timeElapsedSinceLastMsg >= pushIntervalMs;
         }
 

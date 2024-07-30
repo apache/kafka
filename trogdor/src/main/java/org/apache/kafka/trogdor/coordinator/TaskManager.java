@@ -17,11 +17,6 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.LongNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.utils.Scheduler;
@@ -46,6 +41,13 @@ import org.apache.kafka.trogdor.rest.WorkerReceiving;
 import org.apache.kafka.trogdor.rest.WorkerState;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.LongNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -142,30 +144,30 @@ public final class TaskManager {
             }
         }
         log.info("Created TaskManager for agent(s) on: {}",
-            Utils.join(nodeManagers.keySet(), ", "));
+            String.join(", ", nodeManagers.keySet()));
     }
 
     class ManagedTask {
         /**
          * The task id.
          */
-        final private String id;
+        private final String id;
 
         /**
          * The original task specification as submitted when the task was created.
          */
-        final private TaskSpec originalSpec;
+        private final TaskSpec originalSpec;
 
         /**
          * The effective task specification.
          * The start time will be adjusted to reflect the time when the task was submitted.
          */
-        final private TaskSpec spec;
+        private final TaskSpec spec;
 
         /**
          * The task controller.
          */
-        final private TaskController controller;
+        private final TaskController controller;
 
         /**
          * The task state.
@@ -239,7 +241,7 @@ public final class TaskManager {
             }
             if (!nonExistentNodeNames.isEmpty()) {
                 throw new KafkaException("Unknown node names: " +
-                        Utils.join(nonExistentNodeNames, ", "));
+                        String.join(", ", nonExistentNodeNames));
             }
             if (validNodeNames.isEmpty()) {
                 throw new KafkaException("No node names specified.");
@@ -398,7 +400,7 @@ public final class TaskManager {
                 task.maybeSetError("Unable to find nodes for task: " + e.getMessage());
                 return null;
             }
-            log.info("Running task {} on node(s): {}", task.id, Utils.join(nodeNames, ", "));
+            log.info("Running task {} on node(s): {}", task.id, String.join(", ", nodeNames));
             task.state = TaskStateType.RUNNING;
             task.startedMs = time.milliseconds();
             for (String workerName : nodeNames) {
@@ -597,7 +599,7 @@ public final class TaskManager {
             task.doneMs = time.milliseconds();
             task.state = TaskStateType.DONE;
             log.info("{}: Task {} is now complete on {} with error: {}",
-                nodeName, task.id, Utils.join(task.workerIds.keySet(), ", "),
+                nodeName, task.id, String.join(", ", task.workerIds.keySet()),
                 task.error.isEmpty() ? "(none)" : task.error);
         } else if ((task.state == TaskStateType.RUNNING) && (!task.error.isEmpty())) {
             log.info("{}: task {} stopped with error {}.  Stopping worker(s): {}",

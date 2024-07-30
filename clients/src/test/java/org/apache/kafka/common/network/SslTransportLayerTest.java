@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -48,13 +49,13 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -62,24 +63,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
+import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSession;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -88,7 +96,7 @@ import static org.mockito.Mockito.when;
 public class SslTransportLayerTest {
 
     private static final int BUFFER_SIZE = 4 * 1024;
-    private static Time time = Time.SYSTEM;
+    private static final Time TIME = Time.SYSTEM;
 
     private static class Args {
         private final String tlsProtocol;
@@ -97,7 +105,7 @@ public class SslTransportLayerTest {
         private CertStores clientCertStores;
         private Map<String, Object> sslClientConfigs;
         private Map<String, Object> sslServerConfigs;
-        private Map<String, Object> sslConfigOverrides;
+        private final Map<String, Object> sslConfigOverrides;
 
         public Args(String tlsProtocol, boolean useInlinePem) throws Exception {
             this.tlsProtocol = tlsProtocol;
@@ -256,7 +264,7 @@ public class SslTransportLayerTest {
         args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
 
         // Create a server with endpoint validation enabled on the server SSL engine
-        SslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER) {
+        SslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(ConnectionMode.SERVER) {
             @Override
             protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine) throws IOException {
                 SSLParameters sslParams = sslEngine.getSSLParameters();
@@ -267,7 +275,7 @@ public class SslTransportLayerTest {
         };
         serverChannelBuilder.configure(args.sslServerConfigs);
         server = new NioEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL), SecurityProtocol.SSL,
-                new TestSecurityConfig(args.sslServerConfigs), "localhost", serverChannelBuilder, null, time);
+                new TestSecurityConfig(args.sslServerConfigs), "localhost", serverChannelBuilder, null, TIME);
         server.start();
 
         createSelector(args.sslClientConfigs);
@@ -613,7 +621,7 @@ public class SslTransportLayerTest {
 
     /** Checks connection failed using the specified {@code tlsVersion}. */
     private void checkAuthenticationFailed(Args args, String node, String tlsVersion) throws IOException {
-        args.sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(tlsVersion));
+        args.sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsVersion));
         createSelector(args.sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -632,10 +640,10 @@ public class SslTransportLayerTest {
         SSLContext context = SSLContext.getInstance(args.tlsProtocol);
         context.init(null, null, null);
         String[] cipherSuites = context.getDefaultSSLParameters().getCipherSuites();
-        args.sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[0]));
+        args.sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[0]));
         server = createEchoServer(args, SecurityProtocol.SSL);
 
-        args.sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[1]));
+        args.sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[1]));
         createSelector(args.sslClientConfigs);
 
         checkAuthenticationFailed(args, "1", args.tlsProtocol);
@@ -689,7 +697,7 @@ public class SslTransportLayerTest {
             } catch (IOException e) {
                 return false;
             }
-            return selector.completedSends().size() > 0;
+            return !selector.completedSends().isEmpty();
         }, "Timed out waiting for message to be sent");
 
         // Wait for echo server to send the message back
@@ -756,7 +764,7 @@ public class SslTransportLayerTest {
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testNetworkThreadTimeRecorded(Args args) throws Exception {
         LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
         channelBuilder.configure(args.sslClientConfigs);
         try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
                 "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, logContext)) {
@@ -866,7 +874,7 @@ public class SslTransportLayerTest {
     private void testIOExceptionsDuringHandshake(Args args,
                                                  FailureAction readFailureAction,
                                                  FailureAction flushFailureAction) throws Exception {
-        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(ConnectionMode.CLIENT);
         boolean done = false;
         for (int i = 1; i <= 100; i++) {
             String node = String.valueOf(i);
@@ -875,7 +883,7 @@ public class SslTransportLayerTest {
             channelBuilder.flushFailureAction = flushFailureAction;
             channelBuilder.failureIndex = i;
             channelBuilder.configure(args.sslClientConfigs);
-            this.selector = new Selector(10000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+            this.selector = new Selector(10000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
 
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -916,12 +924,12 @@ public class SslTransportLayerTest {
         // Test without delay and a couple of delay counts to ensure delay applies to handshake failure
         for (int i = 0; i < 3; i++) {
             String node = String.valueOf(i);
-            TestSslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER);
+            TestSslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(ConnectionMode.SERVER);
             serverChannelBuilder.configure(args.sslServerConfigs);
             serverChannelBuilder.flushDelayCount = i;
             server = new NioEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL),
                     SecurityProtocol.SSL, new TestSecurityConfig(args.sslServerConfigs),
-                    "localhost", serverChannelBuilder, null, time);
+                    "localhost", serverChannelBuilder, null, TIME);
             server.start();
             createSelector(args.sslClientConfigs);
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
@@ -955,14 +963,14 @@ public class SslTransportLayerTest {
     }
 
     private SslChannelBuilder newClientChannelBuilder() {
-        return new SslChannelBuilder(Mode.CLIENT, null, false, new LogContext());
+        return new SslChannelBuilder(ConnectionMode.CLIENT, null, false, new LogContext());
     }
 
     private void testClose(Args args, SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
         String node = "0";
         server = createEchoServer(args, securityProtocol);
         clientChannelBuilder.configure(args.sslClientConfigs);
-        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", clientChannelBuilder, new LogContext());
+        this.selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", clientChannelBuilder, new LogContext());
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -1008,10 +1016,10 @@ public class SslTransportLayerTest {
         TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-            true, securityProtocol, config, null, null, time, new LogContext(),
+            true, securityProtocol, config, null, null, TIME, new LogContext(),
             defaultApiVersionsSupplier());
         server = new NioEchoServer(listenerName, securityProtocol, config,
-                "localhost", serverChannelBuilder, null, time);
+                "localhost", serverChannelBuilder, null, TIME);
         server.start();
 
         this.selector = createSelector(args.sslClientConfigs, null, null, null);
@@ -1033,7 +1041,7 @@ public class SslTransportLayerTest {
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         assertThrows(KafkaException.class, () -> ChannelBuilders.serverChannelBuilder(
             listenerName, true, securityProtocol, config,
-            null, null, time, new LogContext(), defaultApiVersionsSupplier()));
+            null, null, TIME, new LogContext(), defaultApiVersionsSupplier()));
     }
 
     /**
@@ -1047,10 +1055,10 @@ public class SslTransportLayerTest {
         TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-            false, securityProtocol, config, null, null, time, new LogContext(),
+            false, securityProtocol, config, null, null, TIME, new LogContext(),
             defaultApiVersionsSupplier());
         server = new NioEchoServer(listenerName, securityProtocol, config,
-                "localhost", serverChannelBuilder, null, time);
+                "localhost", serverChannelBuilder, null, TIME);
         server.start();
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
 
@@ -1064,7 +1072,7 @@ public class SslTransportLayerTest {
 
         CertStores newServerCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("localhost").build();
         Map<String, Object> newKeystoreConfigs = newServerCertStores.keyStoreProps();
-        assertTrue(serverChannelBuilder instanceof ListenerReconfigurable, "SslChannelBuilder not reconfigurable");
+        assertInstanceOf(ListenerReconfigurable.class, serverChannelBuilder, "SslChannelBuilder not reconfigurable");
         ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
         assertEquals(listenerName, reconfigurableBuilder.listenerName());
         reconfigurableBuilder.validateReconfiguration(newKeystoreConfigs);
@@ -1108,10 +1116,10 @@ public class SslTransportLayerTest {
         TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-            false, securityProtocol, config, null, null, time, new LogContext(),
+            false, securityProtocol, config, null, null, TIME, new LogContext(),
             defaultApiVersionsSupplier());
         server = new NioEchoServer(listenerName, securityProtocol, config,
-            "localhost", serverChannelBuilder, null, time);
+            "localhost", serverChannelBuilder, null, TIME);
         server.start();
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
 
@@ -1124,7 +1132,7 @@ public class SslTransportLayerTest {
         TestSslUtils.CertificateBuilder certBuilder = new TestSslUtils.CertificateBuilder().sanDnsNames("localhost", "*.example.com");
         String truststorePath = (String) args.sslClientConfigs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
         File truststoreFile = truststorePath != null ? new File(truststorePath) : null;
-        TestSslUtils.SslConfigsBuilder builder = new TestSslUtils.SslConfigsBuilder(Mode.SERVER)
+        TestSslUtils.SslConfigsBuilder builder = new TestSslUtils.SslConfigsBuilder(ConnectionMode.SERVER)
                 .useClientCert(false)
                 .certAlias("server")
                 .cn("server")
@@ -1174,10 +1182,10 @@ public class SslTransportLayerTest {
         TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-            false, securityProtocol, config, null, null, time, new LogContext(),
+            false, securityProtocol, config, null, null, TIME, new LogContext(),
             defaultApiVersionsSupplier());
         server = new NioEchoServer(listenerName, securityProtocol, config,
-                "localhost", serverChannelBuilder, null, time);
+                "localhost", serverChannelBuilder, null, TIME);
         server.start();
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
 
@@ -1192,7 +1200,7 @@ public class SslTransportLayerTest {
         CertStores newClientCertStores = certBuilder(true, "client", args.useInlinePem).addHostName("localhost").build();
         args.sslClientConfigs = args.getTrustingConfig(newClientCertStores, args.serverCertStores);
         Map<String, Object> newTruststoreConfigs = newClientCertStores.trustStoreProps();
-        assertTrue(serverChannelBuilder instanceof ListenerReconfigurable, "SslChannelBuilder not reconfigurable");
+        assertInstanceOf(ListenerReconfigurable.class, serverChannelBuilder, "SslChannelBuilder not reconfigurable");
         ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
         assertEquals(listenerName, reconfigurableBuilder.listenerName());
         reconfigurableBuilder.validateReconfiguration(newTruststoreConfigs);
@@ -1280,18 +1288,18 @@ public class SslTransportLayerTest {
 
     private Selector createSelector(Map<String, Object> sslClientConfigs, final Integer netReadBufSize,
                                 final Integer netWriteBufSize, final Integer appBufSize) {
-        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(ConnectionMode.CLIENT);
         channelBuilder.configureBufferSizes(netReadBufSize, netWriteBufSize, appBufSize);
         channelBuilder.configure(sslClientConfigs);
         if (this.selector != null) {
             this.selector.close();
         }
-        this.selector = new Selector(100 * 5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(100 * 5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
         return selector;
     }
 
     private NioEchoServer createEchoServer(Args args, ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
-        return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(args.sslServerConfigs), null, time);
+        return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(args.sslServerConfigs), null, TIME);
     }
 
     private NioEchoServer createEchoServer(Args args, SecurityProtocol securityProtocol) throws Exception {
@@ -1300,9 +1308,9 @@ public class SslTransportLayerTest {
 
     private Selector createSelector(Args args) {
         LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
         channelBuilder.configure(args.sslClientConfigs);
-        selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, logContext);
+        selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, logContext);
         return selector;
     }
 
@@ -1344,8 +1352,8 @@ public class SslTransportLayerTest {
         void run() throws IOException;
     }
 
-    private Supplier<ApiVersionsResponse> defaultApiVersionsSupplier() {
-        return () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+    private Function<Short, ApiVersionsResponse> defaultApiVersionsSupplier() {
+        return version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
     static class TestSslChannelBuilder extends SslChannelBuilder {
@@ -1358,8 +1366,8 @@ public class SslTransportLayerTest {
         FailureAction flushFailureAction = FailureAction.NO_OP;
         int flushDelayCount = 0;
 
-        public TestSslChannelBuilder(Mode mode) {
-            super(mode, null, false, new LogContext());
+        public TestSslChannelBuilder(ConnectionMode connectionMode) {
+            super(connectionMode, null, false, new LogContext());
         }
 
         public void configureBufferSizes(Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) {
@@ -1526,5 +1534,96 @@ public class SslTransportLayerTest {
         verify(sslEngine, times(2)).unwrap(netReadBuffer, appReadBuffer);
         assertEquals(SSLEngineResult.Status.OK, result.getStatus());
         assertEquals(SSLEngineResult.HandshakeStatus.NEED_WRAP, result.getHandshakeStatus());
+    }
+
+    @Test
+    public void testSSLEngineCloseInboundInvokedOnClose() throws IOException {
+        // Given
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        Socket socket = mock(Socket.class);
+        SocketChannel socketChannel = mock(SocketChannel.class);
+        SelectionKey selectionKey = mock(SelectionKey.class);
+        when(socketChannel.socket()).thenReturn(socket);
+        when(selectionKey.channel()).thenReturn(socketChannel);
+        doThrow(new SSLException("Mock exception")).when(sslEngine).closeInbound();
+        SslTransportLayer sslTransportLayer = new SslTransportLayer(
+                "test-channel",
+                selectionKey,
+                sslEngine,
+                mock(ChannelMetadataRegistry.class)
+        );
+
+        // When
+        sslTransportLayer.close();
+
+        // Then
+        verify(sslEngine, times(1)).closeOutbound();
+        verify(sslEngine, times(1)).closeInbound();
+        verifyNoMoreInteractions(sslEngine);
+    }
+
+    @Test
+    public void testGatheringWrite() throws IOException {
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        SelectionKey selectionKey = mock(SelectionKey.class);
+        SslTransportLayer sslTransportLayer = spy(new SslTransportLayer(
+                "test-channel",
+                selectionKey,
+                sslEngine,
+                mock(ChannelMetadataRegistry.class)
+        ));
+        doReturn(false).when(sslTransportLayer).hasPendingWrites();
+
+        ByteBuffer mockSocket = ByteBuffer.allocate(1024);
+        when(sslTransportLayer.write(any(ByteBuffer.class))).then(invocation -> {
+            ByteBuffer buf = invocation.getArgument(0);
+            int written = buf.remaining();
+            mockSocket.put(buf);
+            return written;
+        });
+        ByteBuffer[] srcs = {
+                ByteBuffer.wrap("Hello, ".getBytes(StandardCharsets.UTF_8)),
+                ByteBuffer.wrap("World".getBytes(StandardCharsets.UTF_8)),
+                ByteBuffer.wrap("!".getBytes(StandardCharsets.UTF_8))
+        };
+
+        byte[] expected = "World!".getBytes(StandardCharsets.UTF_8);
+        assertEquals(expected.length, sslTransportLayer.write(srcs, 1, 2));
+
+        mockSocket.flip();
+        byte[] actual = new byte[expected.length];
+        mockSocket.get(actual);
+        assertArrayEquals(expected, actual);
+    }
+
+    @Test
+    public void testScatteringRead() throws IOException {
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        SelectionKey selectionKey = mock(SelectionKey.class);
+        SslTransportLayer sslTransportLayer = spy(new SslTransportLayer(
+                "test-channel",
+                selectionKey,
+                sslEngine,
+                mock(ChannelMetadataRegistry.class)
+        ));
+
+        ByteBuffer mockSocket = ByteBuffer.wrap("Hello, World!".getBytes(StandardCharsets.UTF_8));
+        when(sslTransportLayer.read(any(ByteBuffer.class))).then(invocation -> {
+            ByteBuffer buf = invocation.getArgument(0);
+            int read = buf.remaining();
+            for (int i = 0; i < read; i++) {
+                buf.put(mockSocket.get());
+            }
+            return read;
+        });
+        ByteBuffer[] dsts = {
+                ByteBuffer.allocate(2),
+                ByteBuffer.allocate(3),
+                ByteBuffer.allocate(4)
+        };
+
+        assertEquals(7, sslTransportLayer.read(dsts, 1, 2));
+        assertArrayEquals("Hel".getBytes(StandardCharsets.UTF_8), dsts[1].array());
+        assertArrayEquals("lo, ".getBytes(StandardCharsets.UTF_8), dsts[2].array());
     }
 }

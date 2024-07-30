@@ -24,8 +24,8 @@ import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.stream.Collectors;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class ListClientMetricsResourcesResponse extends AbstractResponse {
     private final ListClientMetricsResourcesResponseData data;

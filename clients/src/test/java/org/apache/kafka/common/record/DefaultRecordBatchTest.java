@@ -17,7 +17,8 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.compress.ZstdFactory;
+import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.compress.ZstdCompression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -26,6 +27,7 @@ import org.apache.kafka.common.utils.ChunkedBytesStream;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -44,21 +46,19 @@ import static org.apache.kafka.common.record.DefaultRecordBatch.RECORDS_COUNT_OF
 import static org.apache.kafka.common.record.DefaultRecordBatch.RECORDS_OFFSET;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyByte;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class DefaultRecordBatchTest {
     // We avoid SecureRandom.getInstanceStrong() here because it reads from /dev/random and blocks on Linux. Since these
@@ -105,7 +105,7 @@ public class DefaultRecordBatchTest {
     public void buildDefaultRecordBatch() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
                 TimestampType.CREATE_TIME, 1234567L);
         builder.appendWithOffset(1234567, 1L, "a".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234568, 2L, "b".getBytes(), "v".getBytes());
@@ -133,7 +133,7 @@ public class DefaultRecordBatchTest {
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
                 TimestampType.CREATE_TIME, 1234567L, RecordBatch.NO_TIMESTAMP, pid, epoch, baseSequence);
         builder.appendWithOffset(1234567, 1L, "a".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234568, 2L, "b".getBytes(), "v".getBytes());
@@ -160,7 +160,7 @@ public class DefaultRecordBatchTest {
         int baseSequence = Integer.MAX_VALUE - 1;
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
                 TimestampType.CREATE_TIME, 1234567L, RecordBatch.NO_TIMESTAMP, pid, epoch, baseSequence);
         builder.appendWithOffset(1234567, 1L, "a".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234568, 2L, "b".getBytes(), "v".getBytes());
@@ -186,7 +186,7 @@ public class DefaultRecordBatchTest {
     public void testSizeInBytes() {
         Header[] headers = new Header[] {
             new RecordHeader("foo", "value".getBytes()),
-            new RecordHeader("bar", (byte[]) null)
+            new RecordHeader("bar", null)
         };
 
         long timestamp = System.currentTimeMillis();
@@ -196,14 +196,14 @@ public class DefaultRecordBatchTest {
             new SimpleRecord(timestamp + 60000, "key".getBytes(), null),
             new SimpleRecord(timestamp + 60000, "key".getBytes(), "value".getBytes(), headers)
         };
-        int actualSize = MemoryRecords.withRecords(CompressionType.NONE, records).sizeInBytes();
+        int actualSize = MemoryRecords.withRecords(Compression.NONE, records).sizeInBytes();
         assertEquals(actualSize, DefaultRecordBatch.sizeInBytes(Arrays.asList(records)));
     }
 
     @Test
     public void testInvalidRecordSize() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                CompressionType.NONE, TimestampType.CREATE_TIME,
+                Compression.NONE, TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -255,7 +255,7 @@ public class DefaultRecordBatchTest {
     @Test
     public void testInvalidCrc() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                CompressionType.NONE, TimestampType.CREATE_TIME,
+                Compression.NONE, TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -276,7 +276,7 @@ public class DefaultRecordBatchTest {
             new SimpleRecord(3L, "c".getBytes(), "3".getBytes())
         };
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                CompressionType.NONE, TimestampType.CREATE_TIME, simpleRecords);
+                Compression.NONE, TimestampType.CREATE_TIME, simpleRecords);
 
         long lastOffset = 500L;
         long firstOffset = lastOffset - simpleRecords.length + 1;
@@ -299,7 +299,7 @@ public class DefaultRecordBatchTest {
     @Test
     public void testSetPartitionLeaderEpoch() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                CompressionType.NONE, TimestampType.CREATE_TIME,
+                Compression.NONE, TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -319,7 +319,7 @@ public class DefaultRecordBatchTest {
     @Test
     public void testSetLogAppendTime() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                CompressionType.NONE, TimestampType.CREATE_TIME,
+                Compression.NONE, TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -344,7 +344,7 @@ public class DefaultRecordBatchTest {
     @Test
     public void testSetNoTimestampTypeNotAllowed() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                CompressionType.NONE, TimestampType.CREATE_TIME,
+                Compression.NONE, TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -360,7 +360,7 @@ public class DefaultRecordBatchTest {
 
         ByteBuffer buffer = ByteBuffer.allocate(128);
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE, TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, producerId,
+                Compression.NONE, TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, producerId,
                 producerEpoch, RecordBatch.NO_SEQUENCE, true, true, RecordBatch.NO_PARTITION_LEADER_EPOCH,
                 buffer.remaining());
 
@@ -384,8 +384,9 @@ public class DefaultRecordBatchTest {
     @ParameterizedTest
     @EnumSource(value = CompressionType.class)
     public void testStreamingIteratorConsistency(CompressionType compressionType) {
+        Compression compression = Compression.of(compressionType).build();
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                compressionType, TimestampType.CREATE_TIME,
+                compression, TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
@@ -398,12 +399,13 @@ public class DefaultRecordBatchTest {
     @ParameterizedTest
     @EnumSource(value = CompressionType.class)
     public void testSkipKeyValueIteratorCorrectness(CompressionType compressionType) {
+        Compression compression = Compression.of(compressionType).build();
         Header[] headers = {new RecordHeader("k1", "v1".getBytes()), new RecordHeader("k2", null)};
         byte[] largeRecordValue = new byte[200 * 1024]; // 200KB
         RANDOM.nextBytes(largeRecordValue);
 
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-            compressionType, TimestampType.CREATE_TIME,
+            compression, TimestampType.CREATE_TIME,
             // one sample with small value size
             new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
             // one sample with null value
@@ -425,12 +427,12 @@ public class DefaultRecordBatchTest {
 
             if (CompressionType.NONE == compressionType) {
                 // assert that for uncompressed data stream record iterator is not used
-                assertTrue(skipKeyValueIterator instanceof DefaultRecordBatch.RecordIterator);
+                assertInstanceOf(DefaultRecordBatch.RecordIterator.class, skipKeyValueIterator);
                 // superficial validation for correctness. Deep validation is already performed in other tests
                 assertEquals(Utils.toList(records.records()).size(), Utils.toList(skipKeyValueIterator).size());
             } else {
                 // assert that a streaming iterator is used for compressed records
-                assertTrue(skipKeyValueIterator instanceof DefaultRecordBatch.StreamRecordIterator);
+                assertInstanceOf(DefaultRecordBatch.StreamRecordIterator.class, skipKeyValueIterator);
                 // assert correctness for compressed records
                 assertIterableEquals(Arrays.asList(
                         new PartialDefaultRecord(9, (byte) 0, 0L, 1L, -1, 1, 1),
@@ -447,8 +449,9 @@ public class DefaultRecordBatchTest {
     @ParameterizedTest
     @MethodSource
     public void testBufferReuseInSkipKeyValueIterator(CompressionType compressionType, int expectedNumBufferAllocations, byte[] recordValue) {
+        Compression compression = Compression.of(compressionType).build();
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-            compressionType, TimestampType.CREATE_TIME,
+            compression, TimestampType.CREATE_TIME,
             new SimpleRecord(1000L, "a".getBytes(), "0".getBytes()),
             new SimpleRecord(9999L, "b".getBytes(), recordValue)
         );
@@ -499,7 +502,7 @@ public class DefaultRecordBatchTest {
     @MethodSource
     public void testZstdJniForSkipKeyValueIterator(int expectedJniCalls, byte[] recordValue) throws IOException {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-            CompressionType.ZSTD, TimestampType.CREATE_TIME,
+            Compression.zstd().build(), TimestampType.CREATE_TIME,
             new SimpleRecord(9L, "hakuna-matata".getBytes(), recordValue)
         );
 
@@ -507,19 +510,15 @@ public class DefaultRecordBatchTest {
         final ByteBuffer compressedBuf = records.buffer();
         // Create a RecordBatch object
         final DefaultRecordBatch batch = spy(new DefaultRecordBatch(compressedBuf.duplicate()));
-        final CompressionType mockCompression = mock(CompressionType.ZSTD.getClass());
-        doReturn(mockCompression).when(batch).compressionType();
-
         // Buffer containing compressed records to be used for creating zstd-jni stream
         ByteBuffer recordsBuffer = compressedBuf.duplicate();
         recordsBuffer.position(RECORDS_OFFSET);
 
         try (final BufferSupplier bufferSupplier = BufferSupplier.create();
-             final InputStream zstdStream = spy(ZstdFactory.wrapForInput(recordsBuffer, batch.magic(), bufferSupplier));
-             final InputStream chunkedStream = new ChunkedBytesStream(zstdStream, bufferSupplier, 16 * 1024, false)) {
-
-            when(mockCompression.wrapForInput(any(ByteBuffer.class), anyByte(), any(BufferSupplier.class))).thenReturn(chunkedStream);
-
+             final InputStream zstdStream = spy(ZstdCompression.wrapForZstdInput(recordsBuffer, bufferSupplier));
+             final InputStream chunkedStream = new ChunkedBytesStream(zstdStream, bufferSupplier, 16 * 1024, false)
+        ) {
+            doReturn(chunkedStream).when(batch).recordInputStream(any());
             try (CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(bufferSupplier)) {
                 assertNotNull(streamingIterator);
                 Utils.toList(streamingIterator);
@@ -570,7 +569,7 @@ public class DefaultRecordBatchTest {
     private static DefaultRecordBatch recordsWithInvalidRecordCount(Byte magicValue, long timestamp,
                                               CompressionType codec, int invalidCount) {
         ByteBuffer buf = ByteBuffer.allocate(512);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, Compression.of(codec).build(), TimestampType.CREATE_TIME, 0L);
         builder.appendWithOffset(0, timestamp, null, "hello".getBytes());
         builder.appendWithOffset(1, timestamp, null, "there".getBytes());
         builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes());

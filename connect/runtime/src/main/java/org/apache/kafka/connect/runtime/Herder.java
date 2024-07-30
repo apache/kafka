@@ -64,7 +64,18 @@ public interface Herder {
 
     void stop();
 
-    boolean isRunning();
+    /**
+     * @return whether the worker is ready; i.e., it has completed all initialization and startup
+     * steps such as creating internal topics, joining a cluster, etc.
+     */
+    boolean isReady();
+
+    /**
+     * Check for worker health; i.e., its ability to service external requests from the user such
+     * as creating, reconfiguring, and deleting connectors
+     * @param callback callback to invoke once worker health is assured
+     */
+    void healthCheck(Callback<Void> callback);
 
     /**
      * Get a list of connectors currently running in this cluster. This is a full list of connectors in the cluster gathered
@@ -120,6 +131,14 @@ public interface Herder {
      */
     void putConnectorConfig(String connName, Map<String, String> config, TargetState targetState, boolean allowReplace,
                             Callback<Created<ConnectorInfo>> callback);
+
+    /**
+     * Patch the configuration for a connector.
+     * @param connName name of the connector
+     * @param configPatch the connector's configuration patch.
+     * @param callback callback to invoke when the configuration has been written
+     */
+    void patchConnectorConfig(String connName, Map<String, String> configPatch, Callback<Created<ConnectorInfo>> callback);
 
     /**
      * Delete a connector and its configuration.

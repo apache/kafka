@@ -32,6 +32,7 @@ import org.apache.commons.validator.routines.InetAddressValidator
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.util.Csv
 import org.slf4j.event.Level
 
 import java.util
@@ -110,21 +111,10 @@ object CoreUtils {
   }
 
   /**
-   * Parse a comma separated string into a sequence of strings.
-   * Whitespace surrounding the comma will be removed.
-   */
-  def parseCsvList(csvList: String): Seq[String] = {
-    if (csvList == null || csvList.isEmpty)
-      Seq.empty[String]
-    else
-      csvList.split("\\s*,\\s*").filter(v => !v.equals(""))
-  }
-
-  /**
    * Create an instance of the class with the given class name
    */
   def createObject[T <: AnyRef](className: String, args: AnyRef*): T = {
-    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader).asInstanceOf[Class[T]]
+    val klass = Utils.loadClass(className, classOf[Object]).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
   }
@@ -219,8 +209,8 @@ object CoreUtils {
     }
 
     val endPoints = try {
-      val listenerList = parseCsvList(listeners)
-      listenerList.map(EndPoint.createEndPoint(_, Some(securityProtocolMap)))
+      val listenerList = Csv.parseCsvList(listeners)
+      listenerList.asScala.map(EndPoint.createEndPoint(_, Some(securityProtocolMap)))
     } catch {
       case e: Exception =>
         throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)

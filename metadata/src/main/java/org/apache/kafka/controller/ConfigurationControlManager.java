@@ -20,8 +20,8 @@ package org.apache.kafka.controller;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -34,13 +34,13 @@ import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -471,10 +471,7 @@ public class ConfigurationControlManager {
             if (configs != null) {
                 Collection<String> targetConfigs = resourceEntry.getValue();
                 if (targetConfigs.isEmpty()) {
-                    Iterator<Entry<String, String>> iter =
-                        configs.entrySet(lastCommittedOffset).iterator();
-                    while (iter.hasNext()) {
-                        Entry<String, String> entry = iter.next();
+                    for (Entry<String, String> entry : configs.entrySet(lastCommittedOffset)) {
                         foundConfigs.put(entry.getKey(), entry.getValue());
                     }
                 } else {

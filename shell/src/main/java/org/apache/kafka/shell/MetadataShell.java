@@ -19,10 +19,7 @@ package org.apache.kafka.shell;
 
 import kafka.raft.KafkaRaftManager;
 import kafka.tools.TerseFailure;
-import kafka.utils.FileLock;
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.Namespace;
+
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.loader.MetadataLoader;
@@ -30,9 +27,15 @@ import org.apache.kafka.metadata.util.SnapshotFileReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.LoggingFaultHandler;
+import org.apache.kafka.server.util.FileLock;
 import org.apache.kafka.shell.command.Commands;
 import org.apache.kafka.shell.state.MetadataShellPublisher;
 import org.apache.kafka.shell.state.MetadataShellState;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +49,6 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 
@@ -102,7 +104,7 @@ public final class MetadataShell {
      * Take the FileLock in the given directory, if it already exists. Technically, there is a
      * TOCTOU bug here where someone could create and lock the lockfile in between our check
      * and our use. However, this is very unlikely to ever be a problem in practice, and closing
-     * this hole would require the parent parent directory to always be writable when loading a
+     * this hole would require the parent directory to always be writable when loading a
      * snapshot so that we could create our .lock file there.
      */
     static FileLock takeDirectoryLockIfExists(File directory) {
@@ -217,7 +219,7 @@ public final class MetadataShell {
         }
     }
 
-    public void close() throws Exception {
+    public void close() {
         Utils.closeQuietly(loader, "loader");
         if (raftManager != null) {
             try {
@@ -238,7 +240,7 @@ public final class MetadataShell {
         }
     }
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         ArgumentParser parser = ArgumentParsers
             .newArgumentParser("kafka-metadata-shell")
             .defaultHelp(true)
@@ -281,13 +283,12 @@ public final class MetadataShell {
         }
     }
 
-    void waitUntilCaughtUp() throws ExecutionException, InterruptedException {
+    void waitUntilCaughtUp() throws InterruptedException {
         while (true) {
             if (loader.lastAppliedOffset() > 0) {
                 return;
             }
             Thread.sleep(10);
         }
-        //snapshotFileReader.caughtUpFuture().get();
     }
 }

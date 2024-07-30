@@ -17,39 +17,38 @@
 
 package kafka.server
 
-import java.{lang, util}
+import java.util
 import java.util.concurrent.TimeUnit
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.cluster.EndPoint
-import kafka.server.KafkaConfig.{ControllerListenerNamesProp, ListenerSecurityProtocolMapProp}
-import kafka.utils.CoreUtils.parseCsvList
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
-import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, SaslConfigs, SecurityConfig, SslConfigs, TopicConfig}
-import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
+import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, SaslConfigs, TopicConfig}
+import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.record.{CompressionType, LegacyRecord, Records, TimestampType}
+import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.Group.GroupType
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
+import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.security.PasswordEncoderConfigs
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.config.{Defaults, ServerTopicConfigSynonyms}
+import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ShareGroupConfig, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
-import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.server.util.Csv
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -60,60 +59,20 @@ import scala.collection.{Map, Seq}
 
 object KafkaConfig {
 
-  private val LogConfigPrefix = "log."
-
   def main(args: Array[String]): Unit = {
     System.out.println(configDef.toHtml(4, (config: String) => "brokerconfigs_" + config,
       DynamicBrokerConfig.dynamicConfigUpdateModes))
   }
 
-  /** ********* Zookeeper Configuration ***********/
-  val ZkConnectProp = "zookeeper.connect"
-  val ZkSessionTimeoutMsProp = "zookeeper.session.timeout.ms"
-  val ZkConnectionTimeoutMsProp = "zookeeper.connection.timeout.ms"
-  val ZkEnableSecureAclsProp = "zookeeper.set.acl"
-  val ZkMaxInFlightRequestsProp = "zookeeper.max.in.flight.requests"
-  val ZkSslClientEnableProp = "zookeeper.ssl.client.enable"
-  val ZkClientCnxnSocketProp = "zookeeper.clientCnxnSocket"
-  val ZkSslKeyStoreLocationProp = "zookeeper.ssl.keystore.location"
-  val ZkSslKeyStorePasswordProp = "zookeeper.ssl.keystore.password"
-  val ZkSslKeyStoreTypeProp = "zookeeper.ssl.keystore.type"
-  val ZkSslTrustStoreLocationProp = "zookeeper.ssl.truststore.location"
-  val ZkSslTrustStorePasswordProp = "zookeeper.ssl.truststore.password"
-  val ZkSslTrustStoreTypeProp = "zookeeper.ssl.truststore.type"
-  val ZkSslProtocolProp = "zookeeper.ssl.protocol"
-  val ZkSslEnabledProtocolsProp = "zookeeper.ssl.enabled.protocols"
-  val ZkSslCipherSuitesProp = "zookeeper.ssl.cipher.suites"
-  val ZkSslEndpointIdentificationAlgorithmProp = "zookeeper.ssl.endpoint.identification.algorithm"
-  val ZkSslCrlEnableProp = "zookeeper.ssl.crl.enable"
-  val ZkSslOcspEnableProp = "zookeeper.ssl.ocsp.enable"
-
-  // a map from the Kafka config to the corresponding ZooKeeper Java system property
-  private[kafka] val ZkSslConfigToSystemPropertyMap: Map[String, String] = Map(
-    ZkSslClientEnableProp -> ZKClientConfig.SECURE_CLIENT,
-    ZkClientCnxnSocketProp -> ZKClientConfig.ZOOKEEPER_CLIENT_CNXN_SOCKET,
-    ZkSslKeyStoreLocationProp -> "zookeeper.ssl.keyStore.location",
-    ZkSslKeyStorePasswordProp -> "zookeeper.ssl.keyStore.password",
-    ZkSslKeyStoreTypeProp -> "zookeeper.ssl.keyStore.type",
-    ZkSslTrustStoreLocationProp -> "zookeeper.ssl.trustStore.location",
-    ZkSslTrustStorePasswordProp -> "zookeeper.ssl.trustStore.password",
-    ZkSslTrustStoreTypeProp -> "zookeeper.ssl.trustStore.type",
-    ZkSslProtocolProp -> "zookeeper.ssl.protocol",
-    ZkSslEnabledProtocolsProp -> "zookeeper.ssl.enabledProtocols",
-    ZkSslCipherSuitesProp -> "zookeeper.ssl.ciphersuites",
-    ZkSslEndpointIdentificationAlgorithmProp -> "zookeeper.ssl.hostnameVerification",
-    ZkSslCrlEnableProp -> "zookeeper.ssl.crl",
-    ZkSslOcspEnableProp -> "zookeeper.ssl.ocsp")
-
   private[kafka] def zooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String): Option[String] = {
-    Option(clientConfig.getProperty(ZkSslConfigToSystemPropertyMap(kafkaPropName)))
+    Option(clientConfig.getProperty(ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName)))
   }
 
   private[kafka] def setZooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String, kafkaPropValue: Any): Unit = {
-    clientConfig.setProperty(ZkSslConfigToSystemPropertyMap(kafkaPropName),
+    clientConfig.setProperty(ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName),
       kafkaPropName match {
-        case ZkSslEndpointIdentificationAlgorithmProp => (kafkaPropValue.toString.toUpperCase == "HTTPS").toString
-        case ZkSslEnabledProtocolsProp | ZkSslCipherSuitesProp => kafkaPropValue match {
+        case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => (kafkaPropValue.toString.toUpperCase == "HTTPS").toString
+        case ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG | ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG => kafkaPropValue match {
           case list: java.util.List[_] => list.asScala.mkString(",")
           case _ => kafkaPropValue.toString
         }
@@ -124,1172 +83,12 @@ object KafkaConfig {
   // For ZooKeeper TLS client authentication to be enabled the client must (at a minimum) configure itself as using TLS
   // with both a client connection socket and a key store location explicitly set.
   private[kafka] def zkTlsClientAuthEnabled(zkClientConfig: ZKClientConfig): Boolean = {
-    zooKeeperClientProperty(zkClientConfig, ZkSslClientEnableProp).contains("true") &&
-      zooKeeperClientProperty(zkClientConfig, ZkClientCnxnSocketProp).isDefined &&
-      zooKeeperClientProperty(zkClientConfig, ZkSslKeyStoreLocationProp).isDefined
+    zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG).contains("true") &&
+      zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG).isDefined &&
+      zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG).isDefined
   }
 
-  /** ********* General Configuration ***********/
-  val BrokerIdGenerationEnableProp = "broker.id.generation.enable"
-  val MaxReservedBrokerIdProp = "reserved.broker.max.id"
-  val BrokerIdProp = "broker.id"
-  val MessageMaxBytesProp = "message.max.bytes"
-  val NumNetworkThreadsProp = "num.network.threads"
-  val NumIoThreadsProp = "num.io.threads"
-  val BackgroundThreadsProp = "background.threads"
-  val NumReplicaAlterLogDirsThreadsProp = "num.replica.alter.log.dirs.threads"
-  val QueuedMaxRequestsProp = "queued.max.requests"
-  val QueuedMaxBytesProp = "queued.max.request.bytes"
-  val RequestTimeoutMsProp = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG
-  val ConnectionSetupTimeoutMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
-  val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
-
-  /** KRaft mode configs */
-  val ProcessRolesProp = "process.roles"
-  val InitialBrokerRegistrationTimeoutMsProp = "initial.broker.registration.timeout.ms"
-  val BrokerHeartbeatIntervalMsProp = "broker.heartbeat.interval.ms"
-  val BrokerSessionTimeoutMsProp = "broker.session.timeout.ms"
-  val NodeIdProp = "node.id"
-  val MetadataLogDirProp = "metadata.log.dir"
-  val MetadataSnapshotMaxNewRecordBytesProp = "metadata.log.max.record.bytes.between.snapshots"
-  val MetadataSnapshotMaxIntervalMsProp = "metadata.log.max.snapshot.interval.ms"
-  val ControllerListenerNamesProp = "controller.listener.names"
-  val SaslMechanismControllerProtocolProp = "sasl.mechanism.controller.protocol"
-  val MetadataLogSegmentMinBytesProp = "metadata.log.segment.min.bytes"
-  val MetadataLogSegmentBytesProp = "metadata.log.segment.bytes"
-  val MetadataLogSegmentMillisProp = "metadata.log.segment.ms"
-  val MetadataMaxRetentionBytesProp = "metadata.max.retention.bytes"
-  val MetadataMaxRetentionMillisProp = "metadata.max.retention.ms"
-  val QuorumVotersProp = RaftConfig.QUORUM_VOTERS_CONFIG
-  val MetadataMaxIdleIntervalMsProp = "metadata.max.idle.interval.ms"
-  val ServerMaxStartupTimeMsProp = "server.max.startup.time.ms"
-
-  /** ZK to KRaft Migration configs */
-  val MigrationEnabledProp = "zookeeper.metadata.migration.enable"
-  val MigrationMetadataMinBatchSizeProp = "zookeeper.metadata.migration.min.batch.size"
-
-  /** Enable eligible leader replicas configs */
-  val ElrEnabledProp = "eligible.leader.replicas.enable"
-
-  /************* Authorizer Configuration ***********/
-  val AuthorizerClassNameProp = "authorizer.class.name"
-  val EarlyStartListenersProp = "early.start.listeners"
-
-  /** ********* Socket Server Configuration ***********/
-  val ListenersProp = "listeners"
-  val AdvertisedListenersProp = "advertised.listeners"
-  val ListenerSecurityProtocolMapProp = "listener.security.protocol.map"
-  val ControlPlaneListenerNameProp = "control.plane.listener.name"
-  val SocketSendBufferBytesProp = "socket.send.buffer.bytes"
-  val SocketReceiveBufferBytesProp = "socket.receive.buffer.bytes"
-  val SocketRequestMaxBytesProp = "socket.request.max.bytes"
-  val SocketListenBacklogSizeProp = "socket.listen.backlog.size"
-  val MaxConnectionsPerIpProp = "max.connections.per.ip"
-  val MaxConnectionsPerIpOverridesProp = "max.connections.per.ip.overrides"
-  val MaxConnectionsProp = "max.connections"
-  val MaxConnectionCreationRateProp = "max.connection.creation.rate"
-  val ConnectionsMaxIdleMsProp = "connections.max.idle.ms"
-  val FailedAuthenticationDelayMsProp = "connection.failed.authentication.delay.ms"
-  /***************** rack configuration *************/
-  val RackProp = "broker.rack"
-  /** ********* Log Configuration ***********/
-  val NumPartitionsProp = "num.partitions"
-  val LogDirsProp = LogConfigPrefix + "dirs"
-  val LogDirProp = LogConfigPrefix + "dir"
-  val LogSegmentBytesProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG)
-
-  val LogRollTimeMillisProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_MS_CONFIG)
-  val LogRollTimeHoursProp = LogConfigPrefix + "roll.hours"
-
-  val LogRollTimeJitterMillisProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_JITTER_MS_CONFIG)
-  val LogRollTimeJitterHoursProp = LogConfigPrefix + "roll.jitter.hours"
-
-  val LogRetentionTimeMillisProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.RETENTION_MS_CONFIG)
-  val LogRetentionTimeMinutesProp = LogConfigPrefix + "retention.minutes"
-  val LogRetentionTimeHoursProp = LogConfigPrefix + "retention.hours"
-
-  val LogRetentionBytesProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.RETENTION_BYTES_CONFIG)
-  val LogCleanupIntervalMsProp = LogConfigPrefix + "retention.check.interval.ms"
-  val LogCleanupPolicyProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.CLEANUP_POLICY_CONFIG)
-  val LogIndexSizeMaxBytesProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG)
-  val LogIndexIntervalBytesProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG)
-  val LogFlushIntervalMessagesProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG)
-  val LogDeleteDelayMsProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG)
-  val LogFlushSchedulerIntervalMsProp = LogConfigPrefix + "flush.scheduler.interval.ms"
-  val LogFlushIntervalMsProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FLUSH_MS_CONFIG)
-  val LogFlushOffsetCheckpointIntervalMsProp = LogConfigPrefix + "flush.offset.checkpoint.interval.ms"
-  val LogFlushStartOffsetCheckpointIntervalMsProp = LogConfigPrefix + "flush.start.offset.checkpoint.interval.ms"
-  val LogPreAllocateProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.PREALLOCATE_CONFIG)
-
-  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
-  @deprecated("3.0")
-  val LogMessageFormatVersionProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
-
-  val LogMessageTimestampTypeProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG)
-
-  /* See `TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG` for details */
-  @deprecated("3.6")
-  val LogMessageTimestampDifferenceMaxMsProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG)
-
-  val LogMessageTimestampBeforeMaxMsProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG)
-  val LogMessageTimestampAfterMaxMsProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG)
-
-  val NumRecoveryThreadsPerDataDirProp = "num.recovery.threads.per.data.dir"
-  val AutoCreateTopicsEnableProp = "auto.create.topics.enable"
-  val MinInSyncReplicasProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)
-  val CreateTopicPolicyClassNameProp = "create.topic.policy.class.name"
-  val AlterConfigPolicyClassNameProp = "alter.config.policy.class.name"
-  val LogMessageDownConversionEnableProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG)
-  /** ********* Replication configuration ***********/
-  val ControllerSocketTimeoutMsProp = "controller.socket.timeout.ms"
-  val DefaultReplicationFactorProp = "default.replication.factor"
-  val ReplicaLagTimeMaxMsProp = "replica.lag.time.max.ms"
-  val ReplicaSocketTimeoutMsProp = "replica.socket.timeout.ms"
-  val ReplicaSocketReceiveBufferBytesProp = "replica.socket.receive.buffer.bytes"
-  val ReplicaFetchMaxBytesProp = "replica.fetch.max.bytes"
-  val ReplicaFetchWaitMaxMsProp = "replica.fetch.wait.max.ms"
-  val ReplicaFetchMinBytesProp = "replica.fetch.min.bytes"
-  val ReplicaFetchResponseMaxBytesProp = "replica.fetch.response.max.bytes"
-  val ReplicaFetchBackoffMsProp = "replica.fetch.backoff.ms"
-  val NumReplicaFetchersProp = "num.replica.fetchers"
-  val ReplicaHighWatermarkCheckpointIntervalMsProp = "replica.high.watermark.checkpoint.interval.ms"
-  val FetchPurgatoryPurgeIntervalRequestsProp = "fetch.purgatory.purge.interval.requests"
-  val ProducerPurgatoryPurgeIntervalRequestsProp = "producer.purgatory.purge.interval.requests"
-  val DeleteRecordsPurgatoryPurgeIntervalRequestsProp = "delete.records.purgatory.purge.interval.requests"
-  val AutoLeaderRebalanceEnableProp = "auto.leader.rebalance.enable"
-  val LeaderImbalancePerBrokerPercentageProp = "leader.imbalance.per.broker.percentage"
-  val LeaderImbalanceCheckIntervalSecondsProp = "leader.imbalance.check.interval.seconds"
-  val UncleanLeaderElectionEnableProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)
-  val InterBrokerSecurityProtocolProp = "security.inter.broker.protocol"
-  val InterBrokerProtocolVersionProp = "inter.broker.protocol.version"
-  val InterBrokerListenerNameProp = "inter.broker.listener.name"
-  val ReplicaSelectorClassProp = "replica.selector.class"
-  /** ********* Controlled shutdown configuration ***********/
-  val ControlledShutdownMaxRetriesProp = "controlled.shutdown.max.retries"
-  val ControlledShutdownRetryBackoffMsProp = "controlled.shutdown.retry.backoff.ms"
-  val ControlledShutdownEnableProp = "controlled.shutdown.enable"
-
-  /** ********* Group coordinator configuration ***********/
-  val GroupMinSessionTimeoutMsProp = "group.min.session.timeout.ms"
-  val GroupMaxSessionTimeoutMsProp = "group.max.session.timeout.ms"
-  val GroupInitialRebalanceDelayMsProp = "group.initial.rebalance.delay.ms"
-  val GroupMaxSizeProp = "group.max.size"
-
-  /** New group coordinator configs */
-  val NewGroupCoordinatorEnableProp = "group.coordinator.new.enable"
-  val GroupCoordinatorRebalanceProtocolsProp = "group.coordinator.rebalance.protocols"
-  val GroupCoordinatorNumThreadsProp = "group.coordinator.threads"
-
-  /** Consumer group configs */
-  val ConsumerGroupSessionTimeoutMsProp = "group.consumer.session.timeout.ms"
-  val ConsumerGroupMinSessionTimeoutMsProp = "group.consumer.min.session.timeout.ms"
-  val ConsumerGroupMaxSessionTimeoutMsProp = "group.consumer.max.session.timeout.ms"
-  val ConsumerGroupHeartbeatIntervalMsProp = "group.consumer.heartbeat.interval.ms"
-  val ConsumerGroupMinHeartbeatIntervalMsProp = "group.consumer.min.heartbeat.interval.ms"
-  val ConsumerGroupMaxHeartbeatIntervalMsProp ="group.consumer.max.heartbeat.interval.ms"
-  val ConsumerGroupMaxSizeProp = "group.consumer.max.size"
-  val ConsumerGroupAssignorsProp = "group.consumer.assignors"
-
-  /** ********* Offset management configuration ***********/
-  val OffsetMetadataMaxSizeProp = "offset.metadata.max.bytes"
-  val OffsetsLoadBufferSizeProp = "offsets.load.buffer.size"
-  val OffsetsTopicReplicationFactorProp = "offsets.topic.replication.factor"
-  val OffsetsTopicPartitionsProp = "offsets.topic.num.partitions"
-  val OffsetsTopicSegmentBytesProp = "offsets.topic.segment.bytes"
-  val OffsetsTopicCompressionCodecProp = "offsets.topic.compression.codec"
-  val OffsetsRetentionMinutesProp = "offsets.retention.minutes"
-  val OffsetsRetentionCheckIntervalMsProp = "offsets.retention.check.interval.ms"
-  val OffsetCommitTimeoutMsProp = "offsets.commit.timeout.ms"
-  val OffsetCommitRequiredAcksProp = "offsets.commit.required.acks"
-
-  /** ********* Transaction management configuration ***********/
-  val TransactionalIdExpirationMsProp = "transactional.id.expiration.ms"
-  val TransactionsMaxTimeoutMsProp = "transaction.max.timeout.ms"
-  val TransactionsTopicMinISRProp = "transaction.state.log.min.isr"
-  val TransactionsLoadBufferSizeProp = "transaction.state.log.load.buffer.size"
-  val TransactionsTopicPartitionsProp = "transaction.state.log.num.partitions"
-  val TransactionsTopicSegmentBytesProp = "transaction.state.log.segment.bytes"
-  val TransactionsTopicReplicationFactorProp = "transaction.state.log.replication.factor"
-  val TransactionsAbortTimedOutTransactionCleanupIntervalMsProp = "transaction.abort.timed.out.transaction.cleanup.interval.ms"
-  val TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp = "transaction.remove.expired.transaction.cleanup.interval.ms"
-
-  val TransactionPartitionVerificationEnableProp = "transaction.partition.verification.enable"
-
-  val ProducerIdExpirationMsProp = ProducerStateManagerConfig.PRODUCER_ID_EXPIRATION_MS
-  val ProducerIdExpirationCheckIntervalMsProp = "producer.id.expiration.check.interval.ms"
-
-  /** ********* Fetch Configuration **************/
-  val MaxIncrementalFetchSessionCacheSlots = "max.incremental.fetch.session.cache.slots"
-  val FetchMaxBytes = "fetch.max.bytes"
-
-  /** ********* Request Limit Configuration **************/
-  val MaxRequestPartitionSizeLimit = "max.request.partition.size.limit"
-
-  /** ********* Quota Configuration ***********/
-  val NumQuotaSamplesProp = "quota.window.num"
-  val NumReplicationQuotaSamplesProp = "replication.quota.window.num"
-  val NumAlterLogDirsReplicationQuotaSamplesProp = "alter.log.dirs.replication.quota.window.num"
-  val NumControllerQuotaSamplesProp = "controller.quota.window.num"
-  val QuotaWindowSizeSecondsProp = "quota.window.size.seconds"
-  val ReplicationQuotaWindowSizeSecondsProp = "replication.quota.window.size.seconds"
-  val AlterLogDirsReplicationQuotaWindowSizeSecondsProp = "alter.log.dirs.replication.quota.window.size.seconds"
-  val ControllerQuotaWindowSizeSecondsProp = "controller.quota.window.size.seconds"
-  val ClientQuotaCallbackClassProp = "client.quota.callback.class"
-
-  val DeleteTopicEnableProp = "delete.topic.enable"
-  val CompressionTypeProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_TYPE_CONFIG)
-
-  /** ********* Kafka Metrics Configuration ***********/
-  val MetricSampleWindowMsProp = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG
-  val MetricNumSamplesProp: String = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG
-  val MetricReporterClassesProp: String = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG
-  val MetricRecordingLevelProp: String = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG
-  @deprecated
-  val AutoIncludeJmxReporterProp: String = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG
-
-  /** ********* Kafka Yammer Metrics Reporters Configuration ***********/
-  val KafkaMetricsReporterClassesProp = "kafka.metrics.reporters"
-  val KafkaMetricsPollingIntervalSecondsProp = "kafka.metrics.polling.interval.secs"
-
-  /** ********* Kafka Client Telemetry Metrics Configuration ***********/
-  val ClientTelemetryMaxBytesProp = "telemetry.max.bytes"
-
-  /** ******** Common Security Configuration *************/
-  val PrincipalBuilderClassProp = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG
-  val ConnectionsMaxReauthMsProp = BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS
-  val SaslServerMaxReceiveSizeProp = BrokerSecurityConfigs.SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG
-  val securityProviderClassProp = SecurityConfig.SECURITY_PROVIDERS_CONFIG
-
-  /** ********* SSL Configuration ****************/
-  val SslProtocolProp = SslConfigs.SSL_PROTOCOL_CONFIG
-  val SslProviderProp = SslConfigs.SSL_PROVIDER_CONFIG
-  val SslCipherSuitesProp = SslConfigs.SSL_CIPHER_SUITES_CONFIG
-  val SslEnabledProtocolsProp = SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG
-  val SslKeystoreTypeProp = SslConfigs.SSL_KEYSTORE_TYPE_CONFIG
-  val SslKeystoreLocationProp = SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG
-  val SslKeystorePasswordProp = SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG
-  val SslKeyPasswordProp = SslConfigs.SSL_KEY_PASSWORD_CONFIG
-  val SslKeystoreKeyProp = SslConfigs.SSL_KEYSTORE_KEY_CONFIG
-  val SslKeystoreCertificateChainProp = SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG
-  val SslTruststoreTypeProp = SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG
-  val SslTruststoreLocationProp = SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG
-  val SslTruststorePasswordProp = SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG
-  val SslTruststoreCertificatesProp = SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG
-  val SslKeyManagerAlgorithmProp = SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG
-  val SslTrustManagerAlgorithmProp = SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG
-  val SslEndpointIdentificationAlgorithmProp = SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
-  val SslSecureRandomImplementationProp = SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG
-  val SslClientAuthProp = BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG
-  val SslPrincipalMappingRulesProp = BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG
-  var SslEngineFactoryClassProp = SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG
-  var SslAllowDnChangesProp = BrokerSecurityConfigs.SSL_ALLOW_DN_CHANGES_CONFIG
-  var SslAllowSanChangesProp = BrokerSecurityConfigs.SSL_ALLOW_SAN_CHANGES_CONFIG
-
-  /** ********* SASL Configuration ****************/
-  val SaslMechanismInterBrokerProtocolProp = "sasl.mechanism.inter.broker.protocol"
-  val SaslJaasConfigProp = SaslConfigs.SASL_JAAS_CONFIG
-  val SaslEnabledMechanismsProp = BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG
-  val SaslServerCallbackHandlerClassProp = BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS
-  val SaslClientCallbackHandlerClassProp = SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS
-  val SaslLoginClassProp = SaslConfigs.SASL_LOGIN_CLASS
-  val SaslLoginCallbackHandlerClassProp = SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS
-  val SaslKerberosServiceNameProp = SaslConfigs.SASL_KERBEROS_SERVICE_NAME
-  val SaslKerberosKinitCmdProp = SaslConfigs.SASL_KERBEROS_KINIT_CMD
-  val SaslKerberosTicketRenewWindowFactorProp = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR
-  val SaslKerberosTicketRenewJitterProp = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER
-  val SaslKerberosMinTimeBeforeReloginProp = SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN
-  val SaslKerberosPrincipalToLocalRulesProp = BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG
-  val SaslLoginRefreshWindowFactorProp = SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR
-  val SaslLoginRefreshWindowJitterProp = SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER
-  val SaslLoginRefreshMinPeriodSecondsProp = SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS
-  val SaslLoginRefreshBufferSecondsProp = SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS
-
-  val SaslLoginConnectTimeoutMsProp = SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS
-  val SaslLoginReadTimeoutMsProp = SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS
-  val SaslLoginRetryBackoffMaxMsProp = SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS
-  val SaslLoginRetryBackoffMsProp = SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS
-  val SaslOAuthBearerScopeClaimNameProp = SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME
-  val SaslOAuthBearerSubClaimNameProp = SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME
-  val SaslOAuthBearerTokenEndpointUrlProp = SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
-  val SaslOAuthBearerJwksEndpointUrlProp = SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL
-  val SaslOAuthBearerJwksEndpointRefreshMsProp = SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS
-  val SaslOAuthBearerJwksEndpointRetryBackoffMaxMsProp = SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS
-  val SaslOAuthBearerJwksEndpointRetryBackoffMsProp = SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS
-  val SaslOAuthBearerClockSkewSecondsProp = SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS
-  val SaslOAuthBearerExpectedAudienceProp = SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE
-  val SaslOAuthBearerExpectedIssuerProp = SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER
-
-  /** ********* Delegation Token Configuration ****************/
-  val DelegationTokenSecretKeyAliasProp = "delegation.token.master.key"
-  val DelegationTokenSecretKeyProp = "delegation.token.secret.key"
-  val DelegationTokenMaxLifeTimeProp = "delegation.token.max.lifetime.ms"
-  val DelegationTokenExpiryTimeMsProp = "delegation.token.expiry.time.ms"
-  val DelegationTokenExpiryCheckIntervalMsProp = "delegation.token.expiry.check.interval.ms"
-
-  /** ********* Password encryption configuration for dynamic configs *********/
-  val PasswordEncoderSecretProp = PasswordEncoderConfigs.SECRET
-  val PasswordEncoderOldSecretProp = PasswordEncoderConfigs.OLD_SECRET
-  val PasswordEncoderKeyFactoryAlgorithmProp = PasswordEncoderConfigs.KEYFACTORY_ALGORITHM
-  val PasswordEncoderCipherAlgorithmProp = PasswordEncoderConfigs.CIPHER_ALGORITHM
-  val PasswordEncoderKeyLengthProp = PasswordEncoderConfigs.KEY_LENGTH
-  val PasswordEncoderIterationsProp = PasswordEncoderConfigs.ITERATIONS
-
-  /** Internal Configurations **/
-  val UnstableApiVersionsEnableProp = "unstable.api.versions.enable"
-  val UnstableMetadataVersionsEnableProp = "unstable.metadata.versions.enable"
-
-  /* Documentation */
-  /** ********* Zookeeper Configuration ***********/
-  val ZkConnectDoc = "Specifies the ZooKeeper connection string in the form <code>hostname:port</code> where host and port are the " +
-  "host and port of a ZooKeeper server. To allow connecting through other ZooKeeper nodes when that ZooKeeper machine is " +
-  "down you can also specify multiple hosts in the form <code>hostname1:port1,hostname2:port2,hostname3:port3</code>.\n" +
-  "The server can also have a ZooKeeper chroot path as part of its ZooKeeper connection string which puts its data under some path in the global ZooKeeper namespace. " +
-  "For example to give a chroot path of <code>/chroot/path</code> you would give the connection string as <code>hostname1:port1,hostname2:port2,hostname3:port3/chroot/path</code>."
-  val ZkSessionTimeoutMsDoc = "Zookeeper session timeout"
-  val ZkConnectionTimeoutMsDoc = "The max time that the client waits to establish a connection to ZooKeeper. If not set, the value in " + ZkSessionTimeoutMsProp + " is used"
-  val ZkEnableSecureAclsDoc = "Set client to use secure ACLs"
-  val ZkMaxInFlightRequestsDoc = "The maximum number of unacknowledged requests the client will send to ZooKeeper before blocking."
-  val ZkSslClientEnableDoc = "Set client to use TLS when connecting to ZooKeeper." +
-    " An explicit value overrides any value set via the <code>zookeeper.client.secure</code> system property (note the different name)." +
-    s" Defaults to false if neither is set; when true, <code>$ZkClientCnxnSocketProp</code> must be set (typically to <code>org.apache.zookeeper.ClientCnxnSocketNetty</code>); other values to set may include " +
-    ZkSslConfigToSystemPropertyMap.keys.toList.filter(x => x != ZkSslClientEnableProp && x != ZkClientCnxnSocketProp).sorted.mkString("<code>", "</code>, <code>", "</code>")
-  val ZkClientCnxnSocketDoc = "Typically set to <code>org.apache.zookeeper.ClientCnxnSocketNetty</code> when using TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the same-named <code>${ZkSslConfigToSystemPropertyMap(ZkClientCnxnSocketProp)}</code> system property."
-  val ZkSslKeyStoreLocationDoc = "Keystore location when using a client-side certificate with TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the <code>${ZkSslConfigToSystemPropertyMap(ZkSslKeyStoreLocationProp)}</code> system property (note the camelCase)."
-  val ZkSslKeyStorePasswordDoc = "Keystore password when using a client-side certificate with TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the <code>${ZkSslConfigToSystemPropertyMap(ZkSslKeyStorePasswordProp)}</code> system property (note the camelCase)." +
-    " Note that ZooKeeper does not support a key password different from the keystore password, so be sure to set the key password in the keystore to be identical to the keystore password; otherwise the connection attempt to Zookeeper will fail."
-  val ZkSslKeyStoreTypeDoc = "Keystore type when using a client-side certificate with TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the <code>${ZkSslConfigToSystemPropertyMap(ZkSslKeyStoreTypeProp)}</code> system property (note the camelCase)." +
-    " The default value of <code>null</code> means the type will be auto-detected based on the filename extension of the keystore."
-  val ZkSslTrustStoreLocationDoc = "Truststore location when using TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the <code>${ZkSslConfigToSystemPropertyMap(ZkSslTrustStoreLocationProp)}</code> system property (note the camelCase)."
-  val ZkSslTrustStorePasswordDoc = "Truststore password when using TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the <code>${ZkSslConfigToSystemPropertyMap(ZkSslTrustStorePasswordProp)}</code> system property (note the camelCase)."
-  val ZkSslTrustStoreTypeDoc = "Truststore type when using TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the <code>${ZkSslConfigToSystemPropertyMap(ZkSslTrustStoreTypeProp)}</code> system property (note the camelCase)." +
-    " The default value of <code>null</code> means the type will be auto-detected based on the filename extension of the truststore."
-  val ZkSslProtocolDoc = "Specifies the protocol to be used in ZooKeeper TLS negotiation." +
-    s" An explicit value overrides any value set via the same-named <code>${ZkSslConfigToSystemPropertyMap(ZkSslProtocolProp)}</code> system property."
-  val ZkSslEnabledProtocolsDoc = "Specifies the enabled protocol(s) in ZooKeeper TLS negotiation (csv)." +
-    s" Overrides any explicit value set via the <code>${ZkSslConfigToSystemPropertyMap(ZkSslEnabledProtocolsProp)}</code> system property (note the camelCase)." +
-    s" The default value of <code>null</code> means the enabled protocol will be the value of the <code>${KafkaConfig.ZkSslProtocolProp}</code> configuration property."
-  val ZkSslCipherSuitesDoc = "Specifies the enabled cipher suites to be used in ZooKeeper TLS negotiation (csv)." +
-    s""" Overrides any explicit value set via the <code>${ZkSslConfigToSystemPropertyMap(ZkSslCipherSuitesProp)}</code> system property (note the single word \"ciphersuites\").""" +
-    " The default value of <code>null</code> means the list of enabled cipher suites is determined by the Java runtime being used."
-  val ZkSslEndpointIdentificationAlgorithmDoc = "Specifies whether to enable hostname verification in the ZooKeeper TLS negotiation process, with (case-insensitively) \"https\" meaning ZooKeeper hostname verification is enabled and an explicit blank value meaning it is disabled (disabling it is only recommended for testing purposes)." +
-    s""" An explicit value overrides any \"true\" or \"false\" value set via the <code>${ZkSslConfigToSystemPropertyMap(ZkSslEndpointIdentificationAlgorithmProp)}</code> system property (note the different name and values; true implies https and false implies blank)."""
-  val ZkSslCrlEnableDoc = "Specifies whether to enable Certificate Revocation List in the ZooKeeper TLS protocols." +
-    s" Overrides any explicit value set via the <code>${ZkSslConfigToSystemPropertyMap(ZkSslCrlEnableProp)}</code> system property (note the shorter name)."
-  val ZkSslOcspEnableDoc = "Specifies whether to enable Online Certificate Status Protocol in the ZooKeeper TLS protocols." +
-    s" Overrides any explicit value set via the <code>${ZkSslConfigToSystemPropertyMap(ZkSslOcspEnableProp)}</code> system property (note the shorter name)."
-  /** ********* General Configuration ***********/
-  val BrokerIdGenerationEnableDoc = s"Enable automatic broker id generation on the server. When enabled the value configured for $MaxReservedBrokerIdProp should be reviewed."
-  val MaxReservedBrokerIdDoc = "Max number that can be used for a broker.id"
-  val BrokerIdDoc = "The broker id for this server. If unset, a unique broker id will be generated." +
-  "To avoid conflicts between ZooKeeper generated broker id's and user configured broker id's, generated broker ids " +
-  "start from " + MaxReservedBrokerIdProp + " + 1."
-  val MessageMaxBytesDoc = TopicConfig.MAX_MESSAGE_BYTES_DOC +
-    s"This can be set per topic with the topic level <code>${TopicConfig.MAX_MESSAGE_BYTES_CONFIG}</code> config."
-  val NumNetworkThreadsDoc = s"The number of threads that the server uses for receiving requests from the network and sending responses to the network. Noted: each listener (except for controller listener) creates its own thread pool."
-  val NumIoThreadsDoc = "The number of threads that the server uses for processing requests, which may include disk I/O"
-  val NumReplicaAlterLogDirsThreadsDoc = "The number of threads that can move replicas between log directories, which may include disk I/O"
-  val BackgroundThreadsDoc = "The number of threads to use for various background processing tasks"
-  val QueuedMaxRequestsDoc = "The number of queued requests allowed for data-plane, before blocking the network threads"
-  val QueuedMaxRequestBytesDoc = "The number of queued bytes allowed before no more requests are read"
-  val RequestTimeoutMsDoc = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
-  val ConnectionSetupTimeoutMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC
-  val ConnectionSetupTimeoutMaxMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC
-
-  /** KRaft mode configs */
-  val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
-    "This configuration is only applicable for clusters in KRaft (Kafka Raft) mode (instead of ZooKeeper). Leave this config undefined or empty for ZooKeeper clusters."
-  val InitialBrokerRegistrationTimeoutMsDoc = "When initially registering with the controller quorum, the number of milliseconds to wait before declaring failure and exiting the broker process."
-  val BrokerHeartbeatIntervalMsDoc = "The length of time in milliseconds between broker heartbeats. Used when running in KRaft mode."
-  val BrokerSessionTimeoutMsDoc = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made. Used when running in KRaft mode."
-  val NodeIdDoc = "The node ID associated with the roles this process is playing when <code>process.roles</code> is non-empty. " +
-    "This is required configuration when running in KRaft mode."
-  val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
-    "If it is not set, the metadata log is placed in the first log directory from log.dirs."
-  val MetadataSnapshotMaxNewRecordBytesDoc = "This is the maximum number of bytes in the log between the latest " +
-    "snapshot and the high-watermark needed before generating a new snapshot. The default value is " +
-    s"${Defaults.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES}. To generate snapshots based on the time elapsed, see " +
-    s"the <code>$MetadataSnapshotMaxIntervalMsProp</code> configuration. The Kafka node will generate a snapshot when " +
-    "either the maximum time interval is reached or the maximum bytes limit is reached."
-  val MetadataSnapshotMaxIntervalMsDoc = "This is the maximum number of milliseconds to wait to generate a snapshot " +
-    "if there are committed records in the log that are not included in the latest snapshot. A value of zero disables " +
-    s"time based snapshot generation. The default value is ${Defaults.METADATA_SNAPSHOT_MAX_INTERVAL_MS}. To generate " +
-    s"snapshots based on the number of metadata bytes, see the <code>$MetadataSnapshotMaxNewRecordBytesProp</code> " +
-    "configuration. The Kafka node will generate a snapshot when either the maximum time interval is reached or the " +
-    "maximum bytes limit is reached."
-  val MetadataMaxIdleIntervalMsDoc = "This configuration controls how often the active " +
-    "controller should write no-op records to the metadata partition. If the value is 0, no-op records " +
-    s"are not appended to the metadata partition. The default value is ${Defaults.METADATA_MAX_IDLE_INTERVAL_MS}"
-  val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the controller. This is required " +
-    "if running in KRaft mode. When communicating with the controller quorum, the broker will always use the first listener in this list.\n " +
-    "Note: The ZooKeeper-based controller should not set this configuration."
-  val SaslMechanismControllerProtocolDoc = "SASL mechanism used for communication with controllers. Default is GSSAPI."
-  val MetadataLogSegmentBytesDoc = "The maximum size of a single metadata log file."
-  val MetadataLogSegmentMinBytesDoc = "Override the minimum size for a single metadata log file. This should be used for testing only."
-  val ServerMaxStartupTimeMsDoc = "The maximum number of milliseconds we will wait for the server to come up. " +
-  "By default there is no limit. This should be used for testing only."
-
-  val MetadataLogSegmentMillisDoc = "The maximum time before a new metadata log file is rolled out (in milliseconds)."
-  val MetadataMaxRetentionBytesDoc = "The maximum combined size of the metadata log and snapshots before deleting old " +
-    "snapshots and log files. Since at least one snapshot must exist before any logs can be deleted, this is a soft limit."
-  val MetadataMaxRetentionMillisDoc = "The number of milliseconds to keep a metadata log file or snapshot before " +
-    "deleting it. Since at least one snapshot must exist before any logs can be deleted, this is a soft limit."
-
-  /************* Authorizer Configuration ***********/
-  val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements <code>${classOf[Authorizer].getName}</code>" +
-    " interface, which is used by the broker for authorization."
-  val EarlyStartListenersDoc = "A comma-separated list of listener names which may be started before the authorizer has finished " +
-   "initialization. This is useful when the authorizer is dependent on the cluster itself for bootstrapping, as is the case for " +
-   "the StandardAuthorizer (which stores ACLs in the metadata log.) By default, all listeners included in controller.listener.names " +
-   "will also be early start listeners. A listener should not appear in this list if it accepts external traffic."
-
-  /** ********* Socket Server Configuration ***********/
-  val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
-    s" If the listener name is not a security protocol, <code>$ListenerSecurityProtocolMapProp</code> must also be set.\n" +
-    " Listener names and port numbers must be unique unless \n" +
-    " one listener is an IPv4 address and the other listener is \n" +
-    " an IPv6 address (for the same port).\n" +
-    " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
-    " Leave hostname empty to bind to default interface.\n" +
-    " Examples of legal listener lists:\n" +
-    " <code>PLAINTEXT://myhost:9092,SSL://:9091</code>\n" +
-    " <code>CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093</code>\n" +
-    " <code>PLAINTEXT://127.0.0.1:9092,SSL://[::1]:9092</code>\n"
-  val AdvertisedListenersDoc = s"Listeners to publish to ZooKeeper for clients to use, if different than the <code>$ListenersProp</code> config property." +
-    " In IaaS environments, this may need to be different from the interface to which the broker binds." +
-    s" If this is not set, the value for <code>$ListenersProp</code> will be used." +
-    s" Unlike <code>$ListenersProp</code>, it is not valid to advertise the 0.0.0.0 meta-address.\n" +
-    s" Also unlike <code>$ListenersProp</code>, there can be duplicated ports in this property," +
-    " so that one listener can be configured to advertise another listener's address." +
-    " This can be useful in some cases where external load balancers are used."
-  val ListenerSecurityProtocolMapDoc = "Map between listener names and security protocols. This must be defined for " +
-    "the same security protocol to be usable in more than one port or IP. For example, internal and " +
-    "external traffic can be separated even if SSL is required for both. Concretely, the user could define listeners " +
-    "with names INTERNAL and EXTERNAL and this property as: <code>INTERNAL:SSL,EXTERNAL:SSL</code>. As shown, key and value are " +
-    "separated by a colon and map entries are separated by commas. Each listener name should only appear once in the map. " +
-    "Different security (SSL and SASL) settings can be configured for each listener by adding a normalised " +
-    "prefix (the listener name is lowercased) to the config name. For example, to set a different keystore for the " +
-    "INTERNAL listener, a config with name <code>listener.name.internal.ssl.keystore.location</code> would be set. " +
-    "If the config for the listener name is not set, the config will fallback to the generic config (i.e. <code>ssl.keystore.location</code>). " +
-    "Note that in KRaft a default mapping from the listener names defined by <code>controller.listener.names</code> to PLAINTEXT " +
-    "is assumed if no explicit mapping is provided and no other security protocol is in use."
-  val controlPlaneListenerNameDoc = "Name of listener used for communication between controller and brokers. " +
-    s"A broker will use the <code>$ControlPlaneListenerNameProp</code> to locate the endpoint in $ListenersProp list, to listen for connections from the controller. " +
-    "For example, if a broker's config is:\n" +
-    "<code>listeners = INTERNAL://192.1.1.8:9092, EXTERNAL://10.1.1.5:9093, CONTROLLER://192.1.1.8:9094" +
-    "listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
-    "control.plane.listener.name = CONTROLLER</code>\n" +
-    "On startup, the broker will start listening on \"192.1.1.8:9094\" with security protocol \"SSL\".\n" +
-    s"On the controller side, when it discovers a broker's published endpoints through ZooKeeper, it will use the <code>$ControlPlaneListenerNameProp</code> " +
-    "to find the endpoint, which it will use to establish connection to the broker.\n" +
-    "For example, if the broker's published endpoints on ZooKeeper are:\n" +
-    " <code>\"endpoints\" : [\"INTERNAL://broker1.example.com:9092\",\"EXTERNAL://broker1.example.com:9093\",\"CONTROLLER://broker1.example.com:9094\"]</code>\n" +
-    " and the controller's config is:\n" +
-    "<code>listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
-    "control.plane.listener.name = CONTROLLER</code>\n" +
-    "then the controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.\n" +
-    "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections.\n" +
-    s"If explicitly configured, the value cannot be the same as the value of <code>$InterBrokerListenerNameProp</code>."
-
-  val SocketSendBufferBytesDoc = "The SO_SNDBUF buffer of the socket server sockets. If the value is -1, the OS default will be used."
-  val SocketReceiveBufferBytesDoc = "The SO_RCVBUF buffer of the socket server sockets. If the value is -1, the OS default will be used."
-  val SocketRequestMaxBytesDoc = "The maximum number of bytes in a socket request"
-  val SocketListenBacklogSizeDoc = "The maximum number of pending connections on the socket. " +
-    "In Linux, you may also need to configure <code>somaxconn</code> and <code>tcp_max_syn_backlog</code> kernel parameters " +
-    "accordingly to make the configuration takes effect."
-  val MaxConnectionsPerIpDoc = "The maximum number of connections we allow from each ip address. This can be set to 0 if there are overrides " +
-    s"configured using $MaxConnectionsPerIpOverridesProp property. New connections from the ip address are dropped if the limit is reached."
-  val MaxConnectionsPerIpOverridesDoc = "A comma-separated list of per-ip or hostname overrides to the default maximum number of connections. " +
-    "An example value is \"hostName:100,127.0.0.1:200\""
-  val MaxConnectionsDoc = "The maximum number of connections we allow in the broker at any time. This limit is applied in addition " +
-    s"to any per-ip limits configured using $MaxConnectionsPerIpProp. Listener-level limits may also be configured by prefixing the " +
-    s"config name with the listener prefix, for example, <code>listener.name.internal.$MaxConnectionsProp</code>. Broker-wide limit " +
-    "should be configured based on broker capacity while listener limits should be configured based on application requirements. " +
-    "New connections are blocked if either the listener or broker limit is reached. Connections on the inter-broker listener are " +
-    "permitted even if broker-wide limit is reached. The least recently used connection on another listener will be closed in this case."
-  val MaxConnectionCreationRateDoc = "The maximum connection creation rate we allow in the broker at any time. Listener-level limits " +
-    s"may also be configured by prefixing the config name with the listener prefix, for example, <code>listener.name.internal.$MaxConnectionCreationRateProp</code>." +
-    "Broker-wide connection rate limit should be configured based on broker capacity while listener limits should be configured based on " +
-    "application requirements. New connections will be throttled if either the listener or the broker limit is reached, with the exception " +
-    "of inter-broker listener. Connections on the inter-broker listener will be throttled only when the listener-level rate limit is reached."
-  val ConnectionsMaxIdleMsDoc = "Idle connections timeout: the server socket processor threads close the connections that idle more than this"
-  val FailedAuthenticationDelayMsDoc = "Connection close delay on failed authentication: this is the time (in milliseconds) by which connection close will be delayed on authentication failure. " +
-    s"This must be configured to be less than $ConnectionsMaxIdleMsProp to prevent connection timeout."
-  /************* Rack Configuration **************/
-  val RackDoc = "Rack of the broker. This will be used in rack aware replication assignment for fault tolerance. Examples: <code>RACK1</code>, <code>us-east-1d</code>"
-  /** ********* Log Configuration ***********/
-  val NumPartitionsDoc = "The default number of log partitions per topic"
-  val LogDirDoc = "The directory in which the log data is kept (supplemental for " + LogDirsProp + " property)"
-  val LogDirsDoc = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LogDirProp + " is used."
-  val LogSegmentBytesDoc = "The maximum size of a single log file"
-  val LogRollTimeMillisDoc = "The maximum time before a new log segment is rolled out (in milliseconds). If not set, the value in " + LogRollTimeHoursProp + " is used"
-  val LogRollTimeHoursDoc = "The maximum time before a new log segment is rolled out (in hours), secondary to " + LogRollTimeMillisProp + " property"
-
-  val LogRollTimeJitterMillisDoc = "The maximum jitter to subtract from logRollTimeMillis (in milliseconds). If not set, the value in " + LogRollTimeJitterHoursProp + " is used"
-  val LogRollTimeJitterHoursDoc = "The maximum jitter to subtract from logRollTimeMillis (in hours), secondary to " + LogRollTimeJitterMillisProp + " property"
-
-  val LogRetentionTimeMillisDoc = "The number of milliseconds to keep a log file before deleting it (in milliseconds), If not set, the value in " + LogRetentionTimeMinutesProp + " is used. If set to -1, no time limit is applied."
-  val LogRetentionTimeMinsDoc = "The number of minutes to keep a log file before deleting it (in minutes), secondary to " + LogRetentionTimeMillisProp + " property. If not set, the value in " + LogRetentionTimeHoursProp + " is used"
-  val LogRetentionTimeHoursDoc = "The number of hours to keep a log file before deleting it (in hours), tertiary to " + LogRetentionTimeMillisProp + " property"
-
-  val LogRetentionBytesDoc = "The maximum size of the log before deleting it"
-  val LogCleanupIntervalMsDoc = "The frequency in milliseconds that the log cleaner checks whether any log is eligible for deletion"
-  val LogCleanupPolicyDoc = "The default cleanup policy for segments beyond the retention window. A comma separated list of valid policies. Valid policies are: \"delete\" and \"compact\""
-  val LogIndexSizeMaxBytesDoc = "The maximum size in bytes of the offset index"
-  val LogIndexIntervalBytesDoc = "The interval with which we add an entry to the offset index."
-  val LogFlushIntervalMessagesDoc = "The number of messages accumulated on a log partition before messages are flushed to disk."
-  val LogDeleteDelayMsDoc = "The amount of time to wait before deleting a file from the filesystem"
-  val LogFlushSchedulerIntervalMsDoc = "The frequency in ms that the log flusher checks whether any log needs to be flushed to disk"
-  val LogFlushIntervalMsDoc = "The maximum time in ms that a message in any topic is kept in memory before flushed to disk. If not set, the value in " + LogFlushSchedulerIntervalMsProp + " is used"
-  val LogFlushOffsetCheckpointIntervalMsDoc = "The frequency with which we update the persistent record of the last flush which acts as the log recovery point."
-  val LogFlushStartOffsetCheckpointIntervalMsDoc = "The frequency with which we update the persistent record of log start offset"
-  val LogPreAllocateEnableDoc = "Should pre allocate file when create new segment? If you are using Kafka on Windows, you probably need to set it to true."
-  val LogMessageFormatVersionDoc = "Specify the message format version the broker will use to append messages to the logs. The value should be a valid MetadataVersion. " +
-    "Some examples are: 0.8.2, 0.9.0.0, 0.10.0, check MetadataVersion for more details. By setting a particular message format version, the " +
-    "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting this value incorrectly " +
-    "will cause consumers with older versions to break as they will receive messages with a format that they don't understand."
-
-  val LogMessageTimestampTypeDoc = "Define whether the timestamp in the message is message create time or log append time. The value should be either " +
-    "<code>CreateTime</code> or <code>LogAppendTime</code>."
-
-  val LogMessageTimestampDifferenceMaxMsDoc = "[DEPRECATED] The maximum difference allowed between the timestamp when a broker receives " +
-    "a message and the timestamp specified in the message. If log.message.timestamp.type=CreateTime, a message will be rejected " +
-    "if the difference in timestamp exceeds this threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime." +
-    "The maximum timestamp difference allowed should be no greater than log.retention.ms to avoid unnecessarily frequent log rolling."
-
-  val LogMessageTimestampBeforeMaxMsDoc = "This configuration sets the allowable timestamp difference between the " +
-    "broker's timestamp and the message timestamp. The message timestamp can be earlier than or equal to the broker's " +
-    "timestamp, with the maximum allowable difference determined by the value set in this configuration. " +
-    "If log.message.timestamp.type=CreateTime, the message will be rejected if the difference in timestamps exceeds " +
-    "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime."
-
-  val LogMessageTimestampAfterMaxMsDoc = "This configuration sets the allowable timestamp difference between the " +
-    "message timestamp and the broker's timestamp. The message timestamp can be later than or equal to the broker's " +
-    "timestamp, with the maximum allowable difference determined by the value set in this configuration. " +
-    "If log.message.timestamp.type=CreateTime, the message will be rejected if the difference in timestamps exceeds " +
-    "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime."
-
-  val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
-  val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server."
-  val MinInSyncReplicasDoc = "When a producer sets acks to \"all\" (or \"-1\"), " +
-    "<code>min.insync.replicas</code> specifies the minimum number of replicas that must acknowledge " +
-    "a write for the write to be considered successful. If this minimum cannot be met, " +
-    "then the producer will raise an exception (either <code>NotEnoughReplicas</code> or " +
-    "<code>NotEnoughReplicasAfterAppend</code>).<br>When used together, <code>min.insync.replicas</code> and acks " +
-    "allow you to enforce greater durability guarantees. A typical scenario would be to " +
-    "create a topic with a replication factor of 3, set <code>min.insync.replicas</code> to 2, and " +
-    "produce with acks of \"all\". This will ensure that the producer raises an exception " +
-    "if a majority of replicas do not receive a write."
-
-  val CreateTopicPolicyClassNameDoc = "The create topic policy class that should be used for validation. The class should " +
-    "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface."
-  val AlterConfigPolicyClassNameDoc = "The alter configs policy class that should be used for validation. The class should " +
-    "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface."
-  val LogMessageDownConversionEnableDoc = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC
-
-  /** ********* Replication configuration ***********/
-  val ControllerSocketTimeoutMsDoc = "The socket timeout for controller-to-broker channels."
-  val DefaultReplicationFactorDoc = "The default replication factors for automatically created topics."
-  val ReplicaLagTimeMaxMsDoc = "If a follower hasn't sent any fetch requests or hasn't consumed up to the leaders log end offset for at least this time," +
-  " the leader will remove the follower from isr"
-  val ReplicaSocketTimeoutMsDoc = "The socket timeout for network requests. Its value should be at least replica.fetch.wait.max.ms"
-  val ReplicaSocketReceiveBufferBytesDoc = "The socket receive buffer for network requests to the leader for replicating data"
-  val ReplicaFetchMaxBytesDoc = "The number of bytes of messages to attempt to fetch for each partition. This is not an absolute maximum, " +
-    "if the first record batch in the first non-empty partition of the fetch is larger than this value, the record batch will still be returned " +
-    "to ensure that progress can be made. The maximum record batch size accepted by the broker is defined via " +
-    "<code>message.max.bytes</code> (broker config) or <code>max.message.bytes</code> (topic config)."
-  val ReplicaFetchWaitMaxMsDoc = "The maximum wait time for each fetcher request issued by follower replicas. This value should always be less than the " +
-  "replica.lag.time.max.ms at all times to prevent frequent shrinking of ISR for low throughput topics"
-  val ReplicaFetchMinBytesDoc = "Minimum bytes expected for each fetch response. If not enough bytes, wait up to <code>replica.fetch.wait.max.ms</code> (broker config)."
-  val ReplicaFetchResponseMaxBytesDoc = "Maximum bytes expected for the entire fetch response. Records are fetched in batches, " +
-    "and if the first record batch in the first non-empty partition of the fetch is larger than this value, the record batch " +
-    "will still be returned to ensure that progress can be made. As such, this is not an absolute maximum. The maximum " +
-    "record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-    "<code>max.message.bytes</code> (topic config)."
-  val NumReplicaFetchersDoc = "Number of fetcher threads used to replicate records from each source broker. The total number of fetchers " +
-  "on each broker is bound by <code>num.replica.fetchers</code> multiplied by the number of brokers in the cluster." +
-  "Increasing this value can increase the degree of I/O parallelism in the follower and leader broker at the cost " +
-  "of higher CPU and memory utilization."
-  val ReplicaFetchBackoffMsDoc = "The amount of time to sleep when fetch partition error occurs."
-  val ReplicaHighWatermarkCheckpointIntervalMsDoc = "The frequency with which the high watermark is saved out to disk"
-  val FetchPurgatoryPurgeIntervalRequestsDoc = "The purge interval (in number of requests) of the fetch request purgatory"
-  val ProducerPurgatoryPurgeIntervalRequestsDoc = "The purge interval (in number of requests) of the producer request purgatory"
-  val DeleteRecordsPurgatoryPurgeIntervalRequestsDoc = "The purge interval (in number of requests) of the delete records request purgatory"
-  val AutoLeaderRebalanceEnableDoc = s"Enables auto leader balancing. A background thread checks the distribution of partition leaders at regular intervals, configurable by $LeaderImbalanceCheckIntervalSecondsProp. If the leader imbalance exceeds $LeaderImbalancePerBrokerPercentageProp, leader rebalance to the preferred leader for partitions is triggered."
-  val LeaderImbalancePerBrokerPercentageDoc = "The ratio of leader imbalance allowed per broker. The controller would trigger a leader balance if it goes above this value per broker. The value is specified in percentage."
-  val LeaderImbalanceCheckIntervalSecondsDoc = "The frequency with which the partition rebalance check is triggered by the controller"
-  val UncleanLeaderElectionEnableDoc = "Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss"
-  val InterBrokerSecurityProtocolDoc = "Security protocol used to communicate between brokers. Valid values are: " +
-    s"${SecurityProtocol.names.asScala.mkString(", ")}. It is an error to set this and $InterBrokerListenerNameProp " +
-    "properties at the same time."
-  val InterBrokerProtocolVersionDoc = "Specify which version of the inter-broker protocol will be used.\n" +
-  " This is typically bumped after all brokers were upgraded to a new version.\n" +
-  " Example of some valid values are: 0.8.0, 0.8.1, 0.8.1.1, 0.8.2, 0.8.2.0, 0.8.2.1, 0.9.0.0, 0.9.0.1 Check MetadataVersion for the full list."
-  val InterBrokerListenerNameDoc = s"Name of listener used for communication between brokers. If this is unset, the listener name is defined by $InterBrokerSecurityProtocolProp. " +
-    s"It is an error to set this and $InterBrokerSecurityProtocolProp properties at the same time."
-  val ReplicaSelectorClassDoc = "The fully qualified class name that implements ReplicaSelector. This is used by the broker to find the preferred read replica. By default, we use an implementation that returns the leader."
-  /** ********* Controlled shutdown configuration ***********/
-  val ControlledShutdownMaxRetriesDoc = "Controlled shutdown can fail for multiple reasons. This determines the number of retries when such failure happens"
-  val ControlledShutdownRetryBackoffMsDoc = "Before each retry, the system needs time to recover from the state that caused the previous failure (Controller fail over, replica lag etc). This config determines the amount of time to wait before retrying."
-  val ControlledShutdownEnableDoc = "Enable controlled shutdown of the server."
-
-  /** ********* Group coordinator configuration ***********/
-  val GroupMinSessionTimeoutMsDoc = "The minimum allowed session timeout for registered consumers. Shorter timeouts result in quicker failure detection at the cost of more frequent consumer heartbeating, which can overwhelm broker resources."
-  val GroupMaxSessionTimeoutMsDoc = "The maximum allowed session timeout for registered consumers. Longer timeouts give consumers more time to process messages in between heartbeats at the cost of a longer time to detect failures."
-  val GroupInitialRebalanceDelayMsDoc = "The amount of time the group coordinator will wait for more consumers to join a new group before performing the first rebalance. A longer delay means potentially fewer rebalances, but increases the time until processing begins."
-  val GroupMaxSizeDoc = "The maximum number of consumers that a single consumer group can accommodate."
-
-  /** New group coordinator configs */
-  val NewGroupCoordinatorEnableDoc = "Enable the new group coordinator."
-  val GroupCoordinatorRebalanceProtocolsDoc = "The list of enabled rebalance protocols. Supported protocols: " + Utils.join(GroupType.values.toList.map(_.toString).asJava, ",") + ". " +
-    s"The ${GroupType.CONSUMER} rebalance protocol is in early access and therefore must not be used in production."
-  val GroupCoordinatorNumThreadsDoc = "The number of threads used by the group coordinator."
-
-  /** Consumer group configs */
-  val ConsumerGroupSessionTimeoutMsDoc = "The timeout to detect client failures when using the consumer group protocol."
-  val ConsumerGroupMinSessionTimeoutMsDoc = "The minimum allowed session timeout for registered consumers."
-  val ConsumerGroupMaxSessionTimeoutMsDoc = "The maximum allowed session timeout for registered consumers."
-  val ConsumerGroupHeartbeatIntervalMsDoc = "The heartbeat interval given to the members of a consumer group."
-  val ConsumerGroupMinHeartbeatIntervalMsDoc = "The minimum heartbeat interval for registered consumers."
-  val ConsumerGroupMaxHeartbeatIntervalMsDoc = "The maximum heartbeat interval for registered consumers."
-  val ConsumerGroupMaxSizeDoc = "The maximum number of consumers that a single consumer group can accommodate."
-  val ConsumerGroupAssignorsDoc = "The server side assignors as a list of full class names. The first one in the list is considered as the default assignor to be used in the case where the consumer does not specify an assignor."
-
-  /** ********* Offset management configuration ***********/
-  val OffsetMetadataMaxSizeDoc = "The maximum size for a metadata entry associated with an offset commit."
-  val OffsetsLoadBufferSizeDoc = "Batch size for reading from the offsets segments when loading offsets into the cache (soft-limit, overridden if records are too large)."
-  val OffsetsTopicReplicationFactorDoc = "The replication factor for the offsets topic (set higher to ensure availability). " +
-  "Internal topic creation will fail until the cluster size meets this replication factor requirement."
-  val OffsetsTopicPartitionsDoc = "The number of partitions for the offset commit topic (should not change after deployment)."
-  val OffsetsTopicSegmentBytesDoc = "The offsets topic segment bytes should be kept relatively small in order to facilitate faster log compaction and cache loads."
-  val OffsetsTopicCompressionCodecDoc = "Compression codec for the offsets topic - compression may be used to achieve \"atomic\" commits."
-  val OffsetsRetentionMinutesDoc = "For subscribed consumers, committed offset of a specific partition will be expired and discarded when 1) this retention period has elapsed after the consumer group loses all its consumers (i.e. becomes empty); " +
-    "2) this retention period has elapsed since the last time an offset is committed for the partition and the group is no longer subscribed to the corresponding topic. " +
-    "For standalone consumers (using manual assignment), offsets will be expired after this retention period has elapsed since the time of last commit. " +
-    "Note that when a group is deleted via the delete-group request, its committed offsets will also be deleted without extra retention period; " +
-    "also when a topic is deleted via the delete-topic request, upon propagated metadata update any group's committed offsets for that topic will also be deleted without extra retention period."
-  val OffsetsRetentionCheckIntervalMsDoc = "Frequency at which to check for stale offsets"
-  val OffsetCommitTimeoutMsDoc = "Offset commit will be delayed until all replicas for the offsets topic receive the commit " +
-  "or this timeout is reached. This is similar to the producer request timeout."
-  val OffsetCommitRequiredAcksDoc = "The required acks before the commit can be accepted. In general, the default (-1) should not be overridden."
-  /** ********* Transaction management configuration ***********/
-  val TransactionalIdExpirationMsDoc = "The time in ms that the transaction coordinator will wait without receiving any transaction status updates " +
-    "for the current transaction before expiring its transactional id. Transactional IDs will not expire while a the transaction is still ongoing."
-  val TransactionsMaxTimeoutMsDoc = "The maximum allowed timeout for transactions. " +
-    "If a client’s requested transaction time exceed this, then the broker will return an error in InitProducerIdRequest. This prevents a client from too large of a timeout, which can stall consumers reading from topics included in the transaction."
-  val TransactionsTopicMinISRDoc = "Overridden " + MinInSyncReplicasProp + " config for the transaction topic."
-  val TransactionsLoadBufferSizeDoc = "Batch size for reading from the transaction log segments when loading producer ids and transactions into the cache (soft-limit, overridden if records are too large)."
-  val TransactionsTopicReplicationFactorDoc = "The replication factor for the transaction topic (set higher to ensure availability). " +
-    "Internal topic creation will fail until the cluster size meets this replication factor requirement."
-  val TransactionsTopicPartitionsDoc = "The number of partitions for the transaction topic (should not change after deployment)."
-  val TransactionsTopicSegmentBytesDoc = "The transaction topic segment bytes should be kept relatively small in order to facilitate faster log compaction and cache loads"
-  val TransactionsAbortTimedOutTransactionsIntervalMsDoc = "The interval at which to rollback transactions that have timed out"
-  val TransactionsRemoveExpiredTransactionsIntervalMsDoc = "The interval at which to remove transactions that have expired due to <code>transactional.id.expiration.ms</code> passing"
-
-  val TransactionPartitionVerificationEnableDoc = "Enable verification that checks that the partition has been added to the transaction before writing transactional records to the partition"
-
-  val ProducerIdExpirationMsDoc = "The time in ms that a topic partition leader will wait before expiring producer IDs. Producer IDs will not expire while a transaction associated to them is still ongoing. " +
-    "Note that producer IDs may expire sooner if the last write from the producer ID is deleted due to the topic's retention settings. Setting this value the same or higher than " +
-    "<code>delivery.timeout.ms</code> can help prevent expiration during retries and protect against message duplication, but the default should be reasonable for most use cases."
-  val ProducerIdExpirationCheckIntervalMsDoc = "The interval at which to remove producer IDs that have expired due to <code>producer.id.expiration.ms</code> passing."
-
-  /** ********* Fetch Configuration **************/
-  val MaxIncrementalFetchSessionCacheSlotsDoc = "The maximum number of incremental fetch sessions that we will maintain."
-  val FetchMaxBytesDoc = "The maximum number of bytes we will return for a fetch request. Must be at least 1024."
-
-  /** ********* Request Limit Configuration **************/
-  val MaxRequestPartitionSizeLimitDoc = "The maximum number of partitions can be served in one request."
-
-  /** ********* Quota Configuration ***********/
-  val NumQuotaSamplesDoc = "The number of samples to retain in memory for client quotas"
-  val NumReplicationQuotaSamplesDoc = "The number of samples to retain in memory for replication quotas"
-  val NumAlterLogDirsReplicationQuotaSamplesDoc = "The number of samples to retain in memory for alter log dirs replication quotas"
-  val NumControllerQuotaSamplesDoc = "The number of samples to retain in memory for controller mutation quotas"
-  val QuotaWindowSizeSecondsDoc = "The time span of each sample for client quotas"
-  val ReplicationQuotaWindowSizeSecondsDoc = "The time span of each sample for replication quotas"
-  val AlterLogDirsReplicationQuotaWindowSizeSecondsDoc = "The time span of each sample for alter log dirs replication quotas"
-  val ControllerQuotaWindowSizeSecondsDoc = "The time span of each sample for controller mutations quotas"
-
-  val ClientQuotaCallbackClassDoc = "The fully qualified name of a class that implements the ClientQuotaCallback interface, " +
-    "which is used to determine quota limits applied to client requests. By default, the &lt;user&gt; and &lt;client-id&gt; " +
-    "quotas that are stored in ZooKeeper are applied. For any given request, the most specific quota that matches the user principal " +
-    "of the session and the client-id of the request is applied."
-
-  val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
-  val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +
-  "('gzip', 'snappy', 'lz4', 'zstd'). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
-  "'producer' which means retain the original compression codec set by the producer."
-
-  /** ********* Kafka Metrics Configuration ***********/
-  val MetricSampleWindowMsDoc = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC
-  val MetricNumSamplesDoc = CommonClientConfigs.METRICS_NUM_SAMPLES_DOC
-  val MetricReporterClassesDoc = CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC
-  val MetricRecordingLevelDoc = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC
-  val AutoIncludeJmxReporterDoc = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC
-
-
-  /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
-  val KafkaMetricsReporterClassesDoc = "A list of classes to use as Yammer metrics custom reporters." +
-    " The reporters should implement <code>kafka.metrics.KafkaMetricsReporter</code> trait. If a client wants" +
-    " to expose JMX operations on a custom reporter, the custom reporter needs to additionally implement an MBean" +
-    " trait that extends <code>kafka.metrics.KafkaMetricsReporterMBean</code> trait so that the registered MBean is compliant with" +
-    " the standard MBean convention."
-
-  val KafkaMetricsPollingIntervalSecondsDoc = s"The metrics polling interval (in seconds) which can be used" +
-    s" in $KafkaMetricsReporterClassesProp implementations."
-
-  /** ********* Kafka Client Telemetry Metrics Configuration ***********/
-  val ClientTelemetryMaxBytesDoc = "The maximum size (after compression if compression is used) of" +
-    " telemetry metrics pushed from a client to the broker. The default value is 1048576 (1 MB)."
-
-  /** ******** Common Security Configuration *************/
-  val PrincipalBuilderClassDoc = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC
-  val ConnectionsMaxReauthMsDoc = BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_DOC
-  val SaslServerMaxReceiveSizeDoc = BrokerSecurityConfigs.SASL_SERVER_MAX_RECEIVE_SIZE_DOC
-  val securityProviderClassDoc = SecurityConfig.SECURITY_PROVIDERS_DOC
-
-  /** ********* SSL Configuration ****************/
-  val SslProtocolDoc = SslConfigs.SSL_PROTOCOL_DOC
-  val SslProviderDoc = SslConfigs.SSL_PROVIDER_DOC
-  val SslCipherSuitesDoc = SslConfigs.SSL_CIPHER_SUITES_DOC
-  val SslEnabledProtocolsDoc = SslConfigs.SSL_ENABLED_PROTOCOLS_DOC
-  val SslKeystoreTypeDoc = SslConfigs.SSL_KEYSTORE_TYPE_DOC
-  val SslKeystoreLocationDoc = SslConfigs.SSL_KEYSTORE_LOCATION_DOC
-  val SslKeystorePasswordDoc = SslConfigs.SSL_KEYSTORE_PASSWORD_DOC
-  val SslKeyPasswordDoc = SslConfigs.SSL_KEY_PASSWORD_DOC
-  val SslKeystoreKeyDoc = SslConfigs.SSL_KEYSTORE_KEY_DOC
-  val SslKeystoreCertificateChainDoc = SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_DOC
-  val SslTruststoreTypeDoc = SslConfigs.SSL_TRUSTSTORE_TYPE_DOC
-  val SslTruststorePasswordDoc = SslConfigs.SSL_TRUSTSTORE_PASSWORD_DOC
-  val SslTruststoreLocationDoc = SslConfigs.SSL_TRUSTSTORE_LOCATION_DOC
-  val SslTruststoreCertificatesDoc = SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_DOC
-  val SslKeyManagerAlgorithmDoc = SslConfigs.SSL_KEYMANAGER_ALGORITHM_DOC
-  val SslTrustManagerAlgorithmDoc = SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC
-  val SslEndpointIdentificationAlgorithmDoc = SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC
-  val SslSecureRandomImplementationDoc = SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_DOC
-  val SslClientAuthDoc = BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC
-  val SslPrincipalMappingRulesDoc = BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_DOC
-  val SslEngineFactoryClassDoc = SslConfigs.SSL_ENGINE_FACTORY_CLASS_DOC
-  val SslAllowDnChangesDoc = BrokerSecurityConfigs.SSL_ALLOW_DN_CHANGES_DOC
-  val SslAllowSanChangesDoc = BrokerSecurityConfigs.SSL_ALLOW_SAN_CHANGES_DOC
-
-  /** ********* Sasl Configuration ****************/
-  val SaslMechanismInterBrokerProtocolDoc = "SASL mechanism used for inter-broker communication. Default is GSSAPI."
-  val SaslJaasConfigDoc = SaslConfigs.SASL_JAAS_CONFIG_DOC
-  val SaslEnabledMechanismsDoc = BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_DOC
-  val SaslServerCallbackHandlerClassDoc = BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_DOC
-  val SaslClientCallbackHandlerClassDoc = SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS_DOC
-  val SaslLoginClassDoc = SaslConfigs.SASL_LOGIN_CLASS_DOC
-  val SaslLoginCallbackHandlerClassDoc = SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS_DOC
-  val SaslKerberosServiceNameDoc = SaslConfigs.SASL_KERBEROS_SERVICE_NAME_DOC
-  val SaslKerberosKinitCmdDoc = SaslConfigs.SASL_KERBEROS_KINIT_CMD_DOC
-  val SaslKerberosTicketRenewWindowFactorDoc = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC
-  val SaslKerberosTicketRenewJitterDoc = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_DOC
-  val SaslKerberosMinTimeBeforeReloginDoc = SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC
-  val SaslKerberosPrincipalToLocalRulesDoc = BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC
-  val SaslLoginRefreshWindowFactorDoc = SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR_DOC
-  val SaslLoginRefreshWindowJitterDoc = SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER_DOC
-  val SaslLoginRefreshMinPeriodSecondsDoc = SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_DOC
-  val SaslLoginRefreshBufferSecondsDoc = SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS_DOC
-
-  val SaslLoginConnectTimeoutMsDoc = SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS_DOC
-  val SaslLoginReadTimeoutMsDoc = SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS_DOC
-  val SaslLoginRetryBackoffMaxMsDoc = SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC
-  val SaslLoginRetryBackoffMsDoc = SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS_DOC
-  val SaslOAuthBearerScopeClaimNameDoc = SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC
-  val SaslOAuthBearerSubClaimNameDoc = SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC
-  val SaslOAuthBearerTokenEndpointUrlDoc = SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC
-  val SaslOAuthBearerJwksEndpointUrlDoc = SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC
-  val SaslOAuthBearerJwksEndpointRefreshMsDoc = SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC
-  val SaslOAuthBearerJwksEndpointRetryBackoffMaxMsDoc = SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC
-  val SaslOAuthBearerJwksEndpointRetryBackoffMsDoc = SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC
-  val SaslOAuthBearerClockSkewSecondsDoc = SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC
-  val SaslOAuthBearerExpectedAudienceDoc = SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC
-  val SaslOAuthBearerExpectedIssuerDoc = SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC
-
-  /** ********* Delegation Token Configuration ****************/
-  val DelegationTokenSecretKeyAliasDoc = s"DEPRECATED: An alias for $DelegationTokenSecretKeyProp, which should be used instead of this config."
-  val DelegationTokenSecretKeyDoc = "Secret key to generate and verify delegation tokens. The same key must be configured across all the brokers. " +
-    " If using Kafka with KRaft, the key must also be set across all controllers. " +
-    " If the key is not set or set to empty string, brokers will disable the delegation token support."
-  val DelegationTokenMaxLifeTimeDoc = "The token has a maximum lifetime beyond which it cannot be renewed anymore. Default value 7 days."
-  val DelegationTokenExpiryTimeMsDoc = "The token validity time in milliseconds before the token needs to be renewed. Default value 1 day."
-  val DelegationTokenExpiryCheckIntervalDoc = "Scan interval to remove expired delegation tokens."
-
-  /** ********* Password encryption configuration for dynamic configs *********/
-  val PasswordEncoderSecretDoc = "The secret used for encoding dynamically configured passwords for this broker."
-  val PasswordEncoderOldSecretDoc = "The old secret that was used for encoding dynamically configured passwords. " +
-    "This is required only when the secret is updated. If specified, all dynamically encoded passwords are " +
-    s"decoded using this old secret and re-encoded using $PasswordEncoderSecretProp when broker starts up."
-  val PasswordEncoderKeyFactoryAlgorithmDoc = "The SecretKeyFactory algorithm used for encoding dynamically configured passwords. " +
-    "Default is PBKDF2WithHmacSHA512 if available and PBKDF2WithHmacSHA1 otherwise."
-  val PasswordEncoderCipherAlgorithmDoc = "The Cipher algorithm used for encoding dynamically configured passwords."
-  val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
-  val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
-
-  @nowarn("cat=deprecation")
-  val configDef = {
-    import ConfigDef.Importance._
-    import ConfigDef.Range._
-    import ConfigDef.Type._
-    import ConfigDef.ValidString._
-
-    new ConfigDef()
-
-      /** ********* Zookeeper Configuration ***********/
-      .define(ZkConnectProp, STRING, null, HIGH, ZkConnectDoc)
-      .define(ZkSessionTimeoutMsProp, INT, Defaults.ZK_SESSION_TIMEOUT_MS, HIGH, ZkSessionTimeoutMsDoc)
-      .define(ZkConnectionTimeoutMsProp, INT, null, HIGH, ZkConnectionTimeoutMsDoc)
-      .define(ZkEnableSecureAclsProp, BOOLEAN, Defaults.ZK_ENABLE_SECURE_ACLS, HIGH, ZkEnableSecureAclsDoc)
-      .define(ZkMaxInFlightRequestsProp, INT, Defaults.ZK_MAX_IN_FLIGHT_REQUESTS, atLeast(1), HIGH, ZkMaxInFlightRequestsDoc)
-      .define(ZkSslClientEnableProp, BOOLEAN, Defaults.ZK_SSL_CLIENT_ENABLE, MEDIUM, ZkSslClientEnableDoc)
-      .define(ZkClientCnxnSocketProp, STRING, null, MEDIUM, ZkClientCnxnSocketDoc)
-      .define(ZkSslKeyStoreLocationProp, STRING, null, MEDIUM, ZkSslKeyStoreLocationDoc)
-      .define(ZkSslKeyStorePasswordProp, PASSWORD, null, MEDIUM, ZkSslKeyStorePasswordDoc)
-      .define(ZkSslKeyStoreTypeProp, STRING, null, MEDIUM, ZkSslKeyStoreTypeDoc)
-      .define(ZkSslTrustStoreLocationProp, STRING, null, MEDIUM, ZkSslTrustStoreLocationDoc)
-      .define(ZkSslTrustStorePasswordProp, PASSWORD, null, MEDIUM, ZkSslTrustStorePasswordDoc)
-      .define(ZkSslTrustStoreTypeProp, STRING, null, MEDIUM, ZkSslTrustStoreTypeDoc)
-      .define(ZkSslProtocolProp, STRING, Defaults.ZK_SSL_PROTOCOL, LOW, ZkSslProtocolDoc)
-      .define(ZkSslEnabledProtocolsProp, LIST, null, LOW, ZkSslEnabledProtocolsDoc)
-      .define(ZkSslCipherSuitesProp, LIST, null, LOW, ZkSslCipherSuitesDoc)
-      .define(ZkSslEndpointIdentificationAlgorithmProp, STRING, Defaults.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM, LOW, ZkSslEndpointIdentificationAlgorithmDoc)
-      .define(ZkSslCrlEnableProp, BOOLEAN, Defaults.ZK_SSL_CRL_ENABLE, LOW, ZkSslCrlEnableDoc)
-      .define(ZkSslOcspEnableProp, BOOLEAN, Defaults.ZK_SSL_OCSP_ENABLE, LOW, ZkSslOcspEnableDoc)
-
-      /** ********* General Configuration ***********/
-      .define(BrokerIdGenerationEnableProp, BOOLEAN, Defaults.BROKER_ID_GENERATION_ENABLE, MEDIUM, BrokerIdGenerationEnableDoc)
-      .define(MaxReservedBrokerIdProp, INT, Defaults.MAX_RESERVED_BROKER_ID, atLeast(0), MEDIUM, MaxReservedBrokerIdDoc)
-      .define(BrokerIdProp, INT, Defaults.BROKER_ID, HIGH, BrokerIdDoc)
-      .define(MessageMaxBytesProp, INT, LogConfig.DEFAULT_MAX_MESSAGE_BYTES, atLeast(0), HIGH, MessageMaxBytesDoc)
-      .define(NumNetworkThreadsProp, INT, Defaults.NUM_NETWORK_THREADS, atLeast(1), HIGH, NumNetworkThreadsDoc)
-      .define(NumIoThreadsProp, INT, Defaults.NUM_IO_THREADS, atLeast(1), HIGH, NumIoThreadsDoc)
-      .define(NumReplicaAlterLogDirsThreadsProp, INT, null, HIGH, NumReplicaAlterLogDirsThreadsDoc)
-      .define(BackgroundThreadsProp, INT, Defaults.BACKGROUND_THREADS, atLeast(1), HIGH, BackgroundThreadsDoc)
-      .define(QueuedMaxRequestsProp, INT, Defaults.QUEUED_MAX_REQUESTS, atLeast(1), HIGH, QueuedMaxRequestsDoc)
-      .define(QueuedMaxBytesProp, LONG, Defaults.QUEUED_MAX_REQUEST_BYTES, MEDIUM, QueuedMaxRequestBytesDoc)
-      .define(RequestTimeoutMsProp, INT, Defaults.REQUEST_TIMEOUT_MS, HIGH, RequestTimeoutMsDoc)
-      .define(ConnectionSetupTimeoutMsProp, LONG, Defaults.CONNECTION_SETUP_TIMEOUT_MS, MEDIUM, ConnectionSetupTimeoutMsDoc)
-      .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.CONNECTION_SETUP_TIMEOUT_MAX_MS, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
-
-      /*
-       * KRaft mode configs.
-       */
-      .define(MetadataSnapshotMaxNewRecordBytesProp, LONG, Defaults.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES, atLeast(1), HIGH, MetadataSnapshotMaxNewRecordBytesDoc)
-      .define(MetadataSnapshotMaxIntervalMsProp, LONG, Defaults.METADATA_SNAPSHOT_MAX_INTERVAL_MS, atLeast(0), HIGH, MetadataSnapshotMaxIntervalMsDoc)
-      .define(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
-      .define(NodeIdProp, INT, Defaults.EMPTY_NODE_ID, null, HIGH, NodeIdDoc)
-      .define(InitialBrokerRegistrationTimeoutMsProp, INT, Defaults.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS, null, MEDIUM, InitialBrokerRegistrationTimeoutMsDoc)
-      .define(BrokerHeartbeatIntervalMsProp, INT, Defaults.BROKER_HEARTBEAT_INTERVAL_MS, null, MEDIUM, BrokerHeartbeatIntervalMsDoc)
-      .define(BrokerSessionTimeoutMsProp, INT, Defaults.BROKER_SESSION_TIMEOUT_MS, null, MEDIUM, BrokerSessionTimeoutMsDoc)
-      .define(ControllerListenerNamesProp, STRING, null, null, HIGH, ControllerListenerNamesDoc)
-      .define(SaslMechanismControllerProtocolProp, STRING, SaslConfigs.DEFAULT_SASL_MECHANISM, null, HIGH, SaslMechanismControllerProtocolDoc)
-      .define(MetadataLogDirProp, STRING, null, null, HIGH, MetadataLogDirDoc)
-      .define(MetadataLogSegmentBytesProp, INT, LogConfig.DEFAULT_SEGMENT_BYTES, atLeast(Records.LOG_OVERHEAD), HIGH, MetadataLogSegmentBytesDoc)
-      .defineInternal(MetadataLogSegmentMinBytesProp, INT, 8 * 1024 * 1024, atLeast(Records.LOG_OVERHEAD), HIGH, MetadataLogSegmentMinBytesDoc)
-      .define(MetadataLogSegmentMillisProp, LONG, LogConfig.DEFAULT_SEGMENT_MS, null, HIGH, MetadataLogSegmentMillisDoc)
-      .define(MetadataMaxRetentionBytesProp, LONG, Defaults.METADATA_MAX_RETENTION_BYTES, null, HIGH, MetadataMaxRetentionBytesDoc)
-      .define(MetadataMaxRetentionMillisProp, LONG, LogConfig.DEFAULT_RETENTION_MS, null, HIGH, MetadataMaxRetentionMillisDoc)
-      .define(MetadataMaxIdleIntervalMsProp, INT, Defaults.METADATA_MAX_IDLE_INTERVAL_MS, atLeast(0), LOW, MetadataMaxIdleIntervalMsDoc)
-      .defineInternal(ServerMaxStartupTimeMsProp, LONG, Defaults.SERVER_MAX_STARTUP_TIME_MS, atLeast(0), MEDIUM, ServerMaxStartupTimeMsDoc)
-      .define(MigrationEnabledProp, BOOLEAN, false, HIGH, "Enable ZK to KRaft migration")
-      .define(ElrEnabledProp, BOOLEAN, false, HIGH, "Enable the Eligible leader replicas")
-      .defineInternal(MigrationMetadataMinBatchSizeProp, INT, Defaults.MIGRATION_METADATA_MIN_BATCH_SIZE, atLeast(1),
-        MEDIUM, "Soft minimum batch size to use when migrating metadata from ZooKeeper to KRaft")
-
-      /************* Authorizer Configuration ***********/
-      .define(AuthorizerClassNameProp, STRING, Defaults.AUTHORIZER_CLASS_NAME, new ConfigDef.NonNullValidator(), LOW, AuthorizerClassNameDoc)
-      .define(EarlyStartListenersProp, STRING, null,  HIGH, EarlyStartListenersDoc)
-
-      /** ********* Socket Server Configuration ***********/
-      .define(ListenersProp, STRING, Defaults.LISTENERS, HIGH, ListenersDoc)
-      .define(AdvertisedListenersProp, STRING, null, HIGH, AdvertisedListenersDoc)
-      .define(ListenerSecurityProtocolMapProp, STRING, Defaults.LISTENER_SECURITY_PROTOCOL_MAP, LOW, ListenerSecurityProtocolMapDoc)
-      .define(ControlPlaneListenerNameProp, STRING, null, HIGH, controlPlaneListenerNameDoc)
-      .define(SocketSendBufferBytesProp, INT, Defaults.SOCKET_SEND_BUFFER_BYTES, HIGH, SocketSendBufferBytesDoc)
-      .define(SocketReceiveBufferBytesProp, INT, Defaults.SOCKET_RECEIVE_BUFFER_BYTES, HIGH, SocketReceiveBufferBytesDoc)
-      .define(SocketRequestMaxBytesProp, INT, Defaults.SOCKET_REQUEST_MAX_BYTES, atLeast(1), HIGH, SocketRequestMaxBytesDoc)
-      .define(SocketListenBacklogSizeProp, INT, Defaults.SOCKET_LISTEN_BACKLOG_SIZE, atLeast(1), MEDIUM, SocketListenBacklogSizeDoc)
-      .define(MaxConnectionsPerIpProp, INT, Defaults.MAX_CONNECTIONS_PER_IP, atLeast(0), MEDIUM, MaxConnectionsPerIpDoc)
-      .define(MaxConnectionsPerIpOverridesProp, STRING, Defaults.MAX_CONNECTIONS_PER_IP_OVERRIDES, MEDIUM, MaxConnectionsPerIpOverridesDoc)
-      .define(MaxConnectionsProp, INT, Defaults.MAX_CONNECTIONS, atLeast(0), MEDIUM, MaxConnectionsDoc)
-      .define(MaxConnectionCreationRateProp, INT, Defaults.MAX_CONNECTION_CREATION_RATE, atLeast(0), MEDIUM, MaxConnectionCreationRateDoc)
-      .define(ConnectionsMaxIdleMsProp, LONG, Defaults.CONNECTIONS_MAX_IDLE_MS, MEDIUM, ConnectionsMaxIdleMsDoc)
-      .define(FailedAuthenticationDelayMsProp, INT, Defaults.FAILED_AUTHENTICATION_DELAY_MS, atLeast(0), LOW, FailedAuthenticationDelayMsDoc)
-
-      /************ Rack Configuration ******************/
-      .define(RackProp, STRING, null, MEDIUM, RackDoc)
-
-      /** ********* Log Configuration ***********/
-      .define(NumPartitionsProp, INT, Defaults.NUM_PARTITIONS, atLeast(1), MEDIUM, NumPartitionsDoc)
-      .define(LogDirProp, STRING, Defaults.LOG_DIR, HIGH, LogDirDoc)
-      .define(LogDirsProp, STRING, null, HIGH, LogDirsDoc)
-      .define(LogSegmentBytesProp, INT, LogConfig.DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), HIGH, LogSegmentBytesDoc)
-
-      .define(LogRollTimeMillisProp, LONG, null, HIGH, LogRollTimeMillisDoc)
-      .define(LogRollTimeHoursProp, INT, TimeUnit.MILLISECONDS.toHours(LogConfig.DEFAULT_SEGMENT_MS).toInt, atLeast(1), HIGH, LogRollTimeHoursDoc)
-
-      .define(LogRollTimeJitterMillisProp, LONG, null, HIGH, LogRollTimeJitterMillisDoc)
-      .define(LogRollTimeJitterHoursProp, INT, TimeUnit.MILLISECONDS.toHours(LogConfig.DEFAULT_SEGMENT_JITTER_MS).toInt, atLeast(0), HIGH, LogRollTimeJitterHoursDoc)
-
-      .define(LogRetentionTimeMillisProp, LONG, null, HIGH, LogRetentionTimeMillisDoc)
-      .define(LogRetentionTimeMinutesProp, INT, null, HIGH, LogRetentionTimeMinsDoc)
-      .define(LogRetentionTimeHoursProp, INT, TimeUnit.MILLISECONDS.toHours(LogConfig.DEFAULT_RETENTION_MS).toInt, HIGH, LogRetentionTimeHoursDoc)
-
-      .define(LogRetentionBytesProp, LONG, LogConfig.DEFAULT_RETENTION_BYTES, HIGH, LogRetentionBytesDoc)
-      .define(LogCleanupIntervalMsProp, LONG, Defaults.LOG_CLEANUP_INTERVAL_MS, atLeast(1), MEDIUM, LogCleanupIntervalMsDoc)
-      .define(LogCleanupPolicyProp, LIST, LogConfig.DEFAULT_CLEANUP_POLICY, ValidList.in(TopicConfig.CLEANUP_POLICY_COMPACT, TopicConfig.CLEANUP_POLICY_DELETE), MEDIUM, LogCleanupPolicyDoc)
-      .define(CleanerConfig.LOG_CLEANER_THREADS_PROP, INT, CleanerConfig.LOG_CLEANER_THREADS, atLeast(0), MEDIUM, CleanerConfig.LOG_CLEANER_THREADS_DOC)
-      .define(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, DOUBLE, CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND, MEDIUM, CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_DOC)
-      .define(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, LONG, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE, MEDIUM, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_DOC)
-      .define(CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP, INT, CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE, atLeast(0), MEDIUM, CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_DOC)
-      .define(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP, DOUBLE, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR, MEDIUM, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_DOC)
-      .define(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP, LONG, CleanerConfig.LOG_CLEANER_BACKOFF_MS, atLeast(0), MEDIUM, CleanerConfig.LOG_CLEANER_BACKOFF_MS_DOC)
-      .define(CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP, DOUBLE, LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO, between(0, 1), MEDIUM, CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_DOC)
-      .define(CleanerConfig.LOG_CLEANER_ENABLE_PROP, BOOLEAN, CleanerConfig.LOG_CLEANER_ENABLE, MEDIUM, CleanerConfig.LOG_CLEANER_ENABLE_DOC)
-      .define(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP, LONG, LogConfig.DEFAULT_DELETE_RETENTION_MS, atLeast(0), MEDIUM, CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_DOC)
-      .define(CleanerConfig.LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP, LONG, LogConfig.DEFAULT_MIN_COMPACTION_LAG_MS, atLeast(0), MEDIUM, CleanerConfig.LOG_CLEANER_MIN_COMPACTION_LAG_MS_DOC)
-      .define(CleanerConfig.LOG_CLEANER_MAX_COMPACTION_LAG_MS_PROP, LONG, LogConfig.DEFAULT_MAX_COMPACTION_LAG_MS, atLeast(1), MEDIUM, CleanerConfig.LOG_CLEANER_MAX_COMPACTION_LAG_MS_DOC)
-      .define(LogIndexSizeMaxBytesProp, INT, LogConfig.DEFAULT_SEGMENT_INDEX_BYTES, atLeast(4), MEDIUM, LogIndexSizeMaxBytesDoc)
-      .define(LogIndexIntervalBytesProp, INT, LogConfig.DEFAULT_INDEX_INTERVAL_BYTES, atLeast(0), MEDIUM, LogIndexIntervalBytesDoc)
-      .define(LogFlushIntervalMessagesProp, LONG, LogConfig.DEFAULT_FLUSH_MESSAGES_INTERVAL, atLeast(1), HIGH, LogFlushIntervalMessagesDoc)
-      .define(LogDeleteDelayMsProp, LONG, LogConfig.DEFAULT_FILE_DELETE_DELAY_MS, atLeast(0), HIGH, LogDeleteDelayMsDoc)
-      .define(LogFlushSchedulerIntervalMsProp, LONG, LogConfig.DEFAULT_FLUSH_MS, HIGH, LogFlushSchedulerIntervalMsDoc)
-      .define(LogFlushIntervalMsProp, LONG, null, HIGH, LogFlushIntervalMsDoc)
-      .define(LogFlushOffsetCheckpointIntervalMsProp, INT, Defaults.LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS, atLeast(0), HIGH, LogFlushOffsetCheckpointIntervalMsDoc)
-      .define(LogFlushStartOffsetCheckpointIntervalMsProp, INT, Defaults.LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS, atLeast(0), HIGH, LogFlushStartOffsetCheckpointIntervalMsDoc)
-      .define(LogPreAllocateProp, BOOLEAN, LogConfig.DEFAULT_PREALLOCATE, MEDIUM, LogPreAllocateEnableDoc)
-      .define(NumRecoveryThreadsPerDataDirProp, INT, Defaults.NUM_RECOVERY_THREADS_PER_DATA_DIR, atLeast(1), HIGH, NumRecoveryThreadsPerDataDirDoc)
-      .define(AutoCreateTopicsEnableProp, BOOLEAN, Defaults.AUTO_CREATE_TOPICS_ENABLE, HIGH, AutoCreateTopicsEnableDoc)
-      .define(MinInSyncReplicasProp, INT, LogConfig.DEFAULT_MIN_IN_SYNC_REPLICAS, atLeast(1), HIGH, MinInSyncReplicasDoc)
-      .define(LogMessageFormatVersionProp, STRING, LogConfig.DEFAULT_MESSAGE_FORMAT_VERSION, new MetadataVersionValidator(), MEDIUM, LogMessageFormatVersionDoc)
-      .define(LogMessageTimestampTypeProp, STRING, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_TYPE, in("CreateTime", "LogAppendTime"), MEDIUM, LogMessageTimestampTypeDoc)
-      .define(LogMessageTimestampDifferenceMaxMsProp, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS, atLeast(0), MEDIUM, LogMessageTimestampDifferenceMaxMsDoc)
-      .define(LogMessageTimestampBeforeMaxMsProp, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_BEFORE_MAX_MS, atLeast(0), MEDIUM, LogMessageTimestampBeforeMaxMsDoc)
-      .define(LogMessageTimestampAfterMaxMsProp, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_AFTER_MAX_MS, atLeast(0), MEDIUM, LogMessageTimestampAfterMaxMsDoc)
-      .define(CreateTopicPolicyClassNameProp, CLASS, null, LOW, CreateTopicPolicyClassNameDoc)
-      .define(AlterConfigPolicyClassNameProp, CLASS, null, LOW, AlterConfigPolicyClassNameDoc)
-      .define(LogMessageDownConversionEnableProp, BOOLEAN, LogConfig.DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE, LOW, LogMessageDownConversionEnableDoc)
-
-      /** ********* Replication configuration ***********/
-      .define(ControllerSocketTimeoutMsProp, INT, Defaults.CONTROLLER_SOCKET_TIMEOUT_MS, MEDIUM, ControllerSocketTimeoutMsDoc)
-      .define(DefaultReplicationFactorProp, INT, Defaults.REPLICATION_FACTOR, MEDIUM, DefaultReplicationFactorDoc)
-      .define(ReplicaLagTimeMaxMsProp, LONG, Defaults.REPLICA_LAG_TIME_MAX_MS, HIGH, ReplicaLagTimeMaxMsDoc)
-      .define(ReplicaSocketTimeoutMsProp, INT, Defaults.REPLICA_SOCKET_TIMEOUT_MS, HIGH, ReplicaSocketTimeoutMsDoc)
-      .define(ReplicaSocketReceiveBufferBytesProp, INT, Defaults.REPLICA_SOCKET_RECEIVE_BUFFER_BYTES, HIGH, ReplicaSocketReceiveBufferBytesDoc)
-      .define(ReplicaFetchMaxBytesProp, INT, Defaults.REPLICA_FETCH_MAX_BYTES, atLeast(0), MEDIUM, ReplicaFetchMaxBytesDoc)
-      .define(ReplicaFetchWaitMaxMsProp, INT, Defaults.REPLICA_FETCH_WAIT_MAX_MS, HIGH, ReplicaFetchWaitMaxMsDoc)
-      .define(ReplicaFetchBackoffMsProp, INT, Defaults.REPLICA_FETCH_BACKOFF_MS, atLeast(0), MEDIUM, ReplicaFetchBackoffMsDoc)
-      .define(ReplicaFetchMinBytesProp, INT, Defaults.REPLICA_FETCH_MIN_BYTES, HIGH, ReplicaFetchMinBytesDoc)
-      .define(ReplicaFetchResponseMaxBytesProp, INT, Defaults.REPLICA_FETCH_RESPONSE_MAX_BYTES, atLeast(0), MEDIUM, ReplicaFetchResponseMaxBytesDoc)
-      .define(NumReplicaFetchersProp, INT, Defaults.NUM_REPLICA_FETCHERS, HIGH, NumReplicaFetchersDoc)
-      .define(ReplicaHighWatermarkCheckpointIntervalMsProp, LONG, Defaults.REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS, HIGH, ReplicaHighWatermarkCheckpointIntervalMsDoc)
-      .define(FetchPurgatoryPurgeIntervalRequestsProp, INT, Defaults.FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS, MEDIUM, FetchPurgatoryPurgeIntervalRequestsDoc)
-      .define(ProducerPurgatoryPurgeIntervalRequestsProp, INT, Defaults.PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS, MEDIUM, ProducerPurgatoryPurgeIntervalRequestsDoc)
-      .define(DeleteRecordsPurgatoryPurgeIntervalRequestsProp, INT, Defaults.DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS, MEDIUM, DeleteRecordsPurgatoryPurgeIntervalRequestsDoc)
-      .define(AutoLeaderRebalanceEnableProp, BOOLEAN, Defaults.AUTO_LEADER_REBALANCE_ENABLE, HIGH, AutoLeaderRebalanceEnableDoc)
-      .define(LeaderImbalancePerBrokerPercentageProp, INT, Defaults.LEADER_IMBALANCE_PER_BROKER_PERCENTAGE, HIGH, LeaderImbalancePerBrokerPercentageDoc)
-      .define(LeaderImbalanceCheckIntervalSecondsProp, LONG, Defaults.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS, atLeast(1), HIGH, LeaderImbalanceCheckIntervalSecondsDoc)
-      .define(UncleanLeaderElectionEnableProp, BOOLEAN, LogConfig.DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE, HIGH, UncleanLeaderElectionEnableDoc)
-      .define(InterBrokerSecurityProtocolProp, STRING, Defaults.INTER_BROKER_SECURITY_PROTOCOL, in(Utils.enumOptions(classOf[SecurityProtocol]):_*), MEDIUM, InterBrokerSecurityProtocolDoc)
-      .define(InterBrokerProtocolVersionProp, STRING, Defaults.INTER_BROKER_PROTOCOL_VERSION, new MetadataVersionValidator(), MEDIUM, InterBrokerProtocolVersionDoc)
-      .define(InterBrokerListenerNameProp, STRING, null, MEDIUM, InterBrokerListenerNameDoc)
-      .define(ReplicaSelectorClassProp, STRING, null, MEDIUM, ReplicaSelectorClassDoc)
-
-      /** ********* Controlled shutdown configuration ***********/
-      .define(ControlledShutdownMaxRetriesProp, INT, Defaults.CONTROLLED_SHUTDOWN_MAX_RETRIES, MEDIUM, ControlledShutdownMaxRetriesDoc)
-      .define(ControlledShutdownRetryBackoffMsProp, LONG, Defaults.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS, MEDIUM, ControlledShutdownRetryBackoffMsDoc)
-      .define(ControlledShutdownEnableProp, BOOLEAN, Defaults.CONTROLLED_SHUTDOWN_ENABLE, MEDIUM, ControlledShutdownEnableDoc)
-
-      /** ********* Group coordinator configuration ***********/
-      .define(GroupMinSessionTimeoutMsProp, INT, Defaults.GROUP_MIN_SESSION_TIMEOUT_MS, MEDIUM, GroupMinSessionTimeoutMsDoc)
-      .define(GroupMaxSessionTimeoutMsProp, INT, Defaults.GROUP_MAX_SESSION_TIMEOUT_MS, MEDIUM, GroupMaxSessionTimeoutMsDoc)
-      .define(GroupInitialRebalanceDelayMsProp, INT, Defaults.GROUP_INITIAL_REBALANCE_DELAY_MS, MEDIUM, GroupInitialRebalanceDelayMsDoc)
-      .define(GroupMaxSizeProp, INT, Defaults.GROUP_MAX_SIZE, atLeast(1), MEDIUM, GroupMaxSizeDoc)
-
-      /** New group coordinator configs */
-      .define(GroupCoordinatorRebalanceProtocolsProp, LIST, Defaults.GROUP_COORDINATOR_REBALANCE_PROTOCOLS,
-        ConfigDef.ValidList.in(Utils.enumOptions(classOf[GroupType]):_*), MEDIUM, GroupCoordinatorRebalanceProtocolsDoc)
-      .define(GroupCoordinatorNumThreadsProp, INT, Defaults.GROUP_COORDINATOR_NUM_THREADS, atLeast(1), MEDIUM, GroupCoordinatorNumThreadsDoc)
-      // Internal configuration used by integration and system tests.
-      .defineInternal(NewGroupCoordinatorEnableProp, BOOLEAN, Defaults.NEW_GROUP_COORDINATOR_ENABLE, null, MEDIUM, NewGroupCoordinatorEnableDoc)
-
-      /** Consumer groups configs */
-      .define(ConsumerGroupSessionTimeoutMsProp, INT, Defaults.CONSUMER_GROUP_SESSION_TIMEOUT_MS, atLeast(1), MEDIUM, ConsumerGroupSessionTimeoutMsDoc)
-      .define(ConsumerGroupMinSessionTimeoutMsProp, INT, Defaults.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS, atLeast(1), MEDIUM, ConsumerGroupMinSessionTimeoutMsDoc)
-      .define(ConsumerGroupMaxSessionTimeoutMsProp, INT, Defaults.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS, atLeast(1), MEDIUM, ConsumerGroupMaxSessionTimeoutMsDoc)
-      .define(ConsumerGroupHeartbeatIntervalMsProp, INT, Defaults.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS, atLeast(1), MEDIUM, ConsumerGroupHeartbeatIntervalMsDoc)
-      .define(ConsumerGroupMinHeartbeatIntervalMsProp, INT, Defaults.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS, atLeast(1), MEDIUM, ConsumerGroupMinHeartbeatIntervalMsDoc)
-      .define(ConsumerGroupMaxHeartbeatIntervalMsProp, INT, Defaults.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS, atLeast(1), MEDIUM, ConsumerGroupMaxHeartbeatIntervalMsDoc)
-      .define(ConsumerGroupMaxSizeProp, INT, Defaults.CONSUMER_GROUP_MAX_SIZE, atLeast(1), MEDIUM, ConsumerGroupMaxSizeDoc)
-      .define(ConsumerGroupAssignorsProp, LIST, Defaults.CONSUMER_GROUP_ASSIGNORS, null, MEDIUM, ConsumerGroupAssignorsDoc)
-
-      /** ********* Offset management configuration ***********/
-      .define(OffsetMetadataMaxSizeProp, INT, Defaults.OFFSET_METADATA_MAX_SIZE, HIGH, OffsetMetadataMaxSizeDoc)
-      .define(OffsetsLoadBufferSizeProp, INT, Defaults.OFFSETS_LOAD_BUFFER_SIZE, atLeast(1), HIGH, OffsetsLoadBufferSizeDoc)
-      .define(OffsetsTopicReplicationFactorProp, SHORT, Defaults.OFFSETS_TOPIC_REPLICATION_FACTOR, atLeast(1), HIGH, OffsetsTopicReplicationFactorDoc)
-      .define(OffsetsTopicPartitionsProp, INT, Defaults.OFFSETS_TOPIC_PARTITIONS, atLeast(1), HIGH, OffsetsTopicPartitionsDoc)
-      .define(OffsetsTopicSegmentBytesProp, INT, Defaults.OFFSETS_TOPIC_SEGMENT_BYTES, atLeast(1), HIGH, OffsetsTopicSegmentBytesDoc)
-      .define(OffsetsTopicCompressionCodecProp, INT, Defaults.OFFSETS_TOPIC_COMPRESSION_CODEC, HIGH, OffsetsTopicCompressionCodecDoc)
-      .define(OffsetsRetentionMinutesProp, INT, Defaults.OFFSETS_RETENTION_MINUTES, atLeast(1), HIGH, OffsetsRetentionMinutesDoc)
-      .define(OffsetsRetentionCheckIntervalMsProp, LONG, Defaults.OFFSETS_RETENTION_CHECK_INTERVAL_MS, atLeast(1), HIGH, OffsetsRetentionCheckIntervalMsDoc)
-      .define(OffsetCommitTimeoutMsProp, INT, Defaults.OFFSET_COMMIT_TIMEOUT_MS, atLeast(1), HIGH, OffsetCommitTimeoutMsDoc)
-      .define(OffsetCommitRequiredAcksProp, SHORT, Defaults.OFFSET_COMMIT_REQUIRED_ACKS, HIGH, OffsetCommitRequiredAcksDoc)
-      .define(DeleteTopicEnableProp, BOOLEAN, Defaults.DELETE_TOPIC_ENABLE, HIGH, DeleteTopicEnableDoc)
-      .define(CompressionTypeProp, STRING, LogConfig.DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names.asScala.toSeq:_*), HIGH, CompressionTypeDoc)
-
-      /** ********* Transaction management configuration ***********/
-      .define(TransactionalIdExpirationMsProp, INT, Defaults.TRANSACTIONAL_ID_EXPIRATION_MS, atLeast(1), HIGH, TransactionalIdExpirationMsDoc)
-      .define(TransactionsMaxTimeoutMsProp, INT, Defaults.TRANSACTIONS_MAX_TIMEOUT_MS, atLeast(1), HIGH, TransactionsMaxTimeoutMsDoc)
-      .define(TransactionsTopicMinISRProp, INT, Defaults.TRANSACTIONS_TOPIC_MIN_ISR, atLeast(1), HIGH, TransactionsTopicMinISRDoc)
-      .define(TransactionsLoadBufferSizeProp, INT, Defaults.TRANSACTIONS_LOAD_BUFFER_SIZE, atLeast(1), HIGH, TransactionsLoadBufferSizeDoc)
-      .define(TransactionsTopicReplicationFactorProp, SHORT, Defaults.TRANSACTIONS_TOPIC_REPLICATION_FACTOR, atLeast(1), HIGH, TransactionsTopicReplicationFactorDoc)
-      .define(TransactionsTopicPartitionsProp, INT, Defaults.TRANSACTIONS_TOPIC_PARTITIONS, atLeast(1), HIGH, TransactionsTopicPartitionsDoc)
-      .define(TransactionsTopicSegmentBytesProp, INT, Defaults.TRANSACTIONS_TOPIC_SEGMENT_BYTES, atLeast(1), HIGH, TransactionsTopicSegmentBytesDoc)
-      .define(TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, INT, Defaults.TRANSACTIONS_ABORT_TIMED_OUT_CLEANUP_INTERVAL_MS, atLeast(1), LOW, TransactionsAbortTimedOutTransactionsIntervalMsDoc)
-      .define(TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp, INT, Defaults.TRANSACTIONS_REMOVE_EXPIRED_CLEANUP_INTERVAL_MS, atLeast(1), LOW, TransactionsRemoveExpiredTransactionsIntervalMsDoc)
-
-      .define(TransactionPartitionVerificationEnableProp, BOOLEAN, Defaults.TRANSACTION_PARTITION_VERIFICATION_ENABLE, LOW, TransactionPartitionVerificationEnableDoc)
-
-      .define(ProducerIdExpirationMsProp, INT, Defaults.PRODUCER_ID_EXPIRATION_MS, atLeast(1), LOW, ProducerIdExpirationMsDoc)
-      // Configuration for testing only as default value should be sufficient for typical usage
-      .defineInternal(ProducerIdExpirationCheckIntervalMsProp, INT, Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS, atLeast(1), LOW, ProducerIdExpirationCheckIntervalMsDoc)
-
-      /** ********* Fetch Configuration **************/
-      .define(MaxIncrementalFetchSessionCacheSlots, INT, Defaults.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS, atLeast(0), MEDIUM, MaxIncrementalFetchSessionCacheSlotsDoc)
-      .define(FetchMaxBytes, INT, Defaults.FETCH_MAX_BYTES, atLeast(1024), MEDIUM, FetchMaxBytesDoc)
-
-      /** ********* Request Limit Configuration ***********/
-      .define(MaxRequestPartitionSizeLimit, INT, Defaults.MAX_REQUEST_PARTITION_SIZE_LIMIT, atLeast(1), MEDIUM, MaxRequestPartitionSizeLimitDoc)
-
-      /** ********* Kafka Metrics Configuration ***********/
-      .define(MetricNumSamplesProp, INT, Defaults.METRIC_NUM_SAMPLES, atLeast(1), LOW, MetricNumSamplesDoc)
-      .define(MetricSampleWindowMsProp, LONG, Defaults.METRIC_SAMPLE_WINDOW_MS, atLeast(1), LOW, MetricSampleWindowMsDoc)
-      .define(MetricReporterClassesProp, LIST, Defaults.METRIC_REPORTER_CLASSES, LOW, MetricReporterClassesDoc)
-      .define(MetricRecordingLevelProp, STRING, Defaults.METRIC_RECORDING_LEVEL, LOW, MetricRecordingLevelDoc)
-      .define(AutoIncludeJmxReporterProp, BOOLEAN, Defaults.AUTO_INCLUDE_JMX_REPORTER, LOW, AutoIncludeJmxReporterDoc)
-
-      /** ********* Kafka Yammer Metrics Reporter Configuration for docs ***********/
-      .define(KafkaMetricsReporterClassesProp, LIST, Defaults.KAFKA_METRIC_REPORTER_CLASSES, LOW, KafkaMetricsReporterClassesDoc)
-      .define(KafkaMetricsPollingIntervalSecondsProp, INT, Defaults.KAFKA_METRICS_POLLING_INTERVAL_SECONDS, atLeast(1), LOW, KafkaMetricsPollingIntervalSecondsDoc)
-
-      /** ********* Kafka Client Telemetry Metrics Configuration ***********/
-      .define(ClientTelemetryMaxBytesProp, INT, Defaults.CLIENT_TELEMETRY_MAX_BYTES, atLeast(1), LOW, ClientTelemetryMaxBytesDoc)
-
-      /** ********* Quota configuration ***********/
-      .define(NumQuotaSamplesProp, INT, Defaults.NUM_QUOTA_SAMPLES, atLeast(1), LOW, NumQuotaSamplesDoc)
-      .define(NumReplicationQuotaSamplesProp, INT, Defaults.NUM_REPLICATION_QUOTA_SAMPLES, atLeast(1), LOW, NumReplicationQuotaSamplesDoc)
-      .define(NumAlterLogDirsReplicationQuotaSamplesProp, INT, Defaults.NUM_ALTER_LOG_DIRS_REPLICATION_QUOTA_SAMPLES, atLeast(1), LOW, NumAlterLogDirsReplicationQuotaSamplesDoc)
-      .define(NumControllerQuotaSamplesProp, INT, Defaults.NUM_CONTROLLER_QUOTA_SAMPLES, atLeast(1), LOW, NumControllerQuotaSamplesDoc)
-      .define(QuotaWindowSizeSecondsProp, INT, Defaults.QUOTA_WINDOW_SIZE_SECONDS, atLeast(1), LOW, QuotaWindowSizeSecondsDoc)
-      .define(ReplicationQuotaWindowSizeSecondsProp, INT, Defaults.REPLICATION_QUOTA_WINDOW_SIZE_SECONDS, atLeast(1), LOW, ReplicationQuotaWindowSizeSecondsDoc)
-      .define(AlterLogDirsReplicationQuotaWindowSizeSecondsProp, INT, Defaults.ALTER_LOG_DIRS_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS, atLeast(1), LOW, AlterLogDirsReplicationQuotaWindowSizeSecondsDoc)
-      .define(ControllerQuotaWindowSizeSecondsProp, INT, Defaults.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS, atLeast(1), LOW, ControllerQuotaWindowSizeSecondsDoc)
-      .define(ClientQuotaCallbackClassProp, CLASS, null, LOW, ClientQuotaCallbackClassDoc)
-
-      /** ********* General Security Configuration ****************/
-      .define(ConnectionsMaxReauthMsProp, LONG, Defaults.CONNECTIONS_MAX_REAUTH_MS, MEDIUM, ConnectionsMaxReauthMsDoc)
-      .define(SaslServerMaxReceiveSizeProp, INT, Defaults.SERVER_MAX_RECEIVE_SIZE, MEDIUM, SaslServerMaxReceiveSizeDoc)
-      .define(securityProviderClassProp, STRING, null, LOW, securityProviderClassDoc)
-
-      /** ********* SSL Configuration ****************/
-      .define(PrincipalBuilderClassProp, CLASS, Defaults.PRINCIPAL_BUILDER, MEDIUM, PrincipalBuilderClassDoc)
-      .define(SslProtocolProp, STRING, Defaults.SSL_PROTOCOL, MEDIUM, SslProtocolDoc)
-      .define(SslProviderProp, STRING, null, MEDIUM, SslProviderDoc)
-      .define(SslEnabledProtocolsProp, LIST, Defaults.SSL_ENABLED_PROTOCOLS, MEDIUM, SslEnabledProtocolsDoc)
-      .define(SslKeystoreTypeProp, STRING, Defaults.SSL_KEYSTORE_TYPE, MEDIUM, SslKeystoreTypeDoc)
-      .define(SslKeystoreLocationProp, STRING, null, MEDIUM, SslKeystoreLocationDoc)
-      .define(SslKeystorePasswordProp, PASSWORD, null, MEDIUM, SslKeystorePasswordDoc)
-      .define(SslKeyPasswordProp, PASSWORD, null, MEDIUM, SslKeyPasswordDoc)
-      .define(SslKeystoreKeyProp, PASSWORD, null, MEDIUM, SslKeystoreKeyDoc)
-      .define(SslKeystoreCertificateChainProp, PASSWORD, null, MEDIUM, SslKeystoreCertificateChainDoc)
-      .define(SslTruststoreTypeProp, STRING, Defaults.SSL_TRUSTSTORE_TYPE, MEDIUM, SslTruststoreTypeDoc)
-      .define(SslTruststoreLocationProp, STRING, null, MEDIUM, SslTruststoreLocationDoc)
-      .define(SslTruststorePasswordProp, PASSWORD, null, MEDIUM, SslTruststorePasswordDoc)
-      .define(SslTruststoreCertificatesProp, PASSWORD, null, MEDIUM, SslTruststoreCertificatesDoc)
-      .define(SslKeyManagerAlgorithmProp, STRING, Defaults.SSL_KEY_MANAGER_ALGORITHM, MEDIUM, SslKeyManagerAlgorithmDoc)
-      .define(SslTrustManagerAlgorithmProp, STRING, Defaults.SSL_TRUST_MANAGER_ALGORITHM, MEDIUM, SslTrustManagerAlgorithmDoc)
-      .define(SslEndpointIdentificationAlgorithmProp, STRING, Defaults.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM, LOW, SslEndpointIdentificationAlgorithmDoc)
-      .define(SslSecureRandomImplementationProp, STRING, null, LOW, SslSecureRandomImplementationDoc)
-      .define(SslClientAuthProp, STRING, Defaults.SSL_CLIENT_AUTHENTICATION, in(Defaults.SSL_CLIENT_AUTHENTICATION_VALID_VALUES:_*), MEDIUM, SslClientAuthDoc)
-      .define(SslCipherSuitesProp, LIST, Collections.emptyList(), MEDIUM, SslCipherSuitesDoc)
-      .define(SslPrincipalMappingRulesProp, STRING, Defaults.SSL_PRINCIPAL_MAPPING_RULES, LOW, SslPrincipalMappingRulesDoc)
-      .define(SslEngineFactoryClassProp, CLASS, null, LOW, SslEngineFactoryClassDoc)
-      .define(SslAllowDnChangesProp, BOOLEAN, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_DN_CHANGES_VALUE, LOW, SslAllowDnChangesDoc)
-      .define(SslAllowSanChangesProp, BOOLEAN, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_SAN_CHANGES_VALUE, LOW, SslAllowSanChangesDoc)
-
-      /** ********* Sasl Configuration ****************/
-      .define(SaslMechanismInterBrokerProtocolProp, STRING, Defaults.SASL_MECHANISM_INTER_BROKER_PROTOCOL, MEDIUM, SaslMechanismInterBrokerProtocolDoc)
-      .define(SaslJaasConfigProp, PASSWORD, null, MEDIUM, SaslJaasConfigDoc)
-      .define(SaslEnabledMechanismsProp, LIST, Defaults.SASL_ENABLED_MECHANISMS, MEDIUM, SaslEnabledMechanismsDoc)
-      .define(SaslServerCallbackHandlerClassProp, CLASS, null, MEDIUM, SaslServerCallbackHandlerClassDoc)
-      .define(SaslClientCallbackHandlerClassProp, CLASS, null, MEDIUM, SaslClientCallbackHandlerClassDoc)
-      .define(SaslLoginClassProp, CLASS, null, MEDIUM, SaslLoginClassDoc)
-      .define(SaslLoginCallbackHandlerClassProp, CLASS, null, MEDIUM, SaslLoginCallbackHandlerClassDoc)
-      .define(SaslKerberosServiceNameProp, STRING, null, MEDIUM, SaslKerberosServiceNameDoc)
-      .define(SaslKerberosKinitCmdProp, STRING, Defaults.SASL_KERBEROS_KINIT_CMD, MEDIUM, SaslKerberosKinitCmdDoc)
-      .define(SaslKerberosTicketRenewWindowFactorProp, DOUBLE, Defaults.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR, MEDIUM, SaslKerberosTicketRenewWindowFactorDoc)
-      .define(SaslKerberosTicketRenewJitterProp, DOUBLE, Defaults.SASL_KERBEROS_TICKET_RENEW_JITTER, MEDIUM, SaslKerberosTicketRenewJitterDoc)
-      .define(SaslKerberosMinTimeBeforeReloginProp, LONG, Defaults.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN, MEDIUM, SaslKerberosMinTimeBeforeReloginDoc)
-      .define(SaslKerberosPrincipalToLocalRulesProp, LIST, Defaults.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES, MEDIUM, SaslKerberosPrincipalToLocalRulesDoc)
-      .define(SaslLoginRefreshWindowFactorProp, DOUBLE, Defaults.SASL_LOGIN_REFRESH_WINDOW_FACTOR, MEDIUM, SaslLoginRefreshWindowFactorDoc)
-      .define(SaslLoginRefreshWindowJitterProp, DOUBLE, Defaults.SASL_LOGIN_REFRESH_WINDOW_JITTER, MEDIUM, SaslLoginRefreshWindowJitterDoc)
-      .define(SaslLoginRefreshMinPeriodSecondsProp, SHORT, Defaults.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS, MEDIUM, SaslLoginRefreshMinPeriodSecondsDoc)
-      .define(SaslLoginRefreshBufferSecondsProp, SHORT, Defaults.SASL_LOGIN_REFRESH_BUFFER_SECONDS, MEDIUM, SaslLoginRefreshBufferSecondsDoc)
-      .define(SaslLoginConnectTimeoutMsProp, INT, null, LOW, SaslLoginConnectTimeoutMsDoc)
-      .define(SaslLoginReadTimeoutMsProp, INT, null, LOW, SaslLoginReadTimeoutMsDoc)
-      .define(SaslLoginRetryBackoffMaxMsProp, LONG, Defaults.SASL_LOGIN_RETRY_BACKOFF_MAX_MS, LOW, SaslLoginRetryBackoffMaxMsDoc)
-      .define(SaslLoginRetryBackoffMsProp, LONG, Defaults.SASL_LOGIN_RETRY_BACKOFF_MS, LOW, SaslLoginRetryBackoffMsDoc)
-      .define(SaslOAuthBearerScopeClaimNameProp, STRING, Defaults.SASL_OAUTH_BEARER_SCOPE_CLAIM_NAME, LOW, SaslOAuthBearerScopeClaimNameDoc)
-      .define(SaslOAuthBearerSubClaimNameProp, STRING, Defaults.SASL_OAUTH_BEARER_SUB_CLAIM_NAME, LOW, SaslOAuthBearerSubClaimNameDoc)
-      .define(SaslOAuthBearerTokenEndpointUrlProp, STRING, null, MEDIUM, SaslOAuthBearerTokenEndpointUrlDoc)
-      .define(SaslOAuthBearerJwksEndpointUrlProp, STRING, null, MEDIUM, SaslOAuthBearerJwksEndpointUrlDoc)
-      .define(SaslOAuthBearerJwksEndpointRefreshMsProp, LONG, Defaults.SASL_OAUTH_BEARER_JWKS_ENDPOINT_REFRESH_MS, LOW, SaslOAuthBearerJwksEndpointRefreshMsDoc)
-      .define(SaslOAuthBearerJwksEndpointRetryBackoffMsProp, LONG, Defaults.SASL_OAUTH_BEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, LOW, SaslOAuthBearerJwksEndpointRetryBackoffMsDoc)
-      .define(SaslOAuthBearerJwksEndpointRetryBackoffMaxMsProp, LONG, Defaults.SASL_OAUTH_BEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, LOW, SaslOAuthBearerJwksEndpointRetryBackoffMaxMsDoc)
-      .define(SaslOAuthBearerClockSkewSecondsProp, INT, Defaults.SASL_OAUTH_BEARER_CLOCK_SKEW_SECONDS, LOW, SaslOAuthBearerClockSkewSecondsDoc)
-      .define(SaslOAuthBearerExpectedAudienceProp, LIST, null, LOW, SaslOAuthBearerExpectedAudienceDoc)
-      .define(SaslOAuthBearerExpectedIssuerProp, STRING, null, LOW, SaslOAuthBearerExpectedIssuerDoc)
-
-      /** ********* Delegation Token Configuration ****************/
-      .define(DelegationTokenSecretKeyAliasProp, PASSWORD, null, MEDIUM, DelegationTokenSecretKeyAliasDoc)
-      .define(DelegationTokenSecretKeyProp, PASSWORD, null, MEDIUM, DelegationTokenSecretKeyDoc)
-      .define(DelegationTokenMaxLifeTimeProp, LONG, Defaults.DELEGATION_TOKEN_MAX_LIFE_TIME_MS, atLeast(1), MEDIUM, DelegationTokenMaxLifeTimeDoc)
-      .define(DelegationTokenExpiryTimeMsProp, LONG, Defaults.DELEGATION_TOKEN_EXPIRY_TIME_MS, atLeast(1), MEDIUM, DelegationTokenExpiryTimeMsDoc)
-      .define(DelegationTokenExpiryCheckIntervalMsProp, LONG, Defaults.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS, atLeast(1), LOW, DelegationTokenExpiryCheckIntervalDoc)
-
-      /** ********* Password encryption configuration for dynamic configs *********/
-      .define(PasswordEncoderSecretProp, PASSWORD, null, MEDIUM, PasswordEncoderSecretDoc)
-      .define(PasswordEncoderOldSecretProp, PASSWORD, null, MEDIUM, PasswordEncoderOldSecretDoc)
-      .define(PasswordEncoderKeyFactoryAlgorithmProp, STRING, null, LOW, PasswordEncoderKeyFactoryAlgorithmDoc)
-      .define(PasswordEncoderCipherAlgorithmProp, STRING, Defaults.PASSWORD_ENCODER_CIPHER_ALGORITHM, LOW, PasswordEncoderCipherAlgorithmDoc)
-      .define(PasswordEncoderKeyLengthProp, INT, Defaults.PASSWORD_ENCODER_KEY_LENGTH, atLeast(8), LOW, PasswordEncoderKeyLengthDoc)
-      .define(PasswordEncoderIterationsProp, INT, Defaults.PASSWORD_ENCODER_ITERATIONS, atLeast(1024), LOW, PasswordEncoderIterationsDoc)
-
-      /** ********* Raft Quorum Configuration *********/
-      .define(RaftConfig.QUORUM_VOTERS_CONFIG, LIST, Defaults.QUORUM_VOTERS, new RaftConfig.ControllerQuorumVotersValidator(), HIGH, RaftConfig.QUORUM_VOTERS_DOC)
-      .define(RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, INT, Defaults.QUORUM_ELECTION_TIMEOUT_MS, null, HIGH, RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_DOC)
-      .define(RaftConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, INT, Defaults.QUORUM_FETCH_TIMEOUT_MS, null, HIGH, RaftConfig.QUORUM_FETCH_TIMEOUT_MS_DOC)
-      .define(RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, INT, Defaults.QUORUM_ELECTION_BACKOFF_MS, null, HIGH, RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
-      .define(RaftConfig.QUORUM_LINGER_MS_CONFIG, INT, Defaults.QUORUM_LINGER_MS, null, MEDIUM, RaftConfig.QUORUM_LINGER_MS_DOC)
-      .define(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, Defaults.QUORUM_REQUEST_TIMEOUT_MS, null, MEDIUM, RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_DOC)
-      .define(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QUORUM_RETRY_BACKOFF_MS, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
-
-      /** Internal Configurations **/
-      // This indicates whether unreleased APIs should be advertised by this node.
-      .defineInternal(UnstableApiVersionsEnableProp, BOOLEAN, false, HIGH)
-      // This indicates whether unreleased MetadataVersions should be enabled on this node.
-      .defineInternal(UnstableMetadataVersionsEnableProp, BOOLEAN, false, HIGH)
-  }
-
-  /** ********* Remote Log Management Configuration *********/
-  RemoteLogManagerConfig.CONFIG_DEF.configKeys().values().forEach(key => configDef.define(key))
+  val configDef = AbstractKafkaConfig.CONFIG_DEF
 
   def configNames: Seq[String] = configDef.names.asScala.toBuffer.sorted
   private[server] def defaultValues: Map[String, _] = configDef.defaultValues.asScala
@@ -1332,7 +131,7 @@ object KafkaConfig {
     if (configType != null) {
       Some(configType)
     } else {
-      val configKey = DynamicConfig.Broker.brokerConfigDef.configKeys().get(exactName)
+      val configKey = DynamicConfig.Broker.configKeys.get(exactName)
       if (configKey != null) {
         Some(configKey.`type`)
       } else {
@@ -1362,29 +161,33 @@ object KafkaConfig {
    */
   def populateSynonyms(input: util.Map[_, _]): util.Map[Any, Any] = {
     val output = new util.HashMap[Any, Any](input)
-    val brokerId = output.get(KafkaConfig.BrokerIdProp)
-    val nodeId = output.get(KafkaConfig.NodeIdProp)
+    val brokerId = output.get(ServerConfigs.BROKER_ID_CONFIG)
+    val nodeId = output.get(KRaftConfigs.NODE_ID_CONFIG)
     if (brokerId == null && nodeId != null) {
-      output.put(KafkaConfig.BrokerIdProp, nodeId)
+      output.put(ServerConfigs.BROKER_ID_CONFIG, nodeId)
     } else if (brokerId != null && nodeId == null) {
-      output.put(KafkaConfig.NodeIdProp, brokerId)
+      output.put(KRaftConfigs.NODE_ID_CONFIG, brokerId)
     }
     output
   }
 }
 
-class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynamicConfigOverride: Option[DynamicBrokerConfig])
-  extends AbstractConfig(KafkaConfig.configDef, props, doLog) with Logging {
+/**
+ * The class extend {@link AbstractKafkaConfig} which will be the future KafkaConfig.
+ * When add any new methods if it doesn't depend on anything in Core, then move it to org.apache.kafka.server.config.KafkaConfig instead of here.
+ * Any code depends on kafka.server.KafkaConfig will keep for using kafka.server.KafkaConfig for the time being until we move it out of core
+ * For more details check KAFKA-15853
+ */
+class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
+  extends AbstractKafkaConfig(KafkaConfig.configDef, props, Utils.castToStringObjectMap(props), doLog) with Logging {
 
-  def this(props: java.util.Map[_, _]) = this(true, KafkaConfig.populateSynonyms(props), None)
-  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, KafkaConfig.populateSynonyms(props), None)
-  def this(props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig]) =
-    this(doLog, KafkaConfig.populateSynonyms(props), dynamicConfigOverride)
+  def this(props: java.util.Map[_, _]) = this(true, KafkaConfig.populateSynonyms(props))
+  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, KafkaConfig.populateSynonyms(props))
 
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
   val processRoles: Set[ProcessRole] = parseProcessRoles()
-  private[server] val dynamicConfig = dynamicConfigOverride.getOrElse(new DynamicBrokerConfig(this))
+  private[server] val dynamicConfig = new DynamicBrokerConfig(this)
 
   private[server] def updateCurrentConfig(newConfig: KafkaConfig): Unit = {
     this.currentConfig = newConfig
@@ -1417,15 +220,22 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     super.valuesWithPrefixOverride(prefix)
 
   /** ********* Zookeeper Configuration ***********/
-  val zkConnect: String = getString(KafkaConfig.ZkConnectProp)
-  val zkSessionTimeoutMs: Int = getInt(KafkaConfig.ZkSessionTimeoutMsProp)
+  val zkConnect: String = getString(ZkConfigs.ZK_CONNECT_CONFIG)
+  val zkSessionTimeoutMs: Int = getInt(ZkConfigs.ZK_SESSION_TIMEOUT_MS_CONFIG)
   val zkConnectionTimeoutMs: Int =
-    Option(getInt(KafkaConfig.ZkConnectionTimeoutMsProp)).map(_.toInt).getOrElse(getInt(KafkaConfig.ZkSessionTimeoutMsProp))
-  val zkEnableSecureAcls: Boolean = getBoolean(KafkaConfig.ZkEnableSecureAclsProp)
-  val zkMaxInFlightRequests: Int = getInt(KafkaConfig.ZkMaxInFlightRequestsProp)
+    Option(getInt(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG)).map(_.toInt).getOrElse(getInt(ZkConfigs.ZK_SESSION_TIMEOUT_MS_CONFIG))
+  val zkEnableSecureAcls: Boolean = getBoolean(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG)
+  val zkMaxInFlightRequests: Int = getInt(ZkConfigs.ZK_MAX_IN_FLIGHT_REQUESTS_CONFIG)
 
   private val _remoteLogManagerConfig = new RemoteLogManagerConfig(this)
   def remoteLogManagerConfig = _remoteLogManagerConfig
+
+  private val _groupCoordinatorConfig = new GroupCoordinatorConfig(this)
+
+  def groupCoordinatorConfig: GroupCoordinatorConfig = _groupCoordinatorConfig
+
+  private val _shareGroupConfig = new ShareGroupConfig(this)
+  def shareGroupConfig: ShareGroupConfig = _shareGroupConfig
 
   private def zkBooleanConfigOrSystemPropertyWithDefaultValue(propKey: String): Boolean = {
     // Use the system property if it exists and the Kafka config value was defaulted rather than actually provided
@@ -1470,21 +280,21 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
   }
 
-  val zkSslClientEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(KafkaConfig.ZkSslClientEnableProp)
-  val zkClientCnxnSocketClassName = zkOptionalStringConfigOrSystemProperty(KafkaConfig.ZkClientCnxnSocketProp)
-  val zkSslKeyStoreLocation = zkOptionalStringConfigOrSystemProperty(KafkaConfig.ZkSslKeyStoreLocationProp)
-  val zkSslKeyStorePassword = zkPasswordConfigOrSystemProperty(KafkaConfig.ZkSslKeyStorePasswordProp)
-  val zkSslKeyStoreType = zkOptionalStringConfigOrSystemProperty(KafkaConfig.ZkSslKeyStoreTypeProp)
-  val zkSslTrustStoreLocation = zkOptionalStringConfigOrSystemProperty(KafkaConfig.ZkSslTrustStoreLocationProp)
-  val zkSslTrustStorePassword = zkPasswordConfigOrSystemProperty(KafkaConfig.ZkSslTrustStorePasswordProp)
-  val zkSslTrustStoreType = zkOptionalStringConfigOrSystemProperty(KafkaConfig.ZkSslTrustStoreTypeProp)
-  val ZkSslProtocol = zkStringConfigOrSystemPropertyWithDefaultValue(KafkaConfig.ZkSslProtocolProp)
-  val ZkSslEnabledProtocols = zkListConfigOrSystemProperty(KafkaConfig.ZkSslEnabledProtocolsProp)
-  val ZkSslCipherSuites = zkListConfigOrSystemProperty(KafkaConfig.ZkSslCipherSuitesProp)
+  val zkSslClientEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG)
+  val zkClientCnxnSocketClassName = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG)
+  val zkSslKeyStoreLocation = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG)
+  val zkSslKeyStorePassword = zkPasswordConfigOrSystemProperty(ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG)
+  val zkSslKeyStoreType = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG)
+  val zkSslTrustStoreLocation = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG)
+  val zkSslTrustStorePassword = zkPasswordConfigOrSystemProperty(ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG)
+  val zkSslTrustStoreType = zkOptionalStringConfigOrSystemProperty(ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG)
+  val ZkSslProtocol = zkStringConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_PROTOCOL_CONFIG)
+  val ZkSslEnabledProtocols = zkListConfigOrSystemProperty(ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG)
+  val ZkSslCipherSuites = zkListConfigOrSystemProperty(ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG)
   val ZkSslEndpointIdentificationAlgorithm = {
     // Use the system property if it exists and the Kafka config value was defaulted rather than actually provided
     // Need to translate any system property value from true/false to HTTPS/<blank>
-    val kafkaProp = KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp
+    val kafkaProp = ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
     val actuallyProvided = originals.containsKey(kafkaProp)
     if (actuallyProvided)
       getString(kafkaProp)
@@ -1496,27 +306,29 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       }
     }
   }
-  val ZkSslCrlEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(KafkaConfig.ZkSslCrlEnableProp)
-  val ZkSslOcspEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(KafkaConfig.ZkSslOcspEnableProp)
+  val ZkSslCrlEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG)
+  val ZkSslOcspEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG)
   /** ********* General Configuration ***********/
-  val brokerIdGenerationEnable: Boolean = getBoolean(KafkaConfig.BrokerIdGenerationEnableProp)
-  val maxReservedBrokerId: Int = getInt(KafkaConfig.MaxReservedBrokerIdProp)
-  var brokerId: Int = getInt(KafkaConfig.BrokerIdProp)
-  val nodeId: Int = getInt(KafkaConfig.NodeIdProp)
-  val initialRegistrationTimeoutMs: Int = getInt(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp)
-  val brokerHeartbeatIntervalMs: Int = getInt(KafkaConfig.BrokerHeartbeatIntervalMsProp)
-  val brokerSessionTimeoutMs: Int = getInt(KafkaConfig.BrokerSessionTimeoutMsProp)
+  val brokerIdGenerationEnable: Boolean = getBoolean(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG)
+  val maxReservedBrokerId: Int = getInt(ServerConfigs.RESERVED_BROKER_MAX_ID_CONFIG)
+  private[server] var _brokerId: Int = getInt(ServerConfigs.BROKER_ID_CONFIG)
+  def brokerId: Int = _brokerId
+  private[server] var _nodeId: Int = getInt(KRaftConfigs.NODE_ID_CONFIG)
+  def nodeId: Int = _nodeId
+  val initialRegistrationTimeoutMs: Int = getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG)
+  val brokerHeartbeatIntervalMs: Int = getInt(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG)
+  val brokerSessionTimeoutMs: Int = getInt(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG)
 
   def requiresZookeeper: Boolean = processRoles.isEmpty
   def usesSelfManagedQuorum: Boolean = processRoles.nonEmpty
 
-  val migrationEnabled: Boolean = getBoolean(KafkaConfig.MigrationEnabledProp)
-  val migrationMetadataMinBatchSize: Int = getInt(KafkaConfig.MigrationMetadataMinBatchSizeProp)
+  val migrationEnabled: Boolean = getBoolean(KRaftConfigs.MIGRATION_ENABLED_CONFIG)
+  val migrationMetadataMinBatchSize: Int = getInt(KRaftConfigs.MIGRATION_METADATA_MIN_BATCH_SIZE_CONFIG)
 
-  val elrEnabled: Boolean = getBoolean(KafkaConfig.ElrEnabledProp)
+  val elrEnabled: Boolean = getBoolean(KRaftConfigs.ELR_ENABLED_CONFIG)
 
   private def parseProcessRoles(): Set[ProcessRole] = {
-    val roles = getList(KafkaConfig.ProcessRolesProp).asScala.map {
+    val roles = getList(KRaftConfigs.PROCESS_ROLES_CONFIG).asScala.map {
       case "broker" => ProcessRole.BrokerRole
       case "controller" => ProcessRole.ControllerRole
       case role => throw new ConfigException(s"Unknown process role '$role'" +
@@ -1526,7 +338,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     val distinctRoles: Set[ProcessRole] = roles.toSet
 
     if (distinctRoles.size != roles.size) {
-      throw new ConfigException(s"Duplicate role names found in `${KafkaConfig.ProcessRolesProp}`: $roles")
+      throw new ConfigException(s"Duplicate role names found in `${KRaftConfigs.PROCESS_ROLES_CONFIG}`: $roles")
     }
 
     distinctRoles
@@ -1537,44 +349,43 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   def metadataLogDir: String = {
-    Option(getString(KafkaConfig.MetadataLogDirProp)) match {
+    Option(getString(KRaftConfigs.METADATA_LOG_DIR_CONFIG)) match {
       case Some(dir) => dir
       case None => logDirs.head
     }
   }
 
-  def metadataLogSegmentBytes = getInt(KafkaConfig.MetadataLogSegmentBytesProp)
-  def metadataLogSegmentMillis = getLong(KafkaConfig.MetadataLogSegmentMillisProp)
-  def metadataRetentionBytes = getLong(KafkaConfig.MetadataMaxRetentionBytesProp)
-  def metadataRetentionMillis = getLong(KafkaConfig.MetadataMaxRetentionMillisProp)
-  val serverMaxStartupTimeMs = getLong(KafkaConfig.ServerMaxStartupTimeMsProp)
+  def metadataLogSegmentBytes = getInt(KRaftConfigs.METADATA_LOG_SEGMENT_BYTES_CONFIG)
+  def metadataLogSegmentMillis = getLong(KRaftConfigs.METADATA_LOG_SEGMENT_MILLIS_CONFIG)
+  def metadataRetentionBytes = getLong(KRaftConfigs.METADATA_MAX_RETENTION_BYTES_CONFIG)
+  def metadataRetentionMillis = getLong(KRaftConfigs.METADATA_MAX_RETENTION_MILLIS_CONFIG)
+  def metadataNodeIDConfig = getInt(KRaftConfigs.NODE_ID_CONFIG)
+  def metadataLogSegmentMinBytes = getInt(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG)
+  val serverMaxStartupTimeMs = getLong(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG)
 
-  def numNetworkThreads = getInt(KafkaConfig.NumNetworkThreadsProp)
-  def backgroundThreads = getInt(KafkaConfig.BackgroundThreadsProp)
-  val queuedMaxRequests = getInt(KafkaConfig.QueuedMaxRequestsProp)
-  val queuedMaxBytes = getLong(KafkaConfig.QueuedMaxBytesProp)
-  def numIoThreads = getInt(KafkaConfig.NumIoThreadsProp)
-  def messageMaxBytes = getInt(KafkaConfig.MessageMaxBytesProp)
-  val requestTimeoutMs = getInt(KafkaConfig.RequestTimeoutMsProp)
-  val connectionSetupTimeoutMs = getLong(KafkaConfig.ConnectionSetupTimeoutMsProp)
-  val connectionSetupTimeoutMaxMs = getLong(KafkaConfig.ConnectionSetupTimeoutMaxMsProp)
+  def backgroundThreads = getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG)
+  def numIoThreads = getInt(ServerConfigs.NUM_IO_THREADS_CONFIG)
+  def messageMaxBytes = getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG)
+  val requestTimeoutMs = getInt(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG)
+  val connectionSetupTimeoutMs = getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG)
+  val connectionSetupTimeoutMaxMs = getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG)
 
   def getNumReplicaAlterLogDirsThreads: Int = {
-    val numThreads: Integer = Option(getInt(KafkaConfig.NumReplicaAlterLogDirsThreadsProp)).getOrElse(logDirs.size)
+    val numThreads: Integer = Option(getInt(ServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG)).getOrElse(logDirs.size)
     numThreads
   }
 
   /************* Metadata Configuration ***********/
-  val metadataSnapshotMaxNewRecordBytes = getLong(KafkaConfig.MetadataSnapshotMaxNewRecordBytesProp)
-  val metadataSnapshotMaxIntervalMs = getLong(KafkaConfig.MetadataSnapshotMaxIntervalMsProp)
+  val metadataSnapshotMaxNewRecordBytes = getLong(KRaftConfigs.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG)
+  val metadataSnapshotMaxIntervalMs = getLong(KRaftConfigs.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG)
   val metadataMaxIdleIntervalNs: Option[Long] = {
-    val value = TimeUnit.NANOSECONDS.convert(getInt(KafkaConfig.MetadataMaxIdleIntervalMsProp).toLong, TimeUnit.MILLISECONDS)
+    val value = TimeUnit.NANOSECONDS.convert(getInt(KRaftConfigs.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG).toLong, TimeUnit.MILLISECONDS)
     if (value > 0) Some(value) else None
   }
 
   /************* Authorizer Configuration ***********/
   def createNewAuthorizer(): Option[Authorizer] = {
-    val className = getString(KafkaConfig.AuthorizerClassNameProp)
+    val className = getString(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG)
     if (className == null || className.isEmpty)
       None
     else {
@@ -1585,53 +396,55 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val earlyStartListeners: Set[ListenerName] = {
     val listenersSet = listeners.map(_.listenerName).toSet
     val controllerListenersSet = controllerListeners.map(_.listenerName).toSet
-    Option(getString(KafkaConfig.EarlyStartListenersProp)) match {
+    Option(getString(ServerConfigs.EARLY_START_LISTENERS_CONFIG)) match {
       case None => controllerListenersSet
       case Some(str) =>
         str.split(",").map(_.trim()).filterNot(_.isEmpty).map { str =>
           val listenerName = new ListenerName(str)
           if (!listenersSet.contains(listenerName) && !controllerListenersSet.contains(listenerName))
-            throw new ConfigException(s"${KafkaConfig.EarlyStartListenersProp} contains " +
+            throw new ConfigException(s"${ServerConfigs.EARLY_START_LISTENERS_CONFIG} contains " +
               s"listener ${listenerName.value()}, but this is not contained in " +
-              s"${KafkaConfig.ListenersProp} or ${KafkaConfig.ControllerListenerNamesProp}")
+              s"${SocketServerConfigs.LISTENERS_CONFIG} or ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG}")
           listenerName
         }.toSet
     }
   }
 
   /** ********* Socket Server Configuration ***********/
-  val socketSendBufferBytes = getInt(KafkaConfig.SocketSendBufferBytesProp)
-  val socketReceiveBufferBytes = getInt(KafkaConfig.SocketReceiveBufferBytesProp)
-  val socketRequestMaxBytes = getInt(KafkaConfig.SocketRequestMaxBytesProp)
-  val socketListenBacklogSize = getInt(KafkaConfig.SocketListenBacklogSizeProp)
-  val maxConnectionsPerIp = getInt(KafkaConfig.MaxConnectionsPerIpProp)
+  val socketSendBufferBytes = getInt(SocketServerConfigs.SOCKET_SEND_BUFFER_BYTES_CONFIG)
+  val socketReceiveBufferBytes = getInt(SocketServerConfigs.SOCKET_RECEIVE_BUFFER_BYTES_CONFIG)
+  val socketRequestMaxBytes = getInt(SocketServerConfigs.SOCKET_REQUEST_MAX_BYTES_CONFIG)
+  val socketListenBacklogSize = getInt(SocketServerConfigs.SOCKET_LISTEN_BACKLOG_SIZE_CONFIG)
+  val maxConnectionsPerIp = getInt(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG)
   val maxConnectionsPerIpOverrides: Map[String, Int] =
-    getMap(KafkaConfig.MaxConnectionsPerIpOverridesProp, getString(KafkaConfig.MaxConnectionsPerIpOverridesProp)).map { case (k, v) => (k, v.toInt)}
-  def maxConnections = getInt(KafkaConfig.MaxConnectionsProp)
-  def maxConnectionCreationRate = getInt(KafkaConfig.MaxConnectionCreationRateProp)
-  val connectionsMaxIdleMs = getLong(KafkaConfig.ConnectionsMaxIdleMsProp)
-  val failedAuthenticationDelayMs = getInt(KafkaConfig.FailedAuthenticationDelayMsProp)
+    getMap(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, getString(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG)).map { case (k, v) => (k, v.toInt)}
+  def maxConnections = getInt(SocketServerConfigs.MAX_CONNECTIONS_CONFIG)
+  def maxConnectionCreationRate = getInt(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG)
+  val connectionsMaxIdleMs = getLong(SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG)
+  val failedAuthenticationDelayMs = getInt(SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG)
+  val queuedMaxRequests = getInt(SocketServerConfigs.QUEUED_MAX_REQUESTS_CONFIG)
+  val queuedMaxBytes = getLong(SocketServerConfigs.QUEUED_MAX_BYTES_CONFIG)
+  def numNetworkThreads = getInt(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG)
 
   /***************** rack configuration **************/
-  val rack = Option(getString(KafkaConfig.RackProp))
-  val replicaSelectorClassName = Option(getString(KafkaConfig.ReplicaSelectorClassProp))
+  val rack = Option(getString(ServerConfigs.BROKER_RACK_CONFIG))
+  val replicaSelectorClassName = Option(getString(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG))
 
   /** ********* Log Configuration ***********/
-  val autoCreateTopicsEnable = getBoolean(KafkaConfig.AutoCreateTopicsEnableProp)
-  val numPartitions = getInt(KafkaConfig.NumPartitionsProp)
-  val logDirs = CoreUtils.parseCsvList(Option(getString(KafkaConfig.LogDirsProp)).getOrElse(getString(KafkaConfig.LogDirProp)))
-  def logSegmentBytes = getInt(KafkaConfig.LogSegmentBytesProp)
-  def logFlushIntervalMessages = getLong(KafkaConfig.LogFlushIntervalMessagesProp)
+  val autoCreateTopicsEnable = getBoolean(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG)
+  val numPartitions = getInt(ServerLogConfigs.NUM_PARTITIONS_CONFIG)
+  val logDirs: Seq[String] = Csv.parseCsvList(Option(getString(ServerLogConfigs.LOG_DIRS_CONFIG)).getOrElse(getString(ServerLogConfigs.LOG_DIR_CONFIG))).asScala
+  def logSegmentBytes = getInt(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG)
+  def logFlushIntervalMessages = getLong(ServerLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_CONFIG)
   val logCleanerThreads = getInt(CleanerConfig.LOG_CLEANER_THREADS_PROP)
-  def numRecoveryThreadsPerDataDir = getInt(KafkaConfig.NumRecoveryThreadsPerDataDirProp)
-  val logFlushSchedulerIntervalMs = getLong(KafkaConfig.LogFlushSchedulerIntervalMsProp)
-  val logFlushOffsetCheckpointIntervalMs = getInt(KafkaConfig.LogFlushOffsetCheckpointIntervalMsProp).toLong
-  val logFlushStartOffsetCheckpointIntervalMs = getInt(KafkaConfig.LogFlushStartOffsetCheckpointIntervalMsProp).toLong
-  val logCleanupIntervalMs = getLong(KafkaConfig.LogCleanupIntervalMsProp)
-  def logCleanupPolicy = getList(KafkaConfig.LogCleanupPolicyProp)
-  val offsetsRetentionMinutes = getInt(KafkaConfig.OffsetsRetentionMinutesProp)
-  val offsetsRetentionCheckIntervalMs = getLong(KafkaConfig.OffsetsRetentionCheckIntervalMsProp)
-  def logRetentionBytes = getLong(KafkaConfig.LogRetentionBytesProp)
+  def numRecoveryThreadsPerDataDir = getInt(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG)
+  val logFlushSchedulerIntervalMs = getLong(ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG)
+  val logFlushOffsetCheckpointIntervalMs = getInt(ServerLogConfigs.LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG).toLong
+  val logFlushStartOffsetCheckpointIntervalMs = getInt(ServerLogConfigs.LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG).toLong
+  val logCleanupIntervalMs = getLong(ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG)
+  def logCleanupPolicy = getList(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG)
+
+  def logRetentionBytes = getLong(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG)
   val logCleanerDedupeBufferSize = getLong(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP)
   val logCleanerDedupeBufferLoadFactor = getDouble(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP)
   val logCleanerIoBufferSize = getInt(CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP)
@@ -1642,40 +455,41 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val logCleanerBackoffMs = getLong(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP)
   def logCleanerMinCleanRatio = getDouble(CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP)
   val logCleanerEnable = getBoolean(CleanerConfig.LOG_CLEANER_ENABLE_PROP)
-  def logIndexSizeMaxBytes = getInt(KafkaConfig.LogIndexSizeMaxBytesProp)
-  def logIndexIntervalBytes = getInt(KafkaConfig.LogIndexIntervalBytesProp)
-  def logDeleteDelayMs = getLong(KafkaConfig.LogDeleteDelayMsProp)
-  def logRollTimeMillis: java.lang.Long = Option(getLong(KafkaConfig.LogRollTimeMillisProp)).getOrElse(60 * 60 * 1000L * getInt(KafkaConfig.LogRollTimeHoursProp))
-  def logRollTimeJitterMillis: java.lang.Long = Option(getLong(KafkaConfig.LogRollTimeJitterMillisProp)).getOrElse(60 * 60 * 1000L * getInt(KafkaConfig.LogRollTimeJitterHoursProp))
-  def logFlushIntervalMs: java.lang.Long = Option(getLong(KafkaConfig.LogFlushIntervalMsProp)).getOrElse(getLong(KafkaConfig.LogFlushSchedulerIntervalMsProp))
-  def minInSyncReplicas = getInt(KafkaConfig.MinInSyncReplicasProp)
-  def logPreAllocateEnable: java.lang.Boolean = getBoolean(KafkaConfig.LogPreAllocateProp)
+  def logIndexSizeMaxBytes = getInt(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG)
+  def logIndexIntervalBytes = getInt(ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_CONFIG)
+  def logDeleteDelayMs = getLong(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG)
+  def logRollTimeMillis: java.lang.Long = Option(getLong(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG)).getOrElse(60 * 60 * 1000L * getInt(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG))
+  def logRollTimeJitterMillis: java.lang.Long = Option(getLong(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG)).getOrElse(60 * 60 * 1000L * getInt(ServerLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG))
+  def logFlushIntervalMs: java.lang.Long = Option(getLong(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG)).getOrElse(getLong(ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG))
+  def minInSyncReplicas = getInt(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG)
+  def logPreAllocateEnable: java.lang.Boolean = getBoolean(ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG)
+  def logInitialTaskDelayMs: java.lang.Long = Option(getLong(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG)).getOrElse(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT)
 
   // We keep the user-provided String as `MetadataVersion.fromVersionString` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
   @nowarn("cat=deprecation")
-  private val logMessageFormatVersionString = getString(KafkaConfig.LogMessageFormatVersionProp)
+  private val logMessageFormatVersionString = getString(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG)
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
   @deprecated("3.0")
   lazy val logMessageFormatVersion =
     if (LogConfig.shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion))
-      MetadataVersion.fromVersionString(LogConfig.DEFAULT_MESSAGE_FORMAT_VERSION)
+      MetadataVersion.fromVersionString(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_DEFAULT)
     else MetadataVersion.fromVersionString(logMessageFormatVersionString)
 
-  def logMessageTimestampType = TimestampType.forName(getString(KafkaConfig.LogMessageTimestampTypeProp))
+  def logMessageTimestampType = TimestampType.forName(getString(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG))
 
   /* See `TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG` for details */
   @deprecated("3.6")
-  def logMessageTimestampDifferenceMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
+  def logMessageTimestampDifferenceMaxMs: Long = getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG)
 
   // In the transition period before logMessageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
   // we are using its value if logMessageTimestampBeforeMaxMs default value hasn't changed.
   // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
   @nowarn("cat=deprecation")
   def logMessageTimestampBeforeMaxMs: Long = {
-    val messageTimestampBeforeMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampBeforeMaxMsProp)
-    if (messageTimestampBeforeMaxMs != LogConfig.DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS) {
+    val messageTimestampBeforeMaxMs: Long = getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG)
+    if (messageTimestampBeforeMaxMs != ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT) {
       messageTimestampBeforeMaxMs
     } else {
       logMessageTimestampDifferenceMaxMs
@@ -1687,7 +501,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
   @nowarn("cat=deprecation")
   def logMessageTimestampAfterMaxMs: Long = {
-    val messageTimestampAfterMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampAfterMaxMsProp)
+    val messageTimestampAfterMaxMs: Long = getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG)
     if (messageTimestampAfterMaxMs != Long.MaxValue) {
       messageTimestampAfterMaxMs
     } else {
@@ -1695,45 +509,47 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
   }
 
-  def logMessageDownConversionEnable: Boolean = getBoolean(KafkaConfig.LogMessageDownConversionEnableProp)
+  def logMessageDownConversionEnable: Boolean = getBoolean(ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG)
+
+  def logDirFailureTimeoutMs: Long = getLong(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG)
 
   /** ********* Replication configuration ***********/
-  val controllerSocketTimeoutMs: Int = getInt(KafkaConfig.ControllerSocketTimeoutMsProp)
-  val defaultReplicationFactor: Int = getInt(KafkaConfig.DefaultReplicationFactorProp)
-  val replicaLagTimeMaxMs = getLong(KafkaConfig.ReplicaLagTimeMaxMsProp)
-  val replicaSocketTimeoutMs = getInt(KafkaConfig.ReplicaSocketTimeoutMsProp)
-  val replicaSocketReceiveBufferBytes = getInt(KafkaConfig.ReplicaSocketReceiveBufferBytesProp)
-  val replicaFetchMaxBytes = getInt(KafkaConfig.ReplicaFetchMaxBytesProp)
-  val replicaFetchWaitMaxMs = getInt(KafkaConfig.ReplicaFetchWaitMaxMsProp)
-  val replicaFetchMinBytes = getInt(KafkaConfig.ReplicaFetchMinBytesProp)
-  val replicaFetchResponseMaxBytes = getInt(KafkaConfig.ReplicaFetchResponseMaxBytesProp)
-  val replicaFetchBackoffMs = getInt(KafkaConfig.ReplicaFetchBackoffMsProp)
-  def numReplicaFetchers = getInt(KafkaConfig.NumReplicaFetchersProp)
-  val replicaHighWatermarkCheckpointIntervalMs = getLong(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp)
-  val fetchPurgatoryPurgeIntervalRequests = getInt(KafkaConfig.FetchPurgatoryPurgeIntervalRequestsProp)
-  val producerPurgatoryPurgeIntervalRequests = getInt(KafkaConfig.ProducerPurgatoryPurgeIntervalRequestsProp)
-  val deleteRecordsPurgatoryPurgeIntervalRequests = getInt(KafkaConfig.DeleteRecordsPurgatoryPurgeIntervalRequestsProp)
-  val autoLeaderRebalanceEnable = getBoolean(KafkaConfig.AutoLeaderRebalanceEnableProp)
-  val leaderImbalancePerBrokerPercentage = getInt(KafkaConfig.LeaderImbalancePerBrokerPercentageProp)
-  val leaderImbalanceCheckIntervalSeconds: Long = getLong(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp)
-  def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(KafkaConfig.UncleanLeaderElectionEnableProp)
+  val controllerSocketTimeoutMs: Int = getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG)
+  val defaultReplicationFactor: Int = getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG)
+  val replicaLagTimeMaxMs = getLong(ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG)
+  val replicaSocketTimeoutMs = getInt(ReplicationConfigs.REPLICA_SOCKET_TIMEOUT_MS_CONFIG)
+  val replicaSocketReceiveBufferBytes = getInt(ReplicationConfigs.REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_CONFIG)
+  val replicaFetchMaxBytes = getInt(ReplicationConfigs.REPLICA_FETCH_MAX_BYTES_CONFIG)
+  val replicaFetchWaitMaxMs = getInt(ReplicationConfigs.REPLICA_FETCH_WAIT_MAX_MS_CONFIG)
+  val replicaFetchMinBytes = getInt(ReplicationConfigs.REPLICA_FETCH_MIN_BYTES_CONFIG)
+  val replicaFetchResponseMaxBytes = getInt(ReplicationConfigs.REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG)
+  val replicaFetchBackoffMs = getInt(ReplicationConfigs.REPLICA_FETCH_BACKOFF_MS_CONFIG)
+  def numReplicaFetchers = getInt(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG)
+  val replicaHighWatermarkCheckpointIntervalMs = getLong(ReplicationConfigs.REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_CONFIG)
+  val fetchPurgatoryPurgeIntervalRequests = getInt(ReplicationConfigs.FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
+  val producerPurgatoryPurgeIntervalRequests = getInt(ReplicationConfigs.PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
+  val deleteRecordsPurgatoryPurgeIntervalRequests = getInt(ReplicationConfigs.DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
+  val autoLeaderRebalanceEnable = getBoolean(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG)
+  val leaderImbalancePerBrokerPercentage = getInt(ReplicationConfigs.LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_CONFIG)
+  val leaderImbalanceCheckIntervalSeconds: Long = getLong(ReplicationConfigs.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG)
+  def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)
 
   // We keep the user-provided String as `MetadataVersion.fromVersionString` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
-  val interBrokerProtocolVersionString = getString(KafkaConfig.InterBrokerProtocolVersionProp)
+  val interBrokerProtocolVersionString = getString(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)
   val interBrokerProtocolVersion = if (processRoles.isEmpty) {
     MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
   } else {
-    if (originals.containsKey(KafkaConfig.InterBrokerProtocolVersionProp)) {
+    if (originals.containsKey(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)) {
       // A user-supplied IBP was given
       val configuredVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
       if (!configuredVersion.isKRaftSupported) {
-        throw new ConfigException(s"A non-KRaft version $interBrokerProtocolVersionString given for ${KafkaConfig.InterBrokerProtocolVersionProp}. " +
+        throw new ConfigException(s"A non-KRaft version $interBrokerProtocolVersionString given for ${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG}. " +
           s"The minimum version is ${MetadataVersion.MINIMUM_KRAFT_VERSION}")
       } else {
-        warn(s"${KafkaConfig.InterBrokerProtocolVersionProp} is deprecated in KRaft mode as of 3.3 and will only " +
+        warn(s"${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG} is deprecated in KRaft mode as of 3.3 and will only " +
           s"be read when first upgrading from a KRaft prior to 3.3. See kafka-storage.sh help for details on setting " +
-          s"the metadata version for a new KRaft cluster.")
+          s"the metadata.version for a new KRaft cluster.")
       }
     }
     // In KRaft mode, we pin this value to the minimum KRaft-supported version. This prevents inadvertent usage of
@@ -1742,88 +558,64 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   /** ********* Controlled shutdown configuration ***********/
-  val controlledShutdownMaxRetries = getInt(KafkaConfig.ControlledShutdownMaxRetriesProp)
-  val controlledShutdownRetryBackoffMs = getLong(KafkaConfig.ControlledShutdownRetryBackoffMsProp)
-  val controlledShutdownEnable = getBoolean(KafkaConfig.ControlledShutdownEnableProp)
+  val controlledShutdownMaxRetries = getInt(ServerConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG)
+  val controlledShutdownRetryBackoffMs = getLong(ServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG)
+  val controlledShutdownEnable = getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)
 
   /** ********* Feature configuration ***********/
   def isFeatureVersioningSupported = interBrokerProtocolVersion.isFeatureVersioningSupported
 
-  /** ********* Group coordinator configuration ***********/
-  val groupMinSessionTimeoutMs = getInt(KafkaConfig.GroupMinSessionTimeoutMsProp)
-  val groupMaxSessionTimeoutMs = getInt(KafkaConfig.GroupMaxSessionTimeoutMsProp)
-  val groupInitialRebalanceDelay = getInt(KafkaConfig.GroupInitialRebalanceDelayMsProp)
-  val groupMaxSize = getInt(KafkaConfig.GroupMaxSizeProp)
-
   /** New group coordinator configs */
   val groupCoordinatorRebalanceProtocols = {
-    val protocols = getList(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp)
+    val protocols = getList(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)
       .asScala.map(_.toUpperCase).map(GroupType.valueOf).toSet
     if (!protocols.contains(GroupType.CLASSIC)) {
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
     if (protocols.contains(GroupType.CONSUMER)) {
+      if (processRoles.isEmpty) {
+        throw new ConfigException(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported in KRaft cluster.")
+      }
       warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is enabled along with the new group coordinator. " +
-        "This is part of the early access of KIP-848 and MUST NOT be used in production.")
+        "This is part of the preview of KIP-848 and MUST NOT be used in production.")
     }
     protocols
   }
   // The new group coordinator is enabled in two cases: 1) The internal configuration to enable
   // it is explicitly set; or 2) the consumer rebalance protocol is enabled.
-  val isNewGroupCoordinatorEnabled = getBoolean(KafkaConfig.NewGroupCoordinatorEnableProp) ||
+  val isNewGroupCoordinatorEnabled = getBoolean(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG) ||
     groupCoordinatorRebalanceProtocols.contains(GroupType.CONSUMER)
-  val groupCoordinatorNumThreads = getInt(KafkaConfig.GroupCoordinatorNumThreadsProp)
-
-  /** Consumer group configs */
-  val consumerGroupSessionTimeoutMs = getInt(KafkaConfig.ConsumerGroupSessionTimeoutMsProp)
-  val consumerGroupMinSessionTimeoutMs = getInt(KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp)
-  val consumerGroupMaxSessionTimeoutMs = getInt(KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp)
-  val consumerGroupHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp)
-  val consumerGroupMinHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp)
-  val consumerGroupMaxHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp)
-  val consumerGroupMaxSize = getInt(KafkaConfig.ConsumerGroupMaxSizeProp)
-  val consumerGroupAssignors = getConfiguredInstances(KafkaConfig.ConsumerGroupAssignorsProp, classOf[PartitionAssignor])
-
-  /** ********* Offset management configuration ***********/
-  val offsetMetadataMaxSize = getInt(KafkaConfig.OffsetMetadataMaxSizeProp)
-  val offsetsLoadBufferSize = getInt(KafkaConfig.OffsetsLoadBufferSizeProp)
-  val offsetsTopicReplicationFactor = getShort(KafkaConfig.OffsetsTopicReplicationFactorProp)
-  val offsetsTopicPartitions = getInt(KafkaConfig.OffsetsTopicPartitionsProp)
-  val offsetCommitTimeoutMs = getInt(KafkaConfig.OffsetCommitTimeoutMsProp)
-  val offsetCommitRequiredAcks = getShort(KafkaConfig.OffsetCommitRequiredAcksProp)
-  val offsetsTopicSegmentBytes = getInt(KafkaConfig.OffsetsTopicSegmentBytesProp)
-  val offsetsTopicCompressionType = Option(getInt(KafkaConfig.OffsetsTopicCompressionCodecProp)).map(value => CompressionType.forId(value)).orNull
 
   /** ********* Transaction management configuration ***********/
-  val transactionalIdExpirationMs = getInt(KafkaConfig.TransactionalIdExpirationMsProp)
-  val transactionMaxTimeoutMs = getInt(KafkaConfig.TransactionsMaxTimeoutMsProp)
-  val transactionTopicMinISR = getInt(KafkaConfig.TransactionsTopicMinISRProp)
-  val transactionsLoadBufferSize = getInt(KafkaConfig.TransactionsLoadBufferSizeProp)
-  val transactionTopicReplicationFactor = getShort(KafkaConfig.TransactionsTopicReplicationFactorProp)
-  val transactionTopicPartitions = getInt(KafkaConfig.TransactionsTopicPartitionsProp)
-  val transactionTopicSegmentBytes = getInt(KafkaConfig.TransactionsTopicSegmentBytesProp)
-  val transactionAbortTimedOutTransactionCleanupIntervalMs = getInt(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp)
-  val transactionRemoveExpiredTransactionalIdCleanupIntervalMs = getInt(KafkaConfig.TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp)
+  val transactionalIdExpirationMs = getInt(TransactionStateManagerConfigs.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG)
+  val transactionMaxTimeoutMs = getInt(TransactionStateManagerConfigs.TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG)
+  val transactionTopicMinISR = getInt(TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG)
+  val transactionsLoadBufferSize = getInt(TransactionLogConfigs.TRANSACTIONS_LOAD_BUFFER_SIZE_CONFIG)
+  val transactionTopicReplicationFactor = getShort(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG)
+  val transactionTopicPartitions = getInt(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG)
+  val transactionTopicSegmentBytes = getInt(TransactionLogConfigs.TRANSACTIONS_TOPIC_SEGMENT_BYTES_CONFIG)
+  val transactionAbortTimedOutTransactionCleanupIntervalMs = getInt(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG)
+  val transactionRemoveExpiredTransactionalIdCleanupIntervalMs = getInt(TransactionStateManagerConfigs.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG)
 
-  def transactionPartitionVerificationEnable = getBoolean(KafkaConfig.TransactionPartitionVerificationEnableProp)
+  def transactionPartitionVerificationEnable = getBoolean(TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG)
 
-  def producerIdExpirationMs = getInt(KafkaConfig.ProducerIdExpirationMsProp)
-  val producerIdExpirationCheckIntervalMs = getInt(KafkaConfig.ProducerIdExpirationCheckIntervalMsProp)
+  def producerIdExpirationMs = getInt(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG)
+  val producerIdExpirationCheckIntervalMs = getInt(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG)
 
   /** ********* Metric Configuration **************/
-  val metricNumSamples = getInt(KafkaConfig.MetricNumSamplesProp)
-  val metricSampleWindowMs = getLong(KafkaConfig.MetricSampleWindowMsProp)
-  val metricRecordingLevel = getString(KafkaConfig.MetricRecordingLevelProp)
+  val metricNumSamples = getInt(MetricConfigs.METRIC_NUM_SAMPLES_CONFIG)
+  val metricSampleWindowMs = getLong(MetricConfigs.METRIC_SAMPLE_WINDOW_MS_CONFIG)
+  val metricRecordingLevel = getString(MetricConfigs.METRIC_RECORDING_LEVEL_CONFIG)
 
   /** ********* Kafka Client Telemetry Metrics Configuration ***********/
-  val clientTelemetryMaxBytes: Int = getInt(KafkaConfig.ClientTelemetryMaxBytesProp)
+  val clientTelemetryMaxBytes: Int = getInt(MetricConfigs.CLIENT_TELEMETRY_MAX_BYTES_CONFIG)
 
   /** ********* SSL/SASL Configuration **************/
   // Security configs may be overridden for listeners, so it is not safe to use the base values
   // Hence the base SSL/SASL configs are not fields of KafkaConfig, listener configs should be
   // retrieved using KafkaConfig#valuesWithPrefixOverride
   private def saslEnabledMechanisms(listenerName: ListenerName): Set[String] = {
-    val value = valuesWithPrefixOverride(listenerName.configPrefix).get(KafkaConfig.SaslEnabledMechanismsProp)
+    val value = valuesWithPrefixOverride(listenerName.configPrefix).get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG)
     if (value != null)
       value.asInstanceOf[util.List[String]].asScala.toSet
     else
@@ -1834,57 +626,62 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def interBrokerSecurityProtocol = getInterBrokerListenerNameAndSecurityProtocol._2
   def controlPlaneListenerName = getControlPlaneListenerNameAndSecurityProtocol.map { case (listenerName, _) => listenerName }
   def controlPlaneSecurityProtocol = getControlPlaneListenerNameAndSecurityProtocol.map { case (_, securityProtocol) => securityProtocol }
-  def saslMechanismInterBrokerProtocol = getString(KafkaConfig.SaslMechanismInterBrokerProtocolProp)
+  def saslMechanismInterBrokerProtocol = getString(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG)
   val saslInterBrokerHandshakeRequestEnable = interBrokerProtocolVersion.isSaslInterBrokerHandshakeRequestEnabled
 
   /** ********* DelegationToken Configuration **************/
-  val delegationTokenSecretKey = Option(getPassword(KafkaConfig.DelegationTokenSecretKeyProp))
-    .getOrElse(getPassword(KafkaConfig.DelegationTokenSecretKeyAliasProp))
+  val delegationTokenSecretKey = Option(getPassword(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG))
+    .getOrElse(getPassword(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_ALIAS_CONFIG))
   val tokenAuthEnabled = delegationTokenSecretKey != null && delegationTokenSecretKey.value.nonEmpty
-  val delegationTokenMaxLifeMs = getLong(KafkaConfig.DelegationTokenMaxLifeTimeProp)
-  val delegationTokenExpiryTimeMs = getLong(KafkaConfig.DelegationTokenExpiryTimeMsProp)
-  val delegationTokenExpiryCheckIntervalMs = getLong(KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp)
+  val delegationTokenMaxLifeMs = getLong(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG)
+  val delegationTokenExpiryTimeMs = getLong(DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG)
+  val delegationTokenExpiryCheckIntervalMs = getLong(DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_CONFIG)
 
   /** ********* Password encryption configuration for dynamic configs *********/
-  def passwordEncoderSecret = Option(getPassword(KafkaConfig.PasswordEncoderSecretProp))
-  def passwordEncoderOldSecret = Option(getPassword(KafkaConfig.PasswordEncoderOldSecretProp))
-  def passwordEncoderCipherAlgorithm = getString(KafkaConfig.PasswordEncoderCipherAlgorithmProp)
-  def passwordEncoderKeyFactoryAlgorithm = getString(KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp)
-  def passwordEncoderKeyLength = getInt(KafkaConfig.PasswordEncoderKeyLengthProp)
-  def passwordEncoderIterations = getInt(KafkaConfig.PasswordEncoderIterationsProp)
+  def passwordEncoderSecret = Option(getPassword(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG))
+  def passwordEncoderOldSecret = Option(getPassword(PasswordEncoderConfigs.PASSWORD_ENCODER_OLD_SECRET_CONFIG))
+  def passwordEncoderCipherAlgorithm = getString(PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG)
+  def passwordEncoderKeyFactoryAlgorithm = getString(PasswordEncoderConfigs.PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_CONFIG)
+  def passwordEncoderKeyLength = getInt(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_CONFIG)
+  def passwordEncoderIterations = getInt(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG)
 
   /** ********* Quota Configuration **************/
-  val numQuotaSamples = getInt(KafkaConfig.NumQuotaSamplesProp)
-  val quotaWindowSizeSeconds = getInt(KafkaConfig.QuotaWindowSizeSecondsProp)
-  val numReplicationQuotaSamples = getInt(KafkaConfig.NumReplicationQuotaSamplesProp)
-  val replicationQuotaWindowSizeSeconds = getInt(KafkaConfig.ReplicationQuotaWindowSizeSecondsProp)
-  val numAlterLogDirsReplicationQuotaSamples = getInt(KafkaConfig.NumAlterLogDirsReplicationQuotaSamplesProp)
-  val alterLogDirsReplicationQuotaWindowSizeSeconds = getInt(KafkaConfig.AlterLogDirsReplicationQuotaWindowSizeSecondsProp)
-  val numControllerQuotaSamples = getInt(KafkaConfig.NumControllerQuotaSamplesProp)
-  val controllerQuotaWindowSizeSeconds = getInt(KafkaConfig.ControllerQuotaWindowSizeSecondsProp)
+  val numQuotaSamples = getInt(QuotaConfigs.NUM_QUOTA_SAMPLES_CONFIG)
+  val quotaWindowSizeSeconds = getInt(QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_CONFIG)
+  val numReplicationQuotaSamples = getInt(QuotaConfigs.NUM_REPLICATION_QUOTA_SAMPLES_CONFIG)
+  val replicationQuotaWindowSizeSeconds = getInt(QuotaConfigs.REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG)
+  val numAlterLogDirsReplicationQuotaSamples = getInt(QuotaConfigs.NUM_ALTER_LOG_DIRS_REPLICATION_QUOTA_SAMPLES_CONFIG)
+  val alterLogDirsReplicationQuotaWindowSizeSeconds = getInt(QuotaConfigs.ALTER_LOG_DIRS_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG)
+  val numControllerQuotaSamples = getInt(QuotaConfigs.NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG)
+  val controllerQuotaWindowSizeSeconds = getInt(QuotaConfigs.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG)
 
   /** ********* Fetch Configuration **************/
-  val maxIncrementalFetchSessionCacheSlots = getInt(KafkaConfig.MaxIncrementalFetchSessionCacheSlots)
-  val fetchMaxBytes = getInt(KafkaConfig.FetchMaxBytes)
+  val maxIncrementalFetchSessionCacheSlots = getInt(ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG)
+  val fetchMaxBytes = getInt(ServerConfigs.FETCH_MAX_BYTES_CONFIG)
 
   /** ********* Request Limit Configuration ***********/
-  val maxRequestPartitionSizeLimit = getInt(KafkaConfig.MaxRequestPartitionSizeLimit)
+  val maxRequestPartitionSizeLimit = getInt(ServerConfigs.MAX_REQUEST_PARTITION_SIZE_LIMIT_CONFIG)
 
-  val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
-  def compressionType = getString(KafkaConfig.CompressionTypeProp)
+  val deleteTopicEnable = getBoolean(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG)
+  def compressionType = getString(ServerConfigs.COMPRESSION_TYPE_CONFIG)
+
+  def gzipCompressionLevel = getInt(ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG)
+  def lz4CompressionLevel = getInt(ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG)
+  def zstdCompressionLevel = getInt(ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG)
 
   /** ********* Raft Quorum Configuration *********/
-  val quorumVoters = getList(RaftConfig.QUORUM_VOTERS_CONFIG)
-  val quorumElectionTimeoutMs = getInt(RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG)
-  val quorumFetchTimeoutMs = getInt(RaftConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG)
-  val quorumElectionBackoffMs = getInt(RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG)
-  val quorumLingerMs = getInt(RaftConfig.QUORUM_LINGER_MS_CONFIG)
-  val quorumRequestTimeoutMs = getInt(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG)
-  val quorumRetryBackoffMs = getInt(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
+  val quorumVoters = getList(QuorumConfig.QUORUM_VOTERS_CONFIG)
+  val quorumBootstrapServers = getList(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG)
+  val quorumElectionTimeoutMs = getInt(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG)
+  val quorumFetchTimeoutMs = getInt(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG)
+  val quorumElectionBackoffMs = getInt(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG)
+  val quorumLingerMs = getInt(QuorumConfig.QUORUM_LINGER_MS_CONFIG)
+  val quorumRequestTimeoutMs = getInt(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG)
+  val quorumRetryBackoffMs = getInt(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
 
   /** Internal Configurations **/
-  val unstableApiVersionsEnabled = getBoolean(KafkaConfig.UnstableApiVersionsEnableProp)
-  val unstableMetadataVersionsEnabled = getBoolean(KafkaConfig.UnstableMetadataVersionsEnableProp)
+  val unstableApiVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG)
+  val unstableFeatureVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)
@@ -1899,10 +696,10 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     val millisInHour = 60L * millisInMinute
 
     val millis: java.lang.Long =
-      Option(getLong(KafkaConfig.LogRetentionTimeMillisProp)).getOrElse(
-        Option(getInt(KafkaConfig.LogRetentionTimeMinutesProp)) match {
+      Option(getLong(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG)).getOrElse(
+        Option(getInt(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG)) match {
           case Some(mins) => millisInMinute * mins
-          case None => getInt(KafkaConfig.LogRetentionTimeHoursProp) * millisInHour
+          case None => getInt(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG) * millisInHour
         })
 
     if (millis < 0) return -1
@@ -1918,10 +715,10 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   def listeners: Seq[EndPoint] =
-    CoreUtils.listenerListToEndPoints(getString(KafkaConfig.ListenersProp), effectiveListenerSecurityProtocolMap)
+    CoreUtils.listenerListToEndPoints(getString(SocketServerConfigs.LISTENERS_CONFIG), effectiveListenerSecurityProtocolMap)
 
   def controllerListenerNames: Seq[String] = {
-    val value = Option(getString(KafkaConfig.ControllerListenerNamesProp)).getOrElse("")
+    val value = Option(getString(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG)).getOrElse("")
     if (value.isEmpty) {
       Seq.empty
     } else {
@@ -1932,7 +729,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def controllerListeners: Seq[EndPoint] =
     listeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
 
-  def saslMechanismControllerProtocol: String = getString(KafkaConfig.SaslMechanismControllerProtocolProp)
+  def saslMechanismControllerProtocol: String = getString(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG)
 
   def controlPlaneListener: Option[EndPoint] = {
     controlPlaneListenerName.map { listenerName =>
@@ -1943,45 +740,62 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def dataPlaneListeners: Seq[EndPoint] = {
     listeners.filterNot { listener =>
       val name = listener.listenerName.value()
-      name.equals(getString(KafkaConfig.ControlPlaneListenerNameProp)) ||
+      name.equals(getString(SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG)) ||
         controllerListenerNames.contains(name)
     }
   }
 
+  def effectiveAdvertisedControllerListeners: Seq[EndPoint] = {
+    val controllerAdvertisedListeners = advertisedListeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+    val controllerListenersValue = controllerListeners
+
+    controllerListenerNames.flatMap { name =>
+      controllerAdvertisedListeners
+        .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
+        .orElse(controllerListenersValue.find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name))))
+    }
+  }
+
+  def effectiveAdvertisedBrokerListeners: Seq[EndPoint] = {
+    // Only expose broker listeners
+    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
+  }
+
   // Use advertised listeners if defined, fallback to listeners otherwise
-  def effectiveAdvertisedListeners: Seq[EndPoint] = {
-    val advertisedListenersProp = getString(KafkaConfig.AdvertisedListenersProp)
-    if (advertisedListenersProp != null)
+  private def advertisedListeners: Seq[EndPoint] = {
+    val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
+    if (advertisedListenersProp != null) {
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
-    else
-      listeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
+    } else {
+      listeners
+    }
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
-    Option(getString(KafkaConfig.InterBrokerListenerNameProp)) match {
-      case Some(_) if originals.containsKey(KafkaConfig.InterBrokerSecurityProtocolProp) =>
-        throw new ConfigException(s"Only one of ${KafkaConfig.InterBrokerListenerNameProp} and " +
-          s"${KafkaConfig.InterBrokerSecurityProtocolProp} should be set.")
+    Option(getString(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG)) match {
+      case Some(_) if originals.containsKey(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG) =>
+        throw new ConfigException(s"Only one of ${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} and " +
+          s"${ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG} should be set.")
       case Some(name) =>
         val listenerName = ListenerName.normalised(name)
         val securityProtocol = effectiveListenerSecurityProtocolMap.getOrElse(listenerName,
           throw new ConfigException(s"Listener with name ${listenerName.value} defined in " +
-            s"${KafkaConfig.InterBrokerListenerNameProp} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}."))
+            s"${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} not found in ${SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG}."))
         (listenerName, securityProtocol)
       case None =>
-        val securityProtocol = getSecurityProtocol(getString(KafkaConfig.InterBrokerSecurityProtocolProp),
-          KafkaConfig.InterBrokerSecurityProtocolProp)
+        val securityProtocol = getSecurityProtocol(getString(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG),
+          ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG)
         (ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
     }
   }
 
   private def getControlPlaneListenerNameAndSecurityProtocol: Option[(ListenerName, SecurityProtocol)] = {
-    Option(getString(KafkaConfig.ControlPlaneListenerNameProp)) match {
+    Option(getString(SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG)) match {
       case Some(name) =>
         val listenerName = ListenerName.normalised(name)
         val securityProtocol = effectiveListenerSecurityProtocolMap.getOrElse(listenerName,
           throw new ConfigException(s"Listener with ${listenerName.value} defined in " +
-            s"${KafkaConfig.ControlPlaneListenerNameProp} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}."))
+            s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG} not found in ${SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG}."))
         Some(listenerName, securityProtocol)
 
       case None => None
@@ -1997,11 +811,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   def effectiveListenerSecurityProtocolMap: Map[ListenerName, SecurityProtocol] = {
-    val mapValue = getMap(KafkaConfig.ListenerSecurityProtocolMapProp, getString(KafkaConfig.ListenerSecurityProtocolMapProp))
+    val mapValue = getMap(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, getString(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG))
       .map { case (listenerName, protocolName) =>
-        ListenerName.normalised(listenerName) -> getSecurityProtocol(protocolName, KafkaConfig.ListenerSecurityProtocolMapProp)
+        ListenerName.normalised(listenerName) -> getSecurityProtocol(protocolName, SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)
       }
-    if (usesSelfManagedQuorum && !originals.containsKey(ListenerSecurityProtocolMapProp)) {
+    if (usesSelfManagedQuorum && !originals.containsKey(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)) {
       // Nothing was specified explicitly for listener.security.protocol.map, so we are using the default value,
       // and we are using KRaft.
       // Add PLAINTEXT mappings for controller listeners as long as there is no SSL or SASL_{PLAINTEXT,SSL} in use
@@ -2009,7 +823,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       // check controller listener names (they won't appear in listeners when process.roles=broker)
       // as well as listeners for occurrences of SSL or SASL_*
       if (controllerListenerNames.exists(isSslOrSasl) ||
-        parseCsvList(getString(KafkaConfig.ListenersProp)).exists(listenerValue => isSslOrSasl(EndPoint.parseListenerName(listenerValue)))) {
+        Csv.parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).asScala.exists(listenerValue => isSslOrSasl(EndPoint.parseListenerName(listenerValue)))) {
         mapValue // don't add default mappings since we found something that is SSL or SASL_*
       } else {
         // add the PLAINTEXT mappings for all controller listener names that are not explicitly PLAINTEXT
@@ -2025,22 +839,16 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def usesTopicId: Boolean =
     usesSelfManagedQuorum || interBrokerProtocolVersion.isTopicIdsSupported
 
-
-  val isRemoteLogStorageSystemEnabled: lang.Boolean = getBoolean(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP)
-  def logLocalRetentionBytes: java.lang.Long = getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP)
-
-  def logLocalRetentionMs: java.lang.Long = getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP)
-
   validateValues()
 
   @nowarn("cat=deprecation")
   private def validateValues(): Unit = {
     if (nodeId != brokerId) {
-      throw new ConfigException(s"You must set `${KafkaConfig.NodeIdProp}` to the same value as `${KafkaConfig.BrokerIdProp}`.")
+      throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
     }
     if (requiresZookeeper) {
       if (zkConnect == null) {
-        throw new ConfigException(s"Missing required configuration `${KafkaConfig.ZkConnectProp}` which has no default value.")
+        throw new ConfigException(s"Missing required configuration `${ZkConfigs.ZK_CONNECT_CONFIG}` which has no default value.")
       }
       if (brokerIdGenerationEnable) {
         require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be greater than or equal to -1 and not greater than reserved.broker.max.id")
@@ -2050,12 +858,12 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     } else {
       // KRaft-based metadata quorum
       if (nodeId < 0) {
-        throw new ConfigException(s"Missing configuration `${KafkaConfig.NodeIdProp}` which is required " +
+        throw new ConfigException(s"Missing configuration `${KRaftConfigs.NODE_ID_CONFIG}` which is required " +
           s"when `process.roles` is defined (i.e. when running in KRaft mode).")
       }
       if (migrationEnabled) {
         if (zkConnect == null) {
-          throw new ConfigException(s"If using `${KafkaConfig.MigrationEnabledProp}` in KRaft mode, `${KafkaConfig.ZkConnectProp}` must also be set.")
+          throw new ConfigException(s"If using `${KRaftConfigs.MIGRATION_ENABLED_CONFIG}` in KRaft mode, `${ZkConfigs.ZK_CONNECT_CONFIG}` must also be set.")
         }
       }
     }
@@ -2063,55 +871,51 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
     require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, greater than or equal to 1")
     require(logDirs.nonEmpty, "At least one log directory must be defined via log.dirs or log.dir.")
-    if (isRemoteLogStorageSystemEnabled && logDirs.size > 1) {
-      throw new ConfigException(s"Multiple log directories `${logDirs.mkString(",")}` are not supported when remote log storage is enabled")
-    }
     require(logCleanerDedupeBufferSize / logCleanerThreads > 1024 * 1024, "log.cleaner.dedupe.buffer.size must be at least 1MB per cleaner thread.")
     require(replicaFetchWaitMaxMs <= replicaSocketTimeoutMs, "replica.socket.timeout.ms should always be at least replica.fetch.wait.max.ms" +
       " to prevent unnecessary socket timeouts")
     require(replicaFetchWaitMaxMs <= replicaLagTimeMaxMs, "replica.fetch.wait.max.ms should always be less than or equal to replica.lag.time.max.ms" +
       " to prevent frequent changes in ISR")
-    require(offsetCommitRequiredAcks >= -1 && offsetCommitRequiredAcks <= offsetsTopicReplicationFactor,
-      "offsets.commit.required.acks must be greater or equal -1 and less or equal to offsets.topic.replication.factor")
-    val advertisedListenerNames = effectiveAdvertisedListeners.map(_.listenerName).toSet
+
+    val advertisedBrokerListenerNames = effectiveAdvertisedBrokerListeners.map(_.listenerName).toSet
 
     // validate KRaft-related configs
-    val voterAddressSpecsByNodeId = RaftConfig.parseVoterConnections(quorumVoters)
+    val voterIds = QuorumConfig.parseVoterIds(quorumVoters)
     def validateNonEmptyQuorumVotersForKRaft(): Unit = {
-      if (voterAddressSpecsByNodeId.isEmpty) {
-        throw new ConfigException(s"If using ${KafkaConfig.ProcessRolesProp}, ${KafkaConfig.QuorumVotersProp} must contain a parseable set of voters.")
+      if (voterIds.isEmpty) {
+        throw new ConfigException(s"If using ${KRaftConfigs.PROCESS_ROLES_CONFIG}, ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable set of voters.")
       }
     }
     def validateNonEmptyQuorumVotersForMigration(): Unit = {
-      if (voterAddressSpecsByNodeId.isEmpty) {
-        throw new ConfigException(s"If using ${KafkaConfig.MigrationEnabledProp}, ${KafkaConfig.QuorumVotersProp} must contain a parseable set of voters.")
+      if (voterIds.isEmpty) {
+        throw new ConfigException(s"If using ${KRaftConfigs.MIGRATION_ENABLED_CONFIG}, ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable set of voters.")
       }
     }
     def validateControlPlaneListenerEmptyForKRaft(): Unit = {
       require(controlPlaneListenerName.isEmpty,
-        s"${KafkaConfig.ControlPlaneListenerNameProp} is not supported in KRaft mode.")
+        s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG} is not supported in KRaft mode.")
     }
     def validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker(): Unit = {
-      require(!advertisedListenerNames.exists(aln => controllerListenerNames.contains(aln.value())),
-        s"The advertised.listeners config must not contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp} contains the broker role because Kafka clients that send requests via advertised listeners do not send requests to KRaft controllers -- they only send requests to KRaft brokers.")
+      require(advertisedBrokerListenerNames.forall(aln => !controllerListenerNames.contains(aln.value())),
+        s"The advertised.listeners config must not contain KRaft controller listeners from ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} when ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains the broker role because Kafka clients that send requests via advertised listeners do not send requests to KRaft controllers -- they only send requests to KRaft brokers.")
     }
     def validateControllerQuorumVotersMustContainNodeIdForKRaftController(): Unit = {
-      require(voterAddressSpecsByNodeId.containsKey(nodeId),
-        s"If ${KafkaConfig.ProcessRolesProp} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${voterAddressSpecsByNodeId.asScala.keySet.toSet}")
+      require(voterIds.contains(nodeId),
+        s"If ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${QuorumConfig.QUORUM_VOTERS_CONFIG}=${voterIds.asScala.toSet}")
     }
     def validateControllerListenerExistsForKRaftController(): Unit = {
       require(controllerListeners.nonEmpty,
-        s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
+        s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must contain at least one value appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
     }
     def validateControllerListenerNamesMustAppearInListenersForKRaftController(): Unit = {
       val listenerNameValues = listeners.map(_.listenerName.value).toSet
       require(controllerListenerNames.forall(cln => listenerNameValues.contains(cln)),
-        s"${KafkaConfig.ControllerListenerNamesProp} must only contain values appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
+        s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must only contain values appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
     }
     def validateAdvertisedListenersNonEmptyForBroker(): Unit = {
-      require(advertisedListenerNames.nonEmpty,
+      require(advertisedBrokerListenerNames.nonEmpty,
         "There must be at least one advertised listener." + (
-          if (processRoles.contains(ProcessRole.BrokerRole)) s" Perhaps all listeners appear in $ControllerListenerNamesProp?" else ""))
+          if (processRoles.contains(ProcessRole.BrokerRole)) s" Perhaps all listeners appear in ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG}?" else ""))
     }
     if (processRoles == Set(ProcessRole.BrokerRole)) {
       // KRaft broker-only
@@ -2119,40 +923,35 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       validateControlPlaneListenerEmptyForKRaft()
       validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
       // nodeId must not appear in controller.quorum.voters
-      require(!voterAddressSpecsByNodeId.containsKey(nodeId),
-        s"If ${KafkaConfig.ProcessRolesProp} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${voterAddressSpecsByNodeId.asScala.keySet.toSet}")
+      require(!voterIds.contains(nodeId),
+        s"If ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${QuorumConfig.QUORUM_VOTERS_CONFIG}=${voterIds.asScala.toSet}")
       // controller.listener.names must be non-empty...
       require(controllerListenerNames.nonEmpty,
-        s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value when running KRaft with just the broker role")
+        s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must contain at least one value when running KRaft with just the broker role")
       // controller.listener.names are forbidden in listeners...
       require(controllerListeners.isEmpty,
-        s"${KafkaConfig.ControllerListenerNamesProp} must not contain a value appearing in the '${KafkaConfig.ListenersProp}' configuration when running KRaft with just the broker role")
+        s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must not contain a value appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running KRaft with just the broker role")
       // controller.listener.names must all appear in listener.security.protocol.map
       controllerListenerNames.foreach { name =>
         val listenerName = ListenerName.normalised(name)
         if (!effectiveListenerSecurityProtocolMap.contains(listenerName)) {
           throw new ConfigException(s"Controller listener with name ${listenerName.value} defined in " +
-            s"${KafkaConfig.ControllerListenerNamesProp} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}  (an explicit security mapping for each controller listener is required if ${KafkaConfig.ListenerSecurityProtocolMapProp} is non-empty, or if there are security protocols other than PLAINTEXT in use)")
+            s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} not found in ${SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG}  (an explicit security mapping for each controller listener is required if ${SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG} is non-empty, or if there are security protocols other than PLAINTEXT in use)")
         }
       }
       // warn that only the first controller listener is used if there is more than one
       if (controllerListenerNames.size > 1) {
-        warn(s"${KafkaConfig.ControllerListenerNamesProp} has multiple entries; only the first will be used since ${KafkaConfig.ProcessRolesProp}=broker: ${controllerListenerNames.asJava}")
+        warn(s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} has multiple entries; only the first will be used since ${KRaftConfigs.PROCESS_ROLES_CONFIG}=broker: ${controllerListenerNames.asJava}")
       }
       validateAdvertisedListenersNonEmptyForBroker()
     } else if (processRoles == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
       validateNonEmptyQuorumVotersForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
-      // advertised listeners must be empty when only the controller is configured
-      require(
-        getString(KafkaConfig.AdvertisedListenersProp) == null,
-        s"The ${KafkaConfig.AdvertisedListenersProp} config must be empty when ${KafkaConfig.ProcessRolesProp}=controller"
-      )
       // listeners should only contain listeners also enumerated in the controller listener
       require(
-        effectiveAdvertisedListeners.isEmpty,
-        s"The ${KafkaConfig.ListenersProp} config must only contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp}=controller"
+        effectiveAdvertisedControllerListeners.size == listeners.size,
+        s"The ${SocketServerConfigs.LISTENERS_CONFIG} config must only contain KRaft controller listeners from ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} when ${KRaftConfigs.PROCESS_ROLES_CONFIG}=controller"
       )
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
       validateControllerListenerExistsForKRaftController()
@@ -2171,18 +970,18 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       if (migrationEnabled) {
         validateNonEmptyQuorumVotersForMigration()
         require(controllerListenerNames.nonEmpty,
-          s"${KafkaConfig.ControllerListenerNamesProp} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")
+          s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")
         require(interBrokerProtocolVersion.isMigrationSupported, s"Cannot enable ZooKeeper migration without setting " +
-          s"'${KafkaConfig.InterBrokerProtocolVersionProp}' to 3.4 or higher")
+          s"'${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG}' to 3.4 or higher")
         if (logDirs.size > 1) {
           require(interBrokerProtocolVersion.isDirectoryAssignmentSupported,
             s"Cannot enable ZooKeeper migration with multiple log directories (aka JBOD) without setting " +
-            s"'${KafkaConfig.InterBrokerProtocolVersionProp}' to ${MetadataVersion.IBP_3_7_IV2} or higher")
+            s"'${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG}' to ${MetadataVersion.IBP_3_7_IV2} or higher")
         }
       } else {
         // controller listener names must be empty when not in KRaft mode
         require(controllerListenerNames.isEmpty,
-          s"${KafkaConfig.ControllerListenerNamesProp} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava}")
+          s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava}")
       }
       validateAdvertisedListenersNonEmptyForBroker()
     }
@@ -2191,28 +990,32 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     if (processRoles.isEmpty || processRoles.contains(ProcessRole.BrokerRole)) {
       // validations for all broker setups (i.e. ZooKeeper and KRaft broker-only and KRaft co-located)
       validateAdvertisedListenersNonEmptyForBroker()
-      require(advertisedListenerNames.contains(interBrokerListenerName),
-        s"${KafkaConfig.InterBrokerListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
-          s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
-      require(advertisedListenerNames.subsetOf(listenerNames),
-        s"${KafkaConfig.AdvertisedListenersProp} listener names must be equal to or a subset of the ones defined in ${KafkaConfig.ListenersProp}. " +
-          s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
+      require(advertisedBrokerListenerNames.contains(interBrokerListenerName),
+        s"${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} must be a listener name defined in ${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG}. " +
+          s"The valid options based on currently configured listeners are ${advertisedBrokerListenerNames.map(_.value).mkString(",")}")
+      require(advertisedBrokerListenerNames.subsetOf(listenerNames),
+        s"${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG} listener names must be equal to or a subset of the ones defined in ${SocketServerConfigs.LISTENERS_CONFIG}. " +
+          s"Found ${advertisedBrokerListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
           s"are ${listenerNames.map(_.value).mkString(",")}"
       )
     }
 
-    require(!effectiveAdvertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
-      s"${KafkaConfig.AdvertisedListenersProp} cannot use the nonroutable meta-address 0.0.0.0. "+
+    require(!effectiveAdvertisedBrokerListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
+      s"${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG} cannot use the nonroutable meta-address 0.0.0.0. "+
+      s"Use a routable IP address.")
+
+    require(!effectiveAdvertisedControllerListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
+      s"${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")
 
     // validate control.plane.listener.name config
     if (controlPlaneListenerName.isDefined) {
-      require(advertisedListenerNames.contains(controlPlaneListenerName.get),
-        s"${KafkaConfig.ControlPlaneListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
-        s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
+      require(advertisedBrokerListenerNames.contains(controlPlaneListenerName.get),
+        s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG} must be a listener name defined in ${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG}. " +
+        s"The valid options based on currently configured listeners are ${advertisedBrokerListenerNames.map(_.value).mkString(",")}")
       // controlPlaneListenerName should be different from interBrokerListenerName
       require(!controlPlaneListenerName.get.value().equals(interBrokerListenerName.value()),
-        s"${KafkaConfig.ControlPlaneListenerNameProp}, when defined, should have a different value from the inter broker listener name. " +
+        s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG}, when defined, should have a different value from the inter broker listener name. " +
         s"Currently they both have the value ${controlPlaneListenerName.get}")
     }
 
@@ -2225,7 +1028,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       s"log.message.format.version $logMessageFormatVersionString can only be used when inter.broker.protocol.version " +
       s"is set to version ${MetadataVersion.minSupportedFor(recordVersion).shortVersion} or higher")
 
-    if (offsetsTopicCompressionType == CompressionType.ZSTD)
+    if (groupCoordinatorConfig.offsetTopicCompressionType == CompressionType.ZSTD)
       require(interBrokerProtocolVersion.highestSupportedRecordVersion().value >= IBP_2_1_IV0.highestSupportedRecordVersion().value,
         "offsets.topic.compression.codec zstd can only be used when inter.broker.protocol.version " +
         s"is set to version ${IBP_2_1_IV0.shortVersion} or higher")
@@ -2234,49 +1037,45 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     require(!interBrokerUsesSasl || saslInterBrokerHandshakeRequestEnable || saslMechanismInterBrokerProtocol == SaslConfigs.GSSAPI_MECHANISM,
       s"Only GSSAPI mechanism is supported for inter-broker communication with SASL when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")
     require(!interBrokerUsesSasl || saslEnabledMechanisms(interBrokerListenerName).contains(saslMechanismInterBrokerProtocol),
-      s"${KafkaConfig.SaslMechanismInterBrokerProtocolProp} must be included in ${KafkaConfig.SaslEnabledMechanismsProp} when SASL is used for inter-broker communication")
+      s"${BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG} must be included in ${BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG} when SASL is used for inter-broker communication")
     require(queuedMaxBytes <= 0 || queuedMaxBytes >= socketRequestMaxBytes,
-      s"${KafkaConfig.QueuedMaxBytesProp} must be larger or equal to ${KafkaConfig.SocketRequestMaxBytesProp}")
+      s"${SocketServerConfigs.QUEUED_MAX_BYTES_CONFIG} must be larger or equal to ${SocketServerConfigs.SOCKET_REQUEST_MAX_BYTES_CONFIG}")
 
     if (maxConnectionsPerIp == 0)
-      require(maxConnectionsPerIpOverrides.nonEmpty, s"${KafkaConfig.MaxConnectionsPerIpProp} can be set to zero only if" +
-        s" ${KafkaConfig.MaxConnectionsPerIpOverridesProp} property is set.")
+      require(maxConnectionsPerIpOverrides.nonEmpty, s"${SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG} can be set to zero only if" +
+        s" ${SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG} property is set.")
 
     val invalidAddresses = maxConnectionsPerIpOverrides.keys.filterNot(address => Utils.validHostPattern(address))
     if (invalidAddresses.nonEmpty)
-      throw new IllegalArgumentException(s"${KafkaConfig.MaxConnectionsPerIpOverridesProp} contains invalid addresses : ${invalidAddresses.mkString(",")}")
+      throw new IllegalArgumentException(s"${SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG} contains invalid addresses : ${invalidAddresses.mkString(",")}")
 
     if (connectionsMaxIdleMs >= 0)
       require(failedAuthenticationDelayMs < connectionsMaxIdleMs,
-        s"${KafkaConfig.FailedAuthenticationDelayMsProp}=$failedAuthenticationDelayMs should always be less than" +
-        s" ${KafkaConfig.ConnectionsMaxIdleMsProp}=$connectionsMaxIdleMs to prevent failed" +
+        s"${SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG}=$failedAuthenticationDelayMs should always be less than" +
+        s" ${SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG}=$connectionsMaxIdleMs to prevent failed" +
         s" authentication responses from timing out")
 
-    val principalBuilderClass = getClass(KafkaConfig.PrincipalBuilderClassProp)
-    require(principalBuilderClass != null, s"${KafkaConfig.PrincipalBuilderClassProp} must be non-null")
+    val principalBuilderClass = getClass(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG)
+    require(principalBuilderClass != null, s"${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must be non-null")
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass),
-      s"${KafkaConfig.PrincipalBuilderClassProp} must implement KafkaPrincipalSerde")
+      s"${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must implement KafkaPrincipalSerde")
 
-    // New group coordinator configs validation.
-    require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
-      s"${KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp} must be greater than or equals " +
-      s"to ${KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp}")
-    require(consumerGroupHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
-      s"${KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp} must be greater than or equals " +
-      s"to ${KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp}")
-    require(consumerGroupHeartbeatIntervalMs <= consumerGroupMaxHeartbeatIntervalMs,
-      s"${KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp} must be less than or equals " +
-      s"to ${KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp}")
 
-    require(consumerGroupMaxSessionTimeoutMs >= consumerGroupMinSessionTimeoutMs,
-      s"${KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp} must be greater than or equals " +
-      s"to ${KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp}")
-    require(consumerGroupSessionTimeoutMs >= consumerGroupMinSessionTimeoutMs,
-      s"${KafkaConfig.ConsumerGroupSessionTimeoutMsProp} must be greater than or equals " +
-      s"to ${KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp}")
-    require(consumerGroupSessionTimeoutMs <= consumerGroupMaxSessionTimeoutMs,
-      s"${KafkaConfig.ConsumerGroupSessionTimeoutMsProp} must be less than or equals " +
-      s"to ${KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp}")
+    if (originals.containsKey(GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG)) {
+      warn(s"${GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG} is deprecated and it will be removed in Apache Kafka 4.0.")
+    }
+  }
+
+  /**
+   * Validate some configurations for new MetadataVersion. A new MetadataVersion can take place when
+   * a FeatureLevelRecord for "metadata.version" is read from the cluster metadata.
+   */
+  def validateWithMetadataVersion(metadataVersion: MetadataVersion): Unit = {
+    if (processRoles.contains(ProcessRole.BrokerRole) && logDirs.size > 1) {
+      require(metadataVersion.isDirectoryAssignmentSupported,
+        s"Multiple log directories (aka JBOD) are not supported in the current MetadataVersion ${metadataVersion}. " +
+          s"Need ${MetadataVersion.IBP_3_7_IV2} or higher")
+    }
   }
 
   /**
@@ -2304,6 +1103,9 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, logCleanupPolicy)
     logProps.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minInSyncReplicas)
     logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType)
+    logProps.put(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, gzipCompressionLevel)
+    logProps.put(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, lz4CompressionLevel)
+    logProps.put(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, zstdCompressionLevel)
     logProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, uncleanLeaderElectionEnable)
     logProps.put(TopicConfig.PREALLOCATE_CONFIG, logPreAllocateEnable)
     logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, logMessageFormatVersion.version)
@@ -2312,14 +1114,14 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     logProps.put(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, logMessageTimestampBeforeMaxMs: java.lang.Long)
     logProps.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, logMessageTimestampAfterMaxMs: java.lang.Long)
     logProps.put(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, logMessageDownConversionEnable: java.lang.Boolean)
-    logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, logLocalRetentionMs)
-    logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, logLocalRetentionBytes)
+    logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, remoteLogManagerConfig.logLocalRetentionMs: java.lang.Long)
+    logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, remoteLogManagerConfig.logLocalRetentionBytes: java.lang.Long)
     logProps
   }
 
   @nowarn("cat=deprecation")
   private def createBrokerWarningMessage: String = {
-    s"Broker configuration ${KafkaConfig.LogMessageFormatVersionProp} with value $logMessageFormatVersionString is ignored " +
+    s"Broker configuration ${ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG} with value $logMessageFormatVersionString is ignored " +
       s"because the inter-broker protocol version `$interBrokerProtocolVersionString` is greater or equal than 3.0. " +
       "This configuration is deprecated and it will be removed in Apache Kafka 4.0."
   }

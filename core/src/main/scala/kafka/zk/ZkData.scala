@@ -26,7 +26,6 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
-import kafka.security.authorizer.AclEntry
 import kafka.server.DelegationTokenManagerZk
 import kafka.utils.Json
 import kafka.utils.json.JsonObject
@@ -41,6 +40,7 @@ import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.{MetadataVersion, ProducerIdsBlock}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_2_7_IV0}
 import org.apache.kafka.server.config.ConfigType
@@ -713,13 +713,13 @@ case object LiteralAclChangeStore extends ZkAclChangeStore {
     if (resource.patternType != PatternType.LITERAL)
       throw new IllegalArgumentException("Only literal resource patterns can be encoded")
 
-    val legacyName = resource.resourceType.toString + AclEntry.ResourceSeparator + resource.name
+    val legacyName = resource.resourceType.toString + AclEntry.RESOURCE_SEPARATOR + resource.name
     legacyName.getBytes(UTF_8)
   }
 
   def decode(bytes: Array[Byte]): ResourcePattern = {
     val string = new String(bytes, UTF_8)
-    string.split(AclEntry.ResourceSeparator, 2) match {
+    string.split(AclEntry.RESOURCE_SEPARATOR, 2) match {
         case Array(resourceType, resourceName, _*) => new ResourcePattern(ResourceType.fromString(resourceType), resourceName, PatternType.LITERAL)
         case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + string)
       }
@@ -757,8 +757,8 @@ case object ExtendedAclChangeStore extends ZkAclChangeStore {
 object ResourceZNode {
   def path(resource: ResourcePattern): String = ZkAclStore(resource.patternType).path(resource.resourceType, resource.name)
 
-  def encode(acls: Set[AclEntry]): Array[Byte] = Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls).asJava)
-  def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(AclEntry.fromBytes(bytes), stat.getVersion)
+  def encode(acls: Set[AclEntry]): Array[Byte] = Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls.asJava))
+  def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(AclEntry.fromBytes(bytes).asScala.toSet, stat.getVersion)
 }
 
 object ExtendedAclChangeEvent {

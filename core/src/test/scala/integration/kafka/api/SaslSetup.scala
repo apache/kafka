@@ -38,6 +38,8 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.ConfigType
 import org.apache.zookeeper.client.ZKClientConfig
 
+import scala.util.Using
+
 /*
  * Implements an enumeration for the modes enabled here:
  * zk only, kafka only, both, custom KafkaServer.
@@ -131,7 +133,7 @@ trait SaslSetup {
 
   def kafkaServerSaslProperties(serverSaslMechanisms: Seq[String], interBrokerSaslMechanism: String): Properties = {
     val props = new Properties
-    props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, interBrokerSaslMechanism)
+    props.put(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, interBrokerSaslMechanism)
     props.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, serverSaslMechanisms.mkString(","))
     props
   }
@@ -199,9 +201,9 @@ trait SaslSetup {
 
   def createScramCredentials(zkConnect: String, userName: String, password: String): Unit = {
     val zkClientConfig = new ZKClientConfig()
-    TestUtils.resource(KafkaZkClient(
+    Using(KafkaZkClient(
       zkConnect, JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig), 30000, 30000,
-      Int.MaxValue, Time.SYSTEM, name = "SaslSetup", zkClientConfig = zkClientConfig)) { zkClient =>
+      Int.MaxValue, Time.SYSTEM, name = "SaslSetup", zkClientConfig = zkClientConfig, enableEntityConfigControllerCheck = false)) { zkClient =>
       val adminZkClient = new AdminZkClient(zkClient)
 
       val entityType = ConfigType.USER

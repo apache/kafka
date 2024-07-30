@@ -31,16 +31,16 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.kafka.common.quota.ClientQuotaEntity.CLIENT_ID;
 import static org.apache.kafka.common.quota.ClientQuotaEntity.IP;
 import static org.apache.kafka.common.quota.ClientQuotaEntity.USER;
-import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_EXACT;
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_DEFAULT;
+import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_EXACT;
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_SPECIFIED;
 
 
@@ -50,7 +50,7 @@ import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH
  * This class is thread-safe.
  */
 public final class ClientQuotasImage {
-    public final static ClientQuotasImage EMPTY = new ClientQuotasImage(Collections.emptyMap());
+    public static final ClientQuotasImage EMPTY = new ClientQuotasImage(Collections.emptyMap());
 
     private final Map<ClientQuotaEntity, ClientQuotaImage> entities;
 

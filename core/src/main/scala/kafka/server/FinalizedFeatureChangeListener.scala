@@ -171,7 +171,7 @@ class FinalizedFeatureChangeListener(private val finalizedFeatureCache: ZkMetada
   }
 
   // Feature ZK node change handler.
-  object FeatureZNodeChangeHandler extends ZNodeChangeHandler {
+  private object FeatureZNodeChangeHandler extends ZNodeChangeHandler {
     override val path: String = FeatureZNode.path
 
     override def handleCreation(): Unit = {

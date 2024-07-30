@@ -40,6 +40,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,6 +75,7 @@ import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -556,7 +558,7 @@ public class TestUtils {
      */
     public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
         ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        assertTrue(exceptionCauseClass.isInstance(exception.getCause()),
+        assertInstanceOf(exceptionCauseClass, exception.getCause(),
             "Unexpected exception cause " + exception.getCause());
         return exceptionCauseClass.cast(exception.getCause());
     }
@@ -696,12 +698,13 @@ public class TestUtils {
             Features<SupportedVersionRange> latestSupportedFeatures,
             boolean zkMigrationEnabled
     ) {
-        return ApiVersionsResponse.createApiVersionsResponse(
-                throttleTimeMs,
-                apiVersions,
-                latestSupportedFeatures,
-                Collections.emptyMap(),
-                ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-                zkMigrationEnabled);
+        return new ApiVersionsResponse.Builder().
+            setThrottleTimeMs(throttleTimeMs).
+            setApiVersions(apiVersions).
+            setSupportedFeatures(latestSupportedFeatures).
+            setFinalizedFeatures(Collections.emptyMap()).
+            setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
+            setZkMigrationEnabled(zkMigrationEnabled).
+            build();
     }
 }

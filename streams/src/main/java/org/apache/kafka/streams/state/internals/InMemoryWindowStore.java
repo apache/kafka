@@ -40,6 +40,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -479,7 +480,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         void deregisterIterator(final InMemoryWindowStoreIteratorWrapper iterator);
     }
 
-    private static abstract class InMemoryWindowStoreIteratorWrapper {
+    private abstract static class InMemoryWindowStoreIteratorWrapper {
 
         private Iterator<Map.Entry<Bytes, byte[]>> recordIterator;
         private KeyValue<Bytes, byte[]> next;

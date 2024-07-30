@@ -21,6 +21,7 @@ from kafkatest.services.kafka import quorum
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.kafka import config_property
+from kafkatest.services.kafka import consumer_group
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
@@ -125,7 +126,7 @@ class TestSnapshots(ProduceConsumeValidateTest):
             self.logger.debug("File %s was found" % file_path)
             return True
 
-    def validate_success(self, topic = None):
+    def validate_success(self, topic = None, group_protocol=None):
         if topic is None:
             # Create a new topic
             topic = "%s%d" % (TestSnapshots.TOPIC_NAME_PREFIX, self.topics_created)
@@ -138,7 +139,8 @@ class TestSnapshots(ProduceConsumeValidateTest):
 
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
                                         topic, consumer_timeout_ms=30000,
-                                        message_validator=is_int)
+                                        message_validator=is_int,
+                                        consumer_properties=consumer_group.maybe_set_group_protocol(group_protocol))
         self.start_producer_and_consumer()
         self.stop_producer_and_consumer()
         self.validate()
@@ -146,9 +148,14 @@ class TestSnapshots(ProduceConsumeValidateTest):
     @cluster(num_nodes=9)
     @matrix(
         metadata_quorum=quorum.all_kraft,
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[False]
     )
-    def test_broker(self, metadata_quorum=quorum.combined_kraft, use_new_coordinator=False):
+    @matrix(
+        metadata_quorum=quorum.all_kraft,
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_broker(self, metadata_quorum=quorum.combined_kraft, use_new_coordinator=False, group_protocol=None):
         """ Test the ability of a broker to consume metadata snapshots
         and to recover the cluster metadata state using them
 
@@ -204,14 +211,19 @@ class TestSnapshots(ProduceConsumeValidateTest):
         self.kafka.create_topic(topic_cfg)
 
         # Produce to the newly created topic and make sure it works.
-        self.validate_success(broker_topic)
+        self.validate_success(broker_topic, group_protocol=group_protocol)
 
     @cluster(num_nodes=9)
     @matrix(
         metadata_quorum=quorum.all_kraft,
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[False]
     )
-    def test_controller(self, metadata_quorum=quorum.combined_kraft, use_new_coordinator=False):
+    @matrix(
+        metadata_quorum=quorum.all_kraft,
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_controller(self, metadata_quorum=quorum.combined_kraft, use_new_coordinator=False, group_protocol=None):
         """ Test the ability of controllers to consume metadata snapshots
         and to recover the cluster metadata state using them
 
@@ -254,4 +266,4 @@ class TestSnapshots(ProduceConsumeValidateTest):
             self.kafka.controller_quorum.start_node(node)
 
         # Produce to a newly created topic and make sure it works.
-        self.validate_success()
+        self.validate_success(group_protocol=group_protocol)

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -28,8 +29,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -75,7 +78,7 @@ public class SubscriptionState {
     private final Logger log;
 
     private enum SubscriptionType {
-        NONE, AUTO_TOPICS, AUTO_PATTERN, USER_ASSIGNED
+        NONE, AUTO_TOPICS, AUTO_PATTERN, USER_ASSIGNED, AUTO_TOPICS_SHARE
     }
 
     /* the type of subscription */
@@ -124,6 +127,8 @@ public class SubscriptionState {
                 return "Subscribe(" + subscribedPattern + ")";
             case USER_ASSIGNED:
                 return "Assign(" + assignedPartitions() + " , id=" + assignmentId + ")";
+            case AUTO_TOPICS_SHARE:
+                return "Subscribe to Share Group(" + String.join(",", subscription) + ")";
             default:
                 throw new IllegalStateException("Unrecognized subscription type: " + subscriptionType);
         }
@@ -179,6 +184,12 @@ public class SubscriptionState {
             throw new IllegalArgumentException("Attempt to subscribe from pattern while subscription type set to " +
                     subscriptionType);
 
+        return changeSubscription(topics);
+    }
+
+    public synchronized boolean subscribeToShareGroup(Set<String> topics) {
+        registerRebalanceListener(Optional.empty());
+        setSubscriptionType(SubscriptionType.AUTO_TOPICS_SHARE);
         return changeSubscription(topics);
     }
 
@@ -426,7 +437,8 @@ public class SubscriptionState {
         List<TopicPartition> result = new ArrayList<>();
         assignment.forEach((topicPartition, topicPartitionState) -> {
             // Cheap check is first to avoid evaluating the predicate if possible
-            if (topicPartitionState.isFetchable() && isAvailable.test(topicPartition)) {
+            if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || topicPartitionState.isFetchable())
+                    && isAvailable.test(topicPartition)) {
                 result.add(topicPartition);
             }
         });
@@ -434,7 +446,8 @@ public class SubscriptionState {
     }
 
     public synchronized boolean hasAutoAssignedPartitions() {
-        return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN;
+        return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN
+                || this.subscriptionType == SubscriptionType.AUTO_TOPICS_SHARE;
     }
 
     public synchronized void position(TopicPartition tp, FetchPosition position) {
@@ -672,7 +685,7 @@ public class SubscriptionState {
      * Unset the preferred read replica. This causes the fetcher to go back to the leader for fetches.
      *
      * @param tp The topic partition
-     * @return the removed preferred read replica if set, None otherwise.
+     * @return the removed preferred read replica if set, Empty otherwise.
      */
     public synchronized Optional<Integer> clearPreferredReadReplica(TopicPartition tp) {
         final TopicPartitionState topicPartitionState = assignedStateOrNull(tp);
@@ -746,7 +759,7 @@ public class SubscriptionState {
     }
 
     public synchronized Set<TopicPartition> initializingPartitions() {
-        return collectPartitions(state -> state.fetchState.equals(FetchStates.INITIALIZING) && !state.pendingOnAssignedCallback);
+        return collectPartitions(TopicPartitionState::shouldInitialize);
     }
 
     private Set<TopicPartition> collectPartitions(Predicate<TopicPartitionState> filter) {
@@ -759,11 +772,22 @@ public class SubscriptionState {
         return result;
     }
 
-
+    /**
+     * Note: this will not attempt to reset partitions that are in the process of being assigned
+     * and are pending the completion of any {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)}
+     * callbacks.
+     *
+     * <p/>
+     *
+     * This method only appears to be invoked the by the {@link KafkaConsumer} during its
+     * {@link KafkaConsumer#poll(Duration)} logic. <em>Direct</em> calls to methods like
+     * {@link #requestOffsetReset(TopicPartition)}, {@link #requestOffsetResetIfPartitionAssigned(TopicPartition)},
+     * etc. do <em>not</em> skip partitions pending assignment.
+     */
     public synchronized void resetInitializingPositions() {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
         assignment.forEach((tp, partitionState) -> {
-            if (partitionState.fetchState.equals(FetchStates.INITIALIZING)) {
+            if (partitionState.shouldInitialize()) {
                 if (defaultResetStrategy == OffsetResetStrategy.NONE)
                     partitionsWithNoOffsets.add(tp);
                 else
@@ -1084,6 +1108,17 @@ public class SubscriptionState {
 
         private void resume() {
             this.paused = false;
+        }
+
+        /**
+         * True if the partition is in {@link FetchStates#INITIALIZING} state. While in this
+         * state, a position for the partition can be retrieved (based on committed offsets or
+         * partitions offsets).
+         * Note that retrieving a position does not mean that we can start fetching from the
+         * partition (see {@link #isFetchable()})
+         */
+        private boolean shouldInitialize() {
+            return fetchState.equals(FetchStates.INITIALIZING);
         }
 
         private boolean isFetchable() {

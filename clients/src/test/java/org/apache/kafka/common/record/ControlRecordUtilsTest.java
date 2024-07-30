@@ -16,15 +16,20 @@
  */
 package org.apache.kafka.common.record;
 
-import java.nio.ByteBuffer;
-import java.util.Collections;
-import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
-import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.VotersRecord;
+import org.apache.kafka.common.message.VotersRecord.Voter;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+
 import org.junit.jupiter.api.Test;
+
+import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -35,7 +40,7 @@ public class ControlRecordUtilsTest {
         // If any of these asserts fail, please make sure that Kafka supports reading and
         // writing the latest version for these records.
         assertEquals(
-            LeaderChangeMessage.HIGHEST_SUPPORTED_VERSION,
+            (short) 0,
             ControlRecordUtils.LEADER_CHANGE_CURRENT_VERSION
         );
         assertEquals(
@@ -46,6 +51,14 @@ public class ControlRecordUtilsTest {
             SnapshotFooterRecord.HIGHEST_SUPPORTED_VERSION,
             ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION
         );
+        assertEquals(
+            KRaftVersionRecord.HIGHEST_SUPPORTED_VERSION,
+            ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION
+        );
+        assertEquals(
+            VotersRecord.HIGHEST_SUPPORTED_VERSION,
+            ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION
+        );
     }
 
     @Test
@@ -55,22 +68,22 @@ public class ControlRecordUtilsTest {
             () -> testDeserializeRecord(ControlRecordType.COMMIT)
         );
         assertEquals(
-            "Expected LEADER_CHANGE control record type(2), but found COMMIT",
+            "Expected KRAFT_VOTERS control record type(6), but found COMMIT",
             thrown.getMessage()
         );
     }
 
     @Test
     public void testDeserializeByteData() {
-        testDeserializeRecord(ControlRecordType.LEADER_CHANGE);
+        testDeserializeRecord(ControlRecordType.KRAFT_VOTERS);
     }
 
     private void testDeserializeRecord(ControlRecordType controlRecordType) {
-        final int leaderId = 1;
-        final int voterId = 2;
-        LeaderChangeMessage data = new LeaderChangeMessage()
-            .setLeaderId(leaderId)
-            .setVoters(Collections.singletonList(new Voter().setVoterId(voterId)));
+        final int voterId = 0;
+        final List<Voter> voters = Collections.singletonList(
+            new Voter().setVoterId(voterId)
+        );
+        VotersRecord data = new VotersRecord().setVoters(voters);
 
         ByteBuffer valueBuffer = ByteBuffer.allocate(256);
         data.write(new ByteBufferAccessor(valueBuffer), new ObjectSerializationCache(), data.highestSupportedVersion());
@@ -82,9 +95,9 @@ public class ControlRecordUtilsTest {
             256, (byte) 0, 0, 0L, 0, ByteBuffer.wrap(keyData),  valueBuffer, null
         );
 
-        LeaderChangeMessage deserializedData = ControlRecordUtils.deserializeLeaderChangeMessage(record);
+        VotersRecord deserializedData = ControlRecordUtils.deserializeVotersRecord(record);
 
-        assertEquals(leaderId, deserializedData.leaderId());
+        assertEquals(voters, deserializedData.voters());
         assertEquals(Collections.singletonList(
             new Voter().setVoterId(voterId)), deserializedData.voters());
     }

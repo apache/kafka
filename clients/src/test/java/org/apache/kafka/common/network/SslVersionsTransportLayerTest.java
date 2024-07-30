@@ -16,6 +16,19 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.security.TestSecurityConfig;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Java;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.test.TestUtils;
+
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -25,18 +38,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
-
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.security.TestSecurityConfig;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Java;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -132,7 +133,7 @@ public class SslVersionsTransportLayerTest {
      * > supported_versions: Lists which versions of TLS the client supports. In particular, if the client
      * > requests TLS 1.3, then the client version field has the value TLSv1.2 and this extension
      * > contains the value TLSv1.3; if the client requests TLS 1.2, then the client version field has the
-     * > value TLSv1.2 and this extension either doesn’t exist or contains the value TLSv1.2 but not the value TLSv1.3.
+     * > value TLSv1.2 and this extension either doesn't exist or contains the value TLSv1.2 but not the value TLSv1.3.
      * <p>
      *
      * This mean that TLSv1.3 client can fallback to TLSv1.2 but TLSv1.2 client can't change protocol to TLSv1.3.
@@ -166,7 +167,7 @@ public class SslVersionsTransportLayerTest {
 
     private Selector createClientSelector(Map<String, Object> sslClientConfigs) {
         SslTransportLayerTest.TestSslChannelBuilder channelBuilder =
-            new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT);
+            new SslTransportLayerTest.TestSslChannelBuilder(ConnectionMode.CLIENT);
         channelBuilder.configureBufferSizes(null, null, null);
         channelBuilder.configure(sslClientConfigs);
         return new Selector(100 * 5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());

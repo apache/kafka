@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.coordinator.group.runtime;
 
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -25,8 +29,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
-
-import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -92,7 +94,7 @@ public class EventAccumulatorTest {
             new MockEvent(3, 2)
         );
 
-        events.forEach(accumulator::add);
+        events.forEach(accumulator::addLast);
         assertEquals(9, accumulator.size());
 
         Set<MockEvent> polledEvents = new HashSet<>();
@@ -112,15 +114,43 @@ public class EventAccumulatorTest {
     }
 
     @Test
+    public void testAddFirst() {
+        EventAccumulator<Integer, MockEvent> accumulator = new EventAccumulator<>();
+
+        List<MockEvent> events = Arrays.asList(
+            new MockEvent(1, 0),
+            new MockEvent(1, 1),
+            new MockEvent(1, 2)
+        );
+
+        events.forEach(accumulator::addFirst);
+        assertEquals(3, accumulator.size());
+
+        List<MockEvent> polledEvents = new ArrayList<>(3);
+        for (int i = 0; i < events.size(); i++) {
+            MockEvent event = accumulator.poll();
+            assertNotNull(event);
+            polledEvents.add(event);
+            assertEquals(events.size() - 1 - i, accumulator.size());
+            accumulator.done(event);
+        }
+
+        Collections.reverse(events);
+        assertEquals(events, polledEvents);
+
+        accumulator.close();
+    }
+
+    @Test
     public void testKeyConcurrentAndOrderingGuarantees() {
         EventAccumulator<Integer, MockEvent> accumulator = new EventAccumulator<>();
 
         MockEvent event0 = new MockEvent(1, 0);
         MockEvent event1 = new MockEvent(1, 1);
         MockEvent event2 = new MockEvent(1, 2);
-        accumulator.add(event0);
-        accumulator.add(event1);
-        accumulator.add(event2);
+        accumulator.addLast(event0);
+        accumulator.addLast(event1);
+        accumulator.addLast(event2);
         assertEquals(3, accumulator.size());
 
         MockEvent event = null;
@@ -160,18 +190,21 @@ public class EventAccumulatorTest {
         MockEvent event1 = new MockEvent(1, 1);
         MockEvent event2 = new MockEvent(1, 2);
 
-        CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(accumulator::take);
-        CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(accumulator::take);
-        CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(accumulator::take);
+        CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(() ->
+            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
+        CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(() ->
+            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
+        CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(() ->
+            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
         List<CompletableFuture<MockEvent>> futures = Arrays.asList(future0, future1, future2);
 
         assertFalse(future0.isDone());
         assertFalse(future1.isDone());
         assertFalse(future2.isDone());
 
-        accumulator.add(event0);
-        accumulator.add(event1);
-        accumulator.add(event2);
+        accumulator.addLast(event0);
+        accumulator.addLast(event1);
+        accumulator.addLast(event2);
 
         // One future should be completed with event0.
         assertEquals(event0, CompletableFuture
@@ -215,9 +248,12 @@ public class EventAccumulatorTest {
     public void testCloseUnblockWaitingThreads() throws ExecutionException, InterruptedException, TimeoutException {
         EventAccumulator<Integer, MockEvent> accumulator = new EventAccumulator<>();
 
-        CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(accumulator::take);
-        CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(accumulator::take);
-        CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(accumulator::take);
+        CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(() ->
+            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
+        CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(() ->
+            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
+        CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(() ->
+            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
 
         assertFalse(future0.isDone());
         assertFalse(future1.isDone());

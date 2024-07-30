@@ -17,17 +17,19 @@
 
 package org.apache.kafka.trogdor.fault;
 
-import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
+
+import com.fasterxml.jackson.databind.node.TextNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ProcessStopFaultWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ProcessStopFaultWorker.class);
@@ -80,7 +82,7 @@ public class ProcessStopFaultWorker implements TaskWorker {
                 id, javaProcessName, signalName);
         } else {
             log.info("{}: sending {} to {} pid(s) {}",
-                id, signalName, javaProcessName, Utils.join(pids, ", "));
+                id, signalName, javaProcessName, pids.stream().map(Object::toString).collect(Collectors.joining(",")));
             for (Integer pid : pids) {
                 platform.runCommand(new String[] {"kill", "-" + signalName, pid.toString()});
             }

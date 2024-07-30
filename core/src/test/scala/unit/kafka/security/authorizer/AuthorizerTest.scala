@@ -17,7 +17,6 @@
 package kafka.security.authorizer
 
 import kafka.Kafka
-import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
 import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.zk.ZkAclStore
@@ -36,11 +35,13 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceP
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.controller.MockAclMutator
-import org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.AuthorizerTestServerInfo
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
+import org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.AuthorizerTestServerInfo
+import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_0_IV0, IBP_2_0_IV1}
+import org.apache.kafka.server.config.{ReplicationConfigs, ZkConfigs}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -63,14 +64,14 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
   private final val ZK = "zk"
 
 
-  private val allowReadAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, READ, ALLOW)
-  private val allowWriteAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, WRITE, ALLOW)
-  private val denyReadAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, READ, DENY)
+  private val allowReadAcl = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, READ, ALLOW)
+  private val allowWriteAcl = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, WRITE, ALLOW)
+  private val denyReadAcl = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, READ, DENY)
 
   private val wildCardResource = new ResourcePattern(TOPIC, WILDCARD_RESOURCE, LITERAL)
   private val prefixedResource = new ResourcePattern(TOPIC, "foo", PREFIXED)
   private val clusterResource = new ResourcePattern(CLUSTER, CLUSTER_NAME, LITERAL)
-  private val wildcardPrincipal = JSecurityUtils.parseKafkaPrincipal(WildcardPrincipalString)
+  private val wildcardPrincipal = JSecurityUtils.parseKafkaPrincipal(WILDCARD_PRINCIPAL_STRING)
 
   private var authorizer1: Authorizer = _
   private var authorizer2: Authorizer = _
@@ -92,8 +93,10 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
     val props = properties
     config = KafkaConfig.fromProps(props)
-    authorizer1 = createAuthorizer(config.originals)
-    authorizer2 = createAuthorizer(config.originals)
+    authorizer1 = createAuthorizer()
+    configureAuthorizer(authorizer1, config.originals)
+    authorizer2 = createAuthorizer()
+    configureAuthorizer(authorizer2, config.originals)
     resource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
 
     if (!TestInfoUtils.isKRaft(testInfo)) {
@@ -122,14 +125,14 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAuthorizeThrowsOnNonLiteralResource(quorum: String): Unit = {
     assertThrows(classOf[IllegalArgumentException], () => authorize(authorizer1, requestContext, READ,
       new ResourcePattern(TOPIC, "something", PREFIXED)))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAuthorizeWithEmptyResourceName(quorum: String): Unit = {
     assertFalse(authorize(authorizer1, requestContext, READ, new ResourcePattern(GROUP, "", LITERAL)))
@@ -138,7 +141,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
   }
 
   // Authorizing the empty resource is not supported because we create a znode with the resource name.
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testEmptyAclThrowsException(quorum: String): Unit = {
     val e = assertThrows(classOf[ApiException],
@@ -147,7 +150,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
       assertTrue(e.getCause.isInstanceOf[IllegalArgumentException], s"Unexpected exception $e")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testTopicAcl(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
@@ -167,13 +170,13 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val acl4 = new AccessControlEntry(user1.toString, host1.getHostAddress, WRITE, ALLOW)
 
     //user1 has DESCRIBE access from all hosts.
-    val acl5 = new AccessControlEntry(user1.toString, WildcardHost, DESCRIBE, ALLOW)
+    val acl5 = new AccessControlEntry(user1.toString, WILDCARD_HOST, DESCRIBE, ALLOW)
 
     //user2 has READ access from all hosts.
-    val acl6 = new AccessControlEntry(user2.toString, WildcardHost, READ, ALLOW)
+    val acl6 = new AccessControlEntry(user2.toString, WILDCARD_HOST, READ, ALLOW)
 
     //user3 has WRITE access from all hosts.
-    val acl7 = new AccessControlEntry(user3.toString, WildcardHost, WRITE, ALLOW)
+    val acl7 = new AccessControlEntry(user3.toString, WILDCARD_HOST, WRITE, ALLOW)
 
     val acls = Set(acl1, acl2, acl3, acl4, acl5, acl6, acl7)
 
@@ -203,7 +206,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
   /**
     CustomPrincipals should be compared with their principal type and name
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAllowAccessWithCustomPrincipal(quorum: String): Unit = {
     val user = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
@@ -224,14 +227,14 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertFalse(authorize(authorizer1, host1Context, READ, resource), "User1 should not have READ access from host1 due to denyAcl")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testDenyTakesPrecedence(quorum: String): Unit = {
     val user = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val host = InetAddress.getByName("192.168.2.1")
     val session = newRequestContext(user, host)
 
-    val allowAll = new AccessControlEntry(WildcardPrincipalString, WildcardHost, AclOperation.ALL, ALLOW)
+    val allowAll = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, AclOperation.ALL, ALLOW)
     val denyAcl = new AccessControlEntry(user.toString, host.getHostAddress, AclOperation.ALL, DENY)
     val acls = Set(allowAll, denyAcl)
 
@@ -240,10 +243,10 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertFalse(authorize(authorizer1, session, READ, resource), "deny should take precedence over allow.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAllowAllAccess(quorum: String): Unit = {
-    val allowAllAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, AclOperation.ALL, ALLOW)
+    val allowAllAcl = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, AclOperation.ALL, ALLOW)
 
     changeAclAndVerify(Set.empty, Set(allowAllAcl), Set.empty)
 
@@ -251,10 +254,10 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertTrue(authorize(authorizer1, context, READ, resource), "allow all acl should allow access to all.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testSuperUserHasAccess(quorum: String): Unit = {
-    val denyAllAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, AclOperation.ALL, DENY)
+    val denyAllAcl = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, AclOperation.ALL, DENY)
 
     changeAclAndVerify(Set.empty, Set(denyAllAcl), Set.empty)
 
@@ -268,10 +271,10 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
   /**
     CustomPrincipals should be compared with their principal type and name
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testSuperUserWithCustomPrincipalHasAccess(quorum: String): Unit = {
-    val denyAllAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, AclOperation.ALL, DENY)
+    val denyAllAcl = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, AclOperation.ALL, DENY)
     changeAclAndVerify(Set.empty, Set(denyAllAcl), Set.empty)
 
     val session = newRequestContext(new CustomPrincipal(KafkaPrincipal.USER_TYPE, "superuser1"), InetAddress.getByName("192.0.4.4"))
@@ -279,7 +282,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertTrue(authorize(authorizer1, session, READ, resource), "superuser with custom principal always has access, no matter what acls.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testWildCardAcls(quorum: String): Unit = {
     assertFalse(authorize(authorizer1, requestContext, READ, resource), "when acls = [], authorizer should fail close.")
@@ -304,22 +307,22 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertFalse(authorize(authorizer1, host1Context, WRITE, resource), "User1 should not have WRITE access from host1")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testNoAclFound(quorum: String): Unit = {
     assertFalse(authorize(authorizer1, requestContext, READ, resource), "when acls = [], authorizer should deny op.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testNoAclFoundOverride(quorum: String): Unit = {
     val props = properties
     props.put(AclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, "true")
 
     val cfg = KafkaConfig.fromProps(props)
-    var testAuthorizer: Authorizer = null
+    val testAuthorizer = createAuthorizer()
     try {
-      testAuthorizer = createAuthorizer(cfg.originals)
+      configureAuthorizer(testAuthorizer, cfg.originals)
       assertTrue(authorize(testAuthorizer, requestContext, READ, resource),
         "when acls = null or [],  authorizer should allow op with allow.everyone = true.")
     } finally {
@@ -327,7 +330,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAclConfigWithWhitespace(quorum: String): Unit = {
     val props = properties
@@ -335,9 +338,9 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     // replace all property values with leading & trailing whitespaces
     props.replaceAll((_,v) => " " + v + " ")
     val cfg = KafkaConfig.fromProps(props)
-    var testAuthorizer: Authorizer = null
+    val testAuthorizer = createAuthorizer()
     try {
-      testAuthorizer = createAuthorizer(cfg.originals)
+      configureAuthorizer(testAuthorizer, cfg.originals)
       assertTrue(authorize(testAuthorizer, requestContext, READ, resource),
         "when acls = null or [],  authorizer should allow op with allow.everyone = true.")
     } finally {
@@ -345,7 +348,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAclManagementAPIs(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
@@ -361,7 +364,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     var acls = changeAclAndVerify(Set.empty, Set(acl1, acl2, acl3, acl4), Set.empty)
 
     //test addAcl is additive
-    val acl5 = new AccessControlEntry(user2.toString, WildcardHost, READ, ALLOW)
+    val acl5 = new AccessControlEntry(user2.toString, WILDCARD_HOST, READ, ALLOW)
     acls = changeAclAndVerify(acls, Set(acl5), Set.empty)
 
     //test get by principal name.
@@ -371,7 +374,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
       "changes not propagated in timeout period")
 
     val resourceToAcls = Map[ResourcePattern, Set[AccessControlEntry]](
-      new ResourcePattern(TOPIC, WILDCARD_RESOURCE, LITERAL) -> Set(new AccessControlEntry(user2.toString, WildcardHost, READ, ALLOW)),
+      new ResourcePattern(TOPIC, WILDCARD_RESOURCE, LITERAL) -> Set(new AccessControlEntry(user2.toString, WILDCARD_HOST, READ, ALLOW)),
       new ResourcePattern(CLUSTER , WILDCARD_RESOURCE, LITERAL) -> Set(new AccessControlEntry(user2.toString, host1, READ, ALLOW)),
       new ResourcePattern(GROUP, WILDCARD_RESOURCE, LITERAL) -> acls,
       new ResourcePattern(GROUP, "test-ConsumerGroup", LITERAL) -> acls
@@ -415,9 +418,9 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     addAcls(authorizer1, acls1, resource1)
 
     zkClient.deleteAclChangeNotifications()
-    var authorizer: Authorizer = null
+    val authorizer = new AclAuthorizer
     try {
-      authorizer = createAclAuthorizer(config.originals)
+      configureAclAuthorizer(authorizer, config.originals)
 
       assertEquals(acls, getAcls(authorizer, resource))
       assertEquals(acls1, getAcls(authorizer, resource1))
@@ -465,10 +468,10 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val commonResource = new ResourcePattern(TOPIC, "test", LITERAL)
 
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-    val acl1 = new AccessControlEntry(user1.toString, WildcardHost, READ, ALLOW)
+    val acl1 = new AccessControlEntry(user1.toString, WILDCARD_HOST, READ, ALLOW)
 
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob")
-    val acl2 = new AccessControlEntry(user2.toString, WildcardHost, READ, DENY)
+    val acl2 = new AccessControlEntry(user2.toString, WILDCARD_HOST, READ, DENY)
 
     addAcls(authorizer1, Set(acl1), commonResource)
     addAcls(authorizer1, Set(acl2), commonResource)
@@ -481,10 +484,10 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val commonResource = new ResourcePattern(TOPIC, "test", LITERAL)
 
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-    val acl1 = new AccessControlEntry(user1.toString, WildcardHost, READ, ALLOW)
+    val acl1 = new AccessControlEntry(user1.toString, WILDCARD_HOST, READ, ALLOW)
 
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob")
-    val acl2 = new AccessControlEntry(user2.toString, WildcardHost, READ, DENY)
+    val acl2 = new AccessControlEntry(user2.toString, WILDCARD_HOST, READ, DENY)
 
     // Add on each instance
     addAcls(authorizer1, Set(acl1), commonResource)
@@ -494,7 +497,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     TestUtils.waitAndVerifyAcls(Set(acl1, acl2), authorizer2, commonResource)
 
     val user3 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "joe")
-    val acl3 = new AccessControlEntry(user3.toString, WildcardHost, READ, DENY)
+    val acl3 = new AccessControlEntry(user3.toString, WILDCARD_HOST, READ, DENY)
 
     // Add on one instance and delete on another
     addAcls(authorizer1, Set(acl3), commonResource)
@@ -512,7 +515,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
     val acls= (0 to 50).map { i =>
       val useri = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, i.toString)
-      (new AccessControlEntry(useri.toString, WildcardHost, READ, ALLOW), i)
+      (new AccessControlEntry(useri.toString, WILDCARD_HOST, READ, ALLOW), i)
     }
 
     // Alternate authorizer, Remove all acls that end in 0
@@ -542,7 +545,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
   /**
     * Test ACL inheritance, as described in #{org.apache.kafka.common.acl.AclOperation}
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAclInheritance(quorum: String): Unit = {
     testImplicationsOfAllow(AclOperation.ALL, Set(READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE,
@@ -562,7 +565,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val user = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val host = InetAddress.getByName("192.168.3.1")
     val hostContext = newRequestContext(user, host)
-    val acl = new AccessControlEntry(user.toString, WildcardHost, parentOp, ALLOW)
+    val acl = new AccessControlEntry(user.toString, WILDCARD_HOST, parentOp, ALLOW)
     addAcls(authorizer1, Set(acl), clusterResource)
     AclOperation.values.filter(validOp).foreach { op =>
       val authorized = authorize(authorizer1, hostContext, op, clusterResource)
@@ -578,8 +581,8 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val host1 = InetAddress.getByName("192.168.3.1")
     val host1Context = newRequestContext(user1, host1)
-    val acls = Set(new AccessControlEntry(user1.toString, WildcardHost, parentOp, DENY),
-      new AccessControlEntry(user1.toString, WildcardHost, AclOperation.ALL, ALLOW))
+    val acls = Set(new AccessControlEntry(user1.toString, WILDCARD_HOST, parentOp, DENY),
+      new AccessControlEntry(user1.toString, WILDCARD_HOST, AclOperation.ALL, ALLOW))
     addAcls(authorizer1, acls, clusterResource)
     AclOperation.values.filter(validOp).foreach { op =>
       val authorized = authorize(authorizer1, host1Context, op, clusterResource)
@@ -593,7 +596,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   @Test
   def testHighConcurrencyDeletionOfResourceAcls(): Unit = {
-    val acl = new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username).toString, WildcardHost, AclOperation.ALL, ALLOW)
+    val acl = new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username).toString, WILDCARD_HOST, AclOperation.ALL, ALLOW)
 
     // Alternate authorizer to keep adding and removing ZooKeeper path
     val concurrentFunctions = (0 to 50).map { _ =>
@@ -609,7 +612,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer2, resource)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAccessAllowedIfAllowAclExistsOnWildcardResource(quorum: String): Unit = {
     addAcls(authorizer1, Set(allowReadAcl), wildCardResource)
@@ -617,7 +620,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertTrue(authorize(authorizer1, requestContext, READ, resource))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testDeleteAclOnWildcardResource(quorum: String): Unit = {
     addAcls(authorizer1, Set(allowReadAcl, allowWriteAcl), wildCardResource)
@@ -627,7 +630,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertEquals(Set(allowWriteAcl), getAcls(authorizer1, wildCardResource))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testDeleteAllAclOnWildcardResource(quorum: String): Unit = {
     addAcls(authorizer1, Set(allowReadAcl), wildCardResource)
@@ -637,7 +640,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertEquals(Set.empty, getAcls(authorizer1))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAccessAllowedIfAllowAclExistsOnPrefixedResource(quorum: String): Unit = {
     addAcls(authorizer1, Set(allowReadAcl), prefixedResource)
@@ -645,7 +648,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertTrue(authorize(authorizer1, requestContext, READ, resource))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testDeleteAclOnPrefixedResource(quorum: String): Unit = {
     addAcls(authorizer1, Set(allowReadAcl, allowWriteAcl), prefixedResource)
@@ -655,7 +658,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertEquals(Set(allowWriteAcl), getAcls(authorizer1, prefixedResource))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testDeleteAllAclOnPrefixedResource(quorum: String): Unit = {
     addAcls(authorizer1, Set(allowReadAcl, allowWriteAcl), prefixedResource)
@@ -665,7 +668,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertEquals(Set.empty, getAcls(authorizer1))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAddAclsOnLiteralResource(quorum: String): Unit = {
     addAcls(authorizer1, Set(allowReadAcl, allowWriteAcl), resource)
@@ -676,7 +679,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertEquals(Set.empty, getAcls(authorizer1, prefixedResource))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAddAclsOnWildcardResource(quorum: String): Unit = {
     addAcls(authorizer1, Set(allowReadAcl, allowWriteAcl), wildCardResource)
@@ -687,7 +690,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertEquals(Set.empty, getAcls(authorizer1, prefixedResource))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAddAclsOnPrefixedResource(quorum: String): Unit = {
     addAcls(authorizer1, Set(allowReadAcl, allowWriteAcl), prefixedResource)
@@ -698,7 +701,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertEquals(Set.empty, getAcls(authorizer1, resource))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAuthorizeWithPrefixedResource(quorum: String): Unit = {
     addAcls(authorizer1, Set(denyReadAcl), new ResourcePattern(TOPIC, "a_other", LITERAL))
@@ -719,7 +722,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertTrue(authorize(authorizer1, requestContext, READ, resource))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testSingleCharacterResourceAcls(quorum: String): Unit = {
     addAcls(authorizer1, Set(allowReadAcl), new ResourcePattern(TOPIC, "f", LITERAL))
@@ -732,10 +735,10 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertFalse(authorize(authorizer1, requestContext, READ, new ResourcePattern(TOPIC, "foo_", LITERAL)))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testGetAclsPrincipal(quorum: String): Unit = {
-    val aclOnSpecificPrincipal = new AccessControlEntry(principal.toString, WildcardHost, WRITE, ALLOW)
+    val aclOnSpecificPrincipal = new AccessControlEntry(principal.toString, WILDCARD_HOST, WRITE, ALLOW)
     addAcls(authorizer1, Set(aclOnSpecificPrincipal), resource)
 
     assertEquals(0,
@@ -746,24 +749,24 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
       getAcls(authorizer1, new KafkaPrincipal(principal.getPrincipalType, principal.getName)).size, "acl on specific should be returned for different principal instance")
 
     removeAcls(authorizer1, Set.empty, resource)
-    val aclOnWildcardPrincipal = new AccessControlEntry(WildcardPrincipalString, WildcardHost, WRITE, ALLOW)
+    val aclOnWildcardPrincipal = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, WRITE, ALLOW)
     addAcls(authorizer1, Set(aclOnWildcardPrincipal), resource)
 
     assertEquals(1, getAcls(authorizer1, wildcardPrincipal).size, "acl on wildcard should be returned for wildcard request")
     assertEquals(0, getAcls(authorizer1, principal).size, "acl on wildcard should not be returned for specific request")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAclsFilter(quorum: String): Unit = {
     val resource1 = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
     val resource2 = new ResourcePattern(TOPIC, "bar-" + UUID.randomUUID(), LITERAL)
     val prefixedResource = new ResourcePattern(TOPIC, "bar-", PREFIXED)
 
-    val acl1 = new AclBinding(resource1, new AccessControlEntry(principal.toString, WildcardHost, READ, ALLOW))
+    val acl1 = new AclBinding(resource1, new AccessControlEntry(principal.toString, WILDCARD_HOST, READ, ALLOW))
     val acl2 = new AclBinding(resource1, new AccessControlEntry(principal.toString, "192.168.0.1", WRITE, ALLOW))
-    val acl3 = new AclBinding(resource2, new AccessControlEntry(principal.toString, WildcardHost, DESCRIBE, ALLOW))
-    val acl4 = new AclBinding(prefixedResource, new AccessControlEntry(wildcardPrincipal.toString, WildcardHost, READ, ALLOW))
+    val acl3 = new AclBinding(resource2, new AccessControlEntry(principal.toString, WILDCARD_HOST, DESCRIBE, ALLOW))
+    val acl4 = new AclBinding(prefixedResource, new AccessControlEntry(wildcardPrincipal.toString, WILDCARD_HOST, READ, ALLOW))
 
     authorizer1.createAcls(requestContext, List(acl1, acl2, acl3, acl4).asJava)
     assertEquals(Set(acl1, acl2, acl3, acl4), authorizer1.acls(AclBindingFilter.ANY).asScala.toSet)
@@ -869,7 +872,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(noTlsProps),
       noTlsProps.asInstanceOf[java.util.Map[String, Any]].asScala)
-    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach { propName =>
+    ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach { propName =>
       assertNull(zkClientConfig.getProperty(propName))
     }
   }
@@ -879,27 +882,27 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val props = new java.util.Properties()
     val kafkaValue = "kafkaValue"
     val configs = Map("zookeeper.connect" -> "somewhere", // required, otherwise we would omit it
-      KafkaConfig.ZkSslClientEnableProp -> "true",
-      KafkaConfig.ZkClientCnxnSocketProp -> kafkaValue,
-      KafkaConfig.ZkSslKeyStoreLocationProp -> kafkaValue,
-      KafkaConfig.ZkSslKeyStorePasswordProp -> kafkaValue,
-      KafkaConfig.ZkSslKeyStoreTypeProp -> kafkaValue,
-      KafkaConfig.ZkSslTrustStoreLocationProp -> kafkaValue,
-      KafkaConfig.ZkSslTrustStorePasswordProp -> kafkaValue,
-      KafkaConfig.ZkSslTrustStoreTypeProp -> kafkaValue,
-      KafkaConfig.ZkSslEnabledProtocolsProp -> kafkaValue,
-      KafkaConfig.ZkSslCipherSuitesProp -> kafkaValue)
+      ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG -> "true",
+      ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG -> kafkaValue)
     configs.foreach { case (key, value) => props.put(key, value) }
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
     // confirm we get all the values we expect
-    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
-      case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
+    ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(prop => prop match {
+      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG | ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG =>
         assertEquals("true", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
-      case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp =>
+      case ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG =>
         assertEquals("false", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
-      case KafkaConfig.ZkSslProtocolProp =>
+      case ZkConfigs.ZK_SSL_PROTOCOL_CONFIG =>
         assertEquals("TLSv1.2", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       case _ => assertEquals(kafkaValue, KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
     })
@@ -910,29 +913,29 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val props = new java.util.Properties()
     val kafkaValue = "kafkaValue"
     val configs = Map("zookeeper.connect" -> "somewhere", // required, otherwise we would omit it
-      KafkaConfig.ZkSslClientEnableProp -> "true",
-      KafkaConfig.ZkClientCnxnSocketProp -> kafkaValue,
-      KafkaConfig.ZkSslKeyStoreLocationProp -> kafkaValue,
-      KafkaConfig.ZkSslKeyStorePasswordProp -> kafkaValue,
-      KafkaConfig.ZkSslKeyStoreTypeProp -> kafkaValue,
-      KafkaConfig.ZkSslTrustStoreLocationProp -> kafkaValue,
-      KafkaConfig.ZkSslTrustStorePasswordProp -> kafkaValue,
-      KafkaConfig.ZkSslTrustStoreTypeProp -> kafkaValue,
-      KafkaConfig.ZkSslProtocolProp -> kafkaValue,
-      KafkaConfig.ZkSslEnabledProtocolsProp -> kafkaValue,
-      KafkaConfig.ZkSslCipherSuitesProp -> kafkaValue,
-      KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp -> "HTTPS",
-      KafkaConfig.ZkSslCrlEnableProp -> "false",
-      KafkaConfig.ZkSslOcspEnableProp -> "false")
-    configs.foreach{case (key, value) => props.put(key, value.toString) }
+      ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG -> "true",
+      ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_PROTOCOL_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG -> "HTTPS",
+      ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG -> "false",
+      ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG -> "false")
+    configs.foreach{case (key, value) => props.put(key, value) }
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
     // confirm we get all the values we expect
-    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
-        case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
+    ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(prop => prop match {
+        case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG | ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG =>
           assertEquals("true", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
-        case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp =>
+        case ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG =>
           assertEquals("false", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
         case _ => assertEquals(kafkaValue, KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       })
@@ -945,43 +948,43 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val prefixedValue = "prefixedValue"
     val prefix = "authorizer."
     val configs = Map("zookeeper.connect" -> "somewhere", // required, otherwise we would omit it
-      KafkaConfig.ZkSslClientEnableProp -> "false",
-      KafkaConfig.ZkClientCnxnSocketProp -> kafkaValue,
-      KafkaConfig.ZkSslKeyStoreLocationProp -> kafkaValue,
-      KafkaConfig.ZkSslKeyStorePasswordProp -> kafkaValue,
-      KafkaConfig.ZkSslKeyStoreTypeProp -> kafkaValue,
-      KafkaConfig.ZkSslTrustStoreLocationProp -> kafkaValue,
-      KafkaConfig.ZkSslTrustStorePasswordProp -> kafkaValue,
-      KafkaConfig.ZkSslTrustStoreTypeProp -> kafkaValue,
-      KafkaConfig.ZkSslProtocolProp -> kafkaValue,
-      KafkaConfig.ZkSslEnabledProtocolsProp -> kafkaValue,
-      KafkaConfig.ZkSslCipherSuitesProp -> kafkaValue,
-      KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp -> "HTTPS",
-      KafkaConfig.ZkSslCrlEnableProp -> "false",
-      KafkaConfig.ZkSslOcspEnableProp -> "false",
-      prefix + KafkaConfig.ZkSslClientEnableProp -> "true",
-      prefix + KafkaConfig.ZkClientCnxnSocketProp -> prefixedValue,
-      prefix + KafkaConfig.ZkSslKeyStoreLocationProp -> prefixedValue,
-      prefix + KafkaConfig.ZkSslKeyStorePasswordProp -> prefixedValue,
-      prefix + KafkaConfig.ZkSslKeyStoreTypeProp -> prefixedValue,
-      prefix + KafkaConfig.ZkSslTrustStoreLocationProp -> prefixedValue,
-      prefix + KafkaConfig.ZkSslTrustStorePasswordProp -> prefixedValue,
-      prefix + KafkaConfig.ZkSslTrustStoreTypeProp -> prefixedValue,
-      prefix + KafkaConfig.ZkSslProtocolProp -> prefixedValue,
-      prefix + KafkaConfig.ZkSslEnabledProtocolsProp -> prefixedValue,
-      prefix + KafkaConfig.ZkSslCipherSuitesProp -> prefixedValue,
-      prefix + KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp -> "",
-      prefix + KafkaConfig.ZkSslCrlEnableProp -> "true",
-      prefix + KafkaConfig.ZkSslOcspEnableProp -> "true")
+      ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG -> "false",
+      ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_PROTOCOL_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG -> "HTTPS",
+      ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG -> "false",
+      ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG -> "false",
+      prefix + ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG -> "true",
+      prefix + ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_PROTOCOL_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG -> "",
+      prefix + ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG -> "true",
+      prefix + ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG -> "true")
     configs.foreach{case (key, value) => props.put(key, value.toString) }
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
     // confirm we get all the values we expect
-    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
-      case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp =>
+    ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(prop => prop match {
+      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG | ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG =>
         assertEquals("true", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
-      case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
+      case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG =>
         assertEquals("false", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       case _ => assertEquals(prefixedValue, KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
     })
@@ -992,7 +995,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val literalResource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
     val prefixedResource = new ResourcePattern(TOPIC, "bar-", PREFIXED)
     val wildcardResource = new ResourcePattern(TOPIC, "*", LITERAL)
-    val ace = new AccessControlEntry(principal.toString, WildcardHost, READ, ALLOW)
+    val ace = new AccessControlEntry(principal.toString, WILDCARD_HOST, READ, ALLOW)
     val updateSemaphore = new Semaphore(1)
 
     def createAcl(createAuthorizer: Authorizer, resource: ResourcePattern): AclBinding = {
@@ -1063,16 +1066,16 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array(KRAFT, ZK))
   def testAuthorizeByResourceTypeNoAclFoundOverride(quorum: String): Unit = {
     val props = properties
     props.put(AclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, "true")
 
     val cfg = KafkaConfig.fromProps(props)
-    var authorizer: Authorizer = null
+    val authorizer: Authorizer = createAuthorizer()
     try {
-      authorizer = createAuthorizer(cfg.originals)
+      configureAuthorizer(authorizer, cfg.originals)
       assertTrue(authorizeByResourceType(authorizer, requestContext, READ, resource.resourceType()),
         "If allow.everyone.if.no.acl.found = true, caller should have read access to at least one topic")
       assertTrue(authorizeByResourceType(authorizer, requestContext, WRITE, resource.resourceType()),
@@ -1087,7 +1090,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
     val props = TestUtils.createBrokerConfig(0, zkConnectOrNull)
     props.put(AclAuthorizer.SuperUsersProp, superUsers)
-    protocolVersion.foreach(version => props.put(KafkaConfig.InterBrokerProtocolVersionProp, version.toString))
+    protocolVersion.foreach(version => props.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, version.toString))
 
     config = KafkaConfig.fromProps(props)
 
@@ -1167,27 +1170,28 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     } finally writer.close()
   }
 
-  def createAuthorizer(configs: util.Map[String, AnyRef]): Authorizer = {
-    var testAuthorizer: Authorizer = null
+  def createAuthorizer(): Authorizer = {
+    if (TestInfoUtils.isKRaft(_testInfo)) new StandardAuthorizer else new AclAuthorizer
+  }
+
+  def configureAuthorizer(authorizer: Authorizer,
+                          configs: util.Map[String, AnyRef]): Unit = {
     if (TestInfoUtils.isKRaft(_testInfo)) {
-      testAuthorizer = createStandardAuthorizer(configs)
+      configureStandardAuthorizer(authorizer.asInstanceOf[StandardAuthorizer], configs)
     } else {
-      testAuthorizer = createAclAuthorizer(configs)
+      configureAclAuthorizer(authorizer.asInstanceOf[AclAuthorizer], configs)
     }
-    testAuthorizer
   }
 
-  def createAclAuthorizer(configs: util.Map[String, AnyRef]): AclAuthorizer = {
-    val authorizer = new AclAuthorizer
-    authorizer.configure(configs)
-    authorizer
+  def configureAclAuthorizer(aclAuthorizer: AclAuthorizer,
+                             configs: util.Map[String, AnyRef]): Unit = {
+    aclAuthorizer.configure(configs)
   }
 
-  def createStandardAuthorizer(configs: util.Map[String, AnyRef]): StandardAuthorizer = {
-    val standardAuthorizer = new StandardAuthorizer
+  def configureStandardAuthorizer(standardAuthorizer: StandardAuthorizer,
+                                  configs: util.Map[String, AnyRef]): Unit = {
     standardAuthorizer.configure(configs)
     initializeStandardAuthorizer(standardAuthorizer, new AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)))
-    standardAuthorizer
   }
 
   def initializeStandardAuthorizer(standardAuthorizer: StandardAuthorizer,

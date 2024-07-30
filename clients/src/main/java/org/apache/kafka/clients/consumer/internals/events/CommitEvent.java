@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
@@ -29,11 +28,6 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Void> {
      * Offsets to commit per partition.
      */
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
-
-    protected CommitEvent(final Type type, final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
-        super(type, timer);
-        this.offsets = validate(offsets);
-    }
 
     protected CommitEvent(final Type type, final Map<TopicPartition, OffsetAndMetadata> offsets, final long deadlineMs) {
         super(type, deadlineMs);

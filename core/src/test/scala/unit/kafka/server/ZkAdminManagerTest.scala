@@ -83,7 +83,7 @@ class ZkAdminManagerTest {
       .setResourceType(ConfigResource.Type.TOPIC.id)
       .setConfigurationKeys(null))
     val configHelper = createConfigHelper(metadataCache, zkClient)
-    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, includeSynonyms = true, includeDocumentation = true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
     assertFalse(results.head.configs().isEmpty, "Should return configs")
   }
@@ -97,7 +97,7 @@ class ZkAdminManagerTest {
       .setResourceName(topic)
       .setResourceType(ConfigResource.Type.TOPIC.id))
     val configHelper = createConfigHelper(metadataCache, zkClient)
-    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, includeSynonyms = true, includeDocumentation = true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
     assertFalse(results.head.configs().isEmpty, "Should return configs")
   }
@@ -113,7 +113,7 @@ class ZkAdminManagerTest {
       .setConfigurationKeys(List("retention.ms", "retention.bytes", "segment.bytes").asJava)
     )
     val configHelper = createConfigHelper(metadataCache, zkClient)
-    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, includeSynonyms = true, includeDocumentation = true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
     val resultConfigKeys = results.head.configs().asScala.map(r => r.name()).toSet
     assertEquals(Set("retention.ms", "retention.bytes", "segment.bytes"), resultConfigKeys)
@@ -135,7 +135,7 @@ class ZkAdminManagerTest {
         .setResourceName(brokerId.toString)
         .setResourceType(ConfigResource.Type.BROKER.id))
 
-    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, includeSynonyms = true, includeDocumentation = true)
     assertEquals(2, results.size)
     results.foreach(r => {
       assertEquals(Errors.NONE.code, r.errorCode)

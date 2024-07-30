@@ -45,12 +45,10 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
     }
 
     private final DescribeUserScramCredentialsRequestData data;
-    private final short version;
 
     private DescribeUserScramCredentialsRequest(DescribeUserScramCredentialsRequestData data, short version) {
         super(ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS, version);
         this.data = data;
-        this.version = version;
     }
 
     public static DescribeUserScramCredentialsRequest parse(ByteBuffer buffer, short version) {

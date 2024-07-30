@@ -27,6 +27,7 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.test.TestUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -128,9 +129,6 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
                     nodeId,
                     shared,
                     String.format("LocalLogManager-%d_", nodeId)));
-            }
-            for (LocalLogManager logManager : newLogManagers) {
-                logManager.initialize();
             }
         } catch (Throwable t) {
             for (LocalLogManager logManager : newLogManagers) {

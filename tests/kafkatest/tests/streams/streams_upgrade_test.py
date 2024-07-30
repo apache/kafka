@@ -203,16 +203,17 @@ class StreamsUpgradeTest(Test):
         processor.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
 
     @cluster(num_nodes=6)
-    @matrix(from_version=metadata_1_versions, to_version=[str(DEV_VERSION)])
-    @matrix(from_version=metadata_2_versions, to_version=[str(DEV_VERSION)])
-    @matrix(from_version=fk_join_versions, to_version=[str(DEV_VERSION)])
-    def test_rolling_upgrade_with_2_bounces(self, from_version, to_version):
+    @matrix(from_version=metadata_1_versions)
+    @matrix(from_version=metadata_2_versions)
+    @matrix(from_version=fk_join_versions)
+    def test_rolling_upgrade_with_2_bounces(self, from_version):
         """
         This test verifies that the cluster successfully upgrades despite changes in the metadata and FK
         join protocols.
         
         Starts 3 KafkaStreams instances with version <from_version> and upgrades one-by-one to <to_version>
         """
+        to_version = str(DEV_VERSION)
 
         if KafkaVersion(from_version).supports_fk_joins() and KafkaVersion(to_version).supports_fk_joins():
             extra_properties = {'test.run_fk_join': 'true'}
@@ -271,8 +272,8 @@ class StreamsUpgradeTest(Test):
         self.stop_and_await()
 
     @cluster(num_nodes=6)
-    @matrix(from_version=[str(LATEST_3_2), str(DEV_VERSION)], to_version=[str(DEV_VERSION)], upgrade=[True, False])
-    def test_upgrade_downgrade_state_updater(self, from_version, to_version, upgrade):
+    @matrix(from_version=[str(LATEST_3_2), str(DEV_VERSION)],  upgrade=[True, False])
+    def test_upgrade_downgrade_state_updater(self, from_version, upgrade):
         """
         Starts 3 KafkaStreams instances, and enables / disables state restoration
         for the instances in a rolling bounce.
@@ -280,6 +281,8 @@ class StreamsUpgradeTest(Test):
         Once same-thread state restoration is removed from the code, this test
         should use different versions of the code.
         """
+        to_version=str(DEV_VERSION)
+
         if upgrade:
             extra_properties_first = { '__state.updater.enabled__': 'false' }
             first_version = from_version

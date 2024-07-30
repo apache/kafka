@@ -17,16 +17,17 @@
 
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+
 import org.slf4j.Logger;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 
 class TxnPartitionMap {
 
@@ -48,7 +49,7 @@ class TxnPartitionMap {
     }
 
     TxnPartitionEntry getOrCreate(TopicPartition topicPartition) {
-        return topicPartitions.computeIfAbsent(topicPartition, tp -> new TxnPartitionEntry(tp));
+        return topicPartitions.computeIfAbsent(topicPartition, TxnPartitionEntry::new);
     }
 
     boolean contains(TopicPartition topicPartition) {

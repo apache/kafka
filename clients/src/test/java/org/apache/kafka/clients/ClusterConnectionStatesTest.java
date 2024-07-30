@@ -17,6 +17,20 @@
 
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Stream;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -25,20 +39,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Stream;
-
-import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 public class ClusterConnectionStatesTest {
 
@@ -75,14 +75,15 @@ public class ClusterConnectionStatesTest {
     private final String nodeId2 = "2002";
     private final String nodeId3 = "3003";
     private final String hostTwoIps = "multiple.ip.address";
-    private ClusterConnectionStates connectionStates;
 
     // For testing nodes with a single IP address, use localhost and default DNS resolution
-    private DefaultHostResolver singleIPHostResolver = new DefaultHostResolver();
+    private final DefaultHostResolver singleIPHostResolver = new DefaultHostResolver();
 
     // For testing nodes with multiple IP addresses, mock DNS resolution to get consistent results
-    private AddressChangeHostResolver multipleIPHostResolver = new AddressChangeHostResolver(
+    private final AddressChangeHostResolver multipleIPHostResolver = new AddressChangeHostResolver(
             initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
+
+    private ClusterConnectionStates connectionStates;
 
     @BeforeEach
     public void setup() {

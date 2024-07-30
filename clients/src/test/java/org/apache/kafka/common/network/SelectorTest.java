@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,12 +49,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -262,7 +265,7 @@ public class SelectorTest {
         } else {
             waitForCondition(() -> cipherMetrics(metrics).size() == 1,
                 "Waiting for cipher metrics to be created.");
-            assertEquals(Integer.valueOf(5), cipherMetrics(metrics).get(0).metricValue());
+            assertEquals(5, cipherMetrics(metrics).get(0).metricValue());
         }
     }
 
@@ -270,7 +273,7 @@ public class SelectorTest {
         return metrics.metrics().entrySet().stream().
             filter(e -> e.getKey().description().
                 contains("The number of connections with this SSL cipher and protocol.")).
-            map(e -> e.getValue()).
+            map(Map.Entry::getValue).
             collect(Collectors.toList());
     }
 
@@ -637,7 +640,7 @@ public class SelectorTest {
             // Poll until one or more receives complete and then close the server-side connection
             waitForCondition(() -> {
                 selector.poll(1000);
-                return selector.completedReceives().size() > 0;
+                return !selector.completedReceives().isEmpty();
             }, 5000, "Receive not completed");
             server.closeConnections();
             while (selector.disconnected().isEmpty()) {
@@ -953,7 +956,7 @@ public class SelectorTest {
         NetworkSend send = new NetworkSend("destination", new ByteBufferSend(ByteBuffer.allocate(0)));
         when(channel.maybeCompleteSend()).thenReturn(send);
         selector.write(channel);
-        assertEquals(asList(send), selector.completedSends());
+        assertEquals(Collections.singletonList(send), selector.completedSends());
     }
 
     /**
@@ -1012,6 +1015,34 @@ public class SelectorTest {
         assertEquals(0, selector.completedReceives().size());
     }
 
+    /**
+     * Validate that correct subset of io metrics marked deprecated in docs
+     */
+    @Test
+    public void testIoMetricsHaveCorrectDoc() {
+        Predicate<MetricName> docDeprecated =
+                mName -> mName.description().toLowerCase(Locale.ROOT).contains("deprecated");
+
+        List<String> actual = asList("io-ratio", "io-wait-ratio");
+        assertEquals(
+                actual.size(),
+                metrics.metrics().keySet().stream()
+                        .filter(m -> actual.contains(m.name()))
+                        .filter(m -> !docDeprecated.test(m))
+                        .count(),
+                "Metrics " + actual + " should be registered as non-deprecated"
+        );
+
+        List<String> deprecated = asList("iotime-total", "io-waittime-total");
+        assertEquals(
+                deprecated.size(),
+                metrics.metrics().keySet().stream()
+                        .filter(m -> deprecated.contains(m.name()))
+                        .filter(docDeprecated)
+                        .count(),
+                "Metrics " + deprecated + " should be registered as deprecated"
+        );
+    }
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));

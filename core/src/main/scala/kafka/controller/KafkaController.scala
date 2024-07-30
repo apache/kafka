@@ -161,7 +161,7 @@ class KafkaController(val config: KafkaConfig,
   private val isrChangeNotificationHandler = new IsrChangeNotificationHandler(eventManager)
   private val logDirEventNotificationHandler = new LogDirEventNotificationHandler(eventManager)
 
-  @volatile private var activeControllerId = -1
+  @volatile var activeControllerId = -1
   @volatile private var offlinePartitionCount = 0
   @volatile private var preferredReplicaImbalanceCount = 0
   @volatile private var globalTopicCount = 0
@@ -2241,7 +2241,7 @@ class KafkaController(val config: KafkaConfig,
 
             case ElectionType.UNCLEAN =>
               val currentLeader = controllerContext.partitionLeadershipInfo(partition).get.leaderAndIsr.leader
-              currentLeader == LeaderAndIsr.NoLeader || !controllerContext.liveBrokerIds.contains(currentLeader)
+              currentLeader == LeaderAndIsr.NoLeader || !controllerContext.isLiveBroker(currentLeader)
           }
         }
 

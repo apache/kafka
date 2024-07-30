@@ -16,27 +16,23 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.admin.ConsumerGroupCommand;
 import kafka.api.AbstractSaslTest;
 import kafka.api.Both$;
 import kafka.utils.JaasTestUtils;
 import kafka.zk.ConfigEntityChangeNotificationZNode;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.function.Executable;
-import scala.Option;
-import scala.Some$;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
-import scala.collection.immutable.Map$;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,7 +40,11 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
 
-import static org.apache.kafka.tools.consumer.group.ConsumerGroupCommandTest.seq;
+import scala.Option;
+import scala.Some$;
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -54,7 +54,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     public static final int NUM_PARTITIONS = 1;
     public static final int BROKER_COUNT = 1;
     public static final String KAFKA_CLIENT_SASL_MECHANISM = "SCRAM-SHA-256";
-    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS = seq(Collections.singletonList(KAFKA_CLIENT_SASL_MECHANISM));
+    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS = JavaConverters.asScalaIteratorConverter(Collections.singletonList(KAFKA_CLIENT_SASL_MECHANISM).iterator()).asScala().toSeq();
 
     @SuppressWarnings({"deprecation"})
     private Consumer<byte[], byte[]> createConsumer() {
@@ -164,8 +164,8 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
             "--describe",
             "--group", "test.group",
             "--command-config", propsFile.getAbsolutePath()};
-        ConsumerGroupCommand.ConsumerGroupCommandOptions opts = new ConsumerGroupCommand.ConsumerGroupCommandOptions(cgcArgs);
-        return new ConsumerGroupCommand.ConsumerGroupService(opts, Map$.MODULE$.empty());
+        ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(cgcArgs);
+        return new ConsumerGroupCommand.ConsumerGroupService(opts, Collections.emptyMap());
     }
 
     private void verifyAuthenticationException(Executable action) {
