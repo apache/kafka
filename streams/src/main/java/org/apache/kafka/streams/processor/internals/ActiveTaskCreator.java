@@ -48,7 +48,7 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMo
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.processingMode;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.taskProducerClientId;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.threadProducerClientId;
 
 class ActiveTaskCreator {
     private final TopologyMetadata topologyMetadata;
@@ -319,7 +319,7 @@ class ActiveTaskCreator {
 
     Set<String> producerClientIds() {
         if (threadProducer != null) {
-            return Collections.singleton(getThreadProducerClientId(threadId));
+            return Collections.singleton(threadProducerClientId(threadId));
         } else {
             return taskProducers.keySet()
                                 .stream()

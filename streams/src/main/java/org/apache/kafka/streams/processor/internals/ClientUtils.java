@@ -78,7 +78,7 @@ public class ClientUtils {
         return threadClientId + "-restore-consumer";
     }
 
-    public static String getThreadProducerClientId(final String threadClientId) {
+    public static String threadProducerClientId(final String threadClientId) {
         return threadClientId + "-producer";
     }
 
