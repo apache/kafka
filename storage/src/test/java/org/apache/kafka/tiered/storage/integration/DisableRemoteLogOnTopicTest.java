@@ -59,13 +59,12 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
         final Map<Integer, List<Integer>> assignment = mkMap(
                 mkEntry(p0, Arrays.asList(broker0, broker1))
         );
-        final Map<String, String> explictRetain = new HashMap<>();
-        explictRetain.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
-        explictRetain.put(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG, "retain");
+        final Map<String, String> disableCopy = new HashMap<>();
+        disableCopy.put(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, "true");
 
-        final Map<String, String> deletePolicy = new HashMap<>();
-        deletePolicy.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
-        deletePolicy.put(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG, "delete");
+        final Map<String, String> deleteOnDisable = new HashMap<>();
+        deleteOnDisable.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
+        deleteOnDisable.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, "true");
 
         builder
                 .createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, assignment,
@@ -76,27 +75,27 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 2L)
                 .produce(topicA, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
                         new KeyValueSpec("k2", "v2"))
-                // disable remote log storage
+                // disable remote log copy
                 .updateTopicConfig(topicA,
-                        Collections.singletonMap(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"),
+                        Collections.singletonMap(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, "true"),
                         Collections.emptyList())
 
                 // make sure we can still consume from the beginning of the topic to read data from local and remote storage
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 2)
                 .consume(topicA, p0, 0L, 3, 2)
 
-                // enable remote log storage
+                // re-enable remote log copy
                 .updateTopicConfig(topicA,
-                        Collections.singletonMap(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"),
+                        Collections.singletonMap(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, "false"),
                         Collections.emptyList())
 
                 // make sure the logs can be offloaded
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 3L)
                 .produce(topicA, p0, new KeyValueSpec("k3", "v3"))
 
-                // explicitly set delete policy as "retain" and disable remote storage
+                // explicitly disable remote log copy
                 .updateTopicConfig(topicA,
-                        explictRetain,
+                        disableCopy,
                         Collections.emptyList())
                 // make sure we can still consume from the beginning of the topic to read data from local and remote storage
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 3)
@@ -108,9 +107,9 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
                 .deleteRecords(topicA, p0, 1L)
                 .waitForRemoteLogSegmentDeletion(topicA)
 
-                // setting delete policy to "delete" and disable remote storage
+                // disabling remote log on topicA and enabling deleteOnDisable
                 .updateTopicConfig(topicA,
-                        deletePolicy,
+                        deleteOnDisable,
                         Collections.emptyList())
                 // make sure all remote data is deleted
                 .expectEmptyRemoteStorage(topicA, p0)

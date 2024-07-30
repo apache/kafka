@@ -23,7 +23,6 @@ import kafka.log.LocalLog.nextOption
 import kafka.log.remote.RemoteLogManager
 import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, RequestLocal}
 import kafka.utils._
-import org.apache.kafka.common.config.TopicConfig.REMOTE_LOG_DISABLE_POLICY_RETAIN
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeProducersResponseData
@@ -184,30 +183,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   def updateLogStartOffsetFromRemoteTier(remoteLogStartOffset: Long): Unit = {
+    if (!remoteLogEnabled()) {
+      error("Ignoring the call as the remote log storage is disabled")
+      return
+    }
     maybeIncrementLogStartOffset(remoteLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
   }
 
   def remoteLogEnabled(): Boolean = {
     UnifiedLog.isRemoteLogEnabled(remoteStorageSystemEnable, config, topicPartition.topic())
-  }
-
-  /**
-   * Check if consumer can read from remote storage.
-   * Return true if there is data in the remote storage, and
-   *    (1) the topic "remote.storage.enable" is enabled, or
-   *    (2) "remote.log.disable.policy" is "retain"
-   *
-   * @return true if remote data is readable.
-   */
-  def canReadRemoteStorage(): Boolean = {
-    def hasRetainPolicy(remoteLogDisablePolicy: String): Boolean = {
-      remoteLogDisablePolicy == null || REMOTE_LOG_DISABLE_POLICY_RETAIN.equals(remoteLogDisablePolicy)
-    }
-    val remoteLogDisablePolicy = config.remoteLogDisablePolicy()
-    // We can't just check if "remote.log.disable.policy" is "retain" because that's the default value.
-    // We should also check if there is data in remote storage. If so, it means we can read from remote storage
-    (localLogStartOffset() > logStartOffset) &&
-      (config.remoteStorageEnable() || hasRetainPolicy(remoteLogDisablePolicy))
   }
 
   /**

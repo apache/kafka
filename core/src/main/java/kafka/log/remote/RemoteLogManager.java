@@ -139,8 +139,6 @@ import scala.Option;
 import scala.collection.JavaConverters;
 
 import static kafka.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS;
-import static org.apache.kafka.common.config.TopicConfig.REMOTE_LOG_DISABLE_POLICY_DELETE;
-import static org.apache.kafka.common.config.TopicConfig.REMOTE_LOG_DISABLE_POLICY_RETAIN;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
@@ -439,27 +437,57 @@ public class RemoteLogManager implements Closeable {
             throw new KafkaException("RemoteLogManager is not configured when remote storage system is enabled");
         }
 
-        Set<TopicIdPartition> leaderPartitions = filterPartitions(partitionsBecomeLeader)
-                .map(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition())).collect(Collectors.toSet());
+        Map<TopicIdPartition, Boolean> leaderPartitions = filterPartitions(partitionsBecomeLeader)
+                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition()),
+                        p -> p.log().exists(log -> log.config().remoteCopyDisabled())));
 
-        Set<TopicIdPartition> followerPartitions = filterPartitions(partitionsBecomeFollower)
-                .map(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition())).collect(Collectors.toSet());
+        Map<TopicIdPartition, Boolean> followerPartitions = filterPartitions(partitionsBecomeFollower)
+                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition()),
+                        p -> p.log().exists(log -> log.config().remoteCopyDisabled())));
 
         if (!leaderPartitions.isEmpty() || !followerPartitions.isEmpty()) {
             LOGGER.debug("Effective topic partitions after filtering compact and internal topics, leaders: {} and followers: {}",
                     leaderPartitions, followerPartitions);
 
-            leaderPartitions.forEach(this::cacheTopicPartitionIds);
-            followerPartitions.forEach(this::cacheTopicPartitionIds);
+            leaderPartitions.forEach((tp, __) -> cacheTopicPartitionIds(tp));
+            followerPartitions.forEach((tp, __) -> cacheTopicPartitionIds(tp));
 
-            remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
+            remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions.keySet(), followerPartitions.keySet());
             followerPartitions.forEach(this::doHandleFollowerPartition);
 
             // If this node was the previous leader for the partition, then the RLMTask might be running in the
             // background thread and might emit metrics. So, removing the metrics after marking this node as follower.
-            followerPartitions.forEach(this::removeRemoteTopicPartitionMetrics);
+            followerPartitions.forEach((tp, __) -> removeRemoteTopicPartitionMetrics(tp));
 
             leaderPartitions.forEach(this::doHandleLeaderPartition);
+        }
+    }
+
+    public void stopLeaderCopyRLMTasks(Set<Partition> partitions) {
+        for (Partition partition : partitions) {
+            TopicPartition tp = partition.topicPartition();
+            if (topicIdByPartitionMap.containsKey(tp)) {
+                TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
+                leaderCopyRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
+                    LOGGER.info("Cancelling the copy RLM task for tpId: {}", tpId);
+                    task.cancel();
+                    return null;
+                });
+            }
+        }
+    }
+
+    public void stopFollowerRLMTasks(Set<Partition> partitions) {
+        for (Partition partition : partitions) {
+            TopicPartition tp = partition.topicPartition();
+            if (topicIdByPartitionMap.containsKey(tp)) {
+                TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
+                followerRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
+                    LOGGER.info("Cancelling the follower RLM task for tpId: {}", tpId);
+                    task.cancel();
+                    return null;
+                });
+            }
         }
     }
 
@@ -468,8 +496,8 @@ public class RemoteLogManager implements Closeable {
      * {@link RemoteLogMetadataManager#onStopPartitions(Set)} when {@link StopPartition#deleteLocalLog()} is true.
      * Deletes the partitions from the remote storage when {@link StopPartition#deleteRemoteLog()} is true.
      *
-     * @param stopPartitions            topic partitions that needs to be stopped.
-     * @param errorHandler              callback to handle any errors while stopping the partitions.
+     * @param stopPartitions topic partitions that needs to be stopped.
+     * @param errorHandler   callback to handle any errors while stopping the partitions.
      */
     public void stopPartitions(Set<StopPartition> stopPartitions,
                                BiConsumer<TopicPartition, Throwable> errorHandler) {
@@ -477,12 +505,16 @@ public class RemoteLogManager implements Closeable {
         Set<TopicIdPartition> stopRLMMPartitions = new HashSet<>();
         for (StopPartition stopPartition: stopPartitions) {
             TopicPartition tp = stopPartition.topicPartition();
-            String remoteLogDisablePolicy = stopPartition.remoteLogDisablePolicy();
             try {
                 if (topicIdByPartitionMap.containsKey(tp)) {
                     TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
                     leaderCopyRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
                         LOGGER.info("Cancelling the copy RLM task for tpId: {}", tpId);
+                        task.cancel();
+                        return null;
+                    });
+                    leaderExpirationRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
+                        LOGGER.info("Cancelling the expiration RLM task for tpId: {}", tpId);
                         task.cancel();
                         return null;
                     });
@@ -492,16 +524,7 @@ public class RemoteLogManager implements Closeable {
                         return null;
                     });
 
-                    // If "delete" or null is set, we should cancel expiration task
-                    if (!REMOTE_LOG_DISABLE_POLICY_RETAIN.equals(remoteLogDisablePolicy)) {
-                        leaderExpirationRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
-                            LOGGER.info("Cancelling the expiration RLM task for tpId: {}", tpId);
-                            task.cancel();
-                            return null;
-                        });
-                    }
-                    // stop remoteLogMetadataManager if "delete" is set because that's not needed anymore.
-                    if (REMOTE_LOG_DISABLE_POLICY_DELETE.equals(remoteLogDisablePolicy)) {
+                    if (stopPartition.stopRemoteLogMetadataManager()) {
                         stopRLMMPartitions.add(tpId);
                     }
 
@@ -528,9 +551,9 @@ public class RemoteLogManager implements Closeable {
             deleteLocalPartitions.forEach(tpId -> topicIdByPartitionMap.remove(tpId.topicPartition()));
         }
 
-        stopRLMMPartitions.addAll(deleteLocalPartitions);
         // NOTE: In ZK mode, this#stopPartitions method is called when Replica state changes to Offline and
         // ReplicaDeletionStarted
+        stopRLMMPartitions.addAll(deleteLocalPartitions);
         if (!stopRLMMPartitions.isEmpty()) {
             remoteLogMetadataManager.onStopPartitions(stopRLMMPartitions);
         }
@@ -1810,20 +1833,23 @@ public class RemoteLogManager implements Closeable {
                 new RemoteLogReader(fetchInfo, this, callback, brokerTopicStats, rlmFetchQuotaManager, remoteReadTimer));
     }
 
-    void doHandleLeaderPartition(TopicIdPartition topicPartition) {
+    void doHandleLeaderPartition(TopicIdPartition topicPartition, Boolean remoteCopyDisabled) {
         RLMTaskWithFuture followerRLMTaskWithFuture = followerRLMTasks.remove(topicPartition);
         if (followerRLMTaskWithFuture != null) {
             LOGGER.info("Cancelling the follower task: {}", followerRLMTaskWithFuture.rlmTask);
             followerRLMTaskWithFuture.cancel();
         }
 
-        leaderCopyRLMTasks.computeIfAbsent(topicPartition, topicIdPartition -> {
-            RLMCopyTask task = new RLMCopyTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxBytes());
-            // set this upfront when it is getting initialized instead of doing it after scheduling.
-            LOGGER.info("Created a new copy task: {} and getting scheduled", task);
-            ScheduledFuture<?> future = rlmCopyThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
-            return new RLMTaskWithFuture(task, future);
-        });
+        // Only create copy task when remoteCopyDisabled is disabled
+        if (!remoteCopyDisabled) {
+            leaderCopyRLMTasks.computeIfAbsent(topicPartition, topicIdPartition -> {
+                RLMCopyTask task = new RLMCopyTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxBytes());
+                // set this upfront when it is getting initialized instead of doing it after scheduling.
+                LOGGER.info("Created a new copy task: {} and getting scheduled", task);
+                ScheduledFuture<?> future = rlmCopyThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
+                return new RLMTaskWithFuture(task, future);
+            });
+        }
 
         leaderExpirationRLMTasks.computeIfAbsent(topicPartition, topicIdPartition -> {
             RLMExpirationTask task = new RLMExpirationTask(topicIdPartition);
@@ -1833,7 +1859,7 @@ public class RemoteLogManager implements Closeable {
         });
     }
 
-    void doHandleFollowerPartition(TopicIdPartition topicPartition) {
+    void doHandleFollowerPartition(TopicIdPartition topicPartition, Boolean remoteCopyDisabled) {
         RLMTaskWithFuture copyRLMTaskWithFuture = leaderCopyRLMTasks.remove(topicPartition);
         if (copyRLMTaskWithFuture != null) {
             LOGGER.info("Cancelling the copy task: {}", copyRLMTaskWithFuture.rlmTask);
@@ -1846,12 +1872,14 @@ public class RemoteLogManager implements Closeable {
             expirationRLMTaskWithFuture.cancel();
         }
 
-        followerRLMTasks.computeIfAbsent(topicPartition, topicIdPartition -> {
-            RLMFollowerTask task = new RLMFollowerTask(topicIdPartition);
-            LOGGER.info("Created a new follower task: {} and getting scheduled", task);
-            ScheduledFuture<?> future = followerThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
-            return new RLMTaskWithFuture(task, future);
-        });
+        if (!remoteCopyDisabled) {
+            followerRLMTasks.computeIfAbsent(topicPartition, topicIdPartition -> {
+                RLMFollowerTask task = new RLMFollowerTask(topicIdPartition);
+                LOGGER.info("Created a new follower task: {} and getting scheduled", task);
+                ScheduledFuture<?> future = followerThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
+                return new RLMTaskWithFuture(task, future);
+            });
+        }
     }
 
     static class RLMTaskWithFuture {

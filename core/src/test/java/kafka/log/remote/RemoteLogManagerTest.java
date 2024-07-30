@@ -1309,12 +1309,12 @@ public class RemoteLogManagerTest {
         verifyInCache(followerTopicIdPartition, leaderTopicIdPartition);
 
         // Evicts from topicId cache
-        remoteLogManager.stopPartitions(Collections.singleton(new StopPartition(leaderTopicIdPartition.topicPartition(), true, true)), (tp, ex) -> { });
+        remoteLogManager.stopPartitions(Collections.singleton(new StopPartition(leaderTopicIdPartition.topicPartition(), true, true, true)), (tp, ex) -> { });
         verifyNotInCache(leaderTopicIdPartition);
         verifyInCache(followerTopicIdPartition);
 
         // Evicts from topicId cache
-        remoteLogManager.stopPartitions(Collections.singleton(new StopPartition(followerTopicIdPartition.topicPartition(), true, true)), (tp, ex) -> { });
+        remoteLogManager.stopPartitions(Collections.singleton(new StopPartition(followerTopicIdPartition.topicPartition(), true, true, true)), (tp, ex) -> { });
         verifyNotInCache(leaderTopicIdPartition, followerTopicIdPartition);
     }
 
@@ -1338,13 +1338,13 @@ public class RemoteLogManagerTest {
         RemoteLogManager spyRemoteLogManager = spy(remoteLogManager);
         spyRemoteLogManager.onLeadershipChange(
             Collections.emptySet(), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
-        verify(spyRemoteLogManager).doHandleFollowerPartition(eq(followerTopicIdPartition));
+        verify(spyRemoteLogManager).doHandleFollowerPartition(eq(followerTopicIdPartition), eq(false));
 
         Mockito.reset(spyRemoteLogManager);
 
         spyRemoteLogManager.onLeadershipChange(
             Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
-        verify(spyRemoteLogManager).doHandleLeaderPartition(eq(leaderTopicIdPartition));
+        verify(spyRemoteLogManager).doHandleLeaderPartition(eq(leaderTopicIdPartition), eq(false));
     }
 
     private MemoryRecords records(long timestamp,
@@ -1837,8 +1837,8 @@ public class RemoteLogManagerTest {
         remoteLogManager.startup();
         BiConsumer<TopicPartition, Throwable> errorHandler = (topicPartition, throwable) -> fail("shouldn't be called");
         Set<StopPartition> partitions = new HashSet<>();
-        partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, false));
-        partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, false));
+        partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, false, false));
+        partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, false, false));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
                 Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
         assertNotNull(remoteLogManager.leaderCopyTask(leaderTopicIdPartition));
@@ -1860,8 +1860,8 @@ public class RemoteLogManagerTest {
         BiConsumer<TopicPartition, Throwable> errorHandler =
                 (topicPartition, ex) -> fail("shouldn't be called: " + ex);
         Set<StopPartition> partitions = new HashSet<>();
-        partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, true));
-        partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, true));
+        partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, true, true));
+        partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, true, true));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
                 Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
         assertNotNull(remoteLogManager.leaderCopyTask(leaderTopicIdPartition));
