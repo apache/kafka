@@ -95,8 +95,8 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
 
     producer.beginTransaction()
     try {
-      producer.send(record).get()
-      fail("expected ProducerFencedException")
+        producer.send(record).get()
+        fail("expected ProducerFencedException")
     } catch {
       case _: ProducerFencedException => //ok
       case ee: ExecutionException =>
@@ -154,8 +154,8 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
     } catch {
       case ee: ExecutionException =>
         assertTrue(ee.getCause.isInstanceOf[ProducerFencedException] ||
-          ee.getCause.isInstanceOf[InvalidProducerEpochException],
-          "Unexpected ExecutionException cause " + ee.getCause)
+                   ee.getCause.isInstanceOf[InvalidProducerEpochException],
+                   "Unexpected ExecutionException cause " + ee.getCause)
       case e: Exception =>
         throw e
     }
