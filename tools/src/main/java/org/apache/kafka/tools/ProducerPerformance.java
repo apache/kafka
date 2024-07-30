@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.ThroughputThrottler;
@@ -48,8 +49,8 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
 public class ProducerPerformance {
 
-    public static final String DEFAULT_TRANSACTION_ID = "performance-producer-default-transactional-id";
-    public static final Long DEFAULT_TRANSACTION_DURATION_MS = 3000L;
+    public static final String DEFAULT_TRANSACTION_ID_PREFIX = "performance-producer-";
+    public static final long DEFAULT_TRANSACTION_DURATION_MS = 3000L;
 
     public static void main(String[] args) throws Exception {
         ProducerPerformance perf = new ProducerPerformance();
@@ -209,7 +210,10 @@ public class ProducerPerformance {
         ArgumentParser parser = ArgumentParsers
                 .newArgumentParser("producer-performance")
                 .defaultHelp(true)
-                .description("This tool is used to verify the producer performance.");
+                .description("This tool is used to verify the producer performance. To enable transactions, " +
+                        "you can specify a transaction id or set a transaction duration using --transaction-duration-ms. " +
+                        "There are three ways to specify the transaction id: set transaction.id=<id> via --producer-props, " +
+                        "set transaction.id=<id> in the config file via --producer.config, or use --transaction-id <id>.");
 
         MutuallyExclusiveGroup payloadOptions = parser
                 .addMutuallyExclusiveGroup()
@@ -307,9 +311,9 @@ public class ProducerPerformance {
                .metavar("TRANSACTIONAL-ID")
                .dest("transactionalId")
                .help("The transactional id to use. This config takes precedence over the transactional.id " +
-                       "specified via --producer.config or --producer-props. Note that if the transactional ID " +
+                       "specified via --producer.config or --producer-props. Note that if the transactional id " +
                        "is not specified while --transaction-duration-ms is provided, the default value for the " +
-                       "transactional id will be performance-producer-default-transactional-id.");
+                       "transactional id will be performance-producer- followed by a random uuid.");
 
         parser.addArgument("--transaction-duration-ms")
                .action(store())
@@ -519,7 +523,7 @@ public class ProducerPerformance {
                 Optional<String> txIdInProps =
                         Optional.ofNullable(producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG))
                                 .map(Object::toString);
-                String transactionId = Optional.ofNullable(transactionIdArg).orElse(txIdInProps.orElse(DEFAULT_TRANSACTION_ID));
+                String transactionId = Optional.ofNullable(transactionIdArg).orElse(txIdInProps.orElse(DEFAULT_TRANSACTION_ID_PREFIX + Uuid.randomUuid().toString()));
                 producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionId);
 
                 if (transactionDurationMsArg == null) {
