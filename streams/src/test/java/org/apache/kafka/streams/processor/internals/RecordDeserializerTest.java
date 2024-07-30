@@ -24,16 +24,28 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ErrorHandlerContext;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.test.InternalMockProcessorContext;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RecordDeserializerTest {
-
-    private final RecordHeaders headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+    private final String sourceNodeName = "source-node";
+    private final TaskId taskId = new TaskId(0, 0);
+    private final RecordHeaders headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
     private final ConsumerRecord<byte[], byte[]> rawRecord = new ConsumerRecord<>("topic",
         1,
         1,
@@ -46,13 +58,17 @@ public class RecordDeserializerTest {
         headers,
         Optional.empty());
 
+    private final InternalProcessorContext<Void, Void> context = new InternalMockProcessorContext<>();
+
     @Test
     public void shouldReturnConsumerRecordWithDeserializedValueWhenNoExceptions() {
         final RecordDeserializer recordDeserializer = new RecordDeserializer(
             new TheSourceNode(
+                sourceNodeName,
                 false,
                 false,
-                "key", "value"
+                "key",
+                "value"
             ),
             null,
             new LogContext(),
@@ -69,17 +85,82 @@ public class RecordDeserializerTest {
         assertEquals(rawRecord.headers(), record.headers());
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "true, true",
+        "true, false",
+        "false, true",
+    })
+    public void shouldThrowStreamsExceptionWhenDeserializationFailsAndExceptionHandlerRepliesWithFail(final boolean keyThrowsException,
+                                                                                                      final boolean valueThrowsException) {
+        final RecordDeserializer recordDeserializer = new RecordDeserializer(
+            new TheSourceNode(
+                sourceNodeName,
+                keyThrowsException,
+                valueThrowsException,
+                "key",
+                "value"
+            ),
+            new DeserializationExceptionHandlerMock(
+                DeserializationExceptionHandler.DeserializationHandlerResponse.FAIL,
+                rawRecord,
+                sourceNodeName,
+                taskId
+            ),
+            new LogContext(),
+            new Metrics().sensor("dropped-records")
+        );
+
+        final StreamsException e = assertThrows(StreamsException.class, () -> recordDeserializer.deserialize(context, rawRecord));
+        assertEquals(e.getMessage(), "Deserialization exception handler is set "
+                + "to fail upon a deserialization error. "
+                + "If you would rather have the streaming pipeline "
+                + "continue after a deserialization error, please set the "
+                + "default.deserialization.exception.handler appropriately.");
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "true, true",
+        "true, false",
+        "false, true"
+    })
+    public void shouldNotThrowStreamsExceptionWhenDeserializationFailsAndExceptionHandlerRepliesWithContinue(final boolean keyThrowsException,
+                                                                                                             final boolean valueThrowsException) {
+        final RecordDeserializer recordDeserializer = new RecordDeserializer(
+            new TheSourceNode(
+                sourceNodeName,
+                keyThrowsException,
+                valueThrowsException,
+                "key",
+                "value"
+            ),
+            new DeserializationExceptionHandlerMock(
+                DeserializationExceptionHandler.DeserializationHandlerResponse.CONTINUE,
+                rawRecord,
+                sourceNodeName,
+                taskId
+            ),
+            new LogContext(),
+            new Metrics().sensor("dropped-records")
+        );
+
+        final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(context, rawRecord);
+        assertNull(record);
+    }
+
     static class TheSourceNode extends SourceNode<Object, Object> {
         private final boolean keyThrowsException;
         private final boolean valueThrowsException;
         private final Object key;
         private final Object value;
 
-        TheSourceNode(final boolean keyThrowsException,
+        TheSourceNode(final String name,
+                      final boolean keyThrowsException,
                       final boolean valueThrowsException,
                       final Object key,
                       final Object value) {
-            super("", null, null);
+            super(name, null, null);
             this.keyThrowsException = keyThrowsException;
             this.valueThrowsException = valueThrowsException;
             this.key = key;
@@ -89,7 +170,7 @@ public class RecordDeserializerTest {
         @Override
         public Object deserializeKey(final String topic, final Headers headers, final byte[] data) {
             if (keyThrowsException) {
-                throw new RuntimeException();
+                throw new RuntimeException("KABOOM!");
             }
             return key;
         }
@@ -97,10 +178,46 @@ public class RecordDeserializerTest {
         @Override
         public Object deserializeValue(final String topic, final Headers headers, final byte[] data) {
             if (valueThrowsException) {
-                throw new RuntimeException();
+                throw new RuntimeException("KABOOM!");
             }
             return value;
         }
     }
 
+    public static class DeserializationExceptionHandlerMock implements DeserializationExceptionHandler {
+        private final DeserializationHandlerResponse response;
+        private final ConsumerRecord<byte[], byte[]> expectedRecord;
+        private final String expectedProcessorNodeId;
+        private final TaskId expectedTaskId;
+
+        public DeserializationExceptionHandlerMock(final DeserializationHandlerResponse response,
+                                                   final ConsumerRecord<byte[], byte[]> record,
+                                                   final String processorNodeId,
+                                                   final TaskId taskId) {
+            this.response = response;
+            this.expectedRecord = record;
+            this.expectedProcessorNodeId = processorNodeId;
+            this.expectedTaskId = taskId;
+        }
+
+        @Override
+        public DeserializationHandlerResponse handle(final ErrorHandlerContext context,
+                                                     final ConsumerRecord<byte[], byte[]> record,
+                                                     final Exception exception) {
+            assertEquals(expectedRecord.topic(), context.topic());
+            assertEquals(expectedRecord.partition(), context.partition());
+            assertEquals(expectedRecord.offset(), context.offset());
+            assertEquals(expectedProcessorNodeId, context.processorNodeId());
+            assertEquals(expectedTaskId, context.taskId());
+            assertEquals(expectedRecord, record);
+            assertInstanceOf(RuntimeException.class, exception);
+            assertEquals("KABOOM!", exception.getMessage());
+            return response;
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            // do nothing
+        }
+    }
 }

@@ -18,7 +18,10 @@ package org.apache.kafka.streams.errors.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
+
+import java.util.Optional;
 
 /**
  * Default implementation of {@link ErrorHandlerContext} that provides access to the metadata of the record that caused the error.
@@ -30,8 +33,10 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     private final Headers headers;
     private final String processorNodeId;
     private final TaskId taskId;
+    private ProcessorContext processorContext;
 
-    public DefaultErrorHandlerContext(final String topic,
+    public DefaultErrorHandlerContext(final ProcessorContext processorContext,
+                                      final String topic,
                                       final int partition,
                                       final long offset,
                                       final Headers headers,
@@ -43,6 +48,7 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
         this.headers = headers;
         this.processorNodeId = processorNodeId;
         this.taskId = taskId;
+        this.processorContext = processorContext;
     }
 
     @Override
@@ -73,5 +79,9 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     @Override
     public TaskId taskId() {
         return taskId;
+    }
+
+    public Optional<ProcessorContext> processorContext() {
+        return Optional.ofNullable(processorContext);
     }
 }
