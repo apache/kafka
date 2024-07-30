@@ -43,6 +43,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
+import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -57,6 +58,8 @@ import org.slf4j.event.Level;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
@@ -118,6 +121,7 @@ public class ConnectWorkerIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ConnectWorkerIntegrationTest.class);
 
     private static final int NUM_TOPIC_PARTITIONS = 3;
+    private static final long RECORD_TRANSFER_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
     private static final long OFFSET_COMMIT_INTERVAL_MS = TimeUnit.SECONDS.toMillis(30);
     private static final int NUM_WORKERS = 3;
     private static final int NUM_TASKS = 4;
@@ -142,7 +146,7 @@ public class ConnectWorkerIntegrationTest {
         brokerProps = new Properties();
         brokerProps.put("auto.create.topics.enable", String.valueOf(false));
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connectBuilder = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -154,7 +158,7 @@ public class ConnectWorkerIntegrationTest {
     @AfterEach
     public void close(TestInfo testInfo) {
         log.info("Finished test {}", testInfo.getDisplayName());
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 
@@ -244,8 +248,11 @@ public class ConnectWorkerIntegrationTest {
     public void testBrokerCoordinator() throws Exception {
         ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
         workerProps.put(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, String.valueOf(5000));
-        connect = connectBuilder.workerProps(workerProps).build();
+
+        useFixedBrokerPort();
+
         // start the clusters
+        connect = connectBuilder.build();
         connect.start();
         int numTasks = 4;
         // create test topic
@@ -263,7 +270,7 @@ public class ConnectWorkerIntegrationTest {
         // expect that the connector will be stopped once the coordinator is detected to be down
         StartAndStopLatch stopLatch = connectorHandle.expectedStops(1, false);
 
-        connect.kafka().stopOnlyKafka();
+        connect.kafka().stopOnlyBrokers();
 
         // Allow for the workers to discover that the coordinator is unavailable, wait is
         // heartbeat timeout * 2 + 4sec
@@ -294,7 +301,7 @@ public class ConnectWorkerIntegrationTest {
                         + CONNECTOR_SETUP_DURATION_MS + "ms");
 
         StartAndStopLatch startLatch = connectorHandle.expectedStarts(1, false);
-        connect.kafka().startOnlyKafkaOnSamePorts();
+        connect.kafka().restartOnlyBrokers();
 
         // Allow for the kafka brokers to come back online
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
@@ -835,8 +842,10 @@ public class ConnectWorkerIntegrationTest {
         // Workaround for KAFKA-15676, which can cause the scheduled rebalance delay to
         // be spuriously triggered after the group coordinator for a Connect cluster is bounced
         workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "0");
+
+        useFixedBrokerPort();
+
         connect = connectBuilder
-                .numBrokers(1)
                 .numWorkers(1)
                 .build();
         connect.start();
@@ -854,7 +863,7 @@ public class ConnectWorkerIntegrationTest {
 
         // Bring down Kafka, which should cause some REST requests to fail
         log.info("Stopping Kafka cluster");
-        connect.kafka().stopOnlyKafka();
+        connect.kafka().stopOnlyBrokers();
 
         // Try to reconfigure the connector, which should fail with a timeout error
         log.info("Trying to reconfigure connector while Kafka cluster is down");
@@ -863,7 +872,7 @@ public class ConnectWorkerIntegrationTest {
                 "flushing updates to the status topic"
         );
         log.info("Restarting Kafka cluster");
-        connect.kafka().startOnlyKafkaOnSamePorts();
+        connect.kafka().restartOnlyBrokers();
         connect.assertions().assertExactlyNumBrokersAreUp(1, "Broker did not complete startup in time");
         log.info("Kafka cluster is restarted");
 
@@ -1182,7 +1191,7 @@ public class ConnectWorkerIntegrationTest {
                 NUM_TASKS,
                 "Connector or its tasks did not start in time"
         );
-        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+        connectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
 
         connect.deleteConnector(CONNECTOR_NAME);
 
@@ -1223,7 +1232,7 @@ public class ConnectWorkerIntegrationTest {
                 NUM_TASKS,
                 "Connector or its tasks did not start in time"
         );
-        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+        connectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
 
         // See if any new records got written to the old topic
         final long nextEndOffset = connect.kafka().endOffset(connectorTopicPartition);
@@ -1282,7 +1291,7 @@ public class ConnectWorkerIntegrationTest {
                 NUM_TASKS,
                 "Connector or its tasks did not start in time"
         );
-        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+        connectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
 
         // Delete the secrets file, which should render the old task configs invalid
         assertTrue(secretsFile.delete(), "Failed to delete secrets file");
@@ -1307,7 +1316,7 @@ public class ConnectWorkerIntegrationTest {
 
         // Wait for at least one task to commit offsets after being restarted
         connectorHandle.expectedCommits(1);
-        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+        connectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
 
         final long endOffset = connect.kafka().endOffset(new TopicPartition(secondConnectorTopic, 0));
         assertTrue(
@@ -1444,6 +1453,23 @@ public class ConnectWorkerIntegrationTest {
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
         return props;
+    }
+
+    private void useFixedBrokerPort() throws IOException {
+        // Find a free port and use it in the Kafka broker's listeners config. We can't use port 0 in the listeners
+        // config to get a random free port because in this test we want to stop the Kafka broker and then bring it
+        // back up and listening on the same port in order to verify that the Connect cluster can re-connect to Kafka
+        // and continue functioning normally. If we were to use port 0 here, the Kafka broker would most likely listen
+        // on a different random free port the second time it is started. Note that we can only use the static port
+        // because we have a single broker setup in this test.
+        int listenerPort;
+        try (ServerSocket s = new ServerSocket(0)) {
+            listenerPort = s.getLocalPort();
+        }
+        brokerProps.put(SocketServerConfigs.LISTENERS_CONFIG, String.format("EXTERNAL://localhost:%d,CONTROLLER://localhost:0", listenerPort));
+        connectBuilder
+                .numBrokers(1)
+                .brokerProps(brokerProps);
     }
 
     public static class EmptyTaskConfigsConnector extends SinkConnector {
