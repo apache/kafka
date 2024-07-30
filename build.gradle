@@ -3176,7 +3176,6 @@ project(':connect:runtime') {
     implementation libs.jettyServlets
     implementation libs.jettyClient
     implementation libs.classgraph
-    implementation libs.guava
     implementation libs.mavenArtifact
     implementation libs.swaggerAnnotations
 
