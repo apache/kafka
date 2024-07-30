@@ -219,7 +219,7 @@ public class TestKitNodes {
         return new ListenerName("CONTROLLER");
     }
 
-    public static TestKitNode buildBrokerNode(int id,
+    private static TestKitNode buildBrokerNode(int id,
                                               String baseDirectory,
                                               String clusterId,
                                               boolean combined,
@@ -270,7 +270,7 @@ public class TestKitNodes {
         };
     }
 
-    public static TestKitNode buildControllerNode(int id,
+    private static TestKitNode buildControllerNode(int id,
                                                   String baseDirectory,
                                                   String clusterId,
                                                   boolean combined,
