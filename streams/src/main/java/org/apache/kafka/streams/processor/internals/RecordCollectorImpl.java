@@ -351,14 +351,14 @@ public class RecordCollectorImpl implements RecordCollector {
         return new StreamsException(
             MessageFormat.format(
                 String.format(
-                    "ClassCastException while producing data to topic %s. " +
-                    "The {0} serializer %s is not compatible to the actual {0} type: %s. " +
-                    "Change the default {0} serde in StreamConfig or provide the correct {0} serde via method parameters " +
-                    "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with " +
-                    "`Produced.{0}Serde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
-                    topic,
-                    keyOrValueSerializer.getClass().getName(),
-                    keyOrValueClass),
+                        "ClassCastException while producing data to topic %s. " +
+                            "The {0} serializer %s is not compatible to the actual {0} type: %s. " +
+                            "Change the default {0} serde in StreamConfig or provide the correct {0} serde via method parameters " +
+                            "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with " +
+                            "`Produced.{0}Serde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
+                        topic,
+                        keyOrValueSerializer.getClass().getName(),
+                        keyOrValueClass),
                 origin.toString().toLowerCase(Locale.ROOT)),
                 exception);
     }
