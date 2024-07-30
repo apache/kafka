@@ -458,7 +458,7 @@ public class PluginUtils {
     }
 
     private static Collection<URL> forJavaClassPath() {
-        Collection<URL> urls = new ArrayList<URL>();
+        Collection<URL> urls = new ArrayList<>();
         String javaClassPath = System.getProperty("java.class.path");
         if (javaClassPath != null) {
             for (String path : javaClassPath.split(File.pathSeparator)) {
@@ -472,9 +472,9 @@ public class PluginUtils {
         return distinctUrls(urls);
     }
     
-    private static Collection<URL> forClassLoader(ClassLoader... classLoaders) {
+    private static Collection<URL> forClassLoader(ClassLoader classLoader) {
         final Collection<URL> result = new ArrayList<URL>();
-        final ClassLoader[] loaders = classLoaders(classLoaders);
+        final ClassLoader[] loaders = classLoaders(classLoader);
         for (ClassLoader classLoader : loaders) {
             while (classLoader != null) {
                 if (classLoader instanceof URLClassLoader) {
@@ -489,19 +489,17 @@ public class PluginUtils {
         return distinctUrls(result);
     }
     
-    private static ClassLoader[] classLoaders(ClassLoader... classLoaders) {
-        if (classLoaders != null && classLoaders.length != 0) {
-            return classLoaders;
-        } else {
-            ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader(), 
-                    staticClassLoader = ClassGraph.class.getClassLoader();
-            return contextClassLoader != null ?
-                    staticClassLoader != null && contextClassLoader != staticClassLoader ?
-                            new ClassLoader[]{contextClassLoader, staticClassLoader} :
-                            new ClassLoader[]{contextClassLoader} :
-                    new ClassLoader[] {};
-
+    private static ClassLoader[] classLoaders(ClassLoader classLoader) {
+        if (classLoader == null) {
+            return new ClassLoader[] {classLoader};
         }
+        ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader(), 
+                staticClassLoader = ClassGraph.class.getClassLoader();
+        return contextClassLoader != null ?
+                staticClassLoader != null && contextClassLoader != staticClassLoader ?
+                        new ClassLoader[]{contextClassLoader, staticClassLoader} :
+                        new ClassLoader[]{contextClassLoader} :
+                new ClassLoader[] {};
     }
     
     private static Collection<URL> distinctUrls(Collection<URL> urls) {

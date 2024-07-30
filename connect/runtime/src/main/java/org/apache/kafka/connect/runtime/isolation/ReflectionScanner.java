@@ -118,11 +118,12 @@ public class ReflectionScanner extends PluginScanner {
             PluginSource source
     ) {
         ClassInfoList plugins;
-        Class<T> kclass = (Class<T>) type.superClass();
+        Class<T> klass = (Class<T>) type.superClass();
         try {
-            plugins = classGraph.getSubclasses(kclass.getName());
-            if (plugins.isEmpty()) {
-                plugins = classGraph.getClassesImplementing(kclass.getName());
+            if (klass.isInterface()) {
+                plugins = classGraph.getClassesImplementing(klass.getName());
+            } else {
+                plugins = classGraph.getSubclasses(klass.getName());
             }
         } catch (Exception e) {
             log.debug("Reflections scanner could not find any {} in {} for URLs: {}",
@@ -131,7 +132,7 @@ public class ReflectionScanner extends PluginScanner {
         }
 
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
-        for (Class<? extends T> pluginKlass : plugins.getStandardClasses().loadClasses(kclass, true)) {
+        for (Class<? extends T> pluginKlass : plugins.getStandardClasses().loadClasses(klass, true)) {
             if (!PluginUtils.isConcrete(pluginKlass)) {
                 log.debug("Skipping {} in {} as it is not concrete implementation", pluginKlass, source);
                 continue;
