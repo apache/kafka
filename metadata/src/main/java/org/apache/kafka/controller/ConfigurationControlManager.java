@@ -269,9 +269,13 @@ public class ConfigurationControlManager {
                                          List<ApiMessageAndVersion> recordsImplicitlyDeleted,
                                          boolean newlyCreatedResource) {
         Map<String, String> allConfigs = new HashMap<>();
+        Map<String, String> existingConfigsMap = new HashMap<>();
         Map<String, String> alteredConfigsForAlterConfigPolicyCheck = new HashMap<>();
-        TimelineHashMap<String, String> existingConfigs = configData.get(configResource);
-        if (existingConfigs != null) allConfigs.putAll(existingConfigs);
+        TimelineHashMap<String, String> existingConfigsSnapshot = configData.get(configResource);
+        if (existingConfigsSnapshot != null) {
+            allConfigs.putAll(existingConfigsSnapshot);
+            existingConfigsMap.putAll(existingConfigsSnapshot);
+        }
         for (ApiMessageAndVersion newRecord : recordsExplicitlyAltered) {
             ConfigRecord configRecord = (ConfigRecord) newRecord.message();
             if (configRecord.value() == null) {
@@ -288,7 +292,7 @@ public class ConfigurationControlManager {
             // in the list passed to the policy in order to maintain backwards compatibility
         }
         try {
-            validator.validate(configResource, allConfigs);
+            validator.validate(configResource, allConfigs, existingConfigsMap);
             if (!newlyCreatedResource) {
                 existenceChecker.accept(configResource);
             }

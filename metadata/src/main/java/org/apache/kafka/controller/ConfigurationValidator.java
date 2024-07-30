@@ -28,7 +28,7 @@ public interface ConfigurationValidator {
         public void validate(ConfigResource resource) { }
 
         @Override
-        public void validate(ConfigResource resource, Map<String, String> config) { }
+        public void validate(ConfigResource resource, Map<String, String> newConfigs, Map<String, String> existingConfigs) { }
     };
 
     /**
@@ -41,8 +41,9 @@ public interface ConfigurationValidator {
     /**
      * Throws an ApiException if a configuration is invalid for the given resource.
      *
-     * @param resource      The configuration resource.
-     * @param config        The new configuration.
+     * @param resource               The configuration resource.
+     * @param newConfigs             The new configuration.
+     * @param existingConfigs        The existing configuration.
      */
-    void validate(ConfigResource resource, Map<String, String> config);
+    void validate(ConfigResource resource, Map<String, String> newConfigs, Map<String, String> existingConfigs);
 }
