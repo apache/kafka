@@ -179,7 +179,6 @@ class LogLoader(
     } else {
       math.max(logStartOffsetCheckpoint, segments.firstSegment.get.baseOffset)
     }
-
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
     leaderEpochCache.ifPresent(_.truncateFromStartAsyncFlush(logStartOffsetCheckpoint))
 

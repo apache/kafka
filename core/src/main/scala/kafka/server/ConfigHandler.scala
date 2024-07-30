@@ -28,7 +28,6 @@ import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.server.config.{QuotaConfigs, ReplicationConfigs, ZooKeeperInternals}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
@@ -72,7 +71,9 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     val wasRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
     val wasCopyDisabled = logs.exists(_.config.remoteCopyDisabled())
 
-    logManager.updateTopicConfig(topic, props, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
+    // kafkaController is only defined in Zookeeper's mode
+    logManager.updateTopicConfig(topic, props, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
+      wasRemoteLogEnabled, kafkaController.isDefined)
     maybeUpdateRemoteLogComponents(topic, logs, wasRemoteLogEnabled, wasCopyDisabled)
   }
 
@@ -103,14 +104,8 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
       })
     }
 
-    // Disabling remote log on this topic
-    if (wasRemoteLogEnabled && !isRemoteLogEnabled) {
-      if (!isDeleteOnDisable) {
-        throw new InvalidConfigurationException("It is invalid to disable remote storage without deleting remote data. " +
-          "If you want to keep the remote data and turn to read only, please set `remote.storage.enable=true,remote.copy.disabled=true`. " +
-          "If you want to disable remote storage and delete all remote data, please set `remote.storage.enable=false,remote.log.delete.on.disable=true`.")
-      }
-
+    // Disabling remote log storage on this topic
+    if (wasRemoteLogEnabled && !isRemoteLogEnabled && isDeleteOnDisable) {
       val stopPartitions: java.util.HashSet[StopPartition] = new java.util.HashSet[StopPartition]()
       leaderPartitions.foreach(partition => {
         // delete remote logs and stop RemoteLogMetadataManager

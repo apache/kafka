@@ -623,8 +623,13 @@ public class LogConfig extends AbstractConfig {
      */
     private static void validateTopicLogConfigValues(Map<String, String> existingConfigs,
                                                      Map<?, ?> newConfigs,
-                                                     boolean isRemoteLogStorageSystemEnabled) {
+                                                     boolean isRemoteLogStorageSystemEnabled,
+                                                     boolean fromZK) {
         validateValues(newConfigs);
+
+        if (fromZK) {
+            validateNoInvalidRemoteStorageConfigsInZK(newConfigs);
+        }
         boolean isRemoteLogStorageEnabled = (Boolean) newConfigs.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled) {
             validateRemoteStorageOnlyIfSystemEnabled(newConfigs, isRemoteLogStorageSystemEnabled, false);
@@ -633,17 +638,26 @@ public class LogConfig extends AbstractConfig {
             validateRemoteStorageRetentionTime(newConfigs);
         } else {
             // The new config "remote.storage.enable" is false, validate if it's turning from true to false
-            validateTurningOffRemoteStorageWithDelete(existingConfigs, newConfigs);
+            boolean wasRemoteLogEnabled = Boolean.parseBoolean(existingConfigs.getOrDefault(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"));
+            validateTurningOffRemoteStorageWithDelete(existingConfigs, wasRemoteLogEnabled, isRemoteLogStorageEnabled);
         }
     }
 
-    public static void validateTurningOffRemoteStorageWithDelete(Map<String, String> existingConfigs, Map<?, ?> newConfigs) {
-        boolean wasRemoteLogEnabledBeforeUpdate = Boolean.parseBoolean(existingConfigs.getOrDefault(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"));
-        boolean isRemoteLogDeleteOnDisable = (Boolean) newConfigs.get(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG);
-        if (wasRemoteLogEnabledBeforeUpdate && !isRemoteLogDeleteOnDisable) {
+    public static void validateTurningOffRemoteStorageWithDelete(Map<?, ?> newConfigs, boolean wasRemoteLogEnabled, boolean isRemoteLogStorageEnabled) {
+        boolean isRemoteLogDeleteOnDisable = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, false);
+        if (wasRemoteLogEnabled && !isRemoteLogStorageEnabled && !isRemoteLogDeleteOnDisable) {
             throw new InvalidConfigurationException("It is invalid to disable remote storage without deleting remote data. " +
                     "If you want to keep the remote data and turn to read only, please set `remote.storage.enable=true,remote.copy.disabled=true`. " +
                     "If you want to disable remote storage and delete all remote data, please set `remote.storage.enable=false,remote.log.delete.on.disable=true`.");
+        }
+    }
+
+    public static void validateNoInvalidRemoteStorageConfigsInZK(Map<?, ?> newConfigs) {
+        boolean isRemoteLogDeleteOnDisable = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, false);
+        boolean isRemoteLogCopyDisabled = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, false);
+        if (isRemoteLogDeleteOnDisable || isRemoteLogCopyDisabled) {
+            throw new InvalidConfigurationException("It is invalid to set `remote.log.delete.on.disable` or " +
+                    "`remote.log.copy.disabled` under Zookeeper's mode.");
         }
     }
 
@@ -704,13 +718,14 @@ public class LogConfig extends AbstractConfig {
      * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
      */
     public static void validate(Properties props) {
-        validate(Collections.emptyMap(), props, Collections.emptyMap(), false);
+        validate(Collections.emptyMap(), props, Collections.emptyMap(), false, false);
     }
 
     public static void validate(Map<String, String> existingConfigs,
                                 Properties props,
                                 Map<?, ?> configuredProps,
-                                boolean isRemoteLogStorageSystemEnabled) {
+                                boolean isRemoteLogStorageSystemEnabled,
+                                boolean fromZK) {
         validateNames(props);
         if (configuredProps == null || configuredProps.isEmpty()) {
             Map<?, ?> valueMaps = CONFIG.parse(props);
@@ -719,7 +734,7 @@ public class LogConfig extends AbstractConfig {
             Map<Object, Object> combinedConfigs = new HashMap<>(configuredProps);
             combinedConfigs.putAll(props);
             Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
-            validateTopicLogConfigValues(existingConfigs, valueMaps, isRemoteLogStorageSystemEnabled);
+            validateTopicLogConfigValues(existingConfigs, valueMaps, isRemoteLogStorageSystemEnabled, fromZK);
         }
     }
 
