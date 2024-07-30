@@ -26,6 +26,7 @@ import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.MockQuorumStateStore;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.api.AfterEach;
@@ -82,6 +83,7 @@ public class KafkaRaftMetricsTest {
             localDirectoryId,
             mockPartitionState,
             voterSet.listeners(localId),
+            Features.KRAFT_VERSION.supportedVersionRange(),
             electionTimeoutMs,
             fetchTimeoutMs,
             new MockQuorumStateStore(),

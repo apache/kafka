@@ -96,6 +96,21 @@ public final class VoterSet {
     }
 
     /**
+     * Return true if the provided voter node is a voter and would cause a change in the voter set.
+     *
+     * @param updatedVoterNode the updated voter node
+     * @return true if the updated voter node is different than the node in the voter set; otherwise false.
+     */
+    public boolean voterNodeNeedsUpdate(VoterNode updatedVoterNode) {
+        return Optional.ofNullable(voters.get(updatedVoterNode.voterKey().id()))
+            .map(
+                node -> node.isVoter(updatedVoterNode.voterKey()) &&
+                        !node.equals(updatedVoterNode)
+            )
+            .orElse(false);
+    }
+
+    /**
      * Returns if the node is a voter in the set of voters.
      *
      * If the voter set includes the directory id, the {@code replicaKey} directory id must match the
@@ -202,6 +217,24 @@ public final class VoterSet {
         ) {
             HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
             newVoters.remove(voterKey.id());
+
+            return Optional.of(new VoterSet(newVoters));
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Updates a voter in the voter set.
+     *
+     * @param voter the updated voter
+     * @return a new voter set if the voter was updated, otherwise {@code Optional.empty()}
+     */
+    public Optional<VoterSet> updateVoter(VoterNode voter) {
+        VoterNode oldVoter = voters.get(voter.voterKey().id());
+        if (oldVoter != null && oldVoter.isVoter(voter.voterKey())) {
+            HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
+            newVoters.put(voter.voterKey().id(), voter);
 
             return Optional.of(new VoterSet(newVoters));
         }

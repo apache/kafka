@@ -42,7 +42,7 @@ import java.util.concurrent.CompletableFuture;
  * 2. Check that the cluster supports kraft.version 1, otherwise return the UNSUPPORTED_VERSION error.
  * 3. Check that there are no uncommitted voter changes, otherwise return the REQUEST_TIMED_OUT error.
  * 4. Append the updated VotersRecord to the log. The KRaft internal listener will read this
- *    uncommitted record from the log and add the new voter to the set of voters.
+ *    uncommitted record from the log and remove the voter from the set of voters.
  * 5. Wait for the VotersRecord to commit using the majority of the new set of voters. Return a
  *    REQUEST_TIMED_OUT error if it doesn't commit in time.
  * 6. Send the RemoveVoter successful response to the client.
@@ -77,12 +77,12 @@ public final class RemoveVoterHandler {
         ReplicaKey voterKey,
         long currentTimeMs
     ) {
-        // Check if there are any pending add or remove voter requests
+        // Check if there are any pending voter change requests
         if (leaderState.isOperationPending(currentTimeMs)) {
             return CompletableFuture.completedFuture(
                 RaftUtil.removeVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
-                    "Request timed out waiting for leader to handle previous add or remove voter request"
+                    "Request timed out waiting for leader to handle previous voter change request"
                 )
             );
         }

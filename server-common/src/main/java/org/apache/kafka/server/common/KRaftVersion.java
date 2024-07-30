@@ -86,6 +86,22 @@ public enum KRaftVersion implements FeatureVersion {
             case KRAFT_VERSION_1:
                 return (short) 1;
         }
-        throw new RuntimeException("Unknown KRaft feature level: " + this);
+        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
+    }
+
+    public short kraftVersionRecordVersion() {
+        switch (this) {
+            case KRAFT_VERSION_1:
+                return (short) 0;
+        }
+        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
+    }
+
+    public short votersRecordVersion() {
+        switch (this) {
+            case KRAFT_VERSION_1:
+                return (short) 0;
+        }
+        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
     }
 }

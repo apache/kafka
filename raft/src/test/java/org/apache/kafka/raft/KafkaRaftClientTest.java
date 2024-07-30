@@ -2730,7 +2730,12 @@ public class KafkaRaftClientTest {
         context.collectEndQuorumRequests(
             epoch,
             Utils.mkSet(closeFollower.id(), laggingFollower.id()),
-            Optional.of(Arrays.asList(closeFollower.id(), laggingFollower.id()))
+            Optional.of(
+                Arrays.asList(
+                    replicaKey(closeFollower.id(), false),
+                    replicaKey(laggingFollower.id(), false)
+                )
+            )
         );
     }
 
