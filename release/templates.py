@@ -88,6 +88,9 @@ All of the changes in this release can be found in the release notes:
 https://www.apache.org/dist/kafka/{release_version}/RELEASE_NOTES.html
 
 
+An overview of the release can be found in our announcement blog post:
+https://kafka.apache.org/blog
+
 You can download the source and binary release (Scala <VERSIONS>) from:
 https://kafka.apache.org/downloads#{release_version}
 
