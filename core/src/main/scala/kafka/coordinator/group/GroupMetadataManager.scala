@@ -209,14 +209,6 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  // visible for testing
-  private[group] def isGroupOpenForProducer(producerId: Long, groupId: String) = openGroupsForProducer.get(producerId) match {
-    case Some(groups) =>
-      groups.contains(groupId)
-    case None =>
-      false
-  }
-
   /**
    * Get the group associated with the given groupId or null if not found
    */
