@@ -83,6 +83,11 @@
         <allow pkg="org.apache.kafka.coordinator.transaction"/>
     </subpackage>
 
+    <subpackage name="storage.log">
+        <allow pkg="org.apache.kafka.server" />
+        <allow pkg="com.yammer.metrics" />
+    </subpackage>
+
     <!-- START OF TIERED STORAGE INTEGRATION TEST IMPORT DEPENDENCIES -->
     <subpackage name="tiered.storage">
         <allow pkg="scala" />
