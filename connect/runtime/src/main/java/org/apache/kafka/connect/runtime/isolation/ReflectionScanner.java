@@ -29,11 +29,8 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URL;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.ServiceLoader;
-import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
@@ -79,11 +76,8 @@ public class ReflectionScanner extends PluginScanner {
 
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
-        Set<URL> urls = new HashSet<>();
-        Collections.addAll(urls, source.urls());
         ClassGraph classGraphBuilder = new ClassGraph()
                 .addClassLoader(source.loader())
-                .filterClasspathElementsByURL(urls::contains)
                 .enableExternalClasses()
                 .enableAllInfo();
         try (ScanResult classGraph = classGraphBuilder.scan()) {

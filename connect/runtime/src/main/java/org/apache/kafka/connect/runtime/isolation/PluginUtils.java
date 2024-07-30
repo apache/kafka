@@ -475,15 +475,15 @@ public class PluginUtils {
     private static Collection<URL> forClassLoader(ClassLoader classLoader) {
         final Collection<URL> result = new ArrayList<URL>();
         final ClassLoader[] loaders = classLoaders(classLoader);
-        for (ClassLoader classLoader : loaders) {
-            while (classLoader != null) {
-                if (classLoader instanceof URLClassLoader) {
-                    URL[] urls = ((URLClassLoader) classLoader).getURLs();
+        for (ClassLoader loader : loaders) {
+            while (loader != null) {
+                if (loader instanceof URLClassLoader) {
+                    URL[] urls = ((URLClassLoader) loader).getURLs();
                     if (urls != null) {
                         result.addAll(new HashSet<URL>(Arrays.asList(urls)));
                     }
                 }
-                classLoader = classLoader.getParent();
+                loader = loader.getParent();
             }
         }
         return distinctUrls(result);
