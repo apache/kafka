@@ -50,6 +50,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -1545,6 +1546,72 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(context.removeVoterRequest(follower));
         context.pollUntilResponse();
         context.assertSentRemoveVoterResponse(Errors.REQUEST_TIMED_OUT);
+    }
+
+    @Test
+    void testUpdateVoter() throws Exception {
+        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        assertTrue(context.client.quorum().isVoter(follower));
+
+        // Establish a HWM and fence previous leaders
+        context.deliverRequest(
+            context.fetchRequest(epoch, follower, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+
+        // Attempt to update the follower
+        InetSocketAddress defaultAddress = InetSocketAddress.createUnresolved(
+            "localhost",
+            9990 + follower.id()
+        );
+        InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
+            "localhost",
+            8990 + follower.id()
+        );
+        HashMap<ListenerName, InetSocketAddress> listenersMap = new HashMap<>(2);
+        listenersMap.put(context.channel.listenerName(), defaultAddress);
+        listenersMap.put(ListenerName.normalised("ANOTHER_LISTENER"), newAddress);
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(listenersMap);
+        context.deliverRequest(
+            context.updateVoterRequest(
+                follower,
+                new SupportedVersionRange((short) 0, (short) 1),
+                newListeners
+            )
+        );
+
+        // Handle the update voter request
+        context.client.poll();
+        // Append the VotersRecord to the log
+        context.client.poll();
+
+        // follower should not be a voter in the latest voter set
+        assertTrue(context.client.quorum().isVoter(follower));
+
+        // Send a FETCH to increase the HWM and commit the new voter set
+        context.deliverRequest(
+            context.fetchRequest(epoch, follower, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+
+        // Expect reply for RemoveVoter request
+        context.pollUntilResponse();
+        context.assertSentUpdateVoterResponse(Errors.NONE);
     }
 
     private static void verifyVotersRecord(

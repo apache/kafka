@@ -77,12 +77,12 @@ public final class RemoveVoterHandler {
         ReplicaKey voterKey,
         long currentTimeMs
     ) {
-        // Check if there are any pending add or remove voter requests
+        // Check if there are any pending voter change requests
         if (leaderState.isOperationPending(currentTimeMs)) {
             return CompletableFuture.completedFuture(
                 RaftUtil.removeVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
-                    "Request timed out waiting for leader to handle previous add or remove voter request"
+                    "Request timed out waiting for leader to handle previous voter change request"
                 )
             );
         }

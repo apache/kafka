@@ -31,6 +31,7 @@ import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.RemoveVoterHandlerState;
 import org.apache.kafka.raft.internals.ReplicaKey;
+import org.apache.kafka.raft.internals.UpdateVoterHandlerState;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
 
@@ -44,12 +45,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+// TODO: the leader needs to update itself
 /**
  * In the context of LeaderState, an acknowledged voter means one who has acknowledged the current leader by either
  * responding to a `BeginQuorumEpoch` request from the leader or by beginning to send `Fetch` requests.
@@ -74,6 +77,8 @@ public class LeaderState<T> implements EpochState {
     private Map<Integer, ReplicaState> voterStates = new HashMap<>();
     private Optional<AddVoterHandlerState> addVoterHandlerState = Optional.empty();
     private Optional<RemoveVoterHandlerState> removeVoterHandlerState = Optional.empty();
+    private Optional<UpdateVoterHandlerState> updateVoterHandlerState = Optional.empty();
+
 
     private final Map<ReplicaKey, ReplicaState> observerStates = new HashMap<>();
     private final Logger log;
@@ -239,8 +244,26 @@ public class LeaderState<T> implements EpochState {
         removeVoterHandlerState = state;
     }
 
+    public Optional<UpdateVoterHandlerState> updateVoterHandlerState() {
+        return updateVoterHandlerState;
+    }
+
+    public void resetUpdateVoterHandlerState(
+        Errors error,
+        Optional<UpdateVoterHandlerState> state
+    ) {
+        updateVoterHandlerState.ifPresent(
+            handlerState -> handlerState.completeFuture(
+                error,
+                new LeaderAndEpoch(OptionalInt.of(localReplicaKey.id()), epoch),
+                endpoints
+            )
+        );
+        updateVoterHandlerState = state;
+    }
+
     public long maybeExpirePendingOperation(long currentTimeMs) {
-        // First abort any expired operation
+        // First abort any expired operations
         long timeUntilAddVoterExpiration = addVoterHandlerState()
             .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
             .orElse(Long.MAX_VALUE);
@@ -257,14 +280,27 @@ public class LeaderState<T> implements EpochState {
             resetRemoveVoterHandlerState(Errors.REQUEST_TIMED_OUT, null, Optional.empty());
         }
 
-        // Reread the timeouts and return the smaller of the two
+        long timeUntilUpdateVoterExpiration = updateVoterHandlerState()
+            .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+            .orElse(Long.MAX_VALUE);
+
+        if (timeUntilUpdateVoterExpiration == 0) {
+            resetUpdateVoterHandlerState(Errors.REQUEST_TIMED_OUT, Optional.empty());
+        }
+
+        // Reread the timeouts and return the smaller of them
         return Math.min(
             addVoterHandlerState()
                 .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
                 .orElse(Long.MAX_VALUE),
-            removeVoterHandlerState()
-                .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
-                .orElse(Long.MAX_VALUE)
+            Math.min(
+                removeVoterHandlerState()
+                    .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+                    .orElse(Long.MAX_VALUE),
+                updateVoterHandlerState()
+                    .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+                    .orElse(Long.MAX_VALUE)
+            )
         );
     }
 
@@ -826,11 +862,9 @@ public class LeaderState<T> implements EpochState {
 
     @Override
     public void close() {
-        addVoterHandlerState.ifPresent(AddVoterHandlerState::close);
-        addVoterHandlerState = Optional.empty();
-
-        removeVoterHandlerState.ifPresent(RemoveVoterHandlerState::close);
-        removeVoterHandlerState = Optional.empty();
+        resetAddVoterHandlerState(Errors.NOT_LEADER_OR_FOLLOWER, null, Optional.empty());
+        resetRemoveVoterHandlerState(Errors.NOT_LEADER_OR_FOLLOWER, null, Optional.empty());
+        resetUpdateVoterHandlerState(Errors.NOT_LEADER_OR_FOLLOWER, Optional.empty());
 
         accumulator.close();
     }

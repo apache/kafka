@@ -20,6 +20,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
@@ -39,6 +40,8 @@ import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
 import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
+import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
+import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1148,10 +1151,23 @@ public final class RaftClientTestContext {
         return removeVoterResponse;
     }
 
-    // TODO: preferredSuccessors should be a list of replica keys
+    UpdateRaftVoterResponseData assertSentUpdateVoterResponse(Errors error) {
+        List<RaftResponse.Outbound> sentResponses = drainSentResponses(ApiKeys.UPDATE_RAFT_VOTER);
+        assertEquals(1, sentResponses.size());
+
+        RaftResponse.Outbound response = sentResponses.get(0);
+        assertInstanceOf(UpdateRaftVoterResponseData.class, response.data());
+
+        UpdateRaftVoterResponseData updateVoterResponse = (UpdateRaftVoterResponseData) response.data();
+        assertEquals(error, Errors.forCode(updateVoterResponse.errorCode()));
+
+        return updateVoterResponse;
+    }
+
     List<RaftRequest.Outbound> collectEndQuorumRequests(
         int epoch,
         Set<Integer> destinationIdSet,
+        // TODO: preferredSuccessors should be a list of replica keys
         Optional<List<Integer>> preferredSuccessorsOpt
     ) {
         List<RaftRequest.Outbound> endQuorumRequests = new ArrayList<>();
@@ -1644,6 +1660,24 @@ public final class RaftClientTestContext {
         return RaftUtil.removeVoterRequest(cluster, voter);
     }
 
+    UpdateRaftVoterRequestData updateVoterRequest(
+        ReplicaKey voter,
+        SupportedVersionRange supportedVersions,
+        Endpoints endpoints
+    ) {
+        return updateVoterRequest(clusterId, voter, currentEpoch(), supportedVersions, endpoints);
+    }
+
+    UpdateRaftVoterRequestData updateVoterRequest(
+        String clusterId,
+        ReplicaKey voter,
+        int epoch,
+        SupportedVersionRange supportedVersions,
+        Endpoints endpoints
+    ) {
+        return RaftUtil.updateVoterRequest(clusterId, voter, epoch, supportedVersions, endpoints);
+    }
+
     private short fetchRpcVersion() {
         if (kip853Rpc) {
             return 17;
@@ -1708,6 +1742,14 @@ public final class RaftClientTestContext {
         }
     }
 
+    private short updateVoterRpcVersion() {
+        if (kip853Rpc) {
+            return 0;
+        } else {
+            throw new IllegalStateException("Reconfiguration must be enabled by calling withKip853Rpc(true)");
+        }
+    }
+
     private short raftRequestVersion(ApiMessage request) {
         if (request instanceof FetchRequestData) {
             return fetchRpcVersion();
@@ -1725,6 +1767,8 @@ public final class RaftClientTestContext {
             return addVoterRpcVersion();
         } else if (request instanceof RemoveRaftVoterRequestData) {
             return removeVoterRpcVersion();
+        } else if (request instanceof UpdateRaftVoterRequestData) {
+            return updateVoterRpcVersion();
         } else {
             throw new IllegalArgumentException(String.format("Request %s is not a raft request", request));
         }
@@ -1747,6 +1791,8 @@ public final class RaftClientTestContext {
             return addVoterRpcVersion();
         } else if (response instanceof RemoveRaftVoterResponseData) {
             return removeVoterRpcVersion();
+        } else if (response instanceof UpdateRaftVoterResponseData) {
+            return updateVoterRpcVersion();
         } else if (response instanceof ApiVersionsResponseData) {
             return 4;
         } else {

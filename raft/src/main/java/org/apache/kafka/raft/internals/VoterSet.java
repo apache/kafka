@@ -209,6 +209,20 @@ public final class VoterSet {
         return Optional.empty();
     }
 
+    // TODO: write tests
+    // TODO: write documentation
+    public Optional<VoterSet> updateVoter(VoterNode voter) {
+        VoterNode oldVoter = voters.get(voter.voterKey().id());
+        if (oldVoter != null && oldVoter.isVoter(voter.voterKey())) {
+            HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
+            newVoters.put(voter.voterKey().id(), voter);
+
+            return Optional.of(new VoterSet(newVoters));
+        }
+
+        return Optional.empty();
+    }
+
     /**
      * Converts a voter set to a voters record for a given version.
      *
