@@ -633,7 +633,7 @@ public class MembershipManagerImpl implements MembershipManager {
 
     // Visible for testing
     String memberIdInfoForLog() {
-        return memberId.isEmpty() ? "without ID" : memberId;
+        return (memberId == null || memberId.isEmpty()) ? "without ID" : memberId;
     }
 
     /**
@@ -708,7 +708,7 @@ public class MembershipManagerImpl implements MembershipManager {
         if (state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING) {
             // Member already leaving. No-op and return existing leave group future that will
             // complete when the ongoing leave operation completes.
-            log.debug("Leave group operation already in progress for member {}", memberId);
+            log.debug("Leave group operation already in progress for member {}", memberIdInfoForLog());
             return leaveGroupInProgress.get();
         }
 
@@ -723,7 +723,7 @@ public class MembershipManagerImpl implements MembershipManager {
                     "to clear its assignment and send a leave group heartbeat", memberIdInfoForLog(), error);
             } else {
                 log.info("Member {} completed callback to release assignment. It will proceed " +
-                    "to clear its assignment and send a leave group heartbeat", memberId);
+                    "to clear its assignment and send a leave group heartbeat", memberIdInfoForLog());
             }
             // Clear the subscription, no matter if the callback execution failed or succeeded.
             subscriptions.unsubscribe();
@@ -796,7 +796,7 @@ public class MembershipManagerImpl implements MembershipManager {
         }
         if (state == MemberState.UNSUBSCRIBED) {
             log.warn("Member {} won't send leave group request because it is already out of the group.",
-                memberId);
+                memberIdInfoForLog());
             return;
         }
 
@@ -910,7 +910,7 @@ public class MembershipManagerImpl implements MembershipManager {
         isPollTimerExpired = false;
         if (state == MemberState.STALE) {
             log.debug("Expired poll timer has been reset so stale member {} will rejoin the group" +
-                "when it completes releasing its previous assignment.", memberId);
+                "when it completes releasing its previous assignment.", memberIdInfoForLog());
             staleMemberAssignmentRelease.whenComplete((__, error) -> transitionToJoining());
         }
     }
@@ -1002,7 +1002,7 @@ public class MembershipManagerImpl implements MembershipManager {
                         "\tAdded partitions (assigned - owned):       {}\n" +
                         "\tRevoked partitions (owned - assigned):     {}\n",
                 resolvedAssignment.localEpoch,
-                memberId,
+                memberIdInfoForLog(),
                 assignedTopicPartitions,
                 ownedPartitions,
                 addedPartitions,
