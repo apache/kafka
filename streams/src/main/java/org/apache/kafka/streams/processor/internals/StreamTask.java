@@ -844,8 +844,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             record.offset(),
             record.partition(),
             record.topic(),
-            record.headers(),
-            record.rawRecord()
+            record.headers()
         );
         updateProcessorContext(currNode, wallClockTime, recordContext);
 
@@ -906,8 +905,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             -1L,
             -1,
             null,
-            new RecordHeaders(),
-            null
+            new RecordHeaders()
         );
         updateProcessorContext(node, time.milliseconds(), recordContext);
 

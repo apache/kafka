@@ -307,8 +307,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                             record.offset(),
                             record.partition(),
                             record.topic(),
-                            record.headers(),
-                            record);
+                            record.headers());
                     globalProcessorContext.setRecordContext(recordContext);
 
                     try {

@@ -28,8 +28,6 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     private final int partition;
     private final long offset;
     private final Headers headers;
-    private final byte[] sourceRawKey;
-    private final byte[] sourceRawValue;
     private final String processorNodeId;
     private final TaskId taskId;
 
@@ -37,16 +35,12 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
                                       final int partition,
                                       final long offset,
                                       final Headers headers,
-                                      final byte[] sourceRawKey,
-                                      final byte[] sourceRawValue,
                                       final String processorNodeId,
                                       final TaskId taskId) {
         this.topic = topic;
         this.partition = partition;
         this.offset = offset;
         this.headers = headers;
-        this.sourceRawKey = sourceRawKey;
-        this.sourceRawValue = sourceRawValue;
         this.processorNodeId = processorNodeId;
         this.taskId = taskId;
     }
@@ -69,16 +63,6 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     @Override
     public Headers headers() {
         return headers;
-    }
-
-    @Override
-    public byte[] sourceRawKey() {
-        return sourceRawKey;
-    }
-
-    @Override
-    public byte[] sourceRawValue() {
-        return sourceRawValue;
     }
 
     @Override

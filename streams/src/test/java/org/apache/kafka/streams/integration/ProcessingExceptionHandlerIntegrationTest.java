@@ -176,8 +176,6 @@ public class ProcessingExceptionHandlerIntegrationTest {
     }
 
     private static void assertProcessingExceptionHandlerInputs(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
-        assertTrue(Arrays.asList("ID123-2-ERR", "ID123-5-ERR").contains(new String(context.sourceRawKey())));
-        assertTrue(Arrays.asList("ID123-A2", "ID123-A5").contains(new String(context.sourceRawValue())));
         assertTrue(Arrays.asList("ID123-2-ERR", "ID123-5-ERR").contains((String) record.key()));
         assertTrue(Arrays.asList("ID123-A2", "ID123-A5").contains((String) record.value()));
         assertEquals("TOPIC_NAME", context.topic());

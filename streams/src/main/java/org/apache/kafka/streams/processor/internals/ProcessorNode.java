@@ -209,8 +209,6 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 internalProcessorContext.partition(),
                 internalProcessorContext.offset(),
                 internalProcessorContext.headers(),
-                internalProcessorContext.recordContext().rawRecord().key(),
-                internalProcessorContext.recordContext().rawRecord().value(),
                 internalProcessorContext.currentNode().name(),
                 internalProcessorContext.taskId());
 
