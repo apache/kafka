@@ -99,7 +99,7 @@ import javax.security.sasl.SaslException;
  * broker configuration property.
  */
 public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCallbackHandler {
-    private final Logger log = LoggerFactory.getLogger(OAuthBearerUnsecuredLoginCallbackHandler.class);
+    private static final Logger log = LoggerFactory.getLogger(OAuthBearerUnsecuredLoginCallbackHandler.class);
     private static final String OPTION_PREFIX = "unsecuredLogin";
     private static final String PRINCIPAL_CLAIM_NAME_OPTION = OPTION_PREFIX + "PrincipalClaimName";
     private static final String LIFETIME_SECONDS_OPTION = OPTION_PREFIX + "LifetimeSeconds";

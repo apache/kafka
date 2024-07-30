@@ -154,7 +154,7 @@ public class StreamsUpgradeTest {
 
     public static class FutureStreamsPartitionAssignor extends StreamsPartitionAssignor {
         private static final Map<String, String> CLIENT_TAGS = mkMap(mkEntry("t1", "v1"), mkEntry("t2", "v2"));
-        private final Logger log = LoggerFactory.getLogger(FutureStreamsPartitionAssignor.class);
+        private static final Logger log = LoggerFactory.getLogger(FutureStreamsPartitionAssignor.class);
 
         private AtomicInteger usedSubscriptionMetadataVersionPeek;
         private AtomicLong nextScheduledRebalanceMs;

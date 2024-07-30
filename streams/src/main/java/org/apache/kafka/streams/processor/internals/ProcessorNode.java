@@ -45,7 +45,7 @@ import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLE
 
 public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
-    private final Logger log = LoggerFactory.getLogger(ProcessorNode.class);
+    private static final Logger log = LoggerFactory.getLogger(ProcessorNode.class);
     private final List<ProcessorNode<KOut, VOut, ?, ?>> children;
     private final Map<String, ProcessorNode<KOut, VOut, ?, ?>> childByName;
 

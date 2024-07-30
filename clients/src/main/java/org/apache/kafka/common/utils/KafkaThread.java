@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
  */
 public class KafkaThread extends Thread {
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(KafkaThread.class);
     
     public static KafkaThread daemon(final String name, Runnable runnable) {
         return new KafkaThread(name, runnable, true);

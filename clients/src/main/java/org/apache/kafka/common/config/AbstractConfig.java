@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
  */
 public class AbstractConfig {
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(AbstractConfig.class);
 
     /**
      * Configs for which values have been requested, used to detect unused configs.
