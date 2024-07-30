@@ -60,6 +60,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -147,18 +148,18 @@ public class ProcessorNodeTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionWhenProcessingExceptionHandlerThrowsAnException() {
+    public void shouldThrowFailedProcessingExceptionWhenProcessingExceptionHandlerThrowsAnException() {
         final ProcessorNode<Object, Object, Object, Object> node =
                 new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
 
         final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
         node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.CONTINUE, internalProcessorContext, true));
 
-        final StreamsException streamsException = assertThrows(StreamsException.class,
+        final FailedProcessingException failedProcessingException = assertThrows(FailedProcessingException.class,
             () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
 
-        final String msg = streamsException.getMessage();
-        assertTrue(msg.contains("Fatal user code error in processing error callback"));
+        assertInstanceOf(RuntimeException.class, failedProcessingException.getCause());
+        assertEquals("KABOOM!", failedProcessingException.getCause().getMessage());
     }
 
     private static class ExceptionalProcessor implements Processor<Object, Object, Object, Object> {
@@ -357,7 +358,7 @@ public class ProcessorNodeTest {
             assertEquals(internalProcessorContext.taskId(), context.taskId());
             assertEquals(KEY, record.key());
             assertEquals(VALUE, record.value());
-            assertTrue(exception instanceof RuntimeException);
+            assertInstanceOf(RuntimeException.class, exception);
             assertEquals("Processing exception should be caught and handled by the processing exception handler.", exception.getMessage());
 
             if (shouldThrowException) {
