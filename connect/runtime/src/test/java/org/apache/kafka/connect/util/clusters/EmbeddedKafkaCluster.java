@@ -207,6 +207,7 @@ public class EmbeddedKafkaCluster {
      */
     public void restartOnlyBrokers() {
         cluster.brokers().values().forEach(BrokerServer::startup);
+        verifyClusterReadiness();
     }
 
     /**
