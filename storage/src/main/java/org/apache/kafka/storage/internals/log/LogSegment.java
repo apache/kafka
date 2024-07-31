@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 
-import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.Timer;
 
 import org.slf4j.Logger;
@@ -72,14 +71,7 @@ public class LogSegment implements Closeable {
     private static final Pattern FUTURE_DIR_PATTERN = Pattern.compile("^(\\S+)-(\\S+)\\.(\\S+)" + FUTURE_DIR_SUFFIX);
 
     static {
-        KafkaMetricsGroup logFlushStatsMetricsGroup = new KafkaMetricsGroup(LogSegment.class) {
-            @Override
-            public MetricName metricName(String name, Map<String, String> tags) {
-                // Override the group and type names for compatibility - this metrics group was previously defined within
-                // a Scala object named `kafka.log.LogFlushStats`
-                return KafkaMetricsGroup.explicitMetricName("kafka.log", "LogFlushStats", name, tags);
-            }
-        };
+        KafkaMetricsGroup logFlushStatsMetricsGroup = new KafkaMetricsGroup(LogSegment.class);
         LOG_FLUSH_TIMER = logFlushStatsMetricsGroup.newTimer("LogFlushRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
     }
 
