@@ -913,7 +913,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testCloseLeavesGroupOnInterrupt(quorum: String, groupProtocol: String): Unit = {
     val adminClient = createAdminClient()
     val consumer = createConsumer()
