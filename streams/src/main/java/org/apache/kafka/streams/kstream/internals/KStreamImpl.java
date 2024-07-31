@@ -562,6 +562,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
     
     @Override
+    @Deprecated
     public KStream<K, V> repartition() {
         return doRepartition(Repartitioned.as(null));
     }
