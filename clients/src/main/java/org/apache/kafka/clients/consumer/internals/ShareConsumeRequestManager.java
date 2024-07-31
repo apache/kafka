@@ -378,7 +378,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         metricsManager.recordAcknowledgementSent(acknowledgements.size());
                         log.debug("Added async acknowledge request for partition {} to node {}", tip.topicPartition(), node.id());
                         resultCount.incrementAndGet();
-                        if (acknowledgeRequestStates.get(nodeId).getAsyncRequest() == null) {
+                        AcknowledgeRequestState asyncRequestState = acknowledgeRequestStates.get(nodeId).getAsyncRequest();
+                        if (asyncRequestState == null) {
                             acknowledgeRequestStates.replace(nodeId, new Pair<>(new AcknowledgeRequestState(logContext,
                                     ShareConsumeRequestManager.class.getSimpleName() + ":2",
                                     Long.MAX_VALUE,
@@ -392,9 +393,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                     resultHandler
                             ), acknowledgeRequestStates.get(nodeId).getSyncRequest()));
                         } else {
-                            Acknowledgements prevAcks = acknowledgeRequestStates.get(nodeId).getAsyncRequest().acknowledgementsToSend.putIfAbsent(tip, acknowledgements);
+                            Acknowledgements prevAcks = asyncRequestState.acknowledgementsToSend.putIfAbsent(tip, acknowledgements);
                             if (prevAcks != null) {
-                                acknowledgeRequestStates.get(nodeId).getAsyncRequest().acknowledgementsToSend.get(tip).merge(acknowledgements);
+                                asyncRequestState.acknowledgementsToSend.get(tip).merge(acknowledgements);
                             }
                         }
                     }
