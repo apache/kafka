@@ -212,9 +212,13 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 internalProcessorContext.currentNode().name(),
                 internalProcessorContext.taskId());
 
-            final ProcessingExceptionHandler.ProcessingHandlerResponse response = processingExceptionHandler
-                .handle(errorHandlerContext, record, e);
+            final ProcessingExceptionHandler.ProcessingHandlerResponse response;
 
+            try {
+                response = processingExceptionHandler.handle(errorHandlerContext, record, e);
+            } catch (final Exception fatalUserException) {
+                throw new FailedProcessingException(fatalUserException);
+            }
             if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
                 log.error("Processing exception handler is set to fail upon" +
                      " a processing error. If you would rather have the streaming pipeline" +
