@@ -620,6 +620,7 @@ public class LogConfig extends AbstractConfig {
      * @param existingConfigs                   The existing properties
      * @param newConfigs                        The new properties to be validated
      * @param isRemoteLogStorageSystemEnabled   true if system wise remote log storage is enabled
+     * @param fromZK                            true if this is a ZK cluster
      */
     private static void validateTopicLogConfigValues(Map<String, String> existingConfigs,
                                                      Map<?, ?> newConfigs,
@@ -639,7 +640,7 @@ public class LogConfig extends AbstractConfig {
         } else {
             // The new config "remote.storage.enable" is false, validate if it's turning from true to false
             boolean wasRemoteLogEnabled = Boolean.parseBoolean(existingConfigs.getOrDefault(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"));
-            validateTurningOffRemoteStorageWithDelete(existingConfigs, wasRemoteLogEnabled, isRemoteLogStorageEnabled);
+            validateTurningOffRemoteStorageWithDelete(newConfigs, wasRemoteLogEnabled, isRemoteLogStorageEnabled);
         }
     }
 
