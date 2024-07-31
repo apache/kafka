@@ -494,10 +494,10 @@ class BatchAccumulatorTest {
         List<BatchAccumulator.CompletedBatch<String>> drained = acc.drain();
         assertEquals(1, drained.size());
         assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
-        drained.forEach(completedBatch -> {
-            completedBatch.data.batches().forEach(recordBatch -> {
-                assertEquals(leaderEpoch, recordBatch.partitionLeaderEpoch()); });
-        });
+        drained.forEach(completedBatch ->
+            completedBatch.data.batches().forEach(recordBatch ->
+                assertEquals(leaderEpoch, recordBatch.partitionLeaderEpoch()))
+        );
 
         acc.close();
     }
@@ -552,12 +552,12 @@ class BatchAccumulatorTest {
                     true));
         } else {
             assertEquals("Wanted base offset 156, but the next offset was 157",
-                assertThrows(UnexpectedBaseOffsetException.class, () -> {
+                assertThrows(UnexpectedBaseOffsetException.class, () ->
                     acc.append(leaderEpoch,
                         singletonList("a"),
                         OptionalLong.of(baseOffset - 1),
-                        true);
-                }).getMessage());
+                        true)
+                ).getMessage());
         }
         acc.close();
     }

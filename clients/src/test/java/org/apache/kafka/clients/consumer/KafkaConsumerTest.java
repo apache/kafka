@@ -143,7 +143,7 @@ import javax.management.ObjectName;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
-import static org.apache.kafka.clients.consumer.internals.LegacyKafkaConsumer.DEFAULT_REASON;
+import static org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer.DEFAULT_REASON;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.common.utils.Utils.propsToMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -439,7 +439,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testSubscription(GroupProtocol groupProtocol) {
         consumer = newConsumer(groupProtocol, groupId);
 
@@ -914,11 +914,9 @@ public class KafkaConsumerTest {
         mockClient.updateMetadata(initialMetadata);
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
-    public void testMissingOffsetNoResetPolicy(GroupProtocol groupProtocol) {
+    @EnumSource(value = GroupProtocol.class)
+    public void testMissingOffsetNoResetPolicy(GroupProtocol groupProtocol) throws InterruptedException {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -935,7 +933,16 @@ public class KafkaConsumerTest {
 
         // lookup committed offset and find nothing
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, -1L), Errors.NONE), coordinator);
-        assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
+
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            // New consumer poll(ZERO) needs to wait for the offset fetch event added by a call to poll, to be processed
+            // by the background thread, so it can realize there are no committed offsets and then
+            // throw the NoOffsetForPartitionException
+            assertPollEventuallyThrows(consumer, NoOffsetForPartitionException.class,
+                    "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
+        } else {
+            assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
+        }
     }
 
     @ParameterizedTest
@@ -2080,14 +2087,21 @@ public class KafkaConsumerTest {
         assertThrows(AuthenticationException.class, () -> consumer.endOffsets(Collections.singleton(tp0)));
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
-    public void testPollAuthenticationFailure(GroupProtocol groupProtocol) {
+    @EnumSource(GroupProtocol.class)
+    public void testPollAuthenticationFailure(GroupProtocol groupProtocol) throws InterruptedException {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         consumer.subscribe(singleton(topic));
-        assertThrows(AuthenticationException.class, () -> consumer.poll(Duration.ZERO));
+
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            // New consumer poll(ZERO) needs to wait for the event added by a call to poll, to be processed
+            // by the background thread, so it can realize there is authentication fail  and then
+            // throw the AuthenticationException
+            assertPollEventuallyThrows(consumer, AuthenticationException.class,
+                    "he consumer was not able to discover metadata errors during continuous polling.");
+        } else {
+            assertThrows(AuthenticationException.class, () -> consumer.poll(Duration.ZERO));
+        }
     }
 
     // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
@@ -2927,11 +2941,9 @@ public class KafkaConsumerTest {
         }
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
-    public void testSubscriptionOnInvalidTopic(GroupProtocol groupProtocol) {
+    @EnumSource(GroupProtocol.class)
+    public void testSubscriptionOnInvalidTopic(GroupProtocol groupProtocol) throws InterruptedException {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -2952,7 +2964,27 @@ public class KafkaConsumerTest {
         KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singleton(invalidTopicName), getConsumerRebalanceListener(consumer));
 
-        assertThrows(InvalidTopicException.class, () -> consumer.poll(Duration.ZERO));
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            // New consumer poll(ZERO) needs to wait for the event added by a call to poll, to be processed
+            // by the background thread, so it can realize there is invalid topics and then
+            // throw the InvalidTopicException
+            assertPollEventuallyThrows(consumer, InvalidTopicException.class,
+                    "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
+        } else {
+            assertThrows(InvalidTopicException.class, () -> consumer.poll(Duration.ZERO));
+        }
+    }
+
+    private static <T extends Throwable> void assertPollEventuallyThrows(KafkaConsumer<?, ?> consumer,
+            Class<T> expectedException, String errMsg) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            try {
+                consumer.poll(Duration.ZERO);
+                return false;
+            } catch (Throwable exception) {
+                return expectedException.isInstance(exception);
+            }
+        }, errMsg);
     }
 
     @ParameterizedTest

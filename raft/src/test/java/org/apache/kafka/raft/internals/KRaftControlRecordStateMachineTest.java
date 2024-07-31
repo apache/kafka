@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.MockLog;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 
@@ -75,14 +76,14 @@ final class KRaftControlRecordStateMachineTest {
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
 
         // Append the kraft.version control record
-        short kraftVersion = 1;
+        KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
         log.appendAsLeader(
             MemoryRecords.withKRaftVersionRecord(
                 log.endOffset().offset(),
                 0,
                 epoch,
                 bufferSupplier.get(300),
-                new KRaftVersionRecord().setKRaftVersion(kraftVersion)
+                new KRaftVersionRecord().setKRaftVersion(kraftVersion.featureLevel())
             ),
             epoch
         );
@@ -126,14 +127,14 @@ final class KRaftControlRecordStateMachineTest {
         log.truncateToLatestSnapshot();
 
         // Append the kraft.version control record
-        short kraftVersion = 1;
+        KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
         log.appendAsLeader(
             MemoryRecords.withKRaftVersionRecord(
                 log.endOffset().offset(),
                 0,
                 epoch,
                 bufferSupplier.get(300),
-                new KRaftVersionRecord().setKRaftVersion(kraftVersion)
+                new KRaftVersionRecord().setKRaftVersion(kraftVersion.featureLevel())
             ),
             epoch
         );
@@ -168,7 +169,7 @@ final class KRaftControlRecordStateMachineTest {
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
 
         // Create a snapshot that has kraft.version and voter set control records
-        short kraftVersion = 1;
+        KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
         VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(4, 5, 6), true));
 
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
@@ -198,7 +199,7 @@ final class KRaftControlRecordStateMachineTest {
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
 
         // Create a snapshot that has kraft.version and voter set control records
-        short kraftVersion = 1;
+        KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
         VoterSet snapshotVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(4, 5, 6), true));
 
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(10, epoch);
@@ -245,14 +246,14 @@ final class KRaftControlRecordStateMachineTest {
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
 
         // Append the kraft.version control record
-        short kraftVersion = 1;
+        KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
         log.appendAsLeader(
             MemoryRecords.withKRaftVersionRecord(
                 log.endOffset().offset(),
                 0,
                 epoch,
                 bufferSupplier.get(300),
-                new KRaftVersionRecord().setKRaftVersion(kraftVersion)
+                new KRaftVersionRecord().setKRaftVersion(kraftVersion.featureLevel())
             ),
             epoch
         );
@@ -314,14 +315,14 @@ final class KRaftControlRecordStateMachineTest {
 
         // Append the kraft.version control record
         long kraftVersionOffset = log.endOffset().offset();
-        short kraftVersion = 1;
+        KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
         log.appendAsLeader(
             MemoryRecords.withKRaftVersionRecord(
                 kraftVersionOffset,
                 0,
                 epoch,
                 bufferSupplier.get(300),
-                new KRaftVersionRecord().setKRaftVersion(kraftVersion)
+                new KRaftVersionRecord().setKRaftVersion(kraftVersion.featureLevel())
             ),
             epoch
         );

@@ -16,13 +16,23 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.streams.errors.ErrorHandlerContext;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
+import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.InternalFixedKeyRecordFactory;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,8 +40,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
+
 public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
+    private static final Logger log = LoggerFactory.getLogger(ProcessorNode.class);
     private final List<ProcessorNode<KOut, VOut, ?, ?>> children;
     private final Map<String, ProcessorNode<KOut, VOut, ?, ?>> childByName;
 
@@ -40,11 +53,14 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     private final String name;
 
     public final Set<String> stateStores;
+    private ProcessingExceptionHandler processingExceptionHandler;
 
     private InternalProcessorContext<KOut, VOut> internalProcessorContext;
     private String threadId;
 
     private boolean closed = true;
+
+    private Sensor droppedRecordsSensor;
 
     public ProcessorNode(final String name) {
         this(name, (Processor<KIn, VIn, KOut, VOut>) null, null);
@@ -98,6 +114,10 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         try {
             threadId = Thread.currentThread().getName();
             internalProcessorContext = context;
+            droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(threadId,
+                internalProcessorContext.taskId().toString(),
+                internalProcessorContext.metrics());
+
             if (processor != null) {
                 processor.init(context);
             }
@@ -113,6 +133,11 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         // revived tasks could re-initialize the topology,
         // in which case we should reset the flag
         closed = false;
+    }
+
+    public void init(final InternalProcessorContext<KOut, VOut> context, final ProcessingExceptionHandler processingExceptionHandler) {
+        init(context);
+        this.processingExceptionHandler = processingExceptionHandler;
     }
 
     public void close() {
@@ -174,11 +199,32 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                     keyClass,
                     valueClass),
                 e);
-        }
-    }
+        } catch (final FailedProcessingException | TaskCorruptedException | TaskMigratedException e) {
+            // Rethrow exceptions that should not be handled here
+            throw e;
+        } catch (final RuntimeException e) {
+            final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
+                null, // only required to pass for DeserializationExceptionHandler
+                internalProcessorContext.topic(),
+                internalProcessorContext.partition(),
+                internalProcessorContext.offset(),
+                internalProcessorContext.headers(),
+                internalProcessorContext.currentNode().name(),
+                internalProcessorContext.taskId());
 
-    public void punctuate(final long timestamp, final Punctuator punctuator) {
-        punctuator.punctuate(timestamp);
+            final ProcessingExceptionHandler.ProcessingHandlerResponse response = processingExceptionHandler
+                .handle(errorHandlerContext, record, e);
+
+            if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
+                log.error("Processing exception handler is set to fail upon" +
+                     " a processing error. If you would rather have the streaming pipeline" +
+                     " continue after a processing error, please set the " +
+                     PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
+                throw new FailedProcessingException(e);
+            } else {
+                droppedRecordsSensor.record();
+            }
+        }
     }
 
     public boolean isTerminalNode() {
