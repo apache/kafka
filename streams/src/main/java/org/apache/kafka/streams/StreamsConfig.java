@@ -814,14 +814,6 @@ public class StreamsConfig extends AbstractConfig {
     private static final String LOG_SUMMARY_INTERVAL_MS_DOC = "This configuration controls the output interval for summary information.\n" +
             "If greater or equal to 0, the summary log will be output according to the set time interval;\n" +
             "If less than 0, summary output is disabled.";
-    /**
-     * {@code topology.optimization}
-     * @deprecated since 2.7; use {@link #TOPOLOGY_OPTIMIZATION_CONFIG} instead
-     */
-    @Deprecated
-    public static final String TOPOLOGY_OPTIMIZATION = TOPOLOGY_OPTIMIZATION_CONFIG;
-
-
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
         new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
