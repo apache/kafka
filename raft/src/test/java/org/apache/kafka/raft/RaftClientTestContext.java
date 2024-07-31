@@ -44,6 +44,7 @@ import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
 import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -66,6 +67,7 @@ import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.KRaftVersionTest;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -95,6 +97,7 @@ import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.LeaderState.CHECK_QUORUM_TIMEOUT_FACTOR;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
@@ -170,6 +173,7 @@ public final class RaftClientTestContext {
         private List<InetSocketAddress> bootstrapServers = Collections.emptyList();
         private boolean kip853Rpc = false;
         private Optional<VoterSet> startingVoters = Optional.empty();
+        private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
 
         public Builder(int localId, Set<Integer> staticVoters) {
@@ -349,6 +353,11 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withLocalListeners(Endpoints localListeners) {
+            this.localListeners = localListeners;
+            return this;
+        }
+
         public RaftClientTestContext build() throws IOException {
             VoterSet startingVoters = this.startingVoters.orElseThrow(Builder::missingStartingVoterException);
 
@@ -368,11 +377,16 @@ public final class RaftClientTestContext {
                     );
             }
 
-            // Compute the local listeners. Only potential voters/leader need to provide the local listeners
-            // If the local id is not set (must be observer), the local listener can be empty.
-            Endpoints localListeners = localId.isPresent() ?
-                startingVoters.listeners(localId.getAsInt()) :
-                Endpoints.empty();
+            /*
+             * Compute the local listeners if the test didn't override it.
+             * Only potential voters/leader need to provide the local listeners.
+             * If the local id is not set (must be observer), the local listener can be empty.
+             */
+            Endpoints localListeners = this.localListeners.isEmpty() ?
+                localId.isPresent() ?
+                    startingVoters.listeners(localId.getAsInt()) :
+                    Endpoints.empty() :
+                this.localListeners;
 
             QuorumConfig quorumConfig = new QuorumConfig(
                 requestTimeoutMs,
@@ -397,6 +411,7 @@ public final class RaftClientTestContext {
                 clusterId,
                 bootstrapServers,
                 localListeners,
+                KRaftVersionTest.supportedVersionRange(),
                 logContext,
                 random,
                 quorumConfig
@@ -1866,6 +1881,20 @@ public final class RaftClientTestContext {
             } else {
                 return OptionalLong.of(commits.get(commits.size() - 1).lastOffset());
             }
+        }
+
+        Optional<VoterSet> lastCommittedVoterSet() {
+            return commits.stream()
+                .flatMap(batch -> batch.controlRecords().stream())
+                .flatMap(controlRecord -> {
+                    if (controlRecord.type() == ControlRecordType.KRAFT_VOTERS) {
+                        return Stream.of((VotersRecord) controlRecord.message());
+                    } else {
+                        return Stream.empty();
+                    }
+                })
+                .reduce((accumulated, current) -> current)
+                .map(VoterSet::fromVotersRecord);
         }
 
         OptionalInt currentClaimedEpoch() {

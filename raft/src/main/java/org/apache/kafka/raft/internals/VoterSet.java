@@ -95,6 +95,16 @@ public final class VoterSet {
             .map(address -> new Node(voterId, address.getHostString(), address.getPort()));
     }
 
+    // TODO: write documentation
+    public boolean voterNodeNeedsUpdate(VoterNode updatedVoterNode) {
+        return Optional.ofNullable(voters.get(updatedVoterNode.voterKey().id()))
+            .map(
+                node -> node.isVoter(updatedVoterNode.voterKey()) &&
+                        !node.equals(updatedVoterNode)
+            )
+            .orElse(false);
+    }
+
     /**
      * Returns if the node is a voter in the set of voters.
      *

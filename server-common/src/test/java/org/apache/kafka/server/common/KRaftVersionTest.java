@@ -17,11 +17,13 @@
 
 package org.apache.kafka.server.common;
 
+import org.apache.kafka.common.feature.SupportedVersionRange;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class KRaftVersionTest {
+public final class KRaftVersionTest {
     @Test
     public void testFeatureLevel() {
         for (int i = 0; i < KRaftVersion.values().length; i++) {
@@ -58,5 +60,12 @@ class KRaftVersionTest {
                     throw new RuntimeException("Unsupported value " + i);
             }
         }
+    }
+
+    public static SupportedVersionRange supportedVersionRange() {
+        return new SupportedVersionRange(
+            KRaftVersion.values()[0].featureLevel(),
+            KRaftVersion.values()[KRaftVersion.values().length - 1].featureLevel()
+        );
     }
 }

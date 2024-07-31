@@ -24,6 +24,7 @@ import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.raft.internals.VoterSetTest;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.KRaftVersionTest;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -75,6 +76,7 @@ public class LeaderStateTest {
             voters.voterIds(),
             accumulator,
             voters.listeners(localReplicaKey.id()),
+            KRaftVersionTest.supportedVersionRange(),
             fetchTimeoutMs,
             logContext
         );
@@ -120,6 +122,7 @@ public class LeaderStateTest {
                 Collections.emptySet(),
                 null,
                 Endpoints.empty(),
+                KRaftVersionTest.supportedVersionRange(),
                 fetchTimeoutMs,
                 logContext
             )

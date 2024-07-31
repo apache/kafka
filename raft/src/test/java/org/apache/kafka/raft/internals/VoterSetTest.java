@@ -18,10 +18,10 @@ package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.Endpoints;
+import org.apache.kafka.server.common.KRaftVersionTest;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -339,7 +339,7 @@ public final class VoterSetTest {
                     )
                 )
             ),
-            new SupportedVersionRange((short) 0, (short) 0)
+            KRaftVersionTest.supportedVersionRange()
         );
     }
 

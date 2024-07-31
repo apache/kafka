@@ -23,6 +23,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
@@ -174,6 +175,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private final int fetchMaxWaitMs;
     private final String clusterId;
     private final Endpoints localListeners;
+    private final SupportedVersionRange localSupportedKRaftVersion;
     private final NetworkChannel channel;
     private final ReplicatedLog log;
     private final Random random;
@@ -230,6 +232,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         String clusterId,
         Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
+        SupportedVersionRange localSupportedKRaftVersion,
         QuorumConfig quorumConfig
     ) {
         this(
@@ -246,6 +249,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             clusterId,
             bootstrapServers,
             localListeners,
+            localSupportedKRaftVersion,
             logContext,
             new Random(),
             quorumConfig
@@ -266,6 +270,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         String clusterId,
         Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
+        SupportedVersionRange localSupportedKRaftVersion,
         LogContext logContext,
         Random random,
         QuorumConfig quorumConfig
@@ -283,6 +288,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         this.time = time;
         this.clusterId = clusterId;
         this.localListeners = localListeners;
+        this.localSupportedKRaftVersion = localSupportedKRaftVersion;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
@@ -497,6 +503,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             nodeDirectoryId,
             partitionState,
             localListeners,
+            localSupportedKRaftVersion,
             quorumConfig.electionTimeoutMs(),
             quorumConfig.fetchTimeoutMs(),
             quorumStateStore,

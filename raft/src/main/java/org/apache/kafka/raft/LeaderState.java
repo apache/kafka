@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
@@ -67,7 +68,8 @@ public class LeaderState<T> implements EpochState {
     private final int epoch;
     private final long epochStartOffset;
     private final Set<Integer> grantingVoters;
-    private final Endpoints endpoints;
+    private final Endpoints localListeners;
+    private final SupportedVersionRange localSupportedKRaftVersion;
     private final VoterSet voterSetAtEpochStart;
     // This field is non-empty if the voter set at epoch start came from a snapshot or log segment
     private final OptionalLong offsetOfVotersAtEpochStart;
@@ -103,14 +105,16 @@ public class LeaderState<T> implements EpochState {
         KRaftVersion kraftVersionAtEpochStart,
         Set<Integer> grantingVoters,
         BatchAccumulator<T> accumulator,
-        Endpoints endpoints,
+        Endpoints localListeners,
+        SupportedVersionRange localSupportedKRaftVersion,
         int fetchTimeoutMs,
         LogContext logContext
     ) {
         this.localReplicaKey = localReplicaKey;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
-        this.endpoints = endpoints;
+        this.localListeners = localListeners;
+        this.localSupportedKRaftVersion = localSupportedKRaftVersion;
 
         for (VoterSet.VoterNode voterNode: voterSetAtEpochStart.voterNodes()) {
             boolean hasAcknowledgedLeader = voterNode.isVoter(localReplicaKey);
@@ -256,7 +260,7 @@ public class LeaderState<T> implements EpochState {
             handlerState -> handlerState.completeFuture(
                 error,
                 new LeaderAndEpoch(OptionalInt.of(localReplicaKey.id()), epoch),
-                endpoints
+                localListeners
             )
         );
         updateVoterHandlerState = state;
@@ -344,36 +348,54 @@ public class LeaderState<T> implements EpochState {
             ) {
                 builder.appendLeaderChangeMessage(currentTimeMs, leaderChangeMessage);
 
-                offsetOfVotersAtEpochStart.ifPresent(offset -> {
-                    if (offset == -1) {
-                        // Latest voter set came from the bootstrap checkpoint (0-0.checkpoint)
-                        // rewrite the voter set to the log so that it is replicated to the replicas.
-                        if (!kraftVersionAtEpochStart.isReconfigSupported()) {
-                            throw new IllegalStateException(
-                                String.format(
-                                    "The bootstrap checkpoint contains a set of voters %s at %s " +
-                                    "and the KRaft version is %s",
-                                    voterSetAtEpochStart,
-                                    offset,
-                                    kraftVersionAtEpochStart
+                if (kraftVersionAtEpochStart.isReconfigSupported()) {
+                    long offset = offsetOfVotersAtEpochStart.orElseThrow(
+                        () -> new IllegalStateException(
+                            String.format(
+                                "The %s is %s but there is no voter set in the log or " +
+                                "checkpoint %s",
+                                KRaftVersion.FEATURE_NAME,
+                                kraftVersionAtEpochStart,
+                                voterSetAtEpochStart
+                            )
+                        )
+                    );
+
+                    VoterSet.VoterNode updatedVoterNode = VoterSet.VoterNode.of(
+                        localReplicaKey,
+                        localListeners,
+                        localSupportedKRaftVersion
+                    );
+
+                    // The leader should write the latest voters record if its local listeners are different
+                    // or it has never written a voters record to the log before.
+                    if (offset == -1 || voterSetAtEpochStart.voterNodeNeedsUpdate(updatedVoterNode)) {
+                        VoterSet updatedVoterSet = voterSetAtEpochStart
+                            .updateVoter(updatedVoterNode)
+                            .orElseThrow(
+                                () -> new IllegalStateException(
+                                    String.format(
+                                        "Update expected for leader node %s and voter set %s",
+                                        updatedVoterNode,
+                                        voterSetAtEpochStart
+                                    )
                                 )
                             );
-                        } else {
-                            builder.appendKRaftVersionMessage(
-                                currentTimeMs,
-                                new KRaftVersionRecord()
-                                    .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
-                                    .setKRaftVersion(kraftVersionAtEpochStart.featureLevel())
-                            );
-                            builder.appendVotersMessage(
-                                currentTimeMs,
-                                voterSetAtEpochStart.toVotersRecord(
-                                    ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION
-                                )
-                            );
-                        }
+
+                        builder.appendKRaftVersionMessage(
+                            currentTimeMs,
+                            new KRaftVersionRecord()
+                                .setVersion(kraftVersionAtEpochStart.kraftVersionRecordVersion())
+                                .setKRaftVersion(kraftVersionAtEpochStart.featureLevel())
+                        );
+                        builder.appendVotersMessage(
+                            currentTimeMs,
+                            updatedVoterSet.toVotersRecord(
+                                kraftVersionAtEpochStart.votersRecordVersion()
+                            )
+                        );
                     }
-                });
+                }
 
                 return builder.build();
             }
@@ -426,7 +448,7 @@ public class LeaderState<T> implements EpochState {
 
     @Override
     public Endpoints leaderEndpoints() {
-        return endpoints;
+        return localListeners;
     }
 
     Map<Integer, ReplicaState> voterStates() {
