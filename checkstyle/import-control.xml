@@ -301,6 +301,7 @@
     <allow pkg="kafka.utils" />
     <allow pkg="scala.collection" />
     <allow pkg="org.apache.kafka.coordinator.transaction" />
+    <allow pkg="org.apache.kafka.coordinator.group" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.tools"/>
