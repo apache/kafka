@@ -967,7 +967,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testUnsubscribeOnClose() {
+    public void testProcessBackgroundEventsOnClose() {
         SubscriptionState subscriptions = mock(SubscriptionState.class);
         consumer = spy(newConsumer(
             mock(FetchBuffer.class),
@@ -993,7 +993,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             "group-id",
             "client-id"));
-        doThrow(new KafkaException()).when(consumer).unsubscribe(any(), any());
+        doThrow(new KafkaException()).when(consumer).processBackgroundEvents(any(), any());
         assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
         verifyUnsubscribeEvent(subscriptions);
         // Close operation should carry on even if the unsubscribe fails
@@ -1951,11 +1951,11 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#unsubscribe(Future, Timer)}
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer)}
      * handles the case where the {@link Future} takes a bit of time to complete, but does within the timeout.
      */
     @Test
-    public void testUnsubscribeWithInitialDelay() throws Exception {
+    public void testProcessBackgroundEventsWithInitialDelay() throws Exception {
         consumer = newConsumer();
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
@@ -1977,25 +1977,25 @@ public class AsyncKafkaConsumerTest {
             return null;
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
-        consumer.unsubscribe(future, timer);
+        consumer.processBackgroundEvents(future, timer);
 
         // 800 is the 1000 ms timeout (above) minus the 200 ms delay for the two incremental timeouts/retries.
         assertEquals(800, timer.remainingMs());
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#unsubscribe(Future, Timer)}
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer)}
      * handles the case where the {@link Future} is already complete when invoked, so it doesn't have to wait.
      */
     @Test
-    public void testUnsubscribeWithoutDelay() {
+    public void testProcessBackgroundEventsWithoutDelay() {
         consumer = newConsumer();
         Timer timer = time.timer(1000);
 
         // Create a future that is already completed.
         CompletableFuture<?> future = CompletableFuture.completedFuture(null);
 
-        consumer.unsubscribe(future, timer);
+        consumer.processBackgroundEvents(future, timer);
 
         // Because we didn't need to perform a timed get, we should still have every last millisecond
         // of our initial timeout.
@@ -2003,11 +2003,11 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#unsubscribe(Future, Timer)}
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer)}
      * handles the case where the {@link Future} does not complete within the timeout.
      */
     @Test
-    public void testUnsubscribeTimesOut() throws Exception {
+    public void testProcessBackgroundEventsTimesOut() throws Exception {
         consumer = newConsumer();
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
@@ -2018,7 +2018,7 @@ public class AsyncKafkaConsumerTest {
             throw new java.util.concurrent.TimeoutException("Intentional timeout");
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
-        assertThrows(TimeoutException.class, () -> consumer.unsubscribe(future, timer));
+        assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(future, timer));
 
         // Because we forced our mocked future to continuously time out, we should have no time remaining.
         assertEquals(0, timer.remainingMs());
@@ -2077,7 +2077,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testUnsubscribeWithoutGroupId() {
+    public void testProcessBackgroundEventsWithoutGroupId() {
         consumer = newConsumerWithoutGroupId();
 
         completeUnsubscribeApplicationEventSuccessfully();
@@ -2089,7 +2089,7 @@ public class AsyncKafkaConsumerTest {
         // Check that an unsubscribe event was generated, and that the consumer waited for it to
         // complete processing background events.
         verify(applicationEventHandler).add(any(UnsubscribeEvent.class));
-        verify(consumer).unsubscribe(any(), any());
+        verify(consumer).processBackgroundEvents(any(), any());
 
         // The consumer should not clear the assignment in the app thread. The unsubscribe
         // event is the one responsible for updating the assignment in the background when it
