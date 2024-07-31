@@ -73,10 +73,10 @@ public class ControllerRegistration {
             });
             this.listeners = Collections.unmodifiableMap(newListeners);
             Map<String, VersionRange> newSupportedFeatures = new HashMap<>();
-            record.features().forEach(feature -> {
+            record.features().forEach(feature ->
                 newSupportedFeatures.put(feature.name(), VersionRange.of(
-                        feature.minSupportedVersion(), feature.maxSupportedVersion()));
-            });
+                        feature.minSupportedVersion(), feature.maxSupportedVersion()))
+            );
             this.supportedFeatures = Collections.unmodifiableMap(newSupportedFeatures);
         }
 

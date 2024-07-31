@@ -37,7 +37,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.zookeeper.client.ZKClientConfig
@@ -50,6 +50,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 
 trait QuorumImplementation {
   def createBroker(
@@ -103,7 +104,7 @@ class KRaftQuorumImplementation(
   ): KafkaBroker = {
     val metaPropertiesEnsemble = {
       val loader = new MetaPropertiesEnsemble.Loader()
-      config.logDirs.foreach(loader.addLogDir)
+        .addLogDirs(config.logDirs.asJava)
       loader.addMetadataLogDir(config.metadataLogDir)
       val ensemble = loader.load()
       val copier = new MetaPropertiesEnsemble.Copier(ensemble)
@@ -344,6 +345,13 @@ abstract class QuorumTestHarness extends Logging {
     metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
                         setFeatureLevel(metadataVersion.featureLevel()), 0.toShort))
+
+    metadataRecords.add(new ApiMessageAndVersion(
+      new FeatureLevelRecord()
+        .setName(Features.TRANSACTION_VERSION.featureName)
+        .setFeatureLevel(Features.TRANSACTION_VERSION.latestTesting),
+      0.toShort
+    ))
 
     optionalMetadataRecords.foreach { metadataArguments =>
       for (record <- metadataArguments) metadataRecords.add(record)

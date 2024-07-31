@@ -18,6 +18,8 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
+import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
@@ -28,6 +30,8 @@ import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
+import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
+import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.network.ListenerName;
@@ -37,6 +41,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.raft.internals.ReplicaKey;
 
 import java.net.InetSocketAddress;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -477,8 +482,12 @@ public class RaftUtil {
     public static DescribeQuorumResponseData singletonDescribeQuorumResponse(
         short apiVersion,
         TopicPartition topicPartition,
-        DescribeQuorumResponseData.PartitionData partitionData,
-        DescribeQuorumResponseData.NodeCollection nodes
+        int leaderId,
+        int leaderEpoch,
+        long highWatermark,
+        Collection<LeaderState.ReplicaState> voters,
+        Collection<LeaderState.ReplicaState> observers,
+        long currentTimeMs
     ) {
         DescribeQuorumResponseData response = new DescribeQuorumResponseData()
             .setTopics(
@@ -487,17 +496,111 @@ public class RaftUtil {
                         .setTopicName(topicPartition.topic())
                         .setPartitions(
                             Collections.singletonList(
-                                partitionData.setPartitionIndex(topicPartition.partition())
-                            )
-                        )
-                )
-            );
-
+                                new DescribeQuorumResponseData.PartitionData()
+                                    .setPartitionIndex(topicPartition.partition())
+                                    .setErrorCode(Errors.NONE.code())
+                                    .setLeaderId(leaderId)
+                                    .setLeaderEpoch(leaderEpoch)
+                                    .setHighWatermark(highWatermark)
+                                    .setCurrentVoters(toReplicaStates(apiVersion, leaderId, voters, currentTimeMs))
+                                    .setObservers(toReplicaStates(apiVersion, leaderId, observers, currentTimeMs))))));
         if (apiVersion >= 2) {
+            DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection(voters.size());
+            for (LeaderState.ReplicaState voter : voters) {
+                nodes.add(
+                    new DescribeQuorumResponseData.Node()
+                        .setNodeId(voter.replicaKey().id())
+                        .setListeners(voter.listeners().toDescribeQuorumResponseListeners())
+                );
+            }
             response.setNodes(nodes);
         }
-
         return response;
+    }
+
+    public static AddRaftVoterRequestData addVoterRequest(
+        String clusterId,
+        int timeoutMs,
+        ReplicaKey voter,
+        Endpoints listeners
+    ) {
+        return new AddRaftVoterRequestData()
+            .setClusterId(clusterId)
+            .setTimeoutMs(timeoutMs)
+            .setVoterId(voter.id())
+            .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
+            .setListeners(listeners.toAddVoterRequest());
+    }
+
+    public static AddRaftVoterResponseData addVoterResponse(
+        Errors error,
+        String errorMessage
+    ) {
+        errorMessage = errorMessage == null ? error.message() : errorMessage;
+
+        return new AddRaftVoterResponseData()
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage);
+    }
+    
+    public static RemoveRaftVoterRequestData removeVoterRequest(
+        String clusterId,
+        ReplicaKey voter
+    ) {
+        return new RemoveRaftVoterRequestData()
+            .setClusterId(clusterId)
+            .setVoterId(voter.id())
+            .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID));
+    }
+
+    public static RemoveRaftVoterResponseData removeVoterResponse(
+        Errors error,
+        String errorMessage
+    ) {
+        errorMessage = errorMessage == null ? error.message() : errorMessage;
+
+        return new RemoveRaftVoterResponseData()
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage);
+    }
+
+    private static List<DescribeQuorumResponseData.ReplicaState> toReplicaStates(
+        short apiVersion,
+        int leaderId,
+        Collection<LeaderState.ReplicaState> states,
+        long currentTimeMs
+    ) {
+        return states
+            .stream()
+            .map(replicaState -> toReplicaState(apiVersion, leaderId, replicaState, currentTimeMs))
+            .collect(Collectors.toList());
+    }
+
+    private static DescribeQuorumResponseData.ReplicaState toReplicaState(
+        short apiVersion,
+        int leaderId,
+        LeaderState.ReplicaState replicaState,
+        long currentTimeMs
+    ) {
+        final long lastCaughtUpTimestamp;
+        final long lastFetchTimestamp;
+        if (replicaState.replicaKey().id() == leaderId) {
+            lastCaughtUpTimestamp = currentTimeMs;
+            lastFetchTimestamp = currentTimeMs;
+        } else {
+            lastCaughtUpTimestamp = replicaState.lastCaughtUpTimestamp();
+            lastFetchTimestamp = replicaState.lastFetchTimestamp();
+        }
+        DescribeQuorumResponseData.ReplicaState replicaStateData = new DescribeQuorumResponseData.ReplicaState()
+            .setReplicaId(replicaState.replicaKey().id())
+            .setLogEndOffset(replicaState.endOffset().map(LogOffsetMetadata::offset).orElse(-1L))
+            .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
+            .setLastFetchTimestamp(lastFetchTimestamp);
+
+        if (apiVersion >= 2) {
+            replicaStateData.setReplicaDirectoryId(replicaState.replicaKey().directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID));
+        }
+        return replicaStateData;
     }
 
     public static Optional<ReplicaKey> voteRequestVoterKey(
@@ -519,6 +622,22 @@ public class RaftUtil {
             return Optional.empty();
         } else {
             return Optional.of(ReplicaKey.of(request.voterId(), partition.voterDirectoryId()));
+        }
+    }
+
+    public static Optional<ReplicaKey> addVoterRequestVoterKey(AddRaftVoterRequestData request) {
+        if (request.voterId() < 0) {
+            return Optional.empty();
+        } else {
+            return Optional.of(ReplicaKey.of(request.voterId(), request.voterDirectoryId()));
+        }
+    }
+
+    public static Optional<ReplicaKey> removeVoterRequestVoterKey(RemoveRaftVoterRequestData request) {
+        if (request.voterId() < 0) {
+            return Optional.empty();
+        } else {
+            return Optional.of(ReplicaKey.of(request.voterId(), request.voterDirectoryId()));
         }
     }
 

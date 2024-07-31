@@ -243,14 +243,13 @@ public class KRaftMigrationZkWriter {
             );
         });
 
-        deletedTopics.forEach((topicId, topicName) -> {
+        deletedTopics.forEach((topicId, topicName) ->
             operationConsumer.accept(
                 DELETE_TOPIC,
                 "Deleted Topic " + topicName + ", ID " + topicId,
                 migrationState -> migrationClient.topicClient().deleteTopic(topicName, migrationState)
-            );
-            ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
-        });
+            )
+        );
 
         newPartitions.forEach((topicId, partitionMap) -> {
             TopicImage topic = topicsImage.getTopic(topicId);
@@ -272,14 +271,14 @@ public class KRaftMigrationZkWriter {
                     migrationState));
         });
 
-        extraneousPartitionsInZk.forEach((topicName, partitions) -> {
+        extraneousPartitionsInZk.forEach((topicName, partitions) ->
             operationConsumer.accept(
                 DELETE_PARTITION,
                 "Deleted extraneous Partitions " + partitions + " for Topic " + topicName,
                 migrationState -> migrationClient.topicClient().deleteTopicPartitions(
                     Collections.singletonMap(topicName, partitions),
-                    migrationState));
-        });
+                    migrationState))
+        );
     }
 
     void handleTopicsDelta(
@@ -516,9 +515,9 @@ public class KRaftMigrationZkWriter {
 
             // Populate list with users with scram changes
             if (metadataDelta.scramDelta() != null) {
-                metadataDelta.scramDelta().changes().forEach((scramMechanism, changes) -> {
-                    changes.forEach((userName, changeOpt) -> users.add(userName));
-                });
+                metadataDelta.scramDelta().changes().forEach((scramMechanism, changes) ->
+                    changes.forEach((userName, changeOpt) -> users.add(userName))
+                );
             }
 
             // Populate list with users with quota changes
