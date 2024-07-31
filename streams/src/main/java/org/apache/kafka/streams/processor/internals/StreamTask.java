@@ -806,7 +806,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } catch (final StreamsException exception) {
             record = null;
             throw exception;
-        } catch (final Exception e) {
+        } catch (final RuntimeException e) {
             handleException(e);
         } finally {
             processorContext.setCurrentNode(null);
@@ -844,8 +844,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             record.offset(),
             record.partition(),
             record.topic(),
-            record.headers(),
-            record.rawRecord()
+            record.headers()
         );
         updateProcessorContext(currNode, wallClockTime, recordContext);
 
@@ -906,8 +905,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             -1L,
             -1,
             null,
-            new RecordHeaders(),
-            null
+            new RecordHeaders()
         );
         updateProcessorContext(node, time.milliseconds(), recordContext);
 
@@ -916,7 +914,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         try {
-            maybeMeasureLatency(() -> node.punctuate(timestamp, punctuator), time, punctuateLatencySensor);
+            maybeMeasureLatency(() -> punctuator.punctuate(timestamp), time, punctuateLatencySensor);
         } catch (final StreamsException e) {
             throw e;
         } catch (final RuntimeException e) {
