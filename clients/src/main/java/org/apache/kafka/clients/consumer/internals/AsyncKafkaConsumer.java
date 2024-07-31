@@ -1291,13 +1291,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             processBackgroundEvents(unsubscribeEvent.future(), timer);
             log.info("Completed releasing assignment and sending leave group to close consumer");
         } catch (TimeoutException e) {
-            // Try to process any background events in the hope that our ConsumerRebalanceListenerCallbackNeededEvent
-            // is present on the background event queue and can be executed.
-            processBackgroundEvents();
-
             log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +
                 "complete it within {} ms. It will proceed to close.", timer.timeoutMs());
         } finally {
+            // Regardless of success or failure of the unsubscribe process, it's important to process any background
+            // events in the hope that our ConsumerRebalanceListenerCallbackNeededEvent is present on the background
+            // event queue and can be executed.
+            processBackgroundEvents();
+
             timer.update();
         }
     }
