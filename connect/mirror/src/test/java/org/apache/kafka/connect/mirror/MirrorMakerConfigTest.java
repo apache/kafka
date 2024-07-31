@@ -257,6 +257,7 @@ public class MirrorMakerConfigTest {
         assertEquals("b->a", aProps.get("client.id"));
         assertEquals("123", aProps.get("offset.storage.replication.factor"));
         assertEquals("__", aProps.get("replication.policy.separator"));
+        assertEquals("fake", aProps.get("config.providers"));
         Map<String, String> bProps = mirrorConfig.workerConfig(b);
         assertEquals("a->b", bProps.get("client.id"));
         assertEquals("456", bProps.get("status.storage.replication.factor"));
