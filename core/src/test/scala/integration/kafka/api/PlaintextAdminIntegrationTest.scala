@@ -261,13 +261,17 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     var transactionId = "foo"
 
+    def describeTransactions(): TransactionDescription = {
+      client.describeTransactions(Collections.singleton(transactionId)).description(transactionId).get()
+    }
     def transactionState(): TransactionState = {
-      client.describeTransactions(Collections.singleton(transactionId)).description(transactionId).get().state()
+      describeTransactions().state()
     }
 
     def findCoordinatorIdByTransactionId(transactionId: String): Int = {
       // calculate the transaction partition id
-      val transactionPartitionId = Utils.abs(transactionId.hashCode) % 50
+      val transactionPartitionId = Utils.abs(transactionId.hashCode) %
+        brokers.head.metadataCache.numPartitions(Topic.TRANSACTION_STATE_TOPIC_NAME).get
       val transactionTopic = client.describeTopics(Collections.singleton(Topic.TRANSACTION_STATE_TOPIC_NAME))
       val partitionList = transactionTopic.allTopicNames().get().get(Topic.TRANSACTION_STATE_TOPIC_NAME).partitions()
       partitionList.asScala.filter(tp => tp.partition() == transactionPartitionId).head.leader().id()
@@ -288,15 +292,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "k1".getBytes, "v1".getBytes()))
       producer.flush()
       assertEquals(TransactionState.ONGOING, transactionState())
-      producer.commitTransaction()
 
-      val transactionResult = client.describeTransactions(Collections.singleton(transactionId))
-        .description(transactionId).get()
+      TestUtils.waitUntilTrue(() => describeTransactions().topicPartitions().size() == 1, "Describe transactions timeout")
+      val transactionResult = describeTransactions()
       assertEquals(findCoordinatorIdByTransactionId(transactionId), transactionResult.coordinatorId())
       assertEquals(0, transactionResult.producerId())
       assertEquals(0, transactionResult.producerEpoch())
       assertEquals(Collections.singleton(topicPartition), transactionResult.topicPartitions())
 
+      producer.commitTransaction()
       val state = transactionState()
       // Either PREPARE_COMMIT or COMPLETE_COMMIT is expected
       assertTrue(state == TransactionState.PREPARE_COMMIT || state == TransactionState.COMPLETE_COMMIT)
@@ -319,8 +323,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       abortProducer.beginTransaction()
       assertEquals(TransactionState.EMPTY, transactionState())
 
-      val transactionResult = client.describeTransactions(Collections.singleton(transactionId))
-        .description(transactionId).get()
+      val transactionResult = describeTransactions()
       assertEquals(findCoordinatorIdByTransactionId(transactionId), transactionResult.coordinatorId())
       assertEquals(0, transactionResult.topicPartitions().size())
 
@@ -328,8 +331,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       abortProducer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "k2".getBytes, "v2".getBytes()))
       abortProducer.flush()
 
-      val transactionSendMsgResult = client.describeTransactions(Collections.singleton(transactionId))
-        .description(transactionId).get()
+      val transactionSendMsgResult = describeTransactions()
       assertEquals(findCoordinatorIdByTransactionId(transactionId), transactionSendMsgResult.coordinatorId())
       assertEquals(Collections.singleton(topicPartition), transactionSendMsgResult.topicPartitions())
       assertEquals(topicPartition, transactionSendMsgResult.topicPartitions().asScala.head)
