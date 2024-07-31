@@ -226,16 +226,6 @@ object TestUtils extends Logging {
     }
   }
 
-  def plaintextBootstrapControllers[B <: ControllerServer](
-    controllers: Seq[B]
-  ): String = {
-    controllers.map { s =>
-      val listener = s.config.effectiveAdvertisedControllerListeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
-        sys.error(s"Could not find listener with name ${SecurityProtocol.PLAINTEXT}"))
-      formatAddress(listener.host, s.socketServer.boundPort(listener.listenerName))
-    }.mkString(",")
-  }
-
   def plaintextBootstrapServers[B <: KafkaBroker](
     brokers: Seq[B]
   ): String = {
