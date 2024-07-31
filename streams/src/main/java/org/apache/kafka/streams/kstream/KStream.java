@@ -849,10 +849,7 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
      * @deprecated since 2.6; use {@link #repartition()} instead
      */
-    // TODO: when removed, update `StreamsResetter` description of --intermediate-topics
-    @Deprecated
-    KStream<K, V> through(final String topic);
-
+    
     /**
      * Materialize this stream to a topic and creates a new {@code KStream} from the topic using the
      * {@link Produced} instance for configuration of the {@link Serde key serde}, {@link Serde value serde},
@@ -870,9 +867,7 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
      * @deprecated since 2.6; use {@link #repartition(Repartitioned)} instead
      */
-    @Deprecated
-    KStream<K, V> through(final String topic,
-                          final Produced<K, V> produced);
+
 
     /**
      * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
