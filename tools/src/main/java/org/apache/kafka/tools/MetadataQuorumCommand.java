@@ -270,8 +270,8 @@ public class MetadataQuorumCommand {
 
         private Node(int id, Uuid directoryId, List<RaftVoterEndpoint> endpoints) {
             this.id = id;
-            this.directoryId = directoryId;
-            this.endpoints = endpoints;
+            this.directoryId = Objects.requireNonNull(directoryId);
+            this.endpoints = Objects.requireNonNull(endpoints);
         }
 
         @Override
@@ -279,8 +279,8 @@ public class MetadataQuorumCommand {
             StringBuilder sb = new StringBuilder();
             sb.append("{");
             sb.append("\"id\": ").append(id).append(", ");
-            sb.append("\"directoryId\": ").append("\"").append(directoryId).append("\"");
-            if (endpoints != null && !endpoints.isEmpty()) {
+            sb.append("\"directoryId\": ").append("\"").append(directoryId.equals(Uuid.ZERO_UUID) ? "null" : directoryId).append("\"");
+            if (!endpoints.isEmpty()) {
                 sb.append(", \"endpoints\": ");
                 for (RaftVoterEndpoint endpoint : endpoints) {
                     sb.append(endpoint.toString()).append(", ");
