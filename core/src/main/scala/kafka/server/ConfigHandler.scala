@@ -96,11 +96,10 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
         rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
     }
 
-    // When copy disabled, we should stop leaderCopyRLMTask and followerRLMTask, but keep expirationTask
+    // When copy disabled, we should stop leaderCopyRLMTask, but keep expirationTask
     if (isRemoteLogEnabled && !wasCopyDisabled && isCopyDisabled) {
       replicaManager.remoteLogManager.foreach(rlm => {
         rlm.stopLeaderCopyRLMTasks(leaderPartitions.toSet.asJava);
-        rlm.stopFollowerRLMTasks(followerPartitions.toSet.asJava)
       })
     }
 

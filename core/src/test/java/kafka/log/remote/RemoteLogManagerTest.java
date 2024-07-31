@@ -1338,7 +1338,7 @@ public class RemoteLogManagerTest {
         RemoteLogManager spyRemoteLogManager = spy(remoteLogManager);
         spyRemoteLogManager.onLeadershipChange(
             Collections.emptySet(), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
-        verify(spyRemoteLogManager).doHandleFollowerPartition(eq(followerTopicIdPartition), eq(false));
+        verify(spyRemoteLogManager).doHandleFollowerPartition(eq(followerTopicIdPartition));
 
         Mockito.reset(spyRemoteLogManager);
 
