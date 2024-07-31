@@ -51,7 +51,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
  * {@code KStream}, {@link KTable},
  * {@link GlobalKTable}, or can be aggregated into a {@link KTable}. Kafka
  * Streams DSL can be mixed-and-matched with Processor API (PAPI) (c.f.
- * {@link Topology}) via  {@link #process(ProcessorSupplier, String...) process(...)},
+ * {@link Topology}) via null {@link #process(ProcessorSupplier, String...) process(...)},
  * {@link #transform(TransformerSupplier, String...) transform(...)}, and
  * {@link #transformValues(ValueTransformerSupplier, String...) transformValues(...)}.
  *
@@ -1013,6 +1013,7 @@ public interface KStream<K, V> {
      * @return {@code KStream} that contains the exact same repartitioned
      * records as this {@code KStream}.
      */
+    @Deprecated
     KStream<K, V> repartition();
 
     /**
@@ -4050,13 +4051,14 @@ public interface KStream<K, V> {
      * }</pre> Even if any upstream operation was key-changing, no
      * auto-repartition is triggered. If repartitioning is required, a call to
      * {@link #repartition()} should be performed before {@code
-     * flatTransform()}. <p> Transforming records might
-     * r
-     * esult in an internal data redistribution if a key based operator (like an
+     * flatTransform()}. <p> Transforming records might r
+     * esult
+     * i
+     * n an internal data redistribution if a key based operator (like an
      * aggregation or join) is applied to the result {@code KStream}. (cf.
      * {@link #transformValues(ValueTransformerSupplier, String...) transformValues()})
      * <p>
-     * Note that it is possible to emit records by using      {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object)
+     * Note that it is possible to emit records by using null null     {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object)
      * context#forward()} in
      * {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
@@ -4199,13 +4201,14 @@ public interface KStream<K, V> {
      * }</pre> Even if any upstream operation was key-changing, no
      * auto-repartition is triggered. If repartitioning is required, a call to
      * {@link #repartition()} should be performed before {@code
-     * flatTransform()}. <p> Transforming records might
-     * r
-     * esult in an internal data redistribution if a key based operator (like an
+     * flatTransform()}. <p> Transforming records might r
+     * esult
+     * i
+     * n an internal data redistribution if a key based operator (like an
      * aggregation or join) is applied to the result {@code KStream}. (cf.
      * {@link #transformValues(ValueTransformerSupplier, String...) transformValues()})
      * <p>
-     * Note that it is possible to emit records by using      {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object)
+     * Note that it is possible to emit records by using null null     {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object)
      * context#forward()} in
      * {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
@@ -4904,11 +4907,13 @@ public interface KStream<K, V> {
      * }
      * }</pre> Even if any upstream operation was key-changing, no
      * auto-repartition is triggered. If repartitioning is required, a call to
-     * {@link #repartition()} should be performed before {@code flatTransformValues()}.
+     * {@link #repartition()} should be performed before {@code      flatTransformValues()}.
      * <
      * p>
-     * Setting a new value preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based
+     * S
+     * ett ing a new value preserves data co-location with respect to the key.
+     * Thus,
+     * <em>no</em> internal data redistribution is required if a key based
      * operator (like an aggregation or join) is applied to the result
      * {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
      * flatTransform()})
@@ -5049,11 +5054,13 @@ public interface KStream<K, V> {
      * }
      * }</pre> Even if any upstream operation was key-changing, no
      * auto-repartition is triggered. If repartitioning is required, a call to
-     * {@link #repartition()} should be performed before {@code flatTransformValues()}.
+     * {@link #repartition()} should be performed before {@code      flatTransformValues()}.
      * <
      * p>
-     * Setting a new value preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based
+     * S
+     * ett ing a new value preserves data co-location with respect to the key.
+     * Thus,
+     * <em>no</em> internal data redistribution is required if a key based
      * operator (like an aggregation or join) is applied to the result
      * {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
      * flatTransform()})
