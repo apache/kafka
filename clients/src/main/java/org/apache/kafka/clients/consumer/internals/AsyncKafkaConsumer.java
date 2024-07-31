@@ -1291,11 +1291,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             processBackgroundEvents(unsubscribeEvent.future(), timer);
             log.info("Completed releasing assignment and sending leave group to close consumer");
         } catch (TimeoutException e) {
-            // If we get to this point, the unsubscribe event did not complete in time. That means that the
-            // consumer did not process the callback event, which means that the background thread didn't receive
-            // the message to send out the "leave group" heartbeat. We perform one more last ditch effort to
-            // process any background events in the hope that our ConsumerRebalanceListenerCallbackNeededEvent is
-            // present and can be executed.
+            // Try to process any background events in the hope that our ConsumerRebalanceListenerCallbackNeededEvent
+            // is present on the background event queue and can be executed.
             processBackgroundEvents();
 
             log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +
