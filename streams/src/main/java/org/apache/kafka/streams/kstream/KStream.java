@@ -4908,8 +4908,7 @@ public interface KStream<K, V> {
      * }</pre> Even if any upstream operation was key-changing, no
      * auto-repartition is triggered. If repartitioning is required, a call to
      * {@link #repartition()} should be performed before {@code      flatTransformValues()}.
-     * <
-     * p>
+     * <p>
      * S
      * ett ing a new value preserves data co-location with respect to the key.
      * Thus,
@@ -5055,8 +5054,7 @@ public interface KStream<K, V> {
      * }</pre> Even if any upstream operation was key-changing, no
      * auto-repartition is triggered. If repartitioning is required, a call to
      * {@link #repartition()} should be performed before {@code      flatTransformValues()}.
-     * <
-     * p>
+     * <p>
      * S
      * ett ing a new value preserves data co-location with respect to the key.
      * Thus,
