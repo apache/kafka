@@ -447,18 +447,18 @@ public class ShareConsumeRequestManagerTest {
 
         shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements2));
 
-        assertEquals(6, shareConsumeRequestManager.requestStates(0).getFirst().getAcknowledgementsToSendCount(tip0));
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
-        assertEquals(0, shareConsumeRequestManager.requestStates(0).getFirst().getAcknowledgementsToSendCount(tip0));
-        assertEquals(6, shareConsumeRequestManager.requestStates(0).getFirst().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
 
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
-        assertEquals(0, shareConsumeRequestManager.requestStates(0).getFirst().getAcknowledgementsToSendCount(tip0));
-        assertEquals(0, shareConsumeRequestManager.requestStates(0).getFirst().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
     }
 
     @Test
@@ -490,27 +490,27 @@ public class ShareConsumeRequestManagerTest {
 
         shareConsumeRequestManager.commitSync(Collections.singletonMap(tip0, acknowledgements2), 60000L);
 
-        assertEquals(3, shareConsumeRequestManager.requestStates(0).getFirst().getAcknowledgementsToSendCount(tip0));
-        assertEquals(3, shareConsumeRequestManager.requestStates(0).getSecond().getAcknowledgementsToSendCount(tip0));
+        assertEquals(3, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
+        assertEquals(3, shareConsumeRequestManager.requestStates(0).getSyncRequest().getAcknowledgementsToSendCount(tip0));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
-        assertEquals(3, shareConsumeRequestManager.requestStates(0).getFirst().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(3, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
 
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
-        assertEquals(0, shareConsumeRequestManager.requestStates(0).getFirst().getInFlightAcknowledgementsCount(tip0));
-        assertEquals(3, shareConsumeRequestManager.requestStates(0).getSecond().getAcknowledgementsToSendCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(3, shareConsumeRequestManager.requestStates(0).getSyncRequest().getAcknowledgementsToSendCount(tip0));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
-        assertEquals(3, shareConsumeRequestManager.requestStates(0).getSecond().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(3, shareConsumeRequestManager.requestStates(0).getSyncRequest().getInFlightAcknowledgementsCount(tip0));
 
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
-        assertEquals(0, shareConsumeRequestManager.requestStates(0).getSecond().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getSyncRequest().getInFlightAcknowledgementsCount(tip0));
     }
 
     @Test
@@ -537,29 +537,29 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(6L, AcknowledgeType.ACCEPT);
 
         shareConsumeRequestManager.commitSync(Collections.singletonMap(tip0, acknowledgements), 60000L);
-        assertNull(shareConsumeRequestManager.requestStates(0).getFirst());
+        assertNull(shareConsumeRequestManager.requestStates(0).getAsyncRequest());
 
-        assertEquals(6, shareConsumeRequestManager.requestStates(0).getSecond().getAcknowledgementsToSendCount(tip0));
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getSyncRequest().getAcknowledgementsToSendCount(tip0));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
-        assertEquals(6, shareConsumeRequestManager.requestStates(0).getSecond().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getSyncRequest().getInFlightAcknowledgementsCount(tip0));
 
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.REQUEST_TIMED_OUT));
         networkClientDelegate.poll(time.timer(0));
 
-        assertEquals(6, shareConsumeRequestManager.requestStates(0).getSecond().getIncompleteAcknowledgementsCount(tip0));
-        assertEquals(0, shareConsumeRequestManager.requestStates(0).getSecond().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getSyncRequest().getIncompleteAcknowledgementsCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getSyncRequest().getInFlightAcknowledgementsCount(tip0));
 
         TestUtils.retryOnExceptionWithTimeout(() -> assertEquals(1, shareConsumeRequestManager.sendAcknowledgements()));
 
-        assertEquals(6, shareConsumeRequestManager.requestStates(0).getSecond().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getSyncRequest().getInFlightAcknowledgementsCount(tip0));
 
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
-        assertEquals(0, shareConsumeRequestManager.requestStates(0).getSecond().getInFlightAcknowledgementsCount(tip0));
-        assertEquals(0, shareConsumeRequestManager.requestStates(0).getSecond().getIncompleteAcknowledgementsCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getSyncRequest().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getSyncRequest().getIncompleteAcknowledgementsCount(tip0));
     }
 
     @Test
