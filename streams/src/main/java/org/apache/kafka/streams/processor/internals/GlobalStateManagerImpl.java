@@ -330,7 +330,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                 Thread.currentThread().getName(),
                                 globalProcessorContext.taskId().toString(),
                                 globalProcessorContext.metrics()
-                            )
+                            ),
+                            null
                         );
                     }
                 }

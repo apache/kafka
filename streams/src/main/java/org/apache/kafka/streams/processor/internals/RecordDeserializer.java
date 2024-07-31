@@ -80,15 +80,6 @@ public class RecordDeserializer {
                                                     final Exception deserializationException,
                                                     final ConsumerRecord<byte[], byte[]> rawRecord,
                                                     final Logger log,
-                                                    final Sensor droppedRecordsSensor) {
-        handleDeserializationFailure(deserializationExceptionHandler, processorContext, deserializationException, rawRecord, log, droppedRecordsSensor, null);
-    }
-
-    public static void handleDeserializationFailure(final DeserializationExceptionHandler deserializationExceptionHandler,
-                                                    final ProcessorContext<?, ?> processorContext,
-                                                    final Exception deserializationException,
-                                                    final ConsumerRecord<byte[], byte[]> rawRecord,
-                                                    final Logger log,
                                                     final Sensor droppedRecordsSensor,
                                                     final String sourceNodeName) {
         final DeserializationExceptionHandler.DeserializationHandlerResponse response;
