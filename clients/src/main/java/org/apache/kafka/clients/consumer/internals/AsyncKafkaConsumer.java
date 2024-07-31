@@ -1295,8 +1295,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 "complete it within {} ms. It will proceed to close.", timer.timeoutMs());
         } finally {
             // Regardless of success or failure of the unsubscribe process, it's important to process any background
-            // events in the hope that our ConsumerRebalanceListenerCallbackNeededEvent is present on the background
-            // event queue and can be executed.
+            // events in the hope that our ConsumerRebalanceListenerCallbackNeededEvent is present and can be executed.
             processBackgroundEvents();
 
             timer.update();
