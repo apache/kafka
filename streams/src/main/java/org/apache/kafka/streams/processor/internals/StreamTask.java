@@ -29,12 +29,14 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -63,6 +65,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeRecordSensor;
 
@@ -101,6 +104,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor restoreRemainingSensor;
     private final Sensor punctuateLatencySensor;
     private final Sensor bufferedRecordsSensor;
+    private final Sensor droppedRecordsSensor;
     private final Map<String, Sensor> e2eLatencySensors = new HashMap<>();
 
     private final RecordQueueCreator recordQueueCreator;
@@ -160,6 +164,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         processLatencySensor = TaskMetrics.processLatencySensor(threadId, taskId, streamsMetrics);
         punctuateLatencySensor = TaskMetrics.punctuateSensor(threadId, taskId, streamsMetrics);
         bufferedRecordsSensor = TaskMetrics.activeBufferedRecordsSensor(threadId, taskId, streamsMetrics);
+        droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(threadId, taskId, streamsMetrics);
 
         for (final String terminalNodeName : topology.terminalNodes()) {
             e2eLatencySensors.put(
@@ -915,13 +920,46 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         try {
             maybeMeasureLatency(() -> punctuator.punctuate(timestamp), time, punctuateLatencySensor);
-        } catch (final StreamsException e) {
+        } catch (final FailedProcessingException e) {
+            throw createStreamsException(node.name(), e.getCause());
+        } catch (final TaskCorruptedException | TaskMigratedException e) {
             throw e;
-        } catch (final RuntimeException e) {
-            throw new StreamsException(String.format("%sException caught while punctuating processor '%s'", logPrefix, node.name()), e);
+        } catch (final Exception e) {
+            final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
+                null,
+                recordContext.topic(),
+                recordContext.partition(),
+                recordContext.offset(),
+                recordContext.headers(),
+                node.name(),
+                id()
+            );
+
+            final ProcessingExceptionHandler.ProcessingHandlerResponse response;
+
+            try {
+                response = processingExceptionHandler.handle(errorHandlerContext, null, e);
+            } catch (final Exception fatalUserException) {
+                throw new FailedProcessingException(fatalUserException);
+            }
+
+            if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
+                log.error("Processing exception handler is set to fail upon" +
+                        " a processing error. If you would rather have the streaming pipeline" +
+                        " continue after a processing error, please set the " +
+                        PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
+
+                throw createStreamsException(node.name(), e);
+            } else {
+                droppedRecordsSensor.record();
+            }
         } finally {
             processorContext.setCurrentNode(null);
         }
+    }
+
+    private StreamsException createStreamsException(final String processorName, final Throwable cause) {
+        return new StreamsException(String.format("%sException caught while punctuating processor '%s'", logPrefix, processorName), cause);
     }
 
     @SuppressWarnings("unchecked")
