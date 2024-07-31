@@ -18,27 +18,30 @@
 
 FROM eclipse-temurin:21-jre-alpine AS build-jsa
 
-USER root
-
 # Get Kafka from https://archive.apache.org/dist/kafka, url passed as env var, for version 3.7.0
 ENV kafka_url https://archive.apache.org/dist/kafka/3.7.0/kafka_2.13-3.7.0.tgz
+ENV GPG_KEY 7C38C2F6E7DF40E527C7C996DE0D9D12FB1360DA
 
 COPY jsa_launch /etc/kafka/docker/jsa_launch
 
 RUN set -eux ; \
-    apk update ; \
-    apk upgrade ; \
     apk add --no-cache wget gcompat gpg gpg-agent procps bash; \
-    mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
-    tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
-    wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
-    gpg --import KEYS; \
+    for server in ha.pool.sks-keyservers.net $(shuf -e \
+                          hkp://p80.pool.sks-keyservers.net:80 \
+                          keyserver.ubuntu.com \
+                          hkp://keyserver.ubuntu.com:80 \
+                          pgp.mit.edu \
+                          hkp://keys.openpgp.org) ; do \
+      gpg --batch --keyserver "$server" --recv-keys "$GPG_KEY" && break || : ; \
+    done && \
     gpg --batch --verify kafka.tgz.asc kafka.tgz
 
-# Generate jsa files using dynamic CDS for kafka server start command and kafka storage format command
-RUN /etc/kafka/docker/jsa_launch
+RUN mkdir opt/kafka; \
+    tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
+    # Generate jsa files using dynamic CDS for kafka server start command and kafka storage format command
+    /etc/kafka/docker/jsa_launch
 
 
 FROM eclipse-temurin:21-jre-alpine
@@ -46,30 +49,32 @@ FROM eclipse-temurin:21-jre-alpine
 # exposed ports
 EXPOSE 9092
 
-USER root
-
 # Get Kafka from https://archive.apache.org/dist/kafka, url passed as env var, for version 3.7.0
 ENV kafka_url https://archive.apache.org/dist/kafka/3.7.0/kafka_2.13-3.7.0.tgz
-ENV build_date 2024-06-11
+ENV build_date 2024-07-31
+ENV GPG_KEY 7C38C2F6E7DF40E527C7C996DE0D9D12FB1360DA
 
-
-LABEL org.label-schema.name="kafka" \
-      org.label-schema.description="Apache Kafka" \
-      org.label-schema.build-date="${build_date}" \
-      org.label-schema.vcs-url="https://github.com/apache/kafka" \
+LABEL org.opencontainers.image.title="kafka" \
+      org.opencontainers.image.description="Apache Kafka" \
+      org.opencontainers.image.created="${build_date}" \
+      org.opencontainers.image.source="https://github.com/apache/kafka" \
       maintainer="Apache Kafka"
 
 RUN set -eux ; \
-    apk update ; \
-    apk upgrade ; \
     apk add --no-cache wget gcompat gpg gpg-agent procps bash; \
-    mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
-    tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
-    wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
-    gpg --import KEYS; \
+    for server in ha.pool.sks-keyservers.net $(shuf -e \
+                          hkp://p80.pool.sks-keyservers.net:80 \
+                          keyserver.ubuntu.com \
+                          hkp://keyserver.ubuntu.com:80 \
+                          pgp.mit.edu \
+                          hkp://keys.openpgp.org) ; do \
+      gpg --batch --keyserver "$server" --recv-keys "$GPG_KEY" && break || : ; \
+    done && \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+    mkdir opt/kafka; \
+    tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
     mkdir -p /var/lib/kafka/data /etc/kafka/secrets; \
     mkdir -p /etc/kafka/docker /usr/logs /mnt/shared/config; \
     adduser -h /home/appuser -D --shell /bin/bash appuser; \
@@ -79,9 +84,8 @@ RUN set -eux ; \
     cp /opt/kafka/config/log4j.properties /etc/kafka/docker/log4j.properties; \
     cp /opt/kafka/config/tools-log4j.properties /etc/kafka/docker/tools-log4j.properties; \
     cp /opt/kafka/config/kraft/server.properties /etc/kafka/docker/server.properties; \
-    rm kafka.tgz kafka.tgz.asc KEYS; \
-    apk del wget gpg gpg-agent; \
-    apk cache clean;
+    rm kafka.tgz kafka.tgz.asc; \
+    apk del wget gpg gpg-agent; 
 
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
 COPY --from=build-jsa storage.jsa /opt/kafka/storage.jsa
