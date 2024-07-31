@@ -967,7 +967,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testProcessBackgroundEventsOnClose() {
+    public void testUnsubscribeOnClose() {
         SubscriptionState subscriptions = mock(SubscriptionState.class);
         consumer = spy(newConsumer(
             mock(FetchBuffer.class),
@@ -1951,7 +1951,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer)}
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer) processBackgroundEvents}
      * handles the case where the {@link Future} takes a bit of time to complete, but does within the timeout.
      */
     @Test
@@ -1984,7 +1984,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer)}
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer) processBackgroundEvents}
      * handles the case where the {@link Future} is already complete when invoked, so it doesn't have to wait.
      */
     @Test
@@ -2003,7 +2003,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer)}
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer) processBackgroundEvents}
      * handles the case where the {@link Future} does not complete within the timeout.
      */
     @Test
@@ -2077,7 +2077,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testProcessBackgroundEventsWithoutGroupId() {
+    public void testUnsubscribeWithoutGroupId() {
         consumer = newConsumerWithoutGroupId();
 
         completeUnsubscribeApplicationEventSuccessfully();

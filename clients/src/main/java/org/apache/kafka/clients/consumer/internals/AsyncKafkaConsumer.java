@@ -1947,7 +1947,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
         } while (timer.notExpired());
 
-        throw new TimeoutException("Unsubscribe timed out before completion");
+        throw new TimeoutException("Operation timed out before completion");
     }
 
     static ConsumerRebalanceListenerCallbackCompletedEvent invokeRebalanceCallbacks(ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
