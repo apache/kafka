@@ -532,8 +532,12 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   }
 
   private def validProducerEpoch(transitMetadata: TxnTransitMetadata): Boolean = {
-    val transitEpoch = transitMetadata.producerEpoch
-    val transitProducerId = transitMetadata.producerId
+    val transitEpoch =
+      if (transitMetadata.isTransactionsV2 && (transitMetadata.txnState == PrepareCommit || transitMetadata.txnState == PrepareAbort))
+        transitMetadata.lastProducerEpoch
+      else
+        transitMetadata.producerEpoch
+    val transitProducerId = if (transitMetadata.nextProducerId != -1) transitMetadata.nextProducerId else transitMetadata.producerId
     transitEpoch == producerEpoch && transitProducerId == producerId
   }
 
