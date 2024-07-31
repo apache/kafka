@@ -919,7 +919,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         try {
-            maybeMeasureLatency(() -> node.punctuate(timestamp, punctuator), time, punctuateLatencySensor);
+            maybeMeasureLatency(() -> punctuator.punctuate(timestamp), time, punctuateLatencySensor);
         } catch (final FailedProcessingException e) {
             throw createStreamsException(node.name(), e.getCause());
         } catch (final TaskCorruptedException | TaskMigratedException e) {
