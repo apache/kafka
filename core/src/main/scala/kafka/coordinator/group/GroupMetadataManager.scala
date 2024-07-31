@@ -1243,6 +1243,7 @@ object GroupMetadataManager {
 
   // Formatter for use with tools such as console consumer: Consumer should also set exclude.internal.topics to false.
   // (specify --formatter "kafka.coordinator.group.GroupMetadataManager\$OffsetsMessageFormatter" when consuming __consumer_offsets)
+  @Deprecated
   class OffsetsMessageFormatter extends MessageFormatter {
     def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
       Option(consumerRecord.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {

@@ -2117,6 +2117,7 @@ project(':tools') {
     implementation project(':connect:runtime')
     implementation project(':tools:tools-api')
     implementation project(':transaction-coordinator')
+    implementation project(':group-coordinator')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
@@ -2140,7 +2141,6 @@ project(':tools') {
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.main.output
-    testImplementation project(':group-coordinator')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
