@@ -270,7 +270,7 @@ public class GetOffsetShell {
                     if (offsetSpec instanceof OffsetSpec.LatestSpec) {
                         partitionOffsets.put(partition, partitionInfo.offset() - 1);
                     } else {
-                        partitionOffsets.put(partition, partitionInfo.offset() - 1);
+                        partitionOffsets.put(partition, partitionInfo.offset());
                     }
                 }
             }
