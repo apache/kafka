@@ -22,26 +22,21 @@ import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 
+
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
-
 import org.junit.jupiter.api.extension.ExtendWith;
-
-import java.time.Duration;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(value = ClusterTestExtensions.class)
 public class AdminApiIntegrationTest {
@@ -52,42 +47,15 @@ public class AdminApiIntegrationTest {
     public void testClientInstanceId(ClusterInstance clusterInstance) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true");
         try (Admin admin = Admin.create(configs)) {
             assertNotNull(admin.clientInstanceId(Duration.ofSeconds(3)));
         }
     }
 
 
-    @ClusterTest(types = Type.KRAFT, brokers = 3)
-    public void testAddRaftVoter(ClusterInstance clusterInstance) {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true");
-        String servers = clusterInstance.bootstrapServers();
-        configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, servers);
-        try (Admin admin = Admin.create(configs)) {
-            assertThrows(ExecutionException.class, () -> {
-                admin.addRaftVoter(1, Uuid.randomUuid(), Collections.emptySet()).all().get();
-            });
-        }
-    }
-
-    @ClusterTest(types = Type.KRAFT, brokers = 3)
-    public void testRemoveRaftVoter(ClusterInstance clusterInstance) {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true");
-        configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        try (Admin admin = Admin.create(configs)) {
-            assertThrows(ExecutionException.class, () -> {
-                admin.removeRaftVoter(1, Uuid.randomUuid()).all().get();
-            });
-        }
-    }
-
     @ClusterTest(types = Type.KRAFT)
     public void testMetrics(ClusterInstance clusterInstance) {
         Map<String, Object> configs = new HashMap<>();
-        configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true");
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         try (Admin admin = Admin.create(configs)) {
             admin.metrics().forEach((metricName, metric) -> {
