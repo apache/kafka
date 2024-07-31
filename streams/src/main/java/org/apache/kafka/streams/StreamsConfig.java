@@ -1205,7 +1205,12 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     null,
                     Importance.LOW,
-                    WINDOW_SIZE_MS_DOC);
+                    WINDOW_SIZE_MS_DOC)
+            .define(LOG_SUMMARY_INTERVAL_MS_CONFIG,
+                    Type.LONG,
+                    2 * 60 * 1000L,
+                    Importance.LOW,
+                    LOG_SUMMARY_INTERVAL_MS_DOC);
     }
 
     // this is the list of configs for underlying clients
