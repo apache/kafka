@@ -309,7 +309,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
 
     private Map<String, String> stringsWithPrefix(String prefix) {
-        return Utils.entriesWithPrefix(rawProperties, prefix, false);
+        return Utils.entriesWithPrefix(rawProperties, prefix, false, true);
     }
 
     static Map<String, String> clusterConfigsWithPrefix(String prefix, Map<String, String> props) {
