@@ -366,7 +366,7 @@ public class ConsoleConsumerTest {
                         OffsetCommitValueJsonConverter.read(valueNode.get("data"), OffsetCommitValue.HIGHEST_SUPPORTED_VERSION);
                 assertNotNull(offsetCommitValue);
                 assertEquals(0, offsetCommitValue.offset());
-                assertEquals(0, offsetCommitValue.leaderEpoch());
+                assertEquals(-1, offsetCommitValue.leaderEpoch());
                 assertNotNull(offsetCommitValue.metadata());
                 assertEquals(-1, offsetCommitValue.expireTimestamp());
             } finally {

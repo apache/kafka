@@ -21,6 +21,8 @@ import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 
@@ -30,6 +32,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -48,6 +51,13 @@ public class OffsetMessageFormatterTest {
             .setMetadata("metadata")
             .setCommitTimestamp(1234L)
             .setExpireTimestamp(-1L);
+    private static final GroupMetadataKey GROUP_METADATA_KEY = new GroupMetadataKey().setGroup("group-id");
+    private static final GroupMetadataValue GROUP_METADATA_VALUE = new GroupMetadataValue()
+            .setProtocolType("consumer")
+            .setGeneration(1)
+            .setProtocol("range")
+            .setLeader("leader")
+            .setMembers(Collections.emptyList());
     private static final String TOPIC = "TOPIC";
 
     private static Stream<Arguments> parameters() {
@@ -69,7 +79,7 @@ public class OffsetMessageFormatterTest {
                         MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_VALUE).array(),
                         "{\"key\":{\"version\":0,\"data\":{\"group\":\"group-id\",\"topic\":\"foo\",\"partition\":1}}," +
                             "\"value\":{\"version\":1,\"data\":{\"offset\":100,\"metadata\":\"metadata\"," +
-                            "\"commitTimestamp\":1234,\"expireTimestamp\":0}}}"
+                            "\"commitTimestamp\":1234,\"expireTimestamp\":-1}}}"
                 ),
                 Arguments.of(
                         MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
@@ -114,8 +124,13 @@ public class OffsetMessageFormatterTest {
                         null,
                         MessageUtil.toVersionPrefixedByteBuffer((short) 1, OFFSET_COMMIT_VALUE).array(),
                         "{\"key\":null,\"value\":{\"version\":1,\"data\":{\"offset\":100,\"metadata\":\"metadata\"," +
-                            "\"commitTimestamp\":1234,\"expireTimestamp\":0}}}"),
-                Arguments.of(null, null, "{\"key\":null,\"value\":null}")
+                            "\"commitTimestamp\":1234,\"expireTimestamp\":-1}}}"),
+                Arguments.of(null, null, "{\"key\":null,\"value\":null}"),
+                Arguments.of(
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_KEY).array(),
+                        MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_VALUE).array(),
+                        ""
+                )
         );
     }
 

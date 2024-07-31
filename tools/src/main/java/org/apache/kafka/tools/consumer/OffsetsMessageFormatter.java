@@ -39,8 +39,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
-import static org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP;
 
 /**
  * Formatter for use with tools such as console consumer: Consumer should also set exclude.internal.topics to false.
@@ -116,17 +114,11 @@ public class OffsetsMessageFormatter implements MessageFormatter {
         }
     }
 
-    /**
-     * We ignore the timestamp of the message because GroupMetadataMessage has its own timestamp.
-     */
     private Optional<OffsetCommitValue> readToOffsetCommitValue(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= OffsetCommitValue.LOWEST_SUPPORTED_VERSION
                 && version <= OffsetCommitValue.HIGHEST_SUPPORTED_VERSION) {
-            OffsetCommitValue value = new OffsetCommitValue(new ByteBufferAccessor(byteBuffer), version);
-            value.setLeaderEpoch(value.leaderEpoch() == NO_PARTITION_LEADER_EPOCH ? 0 : value.leaderEpoch());
-            value.setExpireTimestamp(value.expireTimestamp() == DEFAULT_TIMESTAMP ? 0L : value.expireTimestamp());
-            return Optional.of(value);
+            return Optional.of(new OffsetCommitValue(new ByteBufferAccessor(byteBuffer), version));
         } else {
             return Optional.empty();
         }
