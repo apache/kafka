@@ -27,7 +27,7 @@ import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
-import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
+import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor, TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
@@ -918,9 +918,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val adminClient = createAdminClient()
     val consumer = createConsumer()
     val groupId = consumerConfig.getProperty("group.id")
-    val listener = new TestConsumerReassignmentListener()
-    consumer.subscribe(List(topic).asJava, listener)
-    awaitRebalance(consumer, listener)
 
     def hasMembers: Boolean = {
       try {
@@ -932,9 +929,13 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       }
     }
 
+    val listener = new TestConsumerReassignmentListener()
+    consumer.subscribe(List(topic).asJava, listener)
+    awaitRebalance(consumer, listener)
+
     assertEquals(1, listener.callsToAssigned)
     assertEquals(0, listener.callsToRevoked)
-    TestUtils.waitUntilTrue(() => hasMembers, s"Consumer did not join the consumer group")
+    TestUtils.waitUntilTrue(() => hasMembers, s"Consumer did not join the consumer group within ${JTestUtils.DEFAULT_MAX_WAIT_MS} of subscribe")
 
     try {
       Thread.currentThread().interrupt()
@@ -946,6 +947,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     assertEquals(1, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
-    TestUtils.waitUntilTrue(() => !hasMembers, s"Consumer did not leave the consumer group")
+    TestUtils.waitUntilTrue(() => !hasMembers, s"Consumer did not leave the consumer group within ${JTestUtils.DEFAULT_MAX_WAIT_MS} of interrupt/close")
   }
 }
