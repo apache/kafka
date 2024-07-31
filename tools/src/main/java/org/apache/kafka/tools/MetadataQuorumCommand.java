@@ -268,7 +268,7 @@ public class MetadataQuorumCommand {
         private final Uuid directoryId;
         private final List<RaftVoterEndpoint> endpoints;
 
-        Node(int id, Uuid directoryId, List<RaftVoterEndpoint> endpoints) {
+        private Node(int id, Uuid directoryId, List<RaftVoterEndpoint> endpoints) {
             this.id = id;
             this.directoryId = directoryId;
             this.endpoints = endpoints;
