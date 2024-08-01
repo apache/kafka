@@ -272,8 +272,4 @@ public final class Endpoints {
 
         return new Endpoints(listeners);
     }
-
-    public static Endpoints fromMap(Map<ListenerName, InetSocketAddress> endpoints) {
-        return new Endpoints(new HashMap<>(endpoints));
-    }
 }

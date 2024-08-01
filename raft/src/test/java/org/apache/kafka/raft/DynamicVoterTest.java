@@ -173,7 +173,7 @@ public class DynamicVoterTest {
     @Test
     public void testToVoterNode() {
         ReplicaKey voterKey = ReplicaKey.of(5, Uuid.fromString("__0IZ-0DRNazJ49kCZ1EMQ"));
-        Endpoints listeners = Endpoints.fromMap(Collections.singletonMap(
+        Endpoints listeners = Endpoints.fromInetSocketAddresses(Collections.singletonMap(
             new ListenerName("CONTROLLER"),
             new InetSocketAddress("localhost", 8020)));
         SupportedVersionRange supportedKRaftVersion =

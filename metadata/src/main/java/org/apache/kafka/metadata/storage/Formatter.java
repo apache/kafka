@@ -27,7 +27,6 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.raft.KafkaRaftClient;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.FeatureVersion;
@@ -36,6 +35,7 @@ import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.snapshot.FileRawSnapshotWriter;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
+import org.apache.kafka.snapshot.Snapshots;
 
 import java.io.File;
 import java.io.PrintStream;
@@ -491,15 +491,16 @@ public class Formatter {
                 CLUSTER_METADATA_TOPIC_PARTITION.topic(),
                 CLUSTER_METADATA_TOPIC_PARTITION.partition()));
         VoterSet voterSet = initialVoters.toVoterSet(controllerListenerName);
-        try (FileRawSnapshotWriter writer = FileRawSnapshotWriter.create(
-                clusterMetadataDirectory.toPath(), new OffsetAndEpoch(0, 0))) {
-            new RecordsSnapshotWriter.Builder().
-                setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
-                setMaxBatchSize(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
-                setRawSnapshotWriter(writer).
-                setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
-                setVoterSet(Optional.of(voterSet)).
-                build(new MetadataRecordSerde());
+        RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
+            setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
+            setMaxBatchSize(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
+            setRawSnapshotWriter(FileRawSnapshotWriter.create(
+                clusterMetadataDirectory.toPath(),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
+            setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
+            setVoterSet(Optional.of(voterSet));
+        try (RecordsSnapshotWriter writer = builder.build(new MetadataRecordSerde())) {
+            writer.freeze();
         }
     }
 }
