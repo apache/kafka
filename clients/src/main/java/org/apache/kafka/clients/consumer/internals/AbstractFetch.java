@@ -230,7 +230,7 @@ public abstract class AbstractFetch implements Closeable {
                 );
             }
 
-            metricsManager.recordLatency(resp.requestLatencyMs());
+            metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
         } finally {
             removePendingFetchRequest(fetchTarget, data.metadata().sessionId());
         }
