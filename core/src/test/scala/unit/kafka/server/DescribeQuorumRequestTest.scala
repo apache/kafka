@@ -97,6 +97,13 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
           assertNotEquals(-1, state.lastCaughtUpTimestamp)
         }
       }
+
+      if (version >= 2) {
+        val nodes = response.data.nodes().asScala
+        assertEquals(cluster.controllerIds().asScala, nodes.map(_.nodeId()).toSet)
+        val node = nodes.find(_.nodeId() == cluster.controllers().keySet().asScala.head)
+        assertEquals(cluster.controllerListenerName().get().value(), node.get.listeners().asScala.head.name())
+      }
     }
   }
 
