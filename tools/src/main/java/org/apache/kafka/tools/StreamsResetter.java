@@ -16,6 +16,25 @@
  */
 package org.apache.kafka.tools;
 
+import java.io.IOException;
+import java.text.ParseException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
@@ -35,25 +54,6 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
-
-import java.io.IOException;
-import java.text.ParseException;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
@@ -93,7 +93,7 @@ public class StreamsResetter {
     private static final String USAGE = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
             + "* This tool resets offsets of input topics to the earliest available offset (by default), or to a specific defined position"
-            + " and it skips to the end of intermediate topics (topics that are input and output topics, e.g., used by deprecated through() method).\n"
+            + " and it skips to the end of intermediate topics (topics that are input and output topics.\n"
             + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
             + "\"<application.id>-\").\n"
             + "The tool finds these internal topics automatically. If the topics flagged automatically for deletion by "
@@ -584,8 +584,8 @@ public class StreamsResetter {
                 .ofType(String.class)
                 .withValuesSeparatedBy(',')
                 .describedAs("list");
-            intermediateTopicsOption = parser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics that are input and output topics, "
-                    + "e.g., used in the deprecated through() method). For these topics, the tool will skip to the end.")
+            intermediateTopicsOption = parser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics that are input and output topics). "
+                    + "For these topics, the tool will skip to the end.")
                 .withRequiredArg()
                 .ofType(String.class)
                 .withValuesSeparatedBy(',')
