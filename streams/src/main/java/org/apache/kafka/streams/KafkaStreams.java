@@ -107,7 +107,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
@@ -1683,60 +1682,10 @@ public class KafkaStreams implements AutoCloseable {
      * Note: this is a point in time view and it may change due to partition reassignment.
      *
      * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances of this application
-     * @deprecated since 3.0.0 use {@link KafkaStreams#metadataForAllStreamsClients}
-     */
-    @Deprecated
-    public Collection<org.apache.kafka.streams.state.StreamsMetadata> allMetadata() {
-        validateIsRunningOrRebalancing();
-        return streamsMetadataState.getAllMetadata().stream().map(streamsMetadata ->
-                new org.apache.kafka.streams.state.StreamsMetadata(streamsMetadata.hostInfo(),
-                        streamsMetadata.stateStoreNames(),
-                        streamsMetadata.topicPartitions(),
-                        streamsMetadata.standbyStateStoreNames(),
-                        streamsMetadata.standbyTopicPartitions()))
-                .collect(Collectors.toSet());
-    }
-
-    /**
-     * Find all currently running {@code KafkaStreams} instances (potentially remotely) that use the same
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG application ID} as this instance (i.e., all instances that belong to
-     * the same Kafka Streams application) and return {@link StreamsMetadata} for each discovered instance.
-     * <p>
-     * Note: this is a point in time view and it may change due to partition reassignment.
-     *
-     * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances of this application
      */
     public Collection<StreamsMetadata> metadataForAllStreamsClients() {
         validateIsRunningOrRebalancing();
         return streamsMetadataState.getAllMetadata();
-    }
-
-    /**
-     * Find all currently running {@code KafkaStreams} instances (potentially remotely) that
-     * <ul>
-     *   <li>use the same {@link StreamsConfig#APPLICATION_ID_CONFIG application ID} as this instance (i.e., all
-     *       instances that belong to the same Kafka Streams application)</li>
-     *   <li>and that contain a {@link StateStore} with the given {@code storeName}</li>
-     * </ul>
-     * and return {@link StreamsMetadata} for each discovered instance.
-     * <p>
-     * Note: this is a point in time view and it may change due to partition reassignment.
-     *
-     * @param storeName the {@code storeName} to find metadata for
-     * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances with the provide {@code storeName} of
-     * this application
-     * @deprecated since 3.0.0 use {@link KafkaStreams#streamsMetadataForStore} instead
-     */
-    @Deprecated
-    public Collection<org.apache.kafka.streams.state.StreamsMetadata> allMetadataForStore(final String storeName) {
-        validateIsRunningOrRebalancing();
-        return streamsMetadataState.getAllMetadataForStore(storeName).stream().map(streamsMetadata ->
-                new org.apache.kafka.streams.state.StreamsMetadata(streamsMetadata.hostInfo(),
-                        streamsMetadata.stateStoreNames(),
-                        streamsMetadata.topicPartitions(),
-                        streamsMetadata.standbyStateStoreNames(),
-                        streamsMetadata.standbyTopicPartitions()))
-                .collect(Collectors.toSet());
     }
 
     /**
@@ -2038,38 +1987,6 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         throw new StreamsException(errorMessage.get(), cause);
-    }
-
-    /**
-     * Returns runtime information about the local threads of this {@link KafkaStreams} instance.
-     *
-     * @return the set of {@link org.apache.kafka.streams.processor.ThreadMetadata}.
-     * @deprecated since 3.0 use {@link #metadataForLocalThreads()}
-     */
-    @Deprecated
-    public Set<org.apache.kafka.streams.processor.ThreadMetadata> localThreadsMetadata() {
-        return metadataForLocalThreads().stream().map(threadMetadata -> new org.apache.kafka.streams.processor.ThreadMetadata(
-                threadMetadata.threadName(),
-                threadMetadata.threadState(),
-                threadMetadata.consumerClientId(),
-                threadMetadata.restoreConsumerClientId(),
-                threadMetadata.producerClientIds(),
-                threadMetadata.adminClientId(),
-                threadMetadata.activeTasks().stream().map(taskMetadata -> new org.apache.kafka.streams.processor.TaskMetadata(
-                        taskMetadata.taskId().toString(),
-                        taskMetadata.topicPartitions(),
-                        taskMetadata.committedOffsets(),
-                        taskMetadata.endOffsets(),
-                        taskMetadata.timeCurrentIdlingStarted())
-                ).collect(Collectors.toSet()),
-                threadMetadata.standbyTasks().stream().map(taskMetadata -> new org.apache.kafka.streams.processor.TaskMetadata(
-                        taskMetadata.taskId().toString(),
-                        taskMetadata.topicPartitions(),
-                        taskMetadata.committedOffsets(),
-                        taskMetadata.endOffsets(),
-                        taskMetadata.timeCurrentIdlingStarted())
-                ).collect(Collectors.toSet())))
-                .collect(Collectors.toSet());
     }
 
     /**
