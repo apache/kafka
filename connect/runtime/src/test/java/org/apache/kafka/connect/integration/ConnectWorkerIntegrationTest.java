@@ -887,18 +887,18 @@ public class ConnectWorkerIntegrationTest {
         log.info("Deleting Kafka Connect config topic");
         connect.kafka().deleteTopic(configTopic);
 
-        // Try to delete the connector, which should fail with a slightly-different timeout error
+        // Try to reconfigure the connector, which should fail with a slightly-different timeout error
         log.info("Trying to reconfigure connector after config topic has been deleted");
         assertTimeoutException(
-                () -> connect.deleteConnector(CONNECTOR_NAME),
-                "removing the config for connector " + CONNECTOR_NAME + " from the config topic"
+                () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig1),
+                "writing a config for connector " + CONNECTOR_NAME + " to the config topic"
         );
 
         // The worker should still be blocked on the same operation
         log.info("Trying again to reconfigure connector after config topic has been deleted");
         assertTimeoutException(
-                () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig1),
-                "removing the config for connector " + CONNECTOR_NAME + " from the config topic"
+                () -> connect.deleteConnector(CONNECTOR_NAME),
+                "writing a config for connector " + CONNECTOR_NAME + " to the config topic"
         );
     }
 
