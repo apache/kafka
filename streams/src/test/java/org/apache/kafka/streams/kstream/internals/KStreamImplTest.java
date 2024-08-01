@@ -568,33 +568,6 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("named can't be null"));
     }
 
-    @Deprecated // specifically testing the deprecated variant
-    @Test
-    public void shouldNotAllowNullTopicOnThrough() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.through(null));
-        assertThat(exception.getMessage(), equalTo("topic can't be null"));
-    }
-
-    @Deprecated // specifically testing the deprecated variant
-    @Test
-    public void shouldNotAllowNullTopicOnThroughWithProduced() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.through(null, Produced.as("through")));
-        assertThat(exception.getMessage(), equalTo("topic can't be null"));
-    }
-
-    @Deprecated // specifically testing the deprecated variant
-    @Test
-    public void shouldNotAllowNullProducedOnThrough() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.through("topic", null));
-        assertThat(exception.getMessage(), equalTo("produced can't be null"));
-    }
-
     @Test
     public void shouldNotAllowNullTopicOnTo() {
         final NullPointerException exception = assertThrows(
@@ -1285,62 +1258,6 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"}) // specifically testing the deprecated variant
-    @Test
-    public void testNumProcesses() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<String, String> source1 = builder.stream(Arrays.asList("topic-1", "topic-2"), stringConsumed);
-
-        final KStream<String, String> source2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
-
-        final KStream<String, String> stream1 = source1.filter((key, value) -> true)
-            .filterNot((key, value) -> false);
-
-        final KStream<String, Integer> stream2 = stream1.mapValues((ValueMapper<String, Integer>) Integer::valueOf);
-
-        final KStream<String, Integer> stream3 = source2.flatMapValues((ValueMapper<String, Iterable<Integer>>)
-            value -> Collections.singletonList(Integer.valueOf(value)));
-
-        final KStream<String, Integer>[] streams2 = stream2.branch(
-            (key, value) -> (value % 2) == 0,
-            (key, value) -> true
-        );
-
-        final KStream<String, Integer>[] streams3 = stream3.branch(
-            (key, value) -> (value % 2) == 0,
-            (key, value) -> true
-        );
-
-        final int anyWindowSize = 1;
-        final StreamJoined<String, Integer, Integer> joined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
-        final KStream<String, Integer> stream4 = streams2[0].join(streams3[0],
-            Integer::sum, JoinWindows.of(ofMillis(anyWindowSize)), joined);
-
-        streams2[1].join(streams3[1], Integer::sum,
-            JoinWindows.of(ofMillis(anyWindowSize)), joined);
-
-        stream4.to("topic-5");
-
-        streams2[1].through("topic-6").process(new MockProcessorSupplier<>());
-
-        streams2[1].repartition().process(new MockProcessorSupplier<>());
-
-        assertEquals(2 + // sources
-                2 + // stream1
-                1 + // stream2
-                1 + // stream3
-                1 + 2 + // streams2
-                1 + 2 + // streams3
-                5 * 2 + // stream2-stream3 joins
-                1 + // to
-                2 + // through
-                1 + // process
-                3 + // repartition
-                1, // process
-            TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology().processors().size());
-    }
-
     @SuppressWarnings({"rawtypes", "deprecation"})  // specifically testing the deprecated variant
     @Test
     public void shouldPreserveSerdesForOperators() {
@@ -1386,10 +1303,6 @@ public class KStreamImplTest {
         assertNull(((AbstractStream) stream1.merge(stream1)).keySerde());
         assertNull(((AbstractStream) stream1.merge(stream1)).valueSerde());
 
-        assertEquals(((AbstractStream) stream1.through("topic-3")).keySerde(), consumedInternal.keySerde());
-        assertEquals(((AbstractStream) stream1.through("topic-3")).valueSerde(), consumedInternal.valueSerde());
-        assertEquals(((AbstractStream) stream1.through("topic-3", Produced.with(mySerde, mySerde))).keySerde(), mySerde);
-        assertEquals(((AbstractStream) stream1.through("topic-3", Produced.with(mySerde, mySerde))).valueSerde(), mySerde);
 
         assertEquals(((AbstractStream) stream1.repartition()).keySerde(), consumedInternal.keySerde());
         assertEquals(((AbstractStream) stream1.repartition()).valueSerde(), consumedInternal.valueSerde());
@@ -1438,24 +1351,6 @@ public class KStreamImplTest {
         assertNull(((AbstractStream) stream1.leftJoin(table2, selector, joiner)).valueSerde());
     }
 
-    @Deprecated
-    @Test
-    public void shouldUseRecordMetadataTimestampExtractorWithThrough() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<String, String> stream1 = builder.stream(Arrays.asList("topic-1", "topic-2"), stringConsumed);
-        final KStream<String, String> stream2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
-
-        stream1.to("topic-5");
-        stream2.through("topic-6");
-
-        final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
-        assertThat(processorTopology.source("topic-6").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
-        assertNull(processorTopology.source("topic-4").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-3").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-2").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-1").getTimestampExtractor());
-    }
-
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWithRepartition() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1471,22 +1366,6 @@ public class KStreamImplTest {
         assertNull(processorTopology.source("topic-3").getTimestampExtractor());
         assertNull(processorTopology.source("topic-2").getTimestampExtractor());
         assertNull(processorTopology.source("topic-1").getTimestampExtractor());
-    }
-
-    @Deprecated
-    @Test
-    public void shouldSendDataThroughTopicUsingProduced() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final String input = "topic";
-        final KStream<String, String> stream = builder.stream(input, stringConsumed);
-        stream.through("through-topic", Produced.with(Serdes.String(), Serdes.String())).process(processorSupplier);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            inputTopic.pipeInput("a", "b");
-        }
-        assertThat(processorSupplier.theCapturedProcessor().processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
     }
 
     @Test
