@@ -534,7 +534,7 @@ public class LogConfig extends AbstractConfig {
      */
     public static LogConfig fromProps(Map<?, ?> defaults, Properties overrides) {
         Properties props = new Properties();
-        defaults.forEach((k, v) -> props.put(k, v));
+        props.putAll(defaults);
         props.putAll(overrides);
         Set<String> overriddenKeys = overrides.keySet().stream().map(k -> (String) k).collect(Collectors.toSet());
         return new LogConfig(props, overriddenKeys);
