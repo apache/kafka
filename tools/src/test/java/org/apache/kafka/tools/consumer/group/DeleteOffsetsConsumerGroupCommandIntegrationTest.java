@@ -30,13 +30,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
 import org.junit.jupiter.api.Assertions;
@@ -48,10 +44,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Properties;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.apache.kafka.tools.consumer.group.ConsumerGroupCommandTestUtils.produceRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -211,7 +206,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
                                        GroupProtocol groupProtocol,
                                        boolean isStable,
                                        Runnable validateRunnable) {
-        produceRecord(inputTopic);
+        produceRecord(inputTopic, clusterInstance.bootstrapServers());
         try (Consumer<byte[], byte[]> consumer = createConsumer(inputGroup, groupProtocol)) {
             consumer.subscribe(Collections.singletonList(inputTopic));
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
@@ -224,22 +219,6 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         if (!isStable) {
             validateRunnable.run();
         }
-    }
-
-    private void produceRecord(String topic) {
-        try (KafkaProducer<byte[], byte[]> producer = createProducer()) {
-            assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(topic, 0, null, null)).get());
-        }
-    }
-
-    private KafkaProducer<byte[], byte[]> createProducer() {
-        Properties config = new Properties();
-        config.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        config.putIfAbsent(ProducerConfig.ACKS_CONFIG, "-1");
-        config.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        config.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-
-        return new KafkaProducer<>(config);
     }
 
     private Consumer<byte[], byte[]> createConsumer(String group, GroupProtocol groupProtocol) {

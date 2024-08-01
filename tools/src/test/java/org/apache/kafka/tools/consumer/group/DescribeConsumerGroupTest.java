@@ -63,7 +63,9 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
 import static org.apache.kafka.test.TestUtils.RANDOM;
+import static org.apache.kafka.tools.consumer.group.ConsumerGroupCommandTestUtils.produceRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -80,7 +82,9 @@ public class DescribeConsumerGroupTest {
     private ClusterInstance clusterInstance;
 
     private static List<ClusterConfig> generator() {
-        return ConsumerGroupCommandTestUtils.generator();
+        Map<String, String> serverProperties = new HashMap<>();
+        serverProperties.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false");
+        return ConsumerGroupCommandTestUtils.generator(serverProperties);
     }
 
     @ClusterTemplate("generator")
@@ -259,6 +263,83 @@ public class DescribeConsumerGroupTest {
             }
         }
     }
+
+    @ClusterTemplate("generator")
+    public void testDescribeAllExistingGroupsWithSomeDeletedTopics(ClusterInstance clusterInstance) throws Exception {
+        this.clusterInstance = clusterInstance;
+
+        for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
+            // create two topics
+            String topic = TOPIC_PREFIX + groupProtocol.name();
+            createTopic(topic);
+            String topicToBeDeleted = topic + "-to-be-deleted";
+            createTopic(topicToBeDeleted);
+
+            // producer 1 record to one of the topics
+            produceRecord(topicToBeDeleted, clusterInstance.bootstrapServers());
+
+            List<AutoCloseable> protocolConsumerGroupExecutors = new ArrayList<>();
+            List<String> groups = new ArrayList<>();
+            try {
+                // create single-threaded consumer groups for the topic that will be deleted soon.
+                String groupWithDeletedTopic = GROUP_PREFIX + groupProtocol.name() + ".for-" + topicToBeDeleted;
+                groups.add(groupWithDeletedTopic);
+                protocolConsumerGroupExecutors.add(consumerGroupClosable(true, groupProtocol, groupWithDeletedTopic, topicToBeDeleted, Collections.emptyMap(), 1));
+
+                // Create N single-threaded consumer groups for the other topic.
+                for (List<String> describeType : DESCRIBE_TYPES) {
+                    String group = GROUP_PREFIX + groupProtocol.name() + "." + String.join("", describeType);
+                    groups.add(group);
+                    protocolConsumerGroupExecutors.add(consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap()));
+                }
+
+                // wait for consumer group to consume and commit the offset which can be detected if both CURRENT-OFFSET and END-OFFSET is 1.
+                try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--all-groups"})) {
+                    TestUtils.waitForCondition(() -> {
+                        Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                        List<String> linesWithoutHeaders = Arrays.stream(res.getKey().trim().split("\n"))
+                                .filter(line -> !line.isEmpty() && !line.contains("CURRENT-OFFSET"))
+                                .collect(Collectors.toList());
+                        Optional<List<String>> groupMetadata = linesWithoutHeaders.stream()
+                                .map(line -> Arrays.stream(line.split(" ")).filter(col -> !col.isEmpty()).collect(Collectors.toList()))
+                                .filter(line -> line.contains(topicToBeDeleted))
+                                .findAny();
+                        boolean groupCaughtUp = groupMetadata.map(metadata -> Collections.frequency(metadata, "1")).orElse(0) == 2;
+
+                        return linesWithoutHeaders.size() == groups.size() && groupCaughtUp;
+                    }, "Expected a data row and no error in describe results.");
+                }
+
+                // delete one of the topics
+                deleteTopic(topicToBeDeleted);
+                // describing all groups should rerun all including the group consuming from deleted topic but no lag or offset metadata will be displayed
+                try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--all-groups"})) {
+                    TestUtils.waitForCondition(() -> {
+                        Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                        List<String> linesWithoutHeaders = Arrays.stream(res.getKey().trim().split("\n"))
+                                .filter(line -> !line.isEmpty() && !line.contains("CURRENT-OFFSET"))
+                                .collect(Collectors.toList());
+                        Optional<List<String>> groupMetadata = linesWithoutHeaders.stream()
+                                .map(line -> Arrays.stream(line.split(" ")).filter(col -> !col.isEmpty()).collect(Collectors.toList()))
+                                .filter(line -> line.contains(topicToBeDeleted))
+                                .findAny();
+                        // "-" is used as placeholder when we can't calculate lag or fetch offset
+                        boolean noLagOrOffsetMetadata = groupMetadata.map(metadata -> Collections.frequency(metadata, "-")).orElse(0) == 3;
+
+                        return linesWithoutHeaders.size() == groups.size() && noLagOrOffsetMetadata;
+                    }, 4000, "Expected a data row and no error in describe results after deleting one of the consumed topics.");
+                }
+            } finally {
+                for (AutoCloseable protocolConsumerGroupExecutor : protocolConsumerGroupExecutors) {
+                    protocolConsumerGroupExecutor.close();
+                }
+                // remove previous consumer groups, so we can have a clean cluster for next consumer group protocol test.
+                deleteConsumerGroups(groups);
+                deleteTopic(topic);
+            }
+        }
+    }
+
 
     @ClusterTemplate("generator")
     public void testDescribeOffsetsOfExistingGroup(ClusterInstance clusterInstance) throws Exception {
@@ -966,6 +1047,10 @@ public class DescribeConsumerGroupTest {
     }
 
     private AutoCloseable consumerGroupClosable(GroupProtocol protocol, String groupId, String topicName, Map<String, Object> customConfigs, int numConsumers) {
+        return consumerGroupClosable(false, protocol, groupId, topicName, customConfigs, numConsumers);
+    }
+
+    private AutoCloseable consumerGroupClosable(Boolean syncCommit, GroupProtocol protocol, String groupId, String topicName, Map<String, Object> customConfigs, int numConsumers) {
         Map<String, Object> configs = composeConfigs(
                 groupId,
                 protocol.name,
@@ -973,7 +1058,7 @@ public class DescribeConsumerGroupTest {
         );
         return ConsumerGroupCommandTestUtils.buildConsumers(
                 numConsumers,
-                false,
+                syncCommit,
                 topicName,
                 () -> new KafkaConsumer<String, String>(configs)
         );
