@@ -66,8 +66,8 @@ import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.common.KRaftVersionTest;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -411,7 +411,7 @@ public final class RaftClientTestContext {
                 clusterId,
                 bootstrapServers,
                 localListeners,
-                KRaftVersionTest.supportedVersionRange(),
+                Features.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,
                 quorumConfig
@@ -1173,6 +1173,7 @@ public final class RaftClientTestContext {
         RaftResponse.Outbound response = sentResponses.get(0);
         assertInstanceOf(UpdateRaftVoterResponseData.class, response.data());
 
+        // TODO: check the leader id, leader epocha and leader endpoint
         UpdateRaftVoterResponseData updateVoterResponse = (UpdateRaftVoterResponseData) response.data();
         assertEquals(error, Errors.forCode(updateVoterResponse.errorCode()));
 

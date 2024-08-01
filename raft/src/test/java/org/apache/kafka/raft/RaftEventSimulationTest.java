@@ -35,7 +35,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
-import org.apache.kafka.server.common.KRaftVersionTest;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -792,7 +792,7 @@ public class RaftEventSimulationTest {
                 clusterId,
                 Collections.emptyList(),
                 endpointsFromId(nodeId, channel.listenerName()),
-                KRaftVersionTest.supportedVersionRange(),
+                Features.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,
                 quorumConfig

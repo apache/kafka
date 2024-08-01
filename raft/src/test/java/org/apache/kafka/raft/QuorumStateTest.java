@@ -25,8 +25,8 @@ import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.raft.internals.VoterSetTest;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.common.KRaftVersionTest;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -81,7 +81,7 @@ public class QuorumStateTest {
             localDirectoryId,
             mockPartitionState,
             localId.isPresent() ? voterSet.listeners(localId.getAsInt()) : Endpoints.empty(),
-            KRaftVersionTest.supportedVersionRange(),
+            Features.KRAFT_VERSION.supportedVersionRange(),
             electionTimeoutMs,
             fetchTimeoutMs,
             store,

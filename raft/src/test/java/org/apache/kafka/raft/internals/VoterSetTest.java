@@ -21,7 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.Endpoints;
-import org.apache.kafka.server.common.KRaftVersionTest;
+import org.apache.kafka.server.common.Features;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -339,7 +339,7 @@ public final class VoterSetTest {
                     )
                 )
             ),
-            KRaftVersionTest.supportedVersionRange()
+            Features.KRAFT_VERSION.supportedVersionRange()
         );
     }
 
