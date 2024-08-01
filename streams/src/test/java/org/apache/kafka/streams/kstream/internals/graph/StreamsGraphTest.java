@@ -194,6 +194,7 @@ public class StreamsGraphTest {
         assertEquals(2, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
         assertEquals(2, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
     }
+
     
     @Test
     public void shouldOptimizeSeveralMergeNodesWithCommonKeyChangingParent() {
@@ -242,6 +243,7 @@ public class StreamsGraphTest {
         return builder.build(properties);
 
     }
+
 
     private Topology getTopologyWithRepartitionOperation(final String optimizeConfig) {
         final StreamsBuilder builder = new StreamsBuilder();
