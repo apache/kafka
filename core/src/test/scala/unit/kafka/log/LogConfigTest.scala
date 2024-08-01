@@ -465,9 +465,9 @@ class LogConfigTest {
     logProps.put(configKey, true)
 
     val message = assertThrows(classOf[InvalidConfigurationException],
-      () => LogConfig.validate(Collections.emptyMap(), logProps, kafkaConfig.extractLogConfigMap, false, true))
+      () => LogConfig.validate(Collections.emptyMap(), logProps, kafkaConfig.extractLogConfigMap, true, true))
     assertTrue(message.getMessage.contains("It is invalid to set `remote.log.delete.on.disable` or " +
-      "`remote.log.copy.disabled` under Zookeeper's mode."))
+      "`remote.copy.disabled` under Zookeeper's mode."))
   }
 
   /* Verify that when the deprecated config LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG has non default value the new configs

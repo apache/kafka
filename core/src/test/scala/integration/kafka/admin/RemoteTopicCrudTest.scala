@@ -315,7 +315,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   @ValueSource(strings = Array("zk"))
   def testUpdateInvalidRemoteStorageConfigUnderZK(quorum: String): Unit = {
     val admin = createAdminClient()
-    val errorMsg = "It is invalid to set `remote.log.delete.on.disable` or `remote.log.copy.disabled` under Zookeeper's mode."
+    val errorMsg = "It is invalid to set `remote.log.delete.on.disable` or `remote.copy.disabled` under Zookeeper's mode."
     val topicConfig = new Properties
     topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
@@ -440,13 +440,13 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
         }
         if (topicConfig.contains(TopicConfig.REMOTE_COPY_DISABLED_CONFIG)) {
           result = result &&
-            topicConfig.getProperty(TopicConfig.REMOTE_COPY_DISABLED_CONFIG).equals(
-              logBuffer.head.config.remoteCopyDisabled())
+            topicConfig.getProperty(TopicConfig.REMOTE_COPY_DISABLED_CONFIG).toBoolean ==
+              logBuffer.head.config.remoteCopyDisabled()
         }
         if (topicConfig.contains(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG)) {
           result = result &&
-            topicConfig.getProperty(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG).equals(
-              logBuffer.head.config.remoteLogDeleteOnDisable())
+            topicConfig.getProperty(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG).toBoolean ==
+              logBuffer.head.config.remoteLogDeleteOnDisable()
         }
       }
       result

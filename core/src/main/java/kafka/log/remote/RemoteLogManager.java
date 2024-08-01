@@ -469,6 +469,8 @@ public class RemoteLogManager implements Closeable {
             if (topicIdByPartitionMap.containsKey(tp)) {
                 TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
                 leaderCopyRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
+                    LOGGER.info("Resetting remote copy lag metrics for tpId: {}", tpId);
+                    ((RLMCopyTask) task.rlmTask).recordLagStats(0L, 0L);
                     LOGGER.info("Cancelling the copy RLM task for tpId: {}", tpId);
                     task.cancel();
                     return null;
@@ -488,7 +490,6 @@ public class RemoteLogManager implements Closeable {
     public void stopPartitions(Set<StopPartition> stopPartitions,
                                BiConsumer<TopicPartition, Throwable> errorHandler) {
         LOGGER.debug("Stop partitions: {}", stopPartitions);
-        Set<TopicIdPartition> stopRLMMPartitions = new HashSet<>();
         for (StopPartition stopPartition: stopPartitions) {
             TopicPartition tp = stopPartition.topicPartition();
             try {
@@ -509,10 +510,6 @@ public class RemoteLogManager implements Closeable {
                         task.cancel();
                         return null;
                     });
-
-                    if (stopPartition.stopRemoteLogMetadataManager()) {
-                        stopRLMMPartitions.add(tpId);
-                    }
 
                     removeRemoteTopicPartitionMetrics(tpId);
 
@@ -539,7 +536,11 @@ public class RemoteLogManager implements Closeable {
 
         // NOTE: In ZK mode, this#stopPartitions method is called when Replica state changes to Offline and
         // ReplicaDeletionStarted
-        stopRLMMPartitions.addAll(deleteLocalPartitions);
+        Set<TopicIdPartition> stopRLMMPartitions = stopPartitions.stream()
+                .filter(sp -> (sp.stopRemoteLogMetadataManager() || sp.deleteLocalLog()) && topicIdByPartitionMap.containsKey(sp.topicPartition()))
+                .map(sp -> new TopicIdPartition(topicIdByPartitionMap.get(sp.topicPartition()), sp.topicPartition()))
+                .collect(Collectors.toSet());
+
         if (!stopRLMMPartitions.isEmpty()) {
             remoteLogMetadataManager.onStopPartitions(stopRLMMPartitions);
         }

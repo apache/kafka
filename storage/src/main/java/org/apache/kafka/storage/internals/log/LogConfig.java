@@ -658,7 +658,7 @@ public class LogConfig extends AbstractConfig {
         boolean isRemoteLogCopyDisabled = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, false);
         if (isRemoteLogDeleteOnDisable || isRemoteLogCopyDisabled) {
             throw new InvalidConfigurationException("It is invalid to set `remote.log.delete.on.disable` or " +
-                    "`remote.log.copy.disabled` under Zookeeper's mode.");
+                    "`remote.copy.disabled` under Zookeeper's mode.");
         }
     }
 

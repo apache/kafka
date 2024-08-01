@@ -119,7 +119,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
       })
 
       // update the log start offset to local log start offset for the leader replicas
-      logs.filter(log => leaderPartitions.find(p => p.equals(log.topicPartition)).isDefined)
+      logs.filter(log => leaderPartitions.exists(p => p.topicPartition.equals(log.topicPartition)))
         .foreach(log => log.maybeIncrementLogStartOffset(log.localLogStartOffset(), LogStartOffsetIncrementReason.SegmentDeletion))
 
       replicaManager.remoteLogManager.foreach(rlm => rlm.stopPartitions(stopPartitions, (_, _) => {}))
