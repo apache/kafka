@@ -156,9 +156,10 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
         topicConfig = topicConfig))
   }
 
+  // `remote.log.delete.on.disable` and `remote.copy.disabled` only works in KRaft mode.
   @ParameterizedTest
-  @CsvSource(Array("true,true", "true,false", "false,true", "false,false"))
-  def testCreateRemoteTopicWithCopyDisabledAndDeleteOnDisable(copyDisabled: Boolean, deleteOnDisable: Boolean): Unit = {
+  @CsvSource(Array("kraft,true,true", "kraft,true,false", "kraft,false,true", "kraft,false,false"))
+  def testCreateRemoteTopicWithCopyDisabledAndDeleteOnDisable(quorum: String, copyDisabled: Boolean, deleteOnDisable: Boolean): Unit = {
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, copyDisabled)
     topicConfig.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, deleteOnDisable)

@@ -469,10 +469,10 @@ public class RemoteLogManager implements Closeable {
             if (topicIdByPartitionMap.containsKey(tp)) {
                 TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
                 leaderCopyRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
-                    LOGGER.info("Resetting remote copy lag metrics for tpId: {}", tpId);
-                    ((RLMCopyTask) task.rlmTask).recordLagStats(0L, 0L);
                     LOGGER.info("Cancelling the copy RLM task for tpId: {}", tpId);
                     task.cancel();
+                    LOGGER.info("Resetting remote copy lag metrics for tpId: {}", tpId);
+                    ((RLMCopyTask) task.rlmTask).recordLagStats(0L, 0L);
                     return null;
                 });
             }
@@ -530,10 +530,6 @@ public class RemoteLogManager implements Closeable {
                 .map(sp -> new TopicIdPartition(topicIdByPartitionMap.get(sp.topicPartition()), sp.topicPartition()))
                 .collect(Collectors.toSet());
 
-        if (!deleteLocalPartitions.isEmpty()) {
-            deleteLocalPartitions.forEach(tpId -> topicIdByPartitionMap.remove(tpId.topicPartition()));
-        }
-
         // NOTE: In ZK mode, this#stopPartitions method is called when Replica state changes to Offline and
         // ReplicaDeletionStarted
         Set<TopicIdPartition> stopRLMMPartitions = stopPartitions.stream()
@@ -541,6 +537,9 @@ public class RemoteLogManager implements Closeable {
                 .map(sp -> new TopicIdPartition(topicIdByPartitionMap.get(sp.topicPartition()), sp.topicPartition()))
                 .collect(Collectors.toSet());
 
+        if (!deleteLocalPartitions.isEmpty()) {
+            deleteLocalPartitions.forEach(tpId -> topicIdByPartitionMap.remove(tpId.topicPartition()));
+        }
         if (!stopRLMMPartitions.isEmpty()) {
             remoteLogMetadataManager.onStopPartitions(stopRLMMPartitions);
         }

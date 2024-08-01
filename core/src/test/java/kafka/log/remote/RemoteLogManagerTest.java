@@ -3208,6 +3208,7 @@ public class RemoteLogManagerTest {
         when(partition.topic()).thenReturn(tp.topic());
         when(log.remoteLogEnabled()).thenReturn(true);
         when(partition.log()).thenReturn(Option.apply(log));
+        when(log.config()).thenReturn(new LogConfig(new Properties()));
         return partition;
     }
 
