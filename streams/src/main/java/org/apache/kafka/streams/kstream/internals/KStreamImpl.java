@@ -58,7 +58,6 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamToTableNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode.UnoptimizableRepartitionNodeBuilder;
-import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
