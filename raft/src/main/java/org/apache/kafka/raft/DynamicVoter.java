@@ -156,7 +156,7 @@ public final class DynamicVoter {
     public VoterSet.VoterNode toVoterNode(String controllerListenerName) {
         ReplicaKey voterKey = ReplicaKey.of(nodeId, directoryId);
         Endpoints listeners = Endpoints.fromInetSocketAddresses(Collections.singletonMap(
-                new ListenerName(controllerListenerName),
+                ListenerName.normalised(controllerListenerName),
                 new InetSocketAddress(host, port)));
         SupportedVersionRange supportedKRaftVersion =
                 new SupportedVersionRange((short) 0, (short) 1);

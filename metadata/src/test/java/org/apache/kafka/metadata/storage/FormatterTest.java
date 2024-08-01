@@ -427,76 +427,19 @@ public class FormatterTest {
         }
     }
 
-    // -> test that KIP-853 fails on older MV
-
-//            val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
-//            assertTrue(stringAfterFirstLine(stream.toString()).contains("Snapshot written to %s".format(checkpointDir)))
-//            val checkpointFilePath = Snapshots.snapshotPath(Paths.get(checkpointDir), BOOTSTRAP_SNAPSHOT_ID)
-//            assertTrue(checkpointFilePath.toFile.exists)
-//            assertTrue(Utils.readFileAsString(checkpointFilePath.toFile.getPath).contains(host))
-//        } finally Utils.delete(tempDir)
-//    }
-//@Test
-//def testDefaultMetadataVersion(): Unit = {
-//        val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
-//        val mv = StorageTool.getMetadataVersion(namespace, Map.empty, defaultVersionString = None)
-//        assertEquals(MetadataVersion.LATEST_PRODUCTION.featureLevel(), mv.featureLevel(),
-//                "Expected the default metadata.version to be the latest production version")
-//    }
-//
-//    @Test
-//    def testStandaloneModeWithArguments(): Unit = {
-//        val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yPOjhMQB6JAY",
-//                "-s"))
-//        val properties: Properties = newSelfManagedProperties()
-//        val logDir1 = "/tmp/other1"
-//        val logDir2 = "/tmp/other2"
-//        properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, logDir1 + "," + logDir2)
-//        properties.setProperty("listeners", "PLAINTEXT://localhost:9092")
-//        val config = new KafkaConfig(properties)
-//        try {
-//            val exitCode = StorageTool.runFormatCommand(namespace, config)
-//            val tempDirs = config.logDirs
-//            tempDirs.foreach(tempDir => {
-//                    val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
-//                    val checkpointFilePath = Snapshots.snapshotPath(Paths.get(checkpointDir), BOOTSTRAP_SNAPSHOT_ID)
-//                    assertTrue(checkpointFilePath.toFile.exists)
-//                    assertTrue(Utils.readFileAsString(checkpointFilePath.toFile.getPath).contains("localhost"))
-//                    Utils.delete(new File(tempDir))
-//            })
-//            assertEquals(0, exitCode)
-//        }
-//        finally{
-//            Utils.delete(new File(logDir1))
-//            Utils.delete(new File(logDir2))
-//        }
-//    }
-//
-//    @Test
-//    def testControllerQuorumVotersWithArguments(): Unit = {
-//        val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS2yQQjhMQB7JAT",
-//                "--controller-quorum-voters", "2@localhost:9092"))
-//        val properties: Properties = newSelfManagedProperties()
-//        val logDir1 = "/tmp/other1"
-//        val logDir2 = "/tmp/other2"
-//        properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, logDir1 + "," + logDir2)
-//        properties.setProperty("listeners", "PLAINTEXT://localhost:9092")
-//        val config = new KafkaConfig(properties)
-//        try{
-//            val exitCode = StorageTool.runFormatCommand(namespace, config)
-//            val tempDirs = config.logDirs
-//            tempDirs.foreach(tempDir => {
-//                    val checkpointDir = tempDir + "/" + CLUSTER_METADATA_TOPIC_NAME
-//                    val checkpointFilePath = Snapshots.snapshotPath(Paths.get(checkpointDir), BOOTSTRAP_SNAPSHOT_ID)
-//                    assertTrue(checkpointFilePath.toFile.exists)
-//                    assertTrue(Utils.readFileAsString(checkpointFilePath.toFile.getPath).contains("localhost"))
-//                    Utils.delete(new File(tempDir))
-//            })
-//            assertEquals(0, exitCode)
-//        }
-//        finally {
-//            Utils.delete(new File(logDir1))
-//            Utils.delete(new File(logDir2))
-//        }
-//    }
+    @Test
+    public void testFormatWithInitialVotersFailsWithOlderMetadataVersion() throws Exception {
+        try (TestEnv testEnv = new TestEnv(2)) {
+            FormatterContext formatter1 = testEnv.newFormatter();
+            formatter1.formatter.setReleaseVersion(MetadataVersion.IBP_3_8_IV0);
+            formatter1.formatter.setFeatureLevel("kraft.version", (short) 1);
+            formatter1.formatter.setInitialVoters(DynamicVoters.
+                    parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
+            formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
+            assertEquals("kraft.version could not be set to 1 because it depends on " +
+                "metadata.version level 21",
+                    assertThrows(IllegalArgumentException.class,
+                        () -> formatter1.formatter.run()).getMessage());
+        }
+    }
 }

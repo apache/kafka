@@ -348,8 +348,6 @@ abstract class QuorumTestHarness extends Logging {
     formatter.setControllerListenerName(config.controllerListenerNames.head)
     formatter.setMetadataLogDirectory(config.metadataLogDir)
     addFormatterSettings(formatter)
-    //formatter.setFeatureLevel(Features.TRANSACTION_VERSION.featureName,
-    //  Features.TRANSACTION_VERSION.defaultValue(metadataVersion))
     formatter.run()
     val bootstrapMetadata = formatter.bootstrapMetadata()
 
