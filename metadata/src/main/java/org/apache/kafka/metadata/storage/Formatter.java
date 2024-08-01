@@ -130,7 +130,7 @@ public class Formatter {
     /**
      * The initial KIP-853 voters.
      */
-    private Optional<DynamicVoters> initialVoters = Optional.empty();
+    private Optional<DynamicVoters> initialControllers = Optional.empty();
 
     public Formatter setPrintStream(PrintStream printStream) {
         this.printStream = printStream;
@@ -202,13 +202,13 @@ public class Formatter {
         return this;
     }
 
-    public Formatter setInitialVoters(DynamicVoters initialVoters) {
-        this.initialVoters = Optional.of(initialVoters);
+    public Formatter setInitialVoters(DynamicVoters initialControllers) {
+        this.initialControllers = Optional.of(initialControllers);
         return this;
     }
 
     boolean hasDynamicQuorum() {
-        if (initialVoters.isPresent()) {
+        if (initialControllers.isPresent()) {
             return true;
         }
         return false;
@@ -403,11 +403,11 @@ public class Formatter {
                 DirectoryType directoryType = DirectoryType.calculate(emptyLogDir,
                     metadataLogDirectory,
                     nodeId,
-                    initialVoters);
+                    initialControllers);
                 directoryTypes.put(emptyLogDir, directoryType);
                 Uuid directoryId;
                 if (directoryType == DirectoryType.DYNAMIC_METADATA_VOTER_DIRECTORY) {
-                    directoryId = initialVoters.get().voters().get(nodeId).directoryId();
+                    directoryId = initialControllers.get().voters().get(nodeId).directoryId();
                 } else {
                     directoryId = copier.generateValidDirectoryId();
                 }
@@ -424,7 +424,7 @@ public class Formatter {
                 bootstrapDirectory.writeBinaryFile(bootstrapMetadata);
                 if (directoryTypes.get(writeLogDir).isDynamicMetadataDirectory()) {
                     writeDynamicQuorumSnapshot(writeLogDir,
-                        initialVoters.get(),
+                        initialControllers.get(),
                         featureLevels.get(KRaftVersion.FEATURE_NAME),
                         controllerListenerName);
                 }
@@ -466,13 +466,13 @@ public class Formatter {
             String logDir,
             String metadataLogDirectory,
             int nodeId,
-            Optional<DynamicVoters> initialVoters
+            Optional<DynamicVoters> initialControllers
         ) {
             if (!logDir.equals(metadataLogDirectory)) {
                 return LOG_DIRECTORY;
-            } else if (!initialVoters.isPresent()) {
+            } else if (!initialControllers.isPresent()) {
                 return STATIC_METADATA_DIRECTORY;
-            } else if (initialVoters.get().voters().containsKey(nodeId)) {
+            } else if (initialControllers.get().voters().containsKey(nodeId)) {
                 return DYNAMIC_METADATA_VOTER_DIRECTORY;
             } else {
                 return DYNAMIC_METADATA_NON_VOTER_DIRECTORY;
@@ -482,7 +482,7 @@ public class Formatter {
 
     static void writeDynamicQuorumSnapshot(
         String writeLogDir,
-        DynamicVoters initialVoters,
+        DynamicVoters initialControllers,
         short kraftVersion,
         String controllerListenerName
     ) {
@@ -490,7 +490,7 @@ public class Formatter {
         File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
                 CLUSTER_METADATA_TOPIC_PARTITION.topic(),
                 CLUSTER_METADATA_TOPIC_PARTITION.partition()));
-        VoterSet voterSet = initialVoters.toVoterSet(controllerListenerName);
+        VoterSet voterSet = initialControllers.toVoterSet(controllerListenerName);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
             setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
             setMaxBatchSize(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).

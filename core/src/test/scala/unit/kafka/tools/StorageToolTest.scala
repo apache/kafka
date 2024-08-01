@@ -399,7 +399,7 @@ Found problem:
   }
 
   @Test
-  def testFormatWithStandaloneFlagAndInitialVotersFlagFails(): Unit = {
+  def testFormatWithStandaloneFlagAndInitialControllersFlagFails(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultDynamicQuorumProperties)
@@ -407,19 +407,19 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String](
       "--release-version", "3.9-IV0",
-      "--standalone", "--initial-voters",
+      "--standalone", "--initial-controllers",
       "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ," +
       "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
       "2@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang")
     assertEquals(1, runFormatCommand(stream, properties, arguments.toSeq))
     assertTrue(stream.toString().contains("net.sourceforge.argparse4j.inf.ArgumentParserException: " +
-      "argument --initial-voters/-I: not allowed with argument --standalone/-s"),
+      "argument --initial-controllers/-I: not allowed with argument --standalone/-s"),
         "Failed to find content in output: " + stream.toString())
   }
 
   @ParameterizedTest
   @ValueSource(booleans = Array(false, true))
-  def testFormatWithInitialVotersFlag(setKraftVersionFeature: Boolean): Unit = {
+  def testFormatWithInitialControllersFlag(setKraftVersionFeature: Boolean): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultDynamicQuorumProperties)
@@ -427,7 +427,7 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String](
       "--release-version", "3.9-IV0",
-      "--initial-voters",
+      "--initial-controllers",
       "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ," +
         "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
         "2@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang")
