@@ -162,8 +162,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
 
         private KafkaConfig createNodeConfig(TestKitNode node) {
-            BrokerNode brokerNode = nodes.brokerNodes().get(node.id());
-            ControllerNode controllerNode = nodes.controllerNodes().get(node.id());
+            TestKitNode brokerNode = nodes.brokerNodes().get(node.id());
+            TestKitNode controllerNode = nodes.controllerNodes().get(node.id());
 
             Map<String, Object> props = new HashMap<>(configProps);
             props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
@@ -241,7 +241,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 baseDirectory = new File(nodes.baseDirectory());
                 executorService = Executors.newFixedThreadPool(numOfExecutorThreads,
                     ThreadUtils.createThreadFactory("kafka-cluster-test-kit-executor-%d", false));
-                for (ControllerNode node : nodes.controllerNodes().values()) {
+                for (TestKitNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
                     SharedServer sharedServer = new SharedServer(
                         createNodeConfig(node),
@@ -273,7 +273,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     });
                     jointServers.put(node.id(), sharedServer);
                 }
-                for (BrokerNode node : nodes.brokerNodes().values()) {
+                for (TestKitNode node : nodes.brokerNodes().values()) {
                     SharedServer sharedServer = jointServers.computeIfAbsent(
                         node.id(),
                         id -> new SharedServer(
@@ -390,7 +390,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 BrokerServer broker = entry.getValue();
                 futures.add(executorService.submit(() -> {
                     formatNode(broker.sharedServer().metaPropsEnsemble(),
-                        !nodes().brokerNodes().get(entry.getKey()).combined());
+                        !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()));
                 }));
             }
             for (Future<?> future: futures) {
