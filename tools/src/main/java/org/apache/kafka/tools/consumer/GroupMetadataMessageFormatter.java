@@ -34,7 +34,20 @@ import java.util.Optional;
 public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
 
     @Override
-    protected Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer) {
+    protected JsonNode readToKeyJson(ByteBuffer byteBuffer, short version) {
+        return readToGroupMetadataKey(byteBuffer)
+                .map(logKey -> transferKeyMessageToJsonNode(logKey, version))
+                .orElseGet(() -> new TextNode(UNKNOWN));
+    }
+
+    @Override
+    protected JsonNode readToValueJson(ByteBuffer byteBuffer, short version) {
+        return readToGroupMetadataValue(byteBuffer)
+                .map(logValue -> GroupMetadataValueJsonConverter.write(logValue, version))
+                .orElseGet(() -> new TextNode(UNKNOWN));
+    }
+
+    private Optional<ApiMessage> readToGroupMetadataKey(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION
                 && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
@@ -46,8 +59,7 @@ public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
         }
     }
 
-    @Override
-    protected JsonNode transferKeyMessageToJsonNode(ApiMessage message, short version) {
+    private JsonNode transferKeyMessageToJsonNode(ApiMessage message, short version) {
         if (message instanceof OffsetCommitKey) {
             return NullNode.getInstance();
         } else if (message instanceof GroupMetadataKey) {
@@ -57,8 +69,7 @@ public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
         }
     }
 
-    @Override
-    protected Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer) {
+    private Optional<GroupMetadataValue> readToGroupMetadataValue(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= GroupMetadataValue.LOWEST_SUPPORTED_VERSION
                 && version <= GroupMetadataValue.HIGHEST_SUPPORTED_VERSION) {
@@ -66,10 +77,5 @@ public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
         } else {
             return Optional.empty();
         }
-    }
-
-    @Override
-    protected JsonNode transferValueMessageToJsonNode(ApiMessage message, short version) {
-        return GroupMetadataValueJsonConverter.write((GroupMetadataValue) message, version);
     }
 }

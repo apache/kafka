@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKeyJsonConverter;
@@ -24,6 +23,7 @@ import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValueJsonConverter;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
@@ -31,7 +31,20 @@ import java.util.Optional;
 public class TransactionLogMessageFormatter extends ApiMessageFormatter {
 
     @Override
-    protected Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer) {
+    protected JsonNode readToKeyJson(ByteBuffer byteBuffer, short version) {
+        return readToTransactionLogKey(byteBuffer)
+                .map(logKey -> TransactionLogKeyJsonConverter.write(logKey, version))
+                .orElseGet(() -> new TextNode(UNKNOWN));
+    }
+
+    @Override
+    protected JsonNode readToValueJson(ByteBuffer byteBuffer, short version) {
+        return readToTransactionLogValue(byteBuffer)
+                .map(logValue -> TransactionLogValueJsonConverter.write(logValue, version))
+                .orElseGet(() -> new TextNode(UNKNOWN));
+    }
+
+    private Optional<TransactionLogKey> readToTransactionLogKey(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= TransactionLogKey.LOWEST_SUPPORTED_VERSION
                 && version <= TransactionLogKey.HIGHEST_SUPPORTED_VERSION) {
@@ -41,13 +54,7 @@ public class TransactionLogMessageFormatter extends ApiMessageFormatter {
         }
     }
 
-    @Override
-    protected JsonNode transferKeyMessageToJsonNode(ApiMessage message, short version) {
-        return TransactionLogKeyJsonConverter.write((TransactionLogKey) message, version);
-    }
-
-    @Override
-    protected Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer) {
+    private Optional<TransactionLogValue> readToTransactionLogValue(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION
                 && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
@@ -55,10 +62,5 @@ public class TransactionLogMessageFormatter extends ApiMessageFormatter {
         } else {
             return Optional.empty();
         }
-    }
-
-    @Override
-    protected JsonNode transferValueMessageToJsonNode(ApiMessage message, short version) {
-        return TransactionLogValueJsonConverter.write((TransactionLogValue) message, version);
     }
 }

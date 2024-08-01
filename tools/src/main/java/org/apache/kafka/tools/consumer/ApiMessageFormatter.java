@@ -18,19 +18,16 @@ package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
-import org.apache.kafka.common.protocol.ApiMessage;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.util.Objects;
-import java.util.Optional;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -49,7 +46,7 @@ public abstract class ApiMessageFormatter implements MessageFormatter {
         byte[] key = consumerRecord.key();
         if (Objects.nonNull(key)) {
             short keyVersion = ByteBuffer.wrap(key).getShort();
-            JsonNode dataNode = readToKeyNode(ByteBuffer.wrap(key), keyVersion);
+            JsonNode dataNode = readToKeyJson(ByteBuffer.wrap(key), keyVersion);
 
             if (dataNode instanceof NullNode) {
                 return;
@@ -64,7 +61,7 @@ public abstract class ApiMessageFormatter implements MessageFormatter {
         byte[] value = consumerRecord.value();
         if (Objects.nonNull(value)) {
             short valueVersion = ByteBuffer.wrap(value).getShort();
-            JsonNode dataNode = readToValueNode(ByteBuffer.wrap(value), valueVersion);
+            JsonNode dataNode = readToValueJson(ByteBuffer.wrap(value), valueVersion);
 
             json.putObject(VALUE)
                     .put(VERSION, valueVersion)
@@ -80,20 +77,6 @@ public abstract class ApiMessageFormatter implements MessageFormatter {
         }
     }
 
-    private JsonNode readToKeyNode(ByteBuffer byteBuffer, short version) {
-        return readToKeyMessage(byteBuffer)
-                .map(logKey -> transferKeyMessageToJsonNode(logKey, version))
-                .orElseGet(() -> new TextNode(UNKNOWN));
-    }
-    
-    private JsonNode readToValueNode(ByteBuffer byteBuffer, short version) {
-        return readToValueMessage(byteBuffer)
-                .map(logValue -> transferValueMessageToJsonNode(logValue, version))
-                .orElseGet(() -> new TextNode(UNKNOWN));
-    }
-    
-    protected abstract Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer);
-    protected abstract JsonNode transferKeyMessageToJsonNode(ApiMessage message, short version);
-    protected abstract Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer);
-    protected abstract JsonNode transferValueMessageToJsonNode(ApiMessage message, short version);
+    protected abstract JsonNode readToKeyJson(ByteBuffer byteBuffer, short version);
+    protected abstract JsonNode readToValueJson(ByteBuffer byteBuffer, short version);
 }  
