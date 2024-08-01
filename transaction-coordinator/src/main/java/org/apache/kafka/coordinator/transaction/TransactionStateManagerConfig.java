@@ -55,10 +55,10 @@ public final class TransactionStateManagerConfig {
             .define(TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, INT, TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT, atLeast(1), LOW, TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS_DOC)
             .define(TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG, INT, TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_DEFAULT, atLeast(1), LOW, TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONS_INTERVAL_MS_DOC);
 
-    private int transactionalIdExpirationMs;
-    private int transactionMaxTimeoutMs;
-    private int transactionAbortTimedOutTransactionCleanupIntervalMs;
-    private int transactionRemoveExpiredTransactionalIdCleanupIntervalMs;
+    private final int transactionalIdExpirationMs;
+    private final int transactionMaxTimeoutMs;
+    private final int transactionAbortTimedOutTransactionCleanupIntervalMs;
+    private final int transactionRemoveExpiredTransactionalIdCleanupIntervalMs;
 
     public TransactionStateManagerConfig(AbstractConfig config) {
         transactionalIdExpirationMs = config.getInt(TransactionStateManagerConfig.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG);
@@ -81,7 +81,4 @@ public final class TransactionStateManagerConfig {
     public int transactionRemoveExpiredTransactionalIdCleanupIntervalMs() {
         return transactionRemoveExpiredTransactionalIdCleanupIntervalMs;
     }
-
-
-
 }

@@ -74,13 +74,13 @@ public final class TransactionLogConfig {
             // Configuration for testing only as default value should be sufficient for typical usage
             .defineInternal(PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG, INT, PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT, atLeast(1), LOW, PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DOC);
 
-    private AbstractConfig config;
-    private int transactionTopicMinISR;
-    private int transactionsLoadBufferSize;
-    private short transactionTopicReplicationFactor;
-    private int transactionTopicPartitions;
-    private int transactionTopicSegmentBytes;
-    private int producerIdExpirationCheckIntervalMs;
+    private final AbstractConfig config;
+    private final int transactionTopicMinISR;
+    private final int transactionsLoadBufferSize;
+    private final short transactionTopicReplicationFactor;
+    private final int transactionTopicPartitions;
+    private final int transactionTopicSegmentBytes;
+    private final int producerIdExpirationCheckIntervalMs;
 
     public TransactionLogConfig(AbstractConfig config) {
         this.config = config;
@@ -112,17 +112,17 @@ public final class TransactionLogConfig {
         return transactionTopicSegmentBytes;
     }
 
-    public Boolean transactionPartitionVerificationEnable() {
-        return config.getBoolean(TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
-    }
-
-    public int producerIdExpirationMs() {
-        return config.getInt(PRODUCER_ID_EXPIRATION_MS_CONFIG);
-    }
-
     public int producerIdExpirationCheckIntervalMs() {
         return producerIdExpirationCheckIntervalMs;
     }
 
+    // This is a broker dynamic config used for DynamicProducerStateManagerConfig
+    public Boolean transactionPartitionVerificationEnable() {
+        return config.getBoolean(TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
+    }
 
+    // This is a broker dynamic config used for DynamicProducerStateManagerConfig
+    public int producerIdExpirationMs() {
+        return config.getInt(PRODUCER_ID_EXPIRATION_MS_CONFIG);
+    }
 }
