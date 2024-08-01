@@ -955,7 +955,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     processingExceptionHandler.handle(errorHandlerContext, null, processingException),
                     "Invalid ProcessingExceptionHandler response."
                 );
-            } catch (final Exception fatalUserException) {
+            } catch (final RuntimeException fatalUserException) {
                 log.error(
                     "Processing error callback failed after processing error for record: {}",
                     errorHandlerContext,

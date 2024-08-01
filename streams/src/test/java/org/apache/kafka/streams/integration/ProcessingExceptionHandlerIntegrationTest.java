@@ -62,7 +62,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
     private final String threadId = Thread.currentThread().getName();
 
     @Test
-    public void shouldFailWhenProcessingExceptionOccursIfExceptionHanlderReturnFail() {
+    public void shouldFailWhenProcessingExceptionOccursIfExceptionHandlerReturnsFail() {
         final List<KeyValue<String, String>> events = Arrays.asList(
             new KeyValue<>("ID123-1", "ID123-A1"),
             new KeyValue<>("ID123-2-ERR", "ID123-A2"),
@@ -107,7 +107,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
     }
 
     @Test
-    public void shouldContinueWhenProcessingExceptionOccursIfExceptionHandlerReturnContinue() {
+    public void shouldContinueWhenProcessingExceptionOccursIfExceptionHandlerReturnsContinue() {
         final List<KeyValue<String, String>> events = Arrays.asList(
             new KeyValue<>("ID123-1", "ID123-A1"),
             new KeyValue<>("ID123-2-ERR", "ID123-A2"),

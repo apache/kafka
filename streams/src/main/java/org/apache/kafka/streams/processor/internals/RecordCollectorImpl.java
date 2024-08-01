@@ -335,15 +335,15 @@ public class RecordCollectorImpl implements RecordCollector {
             throw new StreamsException(
                 String.format(
                     "Unable to serialize record. ProducerRecord(topic=[%s], partition=[%d], timestamp=[%d]",
-                        topic,
-                        partition,
-                        timestamp),
+                    topic,
+                    partition,
+                    timestamp),
                 serializationException
             );
         }
 
         log.warn("Unable to serialize record, continue processing. " +
-                        "ProducerRecord(topic=[{}], partition=[{}], timestamp=[{}])",
+                    "ProducerRecord(topic=[{}], partition=[{}], timestamp=[{}])",
                 topic,
                 partition,
                 timestamp);
