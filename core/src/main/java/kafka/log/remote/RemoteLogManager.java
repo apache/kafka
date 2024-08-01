@@ -472,7 +472,7 @@ public class RemoteLogManager implements Closeable {
                     LOGGER.info("Cancelling the copy RLM task for tpId: {}", tpId);
                     task.cancel();
                     LOGGER.info("Resetting remote copy lag metrics for tpId: {}", tpId);
-                    ((RLMCopyTask) task.rlmTask).recordLagStats(0L, 0L);
+                    ((RLMCopyTask) task.rlmTask).resetLagStats();
                     return null;
                 });
             }
@@ -525,23 +525,18 @@ public class RemoteLogManager implements Closeable {
                 LOGGER.error("Error while stopping the partition: {}", stopPartition, ex);
             }
         }
-        Set<TopicIdPartition> deleteLocalPartitions = stopPartitions.stream()
-                .filter(sp -> sp.deleteLocalLog() && topicIdByPartitionMap.containsKey(sp.topicPartition()))
-                .map(sp -> new TopicIdPartition(topicIdByPartitionMap.get(sp.topicPartition()), sp.topicPartition()))
-                .collect(Collectors.toSet());
 
-        // NOTE: In ZK mode, this#stopPartitions method is called when Replica state changes to Offline and
-        // ReplicaDeletionStarted
-        Set<TopicIdPartition> stopRLMMPartitions = stopPartitions.stream()
+        // We want to remote topicId map and stopPartition on RLMM for deleteLocalLog or stopRLMM partitions because
+        // in both case, they all mean the topic will not be held in this broker anymore.
+        // NOTE: In ZK mode, this#stopPartitions method is called when Replica state changes to Offline and ReplicaDeletionStarted
+        Set<TopicIdPartition> pendingActionsPartitions = stopPartitions.stream()
                 .filter(sp -> (sp.stopRemoteLogMetadataManager() || sp.deleteLocalLog()) && topicIdByPartitionMap.containsKey(sp.topicPartition()))
                 .map(sp -> new TopicIdPartition(topicIdByPartitionMap.get(sp.topicPartition()), sp.topicPartition()))
                 .collect(Collectors.toSet());
 
-        if (!deleteLocalPartitions.isEmpty()) {
-            deleteLocalPartitions.forEach(tpId -> topicIdByPartitionMap.remove(tpId.topicPartition()));
-        }
-        if (!stopRLMMPartitions.isEmpty()) {
-            remoteLogMetadataManager.onStopPartitions(stopRLMMPartitions);
+        if (!pendingActionsPartitions.isEmpty()) {
+            pendingActionsPartitions.forEach(tpId -> topicIdByPartitionMap.remove(tpId.topicPartition()));
+            remoteLogMetadataManager.onStopPartitions(pendingActionsPartitions);
         }
     }
 
@@ -1009,6 +1004,13 @@ public class RemoteLogManager implements Closeable {
                 brokerTopicStats.recordRemoteCopyLagBytes(topic, partition, bytesLag);
                 brokerTopicStats.recordRemoteCopyLagSegments(topic, partition, segmentsLag);
             }
+        }
+
+        void resetLagStats() {
+            String topic = topicIdPartition.topic();
+            int partition = topicIdPartition.partition();
+            brokerTopicStats.recordRemoteCopyLagBytes(topic, partition, 0);
+            brokerTopicStats.recordRemoteCopyLagSegments(topic, partition, 0);
         }
 
         private Path toPathIfExists(File file) {

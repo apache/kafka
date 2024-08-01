@@ -443,7 +443,7 @@ class LogConfigTest {
   @ValueSource(booleans = Array(true, false))
   def testValidRemoteLogCopyDisabled(copyDisabled: Boolean): Unit = {
     val logProps = new Properties
-    logProps.put(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, copyDisabled)
+    logProps.put(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, copyDisabled.toString)
     LogConfig.validate(logProps)
   }
 
@@ -451,7 +451,7 @@ class LogConfigTest {
   @ValueSource(booleans = Array(true, false))
   def testValidRemoteLogDeleteOnDisable(deleteOnDisable: Boolean): Unit = {
     val logProps = new Properties
-    logProps.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, deleteOnDisable)
+    logProps.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, deleteOnDisable.toString)
     LogConfig.validate(logProps)
   }
 
@@ -462,7 +462,7 @@ class LogConfigTest {
     kafkaProps.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
     val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
     val logProps = new Properties
-    logProps.put(configKey, true)
+    logProps.put(configKey, "true")
 
     val message = assertThrows(classOf[InvalidConfigurationException],
       () => LogConfig.validate(Collections.emptyMap(), logProps, kafkaConfig.extractLogConfigMap, true, true))

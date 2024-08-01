@@ -161,8 +161,8 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   @CsvSource(Array("kraft,true,true", "kraft,true,false", "kraft,false,true", "kraft,false,false"))
   def testCreateRemoteTopicWithCopyDisabledAndDeleteOnDisable(quorum: String, copyDisabled: Boolean, deleteOnDisable: Boolean): Unit = {
     val topicConfig = new Properties()
-    topicConfig.put(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, copyDisabled)
-    topicConfig.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, deleteOnDisable)
+    topicConfig.put(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, copyDisabled.toString)
+    topicConfig.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, deleteOnDisable.toString)
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
     verifyRemoteLogTopicConfigs(topicConfig)
