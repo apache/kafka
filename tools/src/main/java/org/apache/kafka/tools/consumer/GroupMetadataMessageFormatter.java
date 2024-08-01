@@ -34,7 +34,7 @@ import java.util.Optional;
 public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
 
     @Override
-    Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer) {
+    protected Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION
                 && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
@@ -47,7 +47,7 @@ public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    JsonNode transferKeyMessageToJsonNode(ApiMessage message, short version) {
+    protected JsonNode transferKeyMessageToJsonNode(ApiMessage message, short version) {
         if (message instanceof OffsetCommitKey) {
             return NullNode.getInstance();
         } else if (message instanceof GroupMetadataKey) {
@@ -58,7 +58,7 @@ public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer) {
+    protected Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= GroupMetadataValue.LOWEST_SUPPORTED_VERSION
                 && version <= GroupMetadataValue.HIGHEST_SUPPORTED_VERSION) {
@@ -69,7 +69,7 @@ public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    JsonNode transferValueMessageToJsonNode(ApiMessage message, short version) {
+    protected JsonNode transferValueMessageToJsonNode(ApiMessage message, short version) {
         return GroupMetadataValueJsonConverter.write((GroupMetadataValue) message, version);
     }
 }

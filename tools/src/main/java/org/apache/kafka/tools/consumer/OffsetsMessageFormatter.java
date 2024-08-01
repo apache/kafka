@@ -37,7 +37,7 @@ import java.util.Optional;
 public class OffsetsMessageFormatter extends ApiMessageFormatter {
 
     @Override
-    Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer) {
+    protected Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION
                 && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
@@ -50,7 +50,7 @@ public class OffsetsMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    JsonNode transferKeyMessageToJsonNode(ApiMessage logKey, short keyVersion) {
+    protected JsonNode transferKeyMessageToJsonNode(ApiMessage logKey, short keyVersion) {
         if (logKey instanceof OffsetCommitKey) {
             return OffsetCommitKeyJsonConverter.write((OffsetCommitKey) logKey, keyVersion);
         } else if (logKey instanceof GroupMetadataKey) {
@@ -61,7 +61,7 @@ public class OffsetsMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer) {
+    protected Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= OffsetCommitValue.LOWEST_SUPPORTED_VERSION
                 && version <= OffsetCommitValue.HIGHEST_SUPPORTED_VERSION) {
@@ -72,7 +72,7 @@ public class OffsetsMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    JsonNode transferValueMessageToJsonNode(ApiMessage message, short version) {
+    protected JsonNode transferValueMessageToJsonNode(ApiMessage message, short version) {
         return OffsetCommitValueJsonConverter.write((OffsetCommitValue) message, version);
     }
 }

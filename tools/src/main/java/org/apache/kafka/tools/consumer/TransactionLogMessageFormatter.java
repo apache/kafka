@@ -31,7 +31,7 @@ import java.util.Optional;
 public class TransactionLogMessageFormatter extends ApiMessageFormatter {
 
     @Override
-    Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer) {
+    protected Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= TransactionLogKey.LOWEST_SUPPORTED_VERSION
                 && version <= TransactionLogKey.HIGHEST_SUPPORTED_VERSION) {
@@ -42,12 +42,12 @@ public class TransactionLogMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    JsonNode transferKeyMessageToJsonNode(ApiMessage message, short version) {
+    protected JsonNode transferKeyMessageToJsonNode(ApiMessage message, short version) {
         return TransactionLogKeyJsonConverter.write((TransactionLogKey) message, version);
     }
 
     @Override
-    Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer) {
+    protected Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION
                 && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
@@ -58,7 +58,7 @@ public class TransactionLogMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    JsonNode transferValueMessageToJsonNode(ApiMessage message, short version) {
+    protected JsonNode transferValueMessageToJsonNode(ApiMessage message, short version) {
         return TransactionLogValueJsonConverter.write((TransactionLogValue) message, version);
     }
 }
