@@ -256,24 +256,7 @@ public class StreamsGraphTest {
         return builder.build(properties);
 
     }
-
-    @Deprecated // specifically testing the deprecated variant
-    private Topology getTopologyWithThroughOperation(final String optimizeConfig) {
-
-        final StreamsBuilder builder = new StreamsBuilder();
-        final Properties properties = new Properties();
-        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizeConfig);
-
-        final KStream<String, String> inputStream = builder.stream("input");
-        final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v).through("through-topic");
-
-        mappedKeyStream.groupByKey().count().toStream().to("output");
-        mappedKeyStream.groupByKey().windowedBy(TimeWindows.of(ofMillis(5000))).count().toStream().to("windowed-output");
-
-        return builder.build(properties);
-
-    }
-
+    
     private Topology getTopologyWithRepartitionOperation(final String optimizeConfig) {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties properties = new Properties();
