@@ -70,6 +70,10 @@ class Scheduler implements AutoCloseable {
         }
     } 
 
+    void executeAsync(Task task, String description) {
+        executor.submit(() -> executeThread(task, description));
+    }
+
     public void close() {
         closed = true;
         executor.shutdown();
