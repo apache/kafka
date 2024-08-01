@@ -276,15 +276,15 @@ public interface AuthorizerData {
      *    authorizer implementation.
      * 3. The default implementation does not support any custom authorizer configs or other access
      *    rules apart from ACLs.
-     *
-     * @param requestContext Request context including request resourceType, security protocol and listener name
-     * @param operation             The ACL operation to check
-     * @param resourceType   The resource type to check
-     * @return               Return {@link AuthorizationResult#ALLOWED} if the caller is authorized
-     *                       to perform the given ACL operation on at least one resource of the
-     *                       given type. Return {@link AuthorizationResult#DENIED} otherwise.
+     /**
+     * performs an authorization check forto match any items of the resource type.
+     * @param principal the principal to limit the search by.
+     * @param host the host to limit the search by.
+     * @param operation the operation to limit the search to.
+     * @param resourceType the resource type to limit the search to.
+     * @return the authorization for the first matching resource.
      */
-    AuthorizationResult authorizeByResourceType(AuthorizableRequestContext requestContext, AclOperation operation, ResourceType resourceType);
+    AuthorizationResult authorizeByResourceType(KafkaPrincipal principal, String host, AclOperation operation, ResourceType resourceType);
 
     /**
      * The definition of a matching rule.

@@ -376,15 +376,13 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
         return aclCache.acls(filter);
     }
 
-    public AuthorizationResult authorizeByResourceType(AuthorizableRequestContext requestContext, AclOperation operation, ResourceType resourceType) {
-        SecurityUtils.authorizeByResourceTypeCheckArgs(operation, resourceType);
+    public AuthorizationResult authorizeByResourceType(
+            KafkaPrincipal principal,
+            String hostAddr,
+            AclOperation operation,
+            ResourceType resourceType) {
 
-        // super users are granted access regardless of DENY ACLs.
-        if (superUsers().contains(requestContext.principal())) {
-            return AuthorizationResult.ALLOWED;
-        }
-
-        // Filter out all the resource pattern corresponding to the RequestContext,
+        // Filter out all the resource pattern corresponding to the principal, hostAddr,
         // AclOperation, and ResourceType
         ResourcePatternFilter resourceTypeFilter = new ResourcePatternFilter(
                 resourceType, null, PatternType.ANY);
@@ -403,11 +401,6 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
                 }};
 
         boolean hasWildCardAllow = false;
-
-        KafkaPrincipal principal = new KafkaPrincipal(
-                requestContext.principal().getPrincipalType(),
-                requestContext.principal().getName());
-        String hostAddr = requestContext.clientAddress().getHostAddress();
 
         for (AclBinding binding : acls(aclFilter)) {
             if (!binding.entry().host().equals(hostAddr) && !binding.entry().host().equals("*"))
