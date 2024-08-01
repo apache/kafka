@@ -58,13 +58,7 @@ public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    JsonNode readToValueNode(ByteBuffer byteBuffer, short version) {
-        return readGroupMetaValue(byteBuffer)
-                .map(logValue -> GroupMetadataValueJsonConverter.write(logValue, version))
-                .orElseGet(() -> new TextNode(UNKNOWN));
-    }
-
-    private Optional<GroupMetadataValue> readGroupMetaValue(ByteBuffer byteBuffer) {
+    Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= GroupMetadataValue.LOWEST_SUPPORTED_VERSION
                 && version <= GroupMetadataValue.HIGHEST_SUPPORTED_VERSION) {
@@ -72,5 +66,10 @@ public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
         } else {
             return Optional.empty();
         }
+    }
+
+    @Override
+    JsonNode transferValueMessageToJsonNode(ApiMessage message, short version) {
+        return GroupMetadataValueJsonConverter.write((GroupMetadataValue) message, version);
     }
 }

@@ -24,7 +24,6 @@ import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValueJsonConverter;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
@@ -48,13 +47,7 @@ public class TransactionLogMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    JsonNode readToValueNode(ByteBuffer byteBuffer, short version) {
-        return readToTransactionLogValue(byteBuffer)
-                .map(logValue -> TransactionLogValueJsonConverter.write(logValue, version))
-                .orElseGet(() -> new TextNode(UNKNOWN));
-    }
-
-    private Optional<TransactionLogValue> readToTransactionLogValue(ByteBuffer byteBuffer) {
+    Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION
                 && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
@@ -62,5 +55,10 @@ public class TransactionLogMessageFormatter extends ApiMessageFormatter {
         } else {
             return Optional.empty();
         }
+    }
+
+    @Override
+    JsonNode transferValueMessageToJsonNode(ApiMessage message, short version) {
+        return TransactionLogValueJsonConverter.write((TransactionLogValue) message, version);
     }
 }

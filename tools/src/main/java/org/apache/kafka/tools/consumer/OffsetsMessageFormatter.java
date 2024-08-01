@@ -61,13 +61,7 @@ public class OffsetsMessageFormatter extends ApiMessageFormatter {
     }
 
     @Override
-    JsonNode readToValueNode(ByteBuffer byteBuffer, short version) {
-        return readToOffsetCommitValue(byteBuffer)
-                .map(logValue -> OffsetCommitValueJsonConverter.write(logValue, version))
-                .orElseGet(() -> new TextNode(UNKNOWN));
-    }
-
-    private Optional<OffsetCommitValue> readToOffsetCommitValue(ByteBuffer byteBuffer) {
+    Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= OffsetCommitValue.LOWEST_SUPPORTED_VERSION
                 && version <= OffsetCommitValue.HIGHEST_SUPPORTED_VERSION) {
@@ -75,5 +69,10 @@ public class OffsetsMessageFormatter extends ApiMessageFormatter {
         } else {
             return Optional.empty();
         }
+    }
+
+    @Override
+    JsonNode transferValueMessageToJsonNode(ApiMessage message, short version) {
+        return OffsetCommitValueJsonConverter.write((OffsetCommitValue) message, version);
     }
 }

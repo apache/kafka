@@ -86,7 +86,14 @@ public abstract class ApiMessageFormatter implements MessageFormatter {
                 .orElseGet(() -> new TextNode(UNKNOWN));
     }
     
+    private JsonNode readToValueNode(ByteBuffer byteBuffer, short version) {
+        return readToValueMessage(byteBuffer)
+                .map(logValue -> transferValueMessageToJsonNode(logValue, version))
+                .orElseGet(() -> new TextNode(UNKNOWN));
+    }
+    
     abstract Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer);
     abstract JsonNode transferKeyMessageToJsonNode(ApiMessage message, short version);
-    abstract JsonNode readToValueNode(ByteBuffer byteBuffer, short version);
+    abstract Optional<ApiMessage> readToValueMessage(ByteBuffer byteBuffer);
+    abstract JsonNode transferValueMessageToJsonNode(ApiMessage message, short version);
 }
