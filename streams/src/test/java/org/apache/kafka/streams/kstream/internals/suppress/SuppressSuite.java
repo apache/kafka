@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
+import org.apache.kafka.streams.integration.SuppressionDurabilityIntegrationTest;
 import org.apache.kafka.streams.integration.SuppressionIntegrationTest;
 import org.apache.kafka.streams.kstream.SuppressedTest;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerdeTest;
@@ -47,7 +48,8 @@ import org.junit.platform.suite.api.Suite;
     InMemoryTimeOrderedKeyValueChangeBufferTest.class,
     TimeOrderedKeyValueBufferTest.class,
     FullChangeSerdeTest.class,
-    SuppressionIntegrationTest.class
+    SuppressionIntegrationTest.class,
+    SuppressionDurabilityIntegrationTest.class
 })
 public class SuppressSuite {
 }
