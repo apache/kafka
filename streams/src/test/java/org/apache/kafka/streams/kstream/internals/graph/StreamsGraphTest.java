@@ -195,7 +195,6 @@ public class StreamsGraphTest {
         assertEquals(2, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
     }
 
-    
     @Test
     public void shouldOptimizeSeveralMergeNodesWithCommonKeyChangingParent() {
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
