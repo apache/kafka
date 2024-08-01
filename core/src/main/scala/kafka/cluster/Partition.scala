@@ -1238,7 +1238,14 @@ class Partition(val topicPartition: TopicPartition,
   /**
    * Try to complete any pending requests. This should be called without holding the leaderIsrUpdateLock.
    */
-  private def tryCompleteDelayedRequests(): Unit = delayedOperations.checkAndCompleteAll()
+  def tryCompleteDelayedRequests(): Unit = {
+    try {
+      delayedOperations.checkAndCompleteAll()
+    } catch {
+      case e: Exception =>
+        error(s"Unexpected exception while completing delayed requests for ${topicPartition}", e)
+    }
+  }
 
   def maybeShrinkIsr(): Unit = {
     def needsIsrUpdate: Boolean = {
