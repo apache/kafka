@@ -2915,11 +2915,11 @@ public class KStreamImplTest {
                     new StringSerializer()
                 );
             final TestOutputTopic<String, Integer> outputTopic =
-                    driver.createOutputTopic(
-                        output,
-                        new StringDeserializer(),
-                        new IntegerDeserializer()
-                    );
+                driver.createOutputTopic(
+                    output,
+                    new StringDeserializer(),
+                    new IntegerDeserializer()
+                );
 
             inputTopic.pipeInput("A", "0", 5L);
             inputTopic.pipeInput("B", "00", 100L);
