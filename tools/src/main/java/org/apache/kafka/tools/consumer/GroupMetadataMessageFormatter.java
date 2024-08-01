@@ -31,20 +31,34 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
-public class GroupMetadataMessageFormatter extends AbstractGroupMetadataFormatter {
+public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
 
-    JsonNode transferMetadataToJsonNode(ApiMessage logKey, short keyVersion) {
-        if (logKey instanceof OffsetCommitKey) {
+    @Override
+    Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer) {
+        short version = byteBuffer.getShort();
+        if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION
+                && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
+            return Optional.of(new OffsetCommitKey(new ByteBufferAccessor(byteBuffer), version));
+        } else if (version >= GroupMetadataKey.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataKey.HIGHEST_SUPPORTED_VERSION) {
+            return Optional.of(new GroupMetadataKey(new ByteBufferAccessor(byteBuffer), version));
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    JsonNode transferKeyMessageToJsonNode(ApiMessage message, short version) {
+        if (message instanceof OffsetCommitKey) {
             return NullNode.getInstance();
-        } else if (logKey instanceof GroupMetadataKey) {
-            return GroupMetadataKeyJsonConverter.write((GroupMetadataKey) logKey, keyVersion);
+        } else if (message instanceof GroupMetadataKey) {
+            return GroupMetadataKeyJsonConverter.write((GroupMetadataKey) message, version);
         } else {
             return new TextNode(UNKNOWN);
         }
     }
 
     @Override
-    JsonNode readValueNode(ByteBuffer byteBuffer, short version) {
+    JsonNode readToValueNode(ByteBuffer byteBuffer, short version) {
         return readGroupMetaValue(byteBuffer)
                 .map(logValue -> GroupMetadataValueJsonConverter.write(logValue, version))
                 .orElseGet(() -> new TextNode(UNKNOWN));

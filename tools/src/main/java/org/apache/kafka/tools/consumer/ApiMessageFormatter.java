@@ -19,9 +19,6 @@ package org.apache.kafka.tools.consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
-import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -37,7 +34,7 @@ import java.util.Optional;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-public abstract class AbstractGroupMetadataFormatter implements MessageFormatter {
+public abstract class ApiMessageFormatter implements MessageFormatter {
 
     private static final String VERSION = "version";
     private static final String DATA = "data";
@@ -52,9 +49,7 @@ public abstract class AbstractGroupMetadataFormatter implements MessageFormatter
         byte[] key = consumerRecord.key();
         if (Objects.nonNull(key)) {
             short keyVersion = ByteBuffer.wrap(key).getShort();
-            JsonNode dataNode = readToGroupMetadataKey(ByteBuffer.wrap(key))
-                    .map(logKey -> transferMetadataToJsonNode(logKey, keyVersion))
-                    .orElseGet(() -> new TextNode(UNKNOWN));
+            JsonNode dataNode = readToKeyNode(ByteBuffer.wrap(key), keyVersion);
 
             if (dataNode instanceof NullNode) {
                 return;
@@ -69,7 +64,7 @@ public abstract class AbstractGroupMetadataFormatter implements MessageFormatter
         byte[] value = consumerRecord.value();
         if (Objects.nonNull(value)) {
             short valueVersion = ByteBuffer.wrap(value).getShort();
-            JsonNode dataNode = readValueNode(ByteBuffer.wrap(value), valueVersion);
+            JsonNode dataNode = readToValueNode(ByteBuffer.wrap(value), valueVersion);
 
             json.putObject(VALUE)
                     .put(VERSION, valueVersion)
@@ -85,18 +80,13 @@ public abstract class AbstractGroupMetadataFormatter implements MessageFormatter
         }
     }
 
-    private Optional<ApiMessage> readToGroupMetadataKey(ByteBuffer byteBuffer) {
-        short version = byteBuffer.getShort();
-        if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION
-                && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
-            return Optional.of(new OffsetCommitKey(new ByteBufferAccessor(byteBuffer), version));
-        } else if (version >= GroupMetadataKey.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataKey.HIGHEST_SUPPORTED_VERSION) {
-            return Optional.of(new GroupMetadataKey(new ByteBufferAccessor(byteBuffer), version));
-        } else {
-            return Optional.empty();
-        }
+    private JsonNode readToKeyNode(ByteBuffer byteBuffer, short version) {
+        return readToKeyMessage(byteBuffer)
+                .map(logKey -> transferKeyMessageToJsonNode(logKey, version))
+                .orElseGet(() -> new TextNode(UNKNOWN));
     }
-
-    abstract JsonNode transferMetadataToJsonNode(ApiMessage logKey, short keyVersion);
-    abstract JsonNode readValueNode(ByteBuffer byteBuffer, short version);
+    
+    abstract Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer);
+    abstract JsonNode transferKeyMessageToJsonNode(ApiMessage message, short version);
+    abstract JsonNode readToValueNode(ByteBuffer byteBuffer, short version);
 }

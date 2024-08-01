@@ -34,9 +34,23 @@ import java.util.Optional;
 /**
  * Formatter for use with tools such as console consumer: Consumer should also set exclude.internal.topics to false.
  */
-public class OffsetsMessageFormatter extends AbstractGroupMetadataFormatter {
+public class OffsetsMessageFormatter extends ApiMessageFormatter {
 
-    JsonNode transferMetadataToJsonNode(ApiMessage logKey, short keyVersion) {
+    @Override
+    Optional<ApiMessage> readToKeyMessage(ByteBuffer byteBuffer) {
+        short version = byteBuffer.getShort();
+        if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION
+                && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
+            return Optional.of(new OffsetCommitKey(new ByteBufferAccessor(byteBuffer), version));
+        } else if (version >= GroupMetadataKey.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataKey.HIGHEST_SUPPORTED_VERSION) {
+            return Optional.of(new GroupMetadataKey(new ByteBufferAccessor(byteBuffer), version));
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    JsonNode transferKeyMessageToJsonNode(ApiMessage logKey, short keyVersion) {
         if (logKey instanceof OffsetCommitKey) {
             return OffsetCommitKeyJsonConverter.write((OffsetCommitKey) logKey, keyVersion);
         } else if (logKey instanceof GroupMetadataKey) {
@@ -47,7 +61,7 @@ public class OffsetsMessageFormatter extends AbstractGroupMetadataFormatter {
     }
 
     @Override
-    JsonNode readValueNode(ByteBuffer byteBuffer, short version) {
+    JsonNode readToValueNode(ByteBuffer byteBuffer, short version) {
         return readToOffsetCommitValue(byteBuffer)
                 .map(logValue -> OffsetCommitValueJsonConverter.write(logValue, version))
                 .orElseGet(() -> new TextNode(UNKNOWN));
