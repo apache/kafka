@@ -17,16 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import java.time.Duration;
-import static java.time.Duration.ofMillis;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.Properties;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -50,8 +40,20 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static java.time.Duration.ofMillis;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SuppressWarnings("deprecation")
 public class StreamsGraphTest {
@@ -193,7 +195,7 @@ public class StreamsGraphTest {
         assertEquals(2, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
     }
 
-    @Test
+@Test
     public void shouldOptimizeSeveralMergeNodesWithCommonKeyChangingParent() {
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         final KStream<Integer, Integer> parentStream = streamsBuilder.stream("input_topic", Consumed.with(Serdes.Integer(), Serdes.Integer()))
