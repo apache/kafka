@@ -182,7 +182,7 @@ public class EmbeddedKafkaCluster {
         String topic = "consumer-warmup-" + consumerGroupId;
 
         createTopic(topic);
-        produce(topic, "warmup message");
+        produce(topic, "warmup message key", "warmup message value");
 
         try (Consumer<?, ?> consumer = createConsumerAndSubscribeTo(consumerConfig, topic)) {
             ConsumerRecords<?, ?> records = consumer.poll(Duration.ofMillis(GROUP_COORDINATOR_AVAILABILITY_DURATION_MS));
