@@ -41,6 +41,7 @@ import scala.jdk.CollectionConverters._
 
 object KafkaBroker {
   //properties for MetricsContext
+  private val MetricsTypeName: String = "KafkaServer"
 
   private[server] def notifyClusterListeners(clusterId: String,
                                              clusterListeners: Seq[AnyRef]): Unit = {
@@ -100,7 +101,7 @@ trait KafkaBroker extends Logging {
   def clientToControllerChannelManager: NodeToControllerChannelManager
   def tokenCache: DelegationTokenCache
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsGroup = new KafkaMetricsGroup(Server.MetricsPrefix, KafkaBroker.MetricsTypeName)
 
   metricsGroup.newGauge("BrokerState", () => brokerState.value)
   metricsGroup.newGauge("ClusterId", () => clusterId)
