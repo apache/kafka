@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.ConnectorUtils;
 
@@ -136,10 +137,14 @@ public class MirrorCheckpointConnector extends SourceConnector {
         // if the replication is disabled, known consumer group is empty, or checkpoint emission is
         // disabled by setting 'emit.checkpoints.enabled' to false, the interval of checkpoint emission
         // will be negative and no 'MirrorCheckpointTask' will be created
-        if (!config.enabled() || knownConsumerGroups.isEmpty()
-                || config.emitCheckpointsInterval().isNegative()) {
+        if (!config.enabled() || config.emitCheckpointsInterval().isNegative()) {
             return Collections.emptyList();
+        } else if (knownConsumerGroups.isEmpty()) {
+            // If consumerGroup is empty, an exception should be thrown to trigger the retry behavior in the framework.
+            // Simply returning an empty list will shut down all tasks, which is not the expected behavior.
+            throw new RetriableException("Timeout while loading consumer groups.");
         }
+
         int numTasks = Math.min(maxTasks, knownConsumerGroups.size());
         List<List<String>> groupsPartitioned = ConnectorUtils.groupPartitions(new ArrayList<>(knownConsumerGroups), numTasks);
         return IntStream.range(0, numTasks)

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 
 import org.junit.jupiter.api.Test;
 
@@ -89,9 +90,11 @@ public class MirrorCheckpointConnectorTest {
     public void testNoConsumerGroup() {
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps());
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(new HashSet<>(), config);
-        List<Map<String, String>> output = connector.taskConfigs(1);
-        // expect no task will be created
-        assertEquals(0, output.size(), "ConsumerGroup shouldn't exist");
+        assertThrows(
+                RetriableException.class,
+                () -> connector.taskConfigs(1),
+                "taskConfigs should throw exception when loading ConsumerGroup timeout"
+        );
     }
 
     @Test
