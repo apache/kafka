@@ -21,6 +21,7 @@ import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -191,7 +192,8 @@ public class ActivationRecordsGeneratorTest {
         assertEquals(0, result.records().size());
 
         result = ActivationRecordsGenerator.recordsForNonEmptyLog(
-            logMsg -> assertEquals("Performing controller activation. Loaded ZK migration state of NONE.", logMsg),
+            logMsg -> assertEquals("Performing controller activation. Loaded ZK migration state of NONE. "
+                                   + "This is expected because this is a de-novo KRaft cluster.", logMsg),
             -1L,
             false,
             buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.empty()),
@@ -202,7 +204,8 @@ public class ActivationRecordsGeneratorTest {
 
         result = ActivationRecordsGenerator.recordsForNonEmptyLog(
             logMsg -> assertEquals("Performing controller activation. Aborting in-progress metadata " +
-                "transaction at offset 42. Loaded ZK migration state of NONE.", logMsg),
+                                   "transaction at offset 42. Loaded ZK migration state of NONE. " +
+                                   "This is expected because this is a de-novo KRaft cluster.", logMsg),
             42L,
             false,
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.empty()),
@@ -243,15 +246,15 @@ public class ActivationRecordsGeneratorTest {
 
         assertEquals(
             "Should not have ZK migrations enabled on a cluster that was created in KRaft mode.",
-            assertThrows(RuntimeException.class, () -> {
+            assertThrows(RuntimeException.class, () ->
                 ActivationRecordsGenerator.recordsForNonEmptyLog(
                     logMsg -> fail(),
                     -1L,
                     true,
                     buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.empty()),
                     MetadataVersion.IBP_3_4_IV0
-                );
-            }).getMessage()
+                )
+            ).getMessage()
         );
 
         result = ActivationRecordsGenerator.recordsForNonEmptyLog(

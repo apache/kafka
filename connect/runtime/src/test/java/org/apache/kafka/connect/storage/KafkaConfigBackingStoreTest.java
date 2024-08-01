@@ -46,14 +46,17 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.AdditionalMatchers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
 import java.time.Duration;
@@ -82,12 +85,12 @@ import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.INCLUDE_T
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.ONLY_FAILED_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.READ_WRITE_TOTAL_TIMEOUT_MS;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -103,7 +106,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KafkaConfigBackingStoreTest {
     private static final String CLIENT_ID_BASE = "test-client-id-";
     private static final String TOPIC = "connect-configs";
@@ -228,7 +232,7 @@ public class KafkaConfigBackingStoreTest {
         configStorage.setUpdateListener(configUpdateListener);
     }
 
-    @Before
+    @BeforeEach
     public void setUp() {
         createStore();
     }
@@ -1314,11 +1318,9 @@ public class KafkaConfigBackingStoreTest {
         verify(configLog).start();
 
         ClusterConfigState configState = configStorage.snapshot();
-        expectRead(TARGET_STATE_KEYS.get(0), CONFIGS_SERIALIZED.get(0), TARGET_STATE_STARTED);
         // Should see a single connector with initial state paused
         assertEquals(TargetState.STARTED, configState.targetState(CONNECTOR_IDS.get(0)));
 
-        expectRead(TARGET_STATE_KEYS.get(0), CONFIGS_SERIALIZED.get(0), TARGET_STATE_STARTED);
         // on resume update listener shouldn't be called
         verify(configUpdateListener, never()).onConnectorTargetStateChange(anyString());
 
@@ -1629,7 +1631,6 @@ public class KafkaConfigBackingStoreTest {
                                         final Struct value) throws Exception {
         doReturn(serialized).when(converter).fromConnectData(eq(TOPIC), eq(valueSchema), eq(value));
         doReturn(producerFuture).when(configLog).sendWithReceipt(eq(configKey), eq(serialized));
-        doReturn(null).when(producerFuture).get(anyLong(), any(TimeUnit.class));
         doReturn(new SchemaAndValue(null, structToMap(value))).when(converter).toConnectData(eq(TOPIC), eq(serialized));
     }
 
@@ -1641,7 +1642,6 @@ public class KafkaConfigBackingStoreTest {
         final ArgumentCaptor<Struct> capturedRecord = ArgumentCaptor.forClass(Struct.class);
         when(converter.fromConnectData(eq(TOPIC), eq(valueSchema), capturedRecord.capture())).thenReturn(serialized);
         when(configLog.sendWithReceipt(configKey, serialized)).thenReturn(producerFuture);
-        when(producerFuture.get(anyLong(), any(TimeUnit.class))).thenReturn(null);
         when(converter.toConnectData(TOPIC, serialized)).thenAnswer(invocation -> {
             assertEquals(dataFieldValue, capturedRecord.getValue().get(dataFieldName));
             // Note null schema because default settings for internal serialization are schema-less

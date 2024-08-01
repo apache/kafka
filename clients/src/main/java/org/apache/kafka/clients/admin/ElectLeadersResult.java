@@ -18,15 +18,15 @@
 package org.apache.kafka.clients.admin;
 
 
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * The result of {@link Admin#electLeaders(ElectionType, Set, ElectLeadersOptions)}

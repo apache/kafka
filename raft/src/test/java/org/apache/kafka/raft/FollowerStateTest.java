@@ -16,15 +16,18 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.Node;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.ReplicaKey;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.net.InetSocketAddress;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -39,7 +42,13 @@ public class FollowerStateTest {
     private final LogContext logContext = new LogContext();
     private final int epoch = 5;
     private final int fetchTimeoutMs = 15000;
-    private final Node leader = new Node(3, "mock-host-3", 1234);
+    private final int leaderId = 3;
+    private final Endpoints leaderEndpoints = Endpoints.fromInetSocketAddresses(
+        Collections.singletonMap(
+            ListenerName.normalised("CONTROLLER"),
+            InetSocketAddress.createUnresolved("mock-host-3", 1234)
+        )
+    );
 
     private FollowerState newFollowerState(
         Set<Integer> voters,
@@ -48,7 +57,8 @@ public class FollowerStateTest {
         return new FollowerState(
             time,
             epoch,
-            leader,
+            leaderId,
+            leaderEndpoints,
             voters,
             highWatermark,
             fetchTimeoutMs,
@@ -92,15 +102,16 @@ public class FollowerStateTest {
             Optional.empty()
         );
 
-        assertFalse(state.canGrantVote(ReplicaKey.of(1, Optional.empty()), isLogUpToDate));
-        assertFalse(state.canGrantVote(ReplicaKey.of(2, Optional.empty()), isLogUpToDate));
-        assertFalse(state.canGrantVote(ReplicaKey.of(3, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
     }
 
     @Test
-    public void testLeaderNode() {
+    public void testLeaderIdAndEndpoint() {
         FollowerState state = newFollowerState(Utils.mkSet(0, 1, 2), Optional.empty());
 
-        assertEquals(leader, state.leader());
+        assertEquals(leaderId, state.leaderId());
+        assertEquals(leaderEndpoints, state.leaderEndpoints());
     }
 }

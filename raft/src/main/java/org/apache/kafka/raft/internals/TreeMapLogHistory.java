@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.raft.internals;
 
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
-import java.util.Map;
 
 /**
  * A implementation for {@code LogHistory} which uses a red-black tree to store values sorted by offset.
@@ -29,9 +29,10 @@ public final class TreeMapLogHistory<T> implements LogHistory<T> {
 
     @Override
     public void addAt(long offset, T value) {
-        if (offset < 0) {
+        // we consider -1 a legal offset to account for loading values from the 0-0.checkpoint
+        if (offset < -1) {
             throw new IllegalArgumentException(
-                String.format("Next offset %d must be greater than or equal to 0", offset)
+                String.format("Next offset %d must be greater than or equal to -1", offset)
             );
         }
 

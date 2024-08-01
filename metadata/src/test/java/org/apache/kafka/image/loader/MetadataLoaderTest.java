@@ -44,6 +44,7 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -82,7 +83,7 @@ public class MetadataLoaderTest {
         MockFaultHandler faultHandler = new MockFaultHandler("testCreateAndClose");
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
-                setHighWaterMarkAccessor(() -> OptionalLong.empty()).
+                setHighWaterMarkAccessor(OptionalLong::empty).
                 build()) {
             assertEquals(-1L, loader.lastAppliedOffset());
         }
@@ -151,7 +152,7 @@ public class MetadataLoaderTest {
                 new MockPublisher("c"));
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
-                setHighWaterMarkAccessor(() -> OptionalLong.empty()).
+                setHighWaterMarkAccessor(OptionalLong::empty).
                 build()) {
             loader.installPublishers(publishers.subList(0, 2)).get();
         }
@@ -264,13 +265,13 @@ public class MetadataLoaderTest {
                     )
                 );
                 loader.handleLoadSnapshot(snapshotReader);
-                TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                    assertEquals(1L, loader.metrics().handleLoadSnapshotCount());
-                });
+                TestUtils.retryOnExceptionWithTimeout(30_000, () ->
+                    assertEquals(1L, loader.metrics().handleLoadSnapshotCount())
+                );
             } else {
-                TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                    assertEquals(0L, loader.metrics().handleLoadSnapshotCount());
-                });
+                TestUtils.retryOnExceptionWithTimeout(30_000, () ->
+                    assertEquals(0L, loader.metrics().handleLoadSnapshotCount())
+                );
             }
             loader.waitForAllEventsToBeHandled();
             if (sameObject) {
@@ -537,8 +538,8 @@ public class MetadataLoaderTest {
     }
 
     /**
-     * Test that we do not leave the catchingUp state state until we have loaded up to the high
-     * water mark.
+     * Test that we do not leave the catchingUp state until we have loaded up to the high
+     * watermark.
      */
     @Test
     public void testCatchingUpState() throws Exception {
@@ -548,7 +549,7 @@ public class MetadataLoaderTest {
         AtomicReference<OptionalLong> highWaterMark = new AtomicReference<>(OptionalLong.empty());
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
-                setHighWaterMarkAccessor(() -> highWaterMark.get()).
+                setHighWaterMarkAccessor(highWaterMark::get).
                 build()) {
             loader.installPublishers(publishers).get();
             loadTestSnapshot(loader, 200);
@@ -558,7 +559,7 @@ public class MetadataLoaderTest {
             assertEquals(-1L, loader.lastAppliedOffset());
             assertFalse(publishers.get(0).firstPublish.isDone());
 
-            // This still doesn't advance lastAppliedOffset since the high water mark at 221
+            // This still doesn't advance lastAppliedOffset since the high watermark at 221
             // is greater than our snapshot at 210.
             highWaterMark.set(OptionalLong.of(221));
             loadTestSnapshot(loader, 210);
@@ -817,9 +818,9 @@ public class MetadataLoaderTest {
             firstPublish.get(30, TimeUnit.SECONDS);
 
             assertFalse(capturedImages.isEmpty());
-            capturedImages.forEach(metadataImage -> {
-                assertFalse(metadataImage.isEmpty());
-            });
+            capturedImages.forEach(metadataImage ->
+                assertFalse(metadataImage.isEmpty())
+            );
 
         }
         faultHandler.maybeRethrowFirstException();

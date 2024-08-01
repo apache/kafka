@@ -26,6 +26,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.TrackingSnapshotRegistry;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -99,9 +100,7 @@ public class OffsetControlManagerTest {
     public void testDeactivateFailsIfNotActive() {
         OffsetControlManager offsetControl = new OffsetControlManager.Builder().build();
         assertEquals("Can't deactivate inactive OffsetControlManager.",
-            assertThrows(RuntimeException.class,
-                () -> offsetControl.deactivate()).
-                    getMessage());
+            assertThrows(RuntimeException.class, offsetControl::deactivate).getMessage());
     }
 
     private static Batch<ApiMessageAndVersion> newFakeBatch(

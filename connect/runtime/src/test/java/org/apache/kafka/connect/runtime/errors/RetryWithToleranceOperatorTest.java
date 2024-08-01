@@ -35,10 +35,13 @@ import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.mockito.stubbing.OngoingStubbing;
 
 import java.util.Arrays;
@@ -65,11 +68,11 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_DEFAULT;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.ALL;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.NONE;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
@@ -80,7 +83,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RetryWithToleranceOperatorTest {
 
     private static final Map<String, String> PROPERTIES = new HashMap<String, String>() {{
@@ -358,15 +362,15 @@ public class RetryWithToleranceOperatorTest {
     public void testToleranceLimit() {
         RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, errorHandlingMetrics);
         retryWithToleranceOperator.markAsFailed();
-        assertFalse("should not tolerate any errors", retryWithToleranceOperator.withinToleranceLimits());
+        assertFalse(retryWithToleranceOperator.withinToleranceLimits(), "should not tolerate any errors");
 
         retryWithToleranceOperator = genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ALL, errorHandlingMetrics);
         retryWithToleranceOperator.markAsFailed();
         retryWithToleranceOperator.markAsFailed();
-        assertTrue("should tolerate all errors", retryWithToleranceOperator.withinToleranceLimits());
+        assertTrue(retryWithToleranceOperator.withinToleranceLimits(), "should tolerate all errors");
 
         retryWithToleranceOperator = genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, errorHandlingMetrics);
-        assertTrue("no tolerance is within limits if no failures", retryWithToleranceOperator.withinToleranceLimits());
+        assertTrue(retryWithToleranceOperator.withinToleranceLimits(), "no tolerance is within limits if no failures");
     }
 
     @Test

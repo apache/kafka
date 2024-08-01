@@ -26,16 +26,15 @@ import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -45,7 +44,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-@Category({IntegrationTest.class})
+@Tag("integration")
 public class HandlingSourceTopicDeletionIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
@@ -56,31 +55,28 @@ public class HandlingSourceTopicDeletionIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
+    @BeforeEach
     public void before() throws InterruptedException {
         CLUSTER.createTopics(INPUT_TOPIC, OUTPUT_TOPIC);
     }
 
-    @After
+    @AfterEach
     public void after() throws InterruptedException {
         CLUSTER.deleteTopics(INPUT_TOPIC, OUTPUT_TOPIC);
     }
 
     @Test
-    public void shouldThrowErrorAfterSourceTopicDeleted() throws InterruptedException {
+    public void shouldThrowErrorAfterSourceTopicDeleted(final TestInfo testName) throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.String()))
             .to(OUTPUT_TOPIC, Produced.with(Serdes.Integer(), Serdes.String()));

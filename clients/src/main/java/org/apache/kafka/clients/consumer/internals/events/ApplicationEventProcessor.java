@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.Acknowledgements;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
@@ -24,15 +25,19 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
+import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
+import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
@@ -45,14 +50,17 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private final Logger log;
     private final ConsumerMetadata metadata;
+    private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
-                                     final ConsumerMetadata metadata) {
+                                     final ConsumerMetadata metadata,
+                                     final SubscriptionState subscriptions) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
+        this.subscriptions = subscriptions;
     }
 
     @SuppressWarnings({"CyclomaticComplexity"})
@@ -119,22 +127,42 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((CommitOnCloseEvent) event);
                 return;
 
-            case LEAVE_ON_CLOSE:
-                process((LeaveOnCloseEvent) event);
+            case SHARE_FETCH:
+                process((ShareFetchEvent) event);
+                return;
+
+            case SHARE_ACKNOWLEDGE_SYNC:
+                process((ShareAcknowledgeSyncEvent) event);
+                return;
+
+            case SHARE_ACKNOWLEDGE_ASYNC:
+                process((ShareAcknowledgeAsyncEvent) event);
+                return;
+
+            case SHARE_SUBSCRIPTION_CHANGE:
+                process((ShareSubscriptionChangeEvent) event);
+                return;
+
+            case SHARE_UNSUBSCRIBE:
+                process((ShareUnsubscribeEvent) event);
+                return;
+
+            case SHARE_ACKNOWLEDGE_ON_CLOSE:
+                process((ShareAcknowledgeOnCloseEvent) event);
                 return;
 
             default:
-                log.warn("Application event type " + event.type() + " was not expected");
+                log.warn("Application event type {} was not expected", event.type());
         }
     }
 
     private void process(final PollEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
-            return;
+        if (requestManagers.commitRequestManager.isPresent()) {
+            requestManagers.commitRequestManager.ifPresent(m -> m.updateAutoCommitTimer(event.pollTimeMs()));
+            requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
+        } else {
+            requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
         }
-
-        requestManagers.commitRequestManager.ifPresent(m -> m.updateAutoCommitTimer(event.pollTimeMs()));
-        requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
     }
 
     private void process(final AsyncCommitEvent event) {
@@ -217,14 +245,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      *              the group is sent out.
      */
     private void process(final UnsubscribeEvent event) {
-        if (!requestManagers.heartbeatRequestManager.isPresent()) {
-            KafkaException error = new KafkaException("Group membership manager not present when processing an unsubscribe event");
-            event.future().completeExceptionally(error);
-            return;
+        if (requestManagers.heartbeatRequestManager.isPresent()) {
+            MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
+            CompletableFuture<Void> future = membershipManager.leaveGroup();
+            future.whenComplete(complete(event.future()));
+        } else {
+            // If the consumer is not using the group management capabilities, we still need to clear all assignments it may have.
+            subscriptions.unsubscribe();
+            event.future().complete(null);
         }
-        MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
-        CompletableFuture<Void> future = membershipManager.leaveGroup();
-        future.whenComplete(complete(event.future()));
     }
 
     private void process(final ResetPositionsEvent event) {
@@ -268,17 +297,89 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         requestManagers.commitRequestManager.get().signalClose();
     }
 
-    private void process(final LeaveOnCloseEvent event) {
-        if (!requestManagers.heartbeatRequestManager.isPresent()) {
-            event.future().complete(null);
+    /**
+     * Process event that tells the share consume request manager to fetch more records.
+     */
+    private void process(final ShareFetchEvent event) {
+        requestManagers.shareConsumeRequestManager.ifPresent(scrm -> scrm.fetch(event.acknowledgementsMap()));
+    }
+
+    /**
+     * Process event that indicates the consumer acknowledged delivery of records synchronously.
+     */
+    private void process(final ShareAcknowledgeSyncEvent event) {
+        if (!requestManagers.shareConsumeRequestManager.isPresent()) {
             return;
         }
-        MembershipManager membershipManager =
-            Objects.requireNonNull(requestManagers.heartbeatRequestManager.get().membershipManager(), "Expecting " +
-                "membership manager to be non-null");
-        log.debug("Leaving group before closing");
+
+        ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
+        CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future =
+                manager.commitSync(event.acknowledgementsMap(), event.deadlineMs());
+        future.whenComplete(complete(event.future()));
+    }
+
+    /**
+     * Process event that indicates the consumer acknowledged delivery of records asynchronously.
+     */
+    private void process(final ShareAcknowledgeAsyncEvent event) {
+        if (!requestManagers.shareConsumeRequestManager.isPresent()) {
+            return;
+        }
+
+        ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
+        manager.commitAsync(event.acknowledgementsMap());
+    }
+
+    /**
+     * Process event that indicates that the subscription changed for a share group. This will make the
+     * consumer join the share group if it is not part of it yet, or send the updated subscription if
+     * it is already a member.
+     */
+    private void process(final ShareSubscriptionChangeEvent ignored) {
+        if (!requestManagers.shareHeartbeatRequestManager.isPresent()) {
+            log.warn("Group membership manager not present when processing a subscribe event");
+            return;
+        }
+        ShareMembershipManager membershipManager = requestManagers.shareHeartbeatRequestManager.get().membershipManager();
+        membershipManager.onSubscriptionUpdated();
+    }
+
+    /**
+     * Process event indicating that the consumer unsubscribed from all topics. This will make
+     * the consumer release its assignment and send a request to leave the share group.
+     *
+     * @param event Unsubscribe event containing a future that will complete when the callback
+     *              execution for releasing the assignment completes, and the request to leave
+     *              the group is sent out.
+     */
+    private void process(final ShareUnsubscribeEvent event) {
+        if (!requestManagers.shareHeartbeatRequestManager.isPresent()) {
+            KafkaException error = new KafkaException("Group membership manager not present when processing an unsubscribe event");
+            event.future().completeExceptionally(error);
+            return;
+        }
+        ShareMembershipManager membershipManager = requestManagers.shareHeartbeatRequestManager.get().membershipManager();
         CompletableFuture<Void> future = membershipManager.leaveGroup();
         // The future will be completed on heartbeat sent
+        future.whenComplete(complete(event.future()));
+    }
+
+    /**
+     * Process event indicating that the consumer is closing. This will make the consumer
+     * complete pending acknowledgements.
+     *
+     * @param event Acknowledge-on-close event containing a future that will complete when
+     *              the acknowledgements have responses.
+     */
+    private void process(final ShareAcknowledgeOnCloseEvent event) {
+        if (!requestManagers.shareConsumeRequestManager.isPresent()) {
+            KafkaException error = new KafkaException("Group membership manager not present when processing an acknowledge-on-close event");
+            event.future().completeExceptionally(error);
+            return;
+        }
+
+        ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
+        CompletableFuture<Void> future = manager.acknowledgeOnClose(event.acknowledgementsMap(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -297,6 +398,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
                                                                final ConsumerMetadata metadata,
+                                                               final SubscriptionState subscriptions,
                                                                final Supplier<RequestManagers> requestManagersSupplier) {
         return new CachedSupplier<ApplicationEventProcessor>() {
             @Override
@@ -305,7 +407,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 return new ApplicationEventProcessor(
                         logContext,
                         requestManagers,
-                        metadata
+                        metadata,
+                        subscriptions
                 );
             }
         };

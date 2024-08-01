@@ -18,14 +18,13 @@ package kafka.server
 
 
 import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
+import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.OffsetFetchResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.server.common.Features
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
-import org.junit.jupiter.api.{Tag, Timeout}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
@@ -33,7 +32,6 @@ import scala.jdk.CollectionConverters._
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT))
-@Tag("integration")
 class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest(
@@ -43,9 +41,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
       new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-    ),
-    features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
     )
   )
   def testSingleGroupOffsetFetchWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
@@ -83,9 +78,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
       new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-    ),
-    features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
     )
   )
   def testSingleGroupAllOffsetFetchWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
@@ -121,9 +113,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
       new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-    ),
-    features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
     )
   )
   def testMultiGroupsOffsetFetchWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {

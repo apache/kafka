@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
@@ -45,6 +42,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -61,8 +59,11 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -507,15 +508,14 @@ public class TaskManager {
                                              final Set<Task> tasksToCloseClean,
                                              final Map<TaskId, RuntimeException> failedTasks) {
         handleTasksPendingInitialization();
-        handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
         handleRestoringAndUpdatingTasks(activeTasksToCreate, standbyTasksToCreate, failedTasks);
+        handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
     }
 
     private void handleTasksPendingInitialization() {
         // All tasks pending initialization are not part of the usual bookkeeping
         for (final Task task : tasks.drainPendingTasksToInit()) {
-            task.suspend();
-            task.closeClean();
+            closeTaskClean(task, Collections.emptySet(), Collections.emptyMap());
         }
     }
 
@@ -979,9 +979,11 @@ public class TaskManager {
             task.clearTaskTimeout();
         } catch (final TimeoutException timeoutException) {
             task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
+            stateUpdater.add(task);
             log.debug(
                 String.format(
-                    "Could not complete restoration for %s due to the following exception; will retry",
+                    "Could not complete restoration for %s due to the following exception; adding the task " +
+                        "back to the state updater and will retry",
                     task.id()),
                 timeoutException
             );
@@ -1212,7 +1214,7 @@ public class TaskManager {
         log.debug("Closing lost active tasks as zombies.");
 
         closeRunningTasksDirty();
-        removeLostActiveTasksFromStateUpdater();
+        removeLostActiveTasksFromStateUpdaterAndPendingTasksToInit();
 
         if (processingMode == EXACTLY_ONCE_V2) {
             activeTaskCreator.reInitializeThreadProducer();
@@ -1233,11 +1235,11 @@ public class TaskManager {
         maybeUnlockTasks(allTaskIds);
     }
 
-    private void removeLostActiveTasksFromStateUpdater() {
+    private void removeLostActiveTasksFromStateUpdaterAndPendingTasksToInit() {
         if (stateUpdater != null) {
             final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
             final Map<TaskId, RuntimeException> failedTasksDuringCleanClose = new HashMap<>();
-            final Set<Task> tasksToCloseClean = new HashSet<>();
+            final Set<Task> tasksToCloseClean = new HashSet<>(tasks.drainPendingActiveTasksToInit());
             final Set<Task> tasksToCloseDirty = new HashSet<>();
             for (final Task restoringTask : stateUpdater.getTasks()) {
                 if (restoringTask.isActive()) {

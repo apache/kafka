@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{BeforeEach, Tag, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
@@ -157,6 +157,17 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
+  @CsvSource(Array("zk,retain", "zk,delete", "kraft,retain", "kraft,delete"))
+  def testCreateRemoteTopicWithDisablePolicyRetain(quorum: String, policy: String): Unit = {
+    val topicConfig = new Properties()
+    topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG, policy)
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+    verifyRemoteLogTopicConfigs(topicConfig)
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testEnableRemoteLogOnExistingTopicTest(quorum: String): Unit = {
     val admin = createAdminClient()
@@ -280,6 +291,26 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
       () => admin.incrementalAlterConfigs(configs).all().get(), "Invalid local retention size")
   }
 
+  // The remote storage config validation on controller level only works in KRaft
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testUpdateTopicConfigWithDisablingRemoteStorage(quorum: String): Unit = {
+    val admin = createAdminClient()
+    val topicConfig = new Properties
+    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"),
+          AlterConfigOp.OpType.SET),
+      ))
+    assertThrowsException(classOf[InvalidConfigurationException],
+      () => admin.incrementalAlterConfigs(configs).all().get(), "Disabling remote storage feature on the topic level is not supported.")
+  }
+
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testTopicDeletion(quorum: String): Unit = {
@@ -378,6 +409,11 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
             topicConfig.getProperty(TopicConfig.RETENTION_BYTES_CONFIG).toLong ==
               logBuffer.head.config.retentionSize
         }
+        if (topicConfig.contains(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG)) {
+          result = result &&
+            topicConfig.getProperty(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG).equals(
+              logBuffer.head.config.remoteLogDisablePolicy())
+        }
       }
       result
     }, s"Failed to update topic config $topicConfig")
@@ -420,9 +456,7 @@ class MyRemoteLogMetadataManager extends NoOpRemoteLogMetadataManager {
       val startOffset = idx * recordsPerSegment
       val endOffset = startOffset + recordsPerSegment - 1
       val segmentLeaderEpochs: util.Map[Integer, java.lang.Long] = Collections.singletonMap(0, 0L)
-      segmentMetadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
-        startOffset, endOffset, timestamp, 0, timestamp, segmentSize, Optional.empty(),
-        RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentLeaderEpochs))
+      segmentMetadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()), startOffset, endOffset, timestamp, 0, timestamp, segmentSize, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentLeaderEpochs, 0))
     }
     segmentMetadataList.iterator()
   }

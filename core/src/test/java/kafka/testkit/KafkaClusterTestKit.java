@@ -21,9 +21,10 @@ import kafka.raft.KafkaRaftManager;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.FaultHandlerFactory;
-import kafka.server.SharedServer;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaRaftServer;
+import kafka.server.SharedServer;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Node;
@@ -45,10 +46,10 @@ import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
-import scala.Option;
 
 import java.io.File;
 import java.net.InetSocketAddress;
@@ -74,9 +75,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 
 @SuppressWarnings("deprecation") // Needed for Scala 2.12 compatibility
@@ -148,23 +149,23 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public static class Builder {
         private TestKitNodes nodes;
-        private Map<String, String> configProps = new HashMap<>();
-        private SimpleFaultHandlerFactory faultHandlerFactory = new SimpleFaultHandlerFactory();
+        private final Map<String, Object> configProps = new HashMap<>();
+        private final SimpleFaultHandlerFactory faultHandlerFactory = new SimpleFaultHandlerFactory();
 
         public Builder(TestKitNodes nodes) {
             this.nodes = nodes;
         }
 
-        public Builder setConfigProp(String key, String value) {
+        public Builder setConfigProp(String key, Object value) {
             this.configProps.put(key, value);
             return this;
         }
 
         private KafkaConfig createNodeConfig(TestKitNode node) {
-            BrokerNode brokerNode = nodes.brokerNodes().get(node.id());
-            ControllerNode controllerNode = nodes.controllerNodes().get(node.id());
+            TestKitNode brokerNode = nodes.brokerNodes().get(node.id());
+            TestKitNode controllerNode = nodes.controllerNodes().get(node.id());
 
-            Map<String, String> props = new HashMap<>(configProps);
+            Map<String, Object> props = new HashMap<>(configProps);
             props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
                     Long.toString(TimeUnit.MINUTES.toMillis(10)));
             props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, roles(node.id()));
@@ -187,13 +188,16 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 props.put(LOG_DIRS_CONFIG,
                     controllerNode.metadataDirectory());
             }
-            props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
-                    "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
-            props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners(node.id()));
-            props.put(INTER_BROKER_LISTENER_NAME_CONFIG,
-                    nodes.interBrokerListenerName().value());
-            props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG,
-                    "CONTROLLER");
+
+            // We allow configuring the listeners and related properties via Builder::setConfigProp,
+            // and they shouldn't be overridden here
+            props.putIfAbsent(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
+                "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
+            props.putIfAbsent(SocketServerConfigs.LISTENERS_CONFIG, listeners(node.id()));
+            props.putIfAbsent(INTER_BROKER_LISTENER_NAME_CONFIG,
+                nodes.interBrokerListenerName().value());
+            props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
+
             // Note: we can't accurately set controller.quorum.voters yet, since we don't
             // yet know what ports each controller will pick.  Set it to a dummy string
             // for now as a placeholder.
@@ -215,7 +219,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             props.putIfAbsent(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true");
             props.putIfAbsent(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
-            return new KafkaConfig(props, false, Option.empty());
+            return new KafkaConfig(props, false);
         }
 
         public KafkaClusterTestKit build() throws Exception {
@@ -237,7 +241,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 baseDirectory = new File(nodes.baseDirectory());
                 executorService = Executors.newFixedThreadPool(numOfExecutorThreads,
                     ThreadUtils.createThreadFactory("kafka-cluster-test-kit-executor-%d", false));
-                for (ControllerNode node : nodes.controllerNodes().values()) {
+                for (TestKitNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
                     SharedServer sharedServer = new SharedServer(
                         createNodeConfig(node),
@@ -256,7 +260,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 nodes.bootstrapMetadata());
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
-                        Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", () -> sharedServer.stopForController());
+                        Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", sharedServer::stopForController);
                         throw e;
                     }
                     controllers.put(node.id(), controller);
@@ -269,7 +273,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     });
                     jointServers.put(node.id(), sharedServer);
                 }
-                for (BrokerNode node : nodes.brokerNodes().values()) {
+                for (TestKitNode node : nodes.brokerNodes().values()) {
                     SharedServer sharedServer = jointServers.computeIfAbsent(
                         node.id(),
                         id -> new SharedServer(
@@ -287,15 +291,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         broker = new BrokerServer(sharedServer);
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
-                        Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", () -> sharedServer.stopForBroker());
+                        Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", sharedServer::stopForBroker);
                         throw e;
                     }
                     brokers.put(node.id(), broker);
                 }
             } catch (Exception e) {
                 if (executorService != null) {
-                    executorService.shutdownNow();
-                    executorService.awaitTermination(5, TimeUnit.MINUTES);
+                    ThreadUtils.shutdownExecutorServiceQuietly(executorService, 5, TimeUnit.MINUTES);
                 }
                 for (BrokerServer brokerServer : brokers.values()) {
                     brokerServer.shutdown();
@@ -387,7 +390,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 BrokerServer broker = entry.getValue();
                 futures.add(executorService.submit(() -> {
                     formatNode(broker.sharedServer().metaPropsEnsemble(),
-                        !nodes().brokerNodes().get(entry.getKey()).combined());
+                        !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()));
                 }));
             }
             for (Future<?> future: futures) {
@@ -637,8 +640,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             throw e;
         } finally {
-            executorService.shutdownNow();
-            executorService.awaitTermination(5, TimeUnit.MINUTES);
+            ThreadUtils.shutdownExecutorServiceQuietly(executorService, 5, TimeUnit.MINUTES);
         }
         faultHandlerFactory.fatalFaultHandler().maybeRethrowFirstException();
         faultHandlerFactory.nonFatalFaultHandler().maybeRethrowFirstException();

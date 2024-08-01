@@ -27,6 +27,7 @@ import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => OldAlterConfigsResource, AlterConfigsResourceCollection => OldAlterConfigsResourceCollection, AlterableConfig => OldAlterableConfig, AlterableConfigCollection => OldAlterableConfigCollection}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
@@ -53,7 +54,7 @@ import org.apache.kafka.controller.{Controller, ControllerRequestContext, Result
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
 import org.apache.kafka.server.util.FutureUtils
 import org.apache.kafka.storage.internals.log.CleanerConfig
@@ -123,7 +124,7 @@ class ControllerApisTest {
   )
   private val replicaQuotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
   private val raftManager: RaftManager[ApiMessageAndVersion] = mock(classOf[RaftManager[ApiMessageAndVersion]])
-  private val metadataCache: KRaftMetadataCache = MetadataCache.kRaftMetadataCache(0)
+  private val metadataCache: KRaftMetadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
   private val quotasNeverThrottleControllerMutations = QuotaManagers(
     clientQuotaManager,
@@ -219,6 +220,7 @@ class ControllerApisTest {
   def testFetchSentToKRaft(): Unit = {
     when(
       raftManager.handleRequest(
+        any(classOf[RequestContext]),
         any(classOf[RequestHeader]),
         any(classOf[ApiMessage]),
         any(classOf[Long])
@@ -233,6 +235,7 @@ class ControllerApisTest {
     verify(raftManager).handleRequest(
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
       ArgumentMatchers.any()
     )
   }
@@ -245,6 +248,7 @@ class ControllerApisTest {
 
     when(
       raftManager.handleRequest(
+        any(classOf[RequestContext]),
         any(classOf[RequestHeader]),
         any(classOf[ApiMessage]),
         any(classOf[Long])
@@ -262,6 +266,7 @@ class ControllerApisTest {
 
 
     verify(raftManager).handleRequest(
+      ArgumentMatchers.eq(request.context),
       ArgumentMatchers.eq(request.header),
       ArgumentMatchers.eq(fetchRequestData),
       ArgumentMatchers.eq(initialTimeMs)
@@ -285,6 +290,7 @@ class ControllerApisTest {
   def testFetchSnapshotSentToKRaft(): Unit = {
     when(
       raftManager.handleRequest(
+        any(classOf[RequestContext]),
         any(classOf[RequestHeader]),
         any(classOf[ApiMessage]),
         any(classOf[Long])
@@ -297,6 +303,7 @@ class ControllerApisTest {
     controllerApis.handleFetchSnapshot(buildRequest(new FetchSnapshotRequest(new FetchSnapshotRequestData(), 0)))
 
     verify(raftManager).handleRequest(
+      ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any()
@@ -661,6 +668,7 @@ class ControllerApisTest {
         new CreatableTopic().setName("baz").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName("indescribable").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName("quux").setNumPartitions(2).setReplicationFactor(3),
+        new CreatableTopic().setName(Topic.CLUSTER_METADATA_TOPIC_NAME).setNumPartitions(2).setReplicationFactor(3),
       ).iterator()))
     val expectedResponse = Set(new CreatableTopicResult().setName("foo").
       setErrorCode(INVALID_REQUEST.code()).
@@ -680,7 +688,10 @@ class ControllerApisTest {
         setTopicConfigErrorCode(TOPIC_AUTHORIZATION_FAILED.code()),
       new CreatableTopicResult().setName("quux").
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
-        setErrorMessage("Authorization failed."))
+        setErrorMessage("Authorization failed."),
+      new CreatableTopicResult().setName(Topic.CLUSTER_METADATA_TOPIC_NAME).
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage(s"Creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME} is prohibited."))
     assertEquals(expectedResponse, controllerApis.createTopics(ANONYMOUS_CONTEXT, request,
       hasClusterAuth = false,
       _ => Set("baz", "indescribable"),
@@ -1207,7 +1218,7 @@ class ControllerApisTest {
     val response = new FetchResponseData()
     val responseFuture = new CompletableFuture[ApiMessage]()
     val errorResponseFuture = new AtomicReference[AbstractResponse]()
-    when(raftManager.handleRequest(any(), any(), any())).thenReturn(responseFuture)
+    when(raftManager.handleRequest(any(), any(), any(), any())).thenReturn(responseFuture)
     when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
       // Simulate an encoding failure in the initial fetch response
       throw new UnsupportedVersionException("Something went wrong")

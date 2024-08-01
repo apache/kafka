@@ -22,11 +22,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -48,13 +48,13 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POL
 import static org.apache.kafka.connect.runtime.WorkerConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration test for sink connectors
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class SinkConnectorsIntegrationTest {
 
     private static final int NUM_TASKS = 1;
@@ -64,7 +64,7 @@ public class SinkConnectorsIntegrationTest {
 
     private EmbeddedConnectCluster connect;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         Map<String, String> workerProps = new HashMap<>();
         // permit all Kafka client overrides; required for testing different consumer partition assignment strategies
@@ -75,7 +75,7 @@ public class SinkConnectorsIntegrationTest {
         brokerProps.put("auto.create.topics.enable", "false");
         brokerProps.put("delete.topic.enable", "true");
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -85,12 +85,12 @@ public class SinkConnectorsIntegrationTest {
         connect.start();
     }
 
-    @After
+    @AfterEach
     public void close() {
         // delete connector handle
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
 
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 
@@ -111,7 +111,7 @@ public class SinkConnectorsIntegrationTest {
             "5000");
 
         final Set<String> consumedRecordValues = new HashSet<>();
-        Consumer<SinkRecord> onPut = record -> assertTrue("Task received duplicate record from Connect", consumedRecordValues.add(Objects.toString(record.value())));
+        Consumer<SinkRecord> onPut = record -> assertTrue(consumedRecordValues.add(Objects.toString(record.value())), "Task received duplicate record from Connect");
         ConnectorHandle connector = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
         TaskHandle task = connector.taskHandle(CONNECTOR_NAME + "-0", onPut);
 
@@ -217,7 +217,7 @@ public class SinkConnectorsIntegrationTest {
                 "5000");
 
         final Set<String> consumedRecordValues = new HashSet<>();
-        Consumer<SinkRecord> onPut = record -> assertTrue("Task received duplicate record from Connect", consumedRecordValues.add(Objects.toString(record.value())));
+        Consumer<SinkRecord> onPut = record -> assertTrue(consumedRecordValues.add(Objects.toString(record.value())), "Task received duplicate record from Connect");
         ConnectorHandle connector = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
         TaskHandle task = connector.taskHandle(CONNECTOR_NAME + "-0", onPut);
 

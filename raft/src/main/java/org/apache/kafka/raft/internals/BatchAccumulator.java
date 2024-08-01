@@ -19,6 +19,10 @@ package org.apache.kafka.raft.internals;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -28,20 +32,17 @@ import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
-import org.apache.kafka.common.message.LeaderChangeMessage;
-import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.message.SnapshotFooterRecord;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -49,7 +50,12 @@ import java.util.concurrent.locks.ReentrantLock;
 public class BatchAccumulator<T> implements Closeable {
     @FunctionalInterface
     public interface MemoryRecordsCreator {
-        MemoryRecords create(long baseOffset, int epoch, ByteBuffer byteBuffer);
+        MemoryRecords create(
+            long baseOffset,
+            int epoch,
+            Compression compression,
+            ByteBuffer byteBuffer
+        );
     }
 
     private final int epoch;
@@ -220,15 +226,21 @@ public class BatchAccumulator<T> implements Closeable {
      * @param valueCreator a function that uses the passed buffer to create the control
      *        batch that will be appended. The memory records returned must contain one
      *        control batch and that control batch have at least one record.
+     * @return the last of offset of the records created
      */
-    public void appendControlMessages(MemoryRecordsCreator valueCreator) {
+    public long appendControlMessages(MemoryRecordsCreator valueCreator) {
         appendLock.lock();
         try {
             ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSize);
             if (buffer != null) {
                 try {
                     forceDrain();
-                    MemoryRecords memoryRecords = valueCreator.create(nextOffset, epoch, buffer);
+                    MemoryRecords memoryRecords = valueCreator.create(
+                        nextOffset,
+                        epoch,
+                        compression,
+                        buffer
+                    );
 
                     int numberOfRecords = validateMemoryRecordsAndReturnCount(memoryRecords);
 
@@ -250,6 +262,8 @@ public class BatchAccumulator<T> implements Closeable {
             } else {
                 throw new IllegalStateException("Could not allocate buffer for the control record");
             }
+
+            return nextOffset - 1;
         } finally {
             appendLock.unlock();
         }
@@ -294,6 +308,30 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     /**
+     * Append a {@link VotersRecord} record to the batch
+     *
+     * @param voters the record to append
+     * @param currentTimestamp the current time in milliseconds
+     * @return the last of offset of the records created
+     * @throws IllegalStateException on failure to allocate a buffer for the record
+     */
+    public long appendVotersRecord(
+        VotersRecord voters,
+        long currentTimestamp
+    ) {
+        return appendControlMessages((baseOffset, epoch, compression, buffer) ->
+            MemoryRecords.withVotersRecord(
+                baseOffset,
+                currentTimestamp,
+                epoch,
+                buffer,
+                voters
+            )
+        );
+    }
+
+
+    /**
      * Append a {@link LeaderChangeMessage} record to the batch
      *
      * @param leaderChangeMessage The message to append
@@ -304,7 +342,7 @@ public class BatchAccumulator<T> implements Closeable {
         LeaderChangeMessage leaderChangeMessage,
         long currentTimestamp
     ) {
-        appendControlMessages((baseOffset, epoch, buffer) ->
+        appendControlMessages((baseOffset, epoch, compression, buffer) ->
             MemoryRecords.withLeaderChangeMessage(
                 baseOffset,
                 currentTimestamp,
@@ -327,7 +365,7 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotHeaderRecord snapshotHeaderRecord,
         long currentTimestamp
     ) {
-        appendControlMessages((baseOffset, epoch, buffer) ->
+        appendControlMessages((baseOffset, epoch, compression, buffer) ->
             MemoryRecords.withSnapshotHeaderRecord(
                 baseOffset,
                 currentTimestamp,
@@ -349,7 +387,7 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotFooterRecord snapshotFooterRecord,
         long currentTimestamp
     ) {
-        appendControlMessages((baseOffset, epoch, buffer) ->
+        appendControlMessages((baseOffset, epoch, compression, buffer) ->
             MemoryRecords.withSnapshotFooterRecord(
                 baseOffset,
                 currentTimestamp,
@@ -391,7 +429,6 @@ public class BatchAccumulator<T> implements Closeable {
                 compression,
                 nextOffset,
                 time.milliseconds(),
-                false,
                 epoch,
                 maxBatchSize
             );

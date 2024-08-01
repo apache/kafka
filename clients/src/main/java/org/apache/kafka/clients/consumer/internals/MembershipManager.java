@@ -77,15 +77,17 @@ public interface MembershipManager extends RequestManager {
 
     /**
      * Notify the member that an error heartbeat response was received.
+     *
+     * @param retriable True if the request failed with a retriable error.
      */
-    void onHeartbeatFailure();
+    void onHeartbeatFailure(boolean retriable);
 
     /**
-     * Update state when a heartbeat is sent out. This will transition out of the states that end
+     * Update state when a heartbeat is generated. This will transition out of the states that end
      * when a heartbeat request is sent, without waiting for a response (ex.
      * {@link MemberState#ACKNOWLEDGING} and {@link MemberState#LEAVING}).
      */
-    void onHeartbeatRequestSent();
+    void onHeartbeatRequestGenerated();
 
     /**
      * Transition out of the {@link MemberState#LEAVING} state even if the heartbeat was not sent

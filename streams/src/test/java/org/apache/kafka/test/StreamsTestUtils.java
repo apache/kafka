@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.state.KeyValueIterator;
+
 import org.mockito.quality.Strictness;
 
 import java.io.Closeable;
@@ -52,7 +53,7 @@ import java.util.function.Supplier;
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -45,14 +46,19 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
+import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
@@ -66,13 +72,16 @@ import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.io.File;
 import java.io.IOException;
@@ -115,14 +124,15 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -133,7 +143,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StreamTaskTest {
 
     private static final String APPLICATION_ID = "stream-task-test";
@@ -236,13 +247,18 @@ public class StreamTaskTest {
     }
 
     private static StreamsConfig createConfig(final String eosConfig, final String enforcedProcessingValue) {
-        return createConfig(eosConfig, enforcedProcessingValue, LogAndFailExceptionHandler.class.getName());
+        return createConfig(eosConfig, enforcedProcessingValue, LogAndFailExceptionHandler.class.getName(), LogAndFailProcessingExceptionHandler.class.getName());
+    }
+
+    private static StreamsConfig createConfig(final String eosConfig, final String enforcedProcessingValue, final String deserializationExceptionHandler) {
+        return createConfig(eosConfig, enforcedProcessingValue, deserializationExceptionHandler, LogAndFailProcessingExceptionHandler.class.getName());
     }
 
     private static StreamsConfig createConfig(
         final String eosConfig,
         final String enforcedProcessingValue,
-        final String deserializationExceptionHandler) {
+        final String deserializationExceptionHandler,
+        final String processingExceptionHandler) {
         final String canonicalPath;
         try {
             canonicalPath = BASE_DIR.getCanonicalPath();
@@ -258,15 +274,13 @@ public class StreamTaskTest {
             mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName()),
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig),
             mkEntry(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, enforcedProcessingValue),
-            mkEntry(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, deserializationExceptionHandler)
+            mkEntry(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, deserializationExceptionHandler),
+            mkEntry(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, processingExceptionHandler)
         )));
     }
 
-    @Before
+    @BeforeEach
     public void setup() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-
         consumer.assign(asList(partition1, partition2));
         consumer.updateBeginningOffsets(mkMap(mkEntry(partition1, 0L), mkEntry(partition2, 0L)));
         stateDirectory = new StateDirectory(createConfig("100"), new MockTime(), true, false);
@@ -274,7 +288,7 @@ public class StreamTaskTest {
         stateDirectory.initializeProcessId();
     }
 
-    @After
+    @AfterEach
     public void cleanup() throws IOException {
         if (task != null) {
             try {
@@ -295,6 +309,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowLockExceptionIfFailedToLockStateDirectory() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         // Clean up state directory created as part of setup
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
@@ -307,6 +323,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotAttemptToLockIfNoStores() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         // Clean up state directory created as part of setup
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
@@ -321,6 +339,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAttemptToDeleteStateDirectoryWhenCloseDirtyAndEosEnabled() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         // Clean up state directory created as part of setup
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
@@ -348,6 +368,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldResetOffsetsToLastCommittedForSpecifiedPartitions() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.addPartitionsForOffsetReset(Collections.singleton(partition1));
 
@@ -371,6 +393,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAutoOffsetResetIfNoCommittedOffsetFound() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.addPartitionsForOffsetReset(Collections.singleton(partition1));
 
@@ -409,6 +433,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReadCommittedStreamTimeAndProcessorMetadataOnInitialize() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         // Clean up state directory created as part of setup
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
@@ -435,6 +461,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReadCommittedStreamTimeAndMergeProcessorMetadataOnInitialize() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         // Clean up state directory created as part of setup
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
@@ -477,6 +505,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldTransitToRestoringThenRunningAfterCreation() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         // Clean up state directory created as part of setup
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
@@ -507,6 +537,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldProcessInOrder() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig());
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -572,6 +604,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldProcessRecordsAfterPrepareCommitWhenEosDisabled() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createSingleSourceStateless(createConfig(), StreamsConfig.METRICS_LATEST);
 
         assertFalse(task.process(time.milliseconds()));
@@ -594,6 +628,8 @@ public class StreamTaskTest {
     @SuppressWarnings("deprecation")
     @Test
     public void shouldNotProcessRecordsAfterPrepareCommitWhenEosAlphaEnabled() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE, "0"), StreamsConfig.METRICS_LATEST);
 
         assertFalse(task.process(time.milliseconds()));
@@ -616,6 +652,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotProcessRecordsAfterPrepareCommitWhenEosV2Enabled() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "0"), StreamsConfig.METRICS_LATEST);
 
         assertFalse(task.process(time.milliseconds()));
@@ -638,6 +676,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRecordBufferedRecords() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
 
         final KafkaMetric metric = getMetric("active-buffer", "%s-count", task.id().toString());
@@ -660,6 +700,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRecordProcessRatio() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig());
 
         final KafkaMetric metric = getMetric("active-process", "%s-ratio", task.id().toString());
@@ -684,6 +726,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRecordE2ELatencyOnSourceNodeAndTerminalNodes() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         time = new MockTime(0L, 0L, 0L);
         metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
 
@@ -778,6 +822,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRecordRestoredRecords() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
 
         final KafkaMetric totalMetric = getMetric("restore", "%s-total", task.id().toString());
@@ -807,6 +853,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowOnTimeoutExceptionAndBufferRecordForRetryIfEosDisabled() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         createTimeoutTask(AT_LEAST_ONCE);
 
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
@@ -832,6 +880,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowTaskCorruptedExceptionOnTimeoutExceptionIfEosEnabled() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         createTimeoutTask(StreamsConfig.EXACTLY_ONCE_V2);
 
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
@@ -844,6 +894,8 @@ public class StreamTaskTest {
 
     @Test
     public void testMetrics() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
 
         assertNotNull(getMetric(
@@ -948,6 +1000,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldPauseAndResumeBasedOnBufferedRecords() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1015,6 +1069,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldPunctuateOnceStreamTimeAfterGap() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig());
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1113,6 +1169,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRespectPunctuateCancellationStreamTime() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1157,6 +1215,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRespectPunctuateCancellationSystemTime() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1173,6 +1233,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRespectCommitNeeded() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1213,6 +1275,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCommitNextOffsetAndProcessorMetadataFromQueueIfAvailable() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1242,6 +1306,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCommitConsumerPositionIfRecordQueueIsEmpty() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig());
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1290,6 +1356,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCommitOldProcessorMetadataWhenNotDirty() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig());
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1361,6 +1429,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldFailOnCommitIfTaskIsClosed() {
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig());
         task.suspend();
         task.transitionTo(Task.State.CLOSED);
@@ -1375,6 +1444,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRespectCommitRequested() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1385,6 +1456,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldBeProcessableIfAllPartitionsBuffered() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1409,6 +1482,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldBeRecordIdlingTimeIfSuspended() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1423,6 +1498,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1449,6 +1526,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotPunctuateSystemTimeWhenIntervalNotElapsed() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1462,6 +1541,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldPunctuateOnceSystemTimeAfterGap() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1498,6 +1579,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingStreamTime() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1509,13 +1592,15 @@ public class StreamTaskTest {
             fail("Should've thrown StreamsException");
         } catch (final StreamsException e) {
             final String message = e.getMessage();
-            assertTrue("message=" + message + " should contain processor", message.contains("processor '" + processorStreamTime.name() + "'"));
+            assertTrue(message.contains("processor '" + processorStreamTime.name() + "'"), "message=" + message + " should contain processor");
             assertThat(task.processorContext().currentNode(), nullValue());
         }
     }
 
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingWallClockTimeTime() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1527,13 +1612,15 @@ public class StreamTaskTest {
             fail("Should've thrown StreamsException");
         } catch (final StreamsException e) {
             final String message = e.getMessage();
-            assertTrue("message=" + message + " should contain processor", message.contains("processor '" + processorSystemTime.name() + "'"));
+            assertTrue(message.contains("processor '" + processorSystemTime.name() + "'"), "message=" + message + " should contain processor");
             assertThat(task.processorContext().currentNode(), nullValue());
         }
     }
 
     @Test
     public void shouldNotShareHeadersBetweenPunctuateIterations() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1554,6 +1641,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldWrapKafkaExceptionWithStreamsExceptionWhenProcess() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createFaultyStatefulTask(createConfig("100"));
 
         task.initializeIfNeeded();
@@ -1577,6 +1666,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReadCommittedOffsetAndRethrowTimeoutWhenCompleteRestoration() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         // Clean up state directory created as part of setup
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
@@ -1591,6 +1682,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReInitializeTopologyWhenResuming() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         // Clean up state directory created as part of setup
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
@@ -1625,6 +1718,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotCheckpointOffsetsAgainOnCommitIfSnapshotNotChangedMuch() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final Long offset = 543L;
 
         when(recordCollector.offsets()).thenReturn(singletonMap(changelogPartition, offset));
@@ -1651,6 +1746,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointOffsetsOnCommitIfSnapshotMuchChanged() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final Long offset = 543L;
 
         when(recordCollector.offsets()).thenReturn(singletonMap(changelogPartition, offset));
@@ -1676,6 +1773,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotCheckpointOffsetsOnCommitIfEosIsEnabled() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "100"), true);
 
         task.initializeIfNeeded();
@@ -1693,6 +1792,8 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1707,6 +1808,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCallPunctuateOnPassedInProcessorNode() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1718,6 +1821,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldSetProcessorNodeOnContextBackToNullAfterSuccessfulPunctuate() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -1727,6 +1832,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowIllegalStateExceptionOnScheduleIfCurrentNodeIsNull() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         assertThrows(IllegalStateException.class, () -> task.schedule(1, PunctuationType.STREAM_TIME, timestamp -> { }));
     }
@@ -1734,6 +1841,8 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldNotThrowExceptionOnScheduleIfCurrentNodeIsNotNull() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.processorContext().setCurrentNode(processorStreamTime);
         task.schedule(1, PunctuationType.STREAM_TIME, timestamp -> { });
@@ -1741,6 +1850,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCloseStateManagerEvenDuringFailureOnUncleanTaskClose() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createFaultyStatefulTask(createConfig("100"));
 
         task.initializeIfNeeded();
@@ -1753,6 +1864,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReturnOffsetsForRepartitionTopicsForPurging() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final TopicPartition repartition = new TopicPartition("repartition", 1);
 
         final ProcessorTopology topology = withRepartitionTopics(
@@ -1810,6 +1923,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowStreamsExceptionWhenFetchCommittedFailed() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final Consumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
             public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
@@ -1826,6 +1941,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowIfCommittingOnIllegalState() {
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
 
         task.transitionTo(SUSPENDED);
@@ -1835,6 +1951,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowIfPostCommittingOnIllegalState() {
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
 
         task.transitionTo(SUSPENDED);
@@ -1844,6 +1961,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldSkipCheckpointingSuspendedCreatedTask() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatefulTask(createConfig("100"), true);
         task.suspend();
         task.postCommit(true);
@@ -1853,6 +1972,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointForSuspendedTask() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         when(stateManager.changelogOffsets()).thenReturn(singletonMap(partition1, 1L));
 
         task = createStatefulTask(createConfig("100"), true);
@@ -1865,6 +1986,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotCheckpointForSuspendedRunningTaskWithSmallProgress() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         when(stateManager.changelogOffsets())
                 .thenReturn(singletonMap(partition1, 0L)) // restoration checkpoint
                 .thenReturn(singletonMap(partition1, 1L))
@@ -1885,6 +2008,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointForSuspendedRunningTaskWithLargeProgress() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         when(stateManager.changelogOffsets())
                 .thenReturn(singletonMap(partition1, 0L))
                 .thenReturn(singletonMap(partition1, 12000L))
@@ -1905,6 +2030,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointWhileUpdateSnapshotWithTheConsumedOffsetsForSuspendedRunningTask() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final Map<TopicPartition, Long> checkpointableOffsets = singletonMap(partition1, 1L);
         when(stateManager.changelogOffsets())
                 .thenReturn(Collections.emptyMap()) // restoration checkpoint
@@ -1929,6 +2056,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReturnStateManagerChangelogOffsets() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         when(stateManager.changelogOffsets()).thenReturn(singletonMap(partition1, 50L));
         when(stateManager.changelogPartitions()).thenReturn(singleton(partition1));
 
@@ -1945,6 +2074,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotCheckpointOnCloseCreated() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
@@ -1965,6 +2096,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointOnCloseRestoringIfNoProgress() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.initializeIfNeeded();
@@ -1982,6 +2115,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAlwaysCheckpointStateIfEnforced() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.initializeIfNeeded();
@@ -1993,6 +2128,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldOnlyCheckpointStateWithBigAdvanceIfNotEnforced() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         when(stateManager.changelogOffsets())
                 .thenReturn(Collections.singletonMap(partition1, 50L))
                 .thenReturn(Collections.singletonMap(partition1, 11000L))
@@ -2014,6 +2151,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointOffsetsOnPostCommit() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final long offset = 543L;
         final long consumedOffset = 345L;
 
@@ -2041,6 +2180,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowExceptionOnCloseCleanError() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final long offset = 543L;
 
         when(stateManager.changelogOffsets()).thenReturn(singletonMap(changelogPartition, offset));
@@ -2069,6 +2210,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowOnCloseCleanFlushError() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final long offset = 543L;
 
         when(recordCollector.offsets()).thenReturn(singletonMap(changelogPartition, offset));
@@ -2097,6 +2240,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowOnCloseCleanCheckpointError() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final long offset = 54300L;
         doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).checkpoint();
         when(stateManager.changelogOffsets()).thenReturn(singletonMap(partition1, offset));
@@ -2123,6 +2268,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotThrowFromStateManagerCloseInCloseDirty() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         doThrow(new RuntimeException("KABOOM!")).when(stateManager).close();
 
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
@@ -2134,6 +2281,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldUnregisterMetricsInCloseClean() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.suspend();
@@ -2144,6 +2293,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldUnregisterMetricsInCloseDirty() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.suspend();
@@ -2154,6 +2305,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldUnregisterMetricsAndCloseInPrepareRecycle() {
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.suspend();
@@ -2167,6 +2319,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldFlushStateManagerAndRecordCollector() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatefulTask(createConfig("100"), false);
 
         task.flush();
@@ -2177,6 +2331,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldClearCommitStatusesInCloseDirty() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -2195,6 +2351,8 @@ public class StreamTaskTest {
 
     @Test
     public void closeShouldBeIdempotent() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.suspend();
@@ -2207,6 +2365,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldUpdatePartitions() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig());
         final Set<TopicPartition> newPartitions = new HashSet<>(task.inputPartitions());
         newPartitions.add(new TopicPartition("newTopic", 0));
@@ -2221,6 +2381,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowIfCleanClosingDirtyTask() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -2234,6 +2396,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowIfRecyclingDirtyTask() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig());
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -2248,6 +2412,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldPrepareRecycleSuspendedTask() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatefulTask(createConfig("100"), true);
         assertThrows(IllegalStateException.class, () -> task.prepareRecycle()); // CREATED
 
@@ -2267,6 +2433,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAlwaysSuspendCreatedTasks() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatefulTask(createConfig("100"), true);
         assertThat(task.state(), equalTo(CREATED));
         task.suspend();
@@ -2275,6 +2443,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAlwaysSuspendRestoringTasks() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatefulTask(createConfig("100"), true);
         task.initializeIfNeeded();
         assertThat(task.state(), equalTo(RESTORING));
@@ -2284,6 +2454,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAlwaysSuspendRunningTasks() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createFaultyStatefulTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -2294,6 +2466,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowTopologyExceptionIfTaskCreatedForUnknownTopic() {
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final InternalProcessorContext context = new ProcessorContextImpl(
                 taskId,
                 createConfig("100"),
@@ -2334,6 +2507,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldInitTaskTimeoutAndEventuallyThrow() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig());
 
         task.maybeInitTaskTimeoutOrThrow(0L, null);
@@ -2349,6 +2524,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldClearTaskTimeout() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig());
 
         task.maybeInitTaskTimeoutOrThrow(0L, null);
@@ -2358,6 +2535,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldUpdateOffsetIfAllRecordsAreCorrupted() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig(
             AT_LEAST_ONCE,
             "0",
@@ -2389,6 +2568,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldUpdateOffsetIfValidRecordFollowsCorrupted() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig(
             AT_LEAST_ONCE,
             "0",
@@ -2419,6 +2600,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldUpdateOffsetIfCorruptedRecordFollowsValid() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig(
             AT_LEAST_ONCE,
             "0",
@@ -2477,6 +2660,124 @@ public class StreamTaskTest {
         verify(recordCollector, never()).offsets();
     }
 
+    @Test
+    public void shouldPunctuateNotHandleFailProcessingExceptionAndThrowStreamsException() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "100",
+            LogAndFailExceptionHandler.class.getName(), LogAndContinueProcessingExceptionHandler.class.getName()));
+
+        final StreamsException streamsException = assertThrows(StreamsException.class, () ->
+            task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw new FailedProcessingException(
+                    new RuntimeException("KABOOM!")
+                );
+            })
+        );
+
+        assertInstanceOf(RuntimeException.class, streamsException.getCause());
+        assertEquals("KABOOM!", streamsException.getCause().getMessage());
+    }
+
+    @Test
+    public void shouldPunctuateNotHandleTaskCorruptedExceptionAndThrowItAsIs() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "100",
+            LogAndFailExceptionHandler.class.getName(), LogAndContinueProcessingExceptionHandler.class.getName()));
+
+        final Set<TaskId> tasksIds = new HashSet<>();
+        tasksIds.add(new TaskId(0, 0));
+        final TaskCorruptedException expectedException = new TaskCorruptedException(tasksIds, new InvalidOffsetException("Invalid offset") {
+            @Override
+            public Set<TopicPartition> partitions() {
+                return new HashSet<>(Collections.singletonList(new TopicPartition("topic", 0)));
+            }
+        });
+
+        final TaskCorruptedException taskCorruptedException = assertThrows(TaskCorruptedException.class, () ->
+            task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw expectedException;
+            })
+        );
+
+        assertEquals(expectedException, taskCorruptedException);
+    }
+
+    @Test
+    public void shouldPunctuateNotHandleTaskMigratedExceptionAndThrowItAsIs() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "100",
+            LogAndFailExceptionHandler.class.getName(), LogAndContinueProcessingExceptionHandler.class.getName()));
+
+        final TaskMigratedException expectedException = new TaskMigratedException("TaskMigratedException", new RuntimeException("Task migrated cause"));
+
+        final TaskMigratedException taskCorruptedException = assertThrows(TaskMigratedException.class, () ->
+            task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw expectedException;
+            })
+        );
+
+        assertEquals(expectedException, taskCorruptedException);
+    }
+
+    @Test
+    public void shouldPunctuateNotThrowStreamsExceptionWhenProcessingExceptionHandlerRepliesWithContinue() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "100",
+            LogAndFailExceptionHandler.class.getName(), LogAndContinueProcessingExceptionHandler.class.getName()));
+
+        assertDoesNotThrow(() ->
+            task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw new KafkaException("KABOOM!");
+            })
+        );
+    }
+
+    @Test
+    public void shouldPunctuateThrowStreamsExceptionWhenProcessingExceptionHandlerRepliesWithFail() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "100",
+            LogAndFailExceptionHandler.class.getName(), LogAndFailProcessingExceptionHandler.class.getName()));
+
+        final StreamsException streamsException = assertThrows(StreamsException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw new KafkaException("KABOOM!");
+            }));
+
+        assertInstanceOf(KafkaException.class, streamsException.getCause());
+        assertEquals("KABOOM!", streamsException.getCause().getMessage());
+    }
+
+    @Test
+    public void shouldPunctuateThrowFailedProcessingExceptionWhenProcessingExceptionHandlerThrowsAnException() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "100",
+                LogAndFailExceptionHandler.class.getName(), ProcessingExceptionHandlerMock.class.getName()));
+
+        final FailedProcessingException streamsException = assertThrows(FailedProcessingException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw new KafkaException("KABOOM!");
+            }));
+
+        assertInstanceOf(RuntimeException.class, streamsException.getCause());
+        assertEquals("KABOOM from ProcessingExceptionHandlerMock!", streamsException.getCause().getMessage());
+    }
+
+    public static class ProcessingExceptionHandlerMock implements ProcessingExceptionHandler {
+        @Override
+        public ProcessingExceptionHandler.ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+            throw new RuntimeException("KABOOM from ProcessingExceptionHandlerMock!");
+        }
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            // No-op
+        }
+    }
 
     private ProcessorStateManager mockStateManager() {
         final ProcessorStateManager manager = mock(ProcessorStateManager.class);

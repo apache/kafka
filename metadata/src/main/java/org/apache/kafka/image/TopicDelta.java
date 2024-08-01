@@ -18,8 +18,8 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -27,8 +27,8 @@ import org.apache.kafka.metadata.Replicas;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -160,10 +160,7 @@ public final class TopicDelta {
                     }
                     topicIds.putIfAbsent(name(), id());
                 }
-            } else if (
-                entry.getValue().leader != brokerId &&
-                Replicas.contains(entry.getValue().replicas, brokerId)
-            ) {
+            } else {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
                 if (prevPartition == null || prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
                     followers.put(

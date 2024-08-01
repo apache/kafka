@@ -17,8 +17,25 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.compress.GzipCompression;
+import org.apache.kafka.common.compress.Lz4Compression;
+import org.apache.kafka.common.compress.ZstdCompression;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.server.record.BrokerCompressionType;
+import org.apache.kafka.storage.internals.log.LogConfig;
+
+import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
+import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
+import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
+import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
+import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
+import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
+
 public class ServerConfigs {
     /** ********* General Configuration ***********/
     public static final String RESERVED_BROKER_MAX_ID_CONFIG = "reserved.broker.max.id";
@@ -40,10 +57,6 @@ public class ServerConfigs {
     public static final String MESSAGE_MAX_BYTES_DOC = TopicConfig.MAX_MESSAGE_BYTES_DOC +
             "This can be set per topic with the topic level <code>" + TopicConfig.MAX_MESSAGE_BYTES_CONFIG + "</code> config.";
 
-    public static final String NUM_NETWORK_THREADS_CONFIG = "num.network.threads";
-    public static final int NUM_NETWORK_THREADS_DEFAULT = 3;
-    public static final String NUM_NETWORK_THREADS_DOC = "The number of threads that the server uses for receiving requests from the network and sending responses to the network. Noted: each listener (except for controller listener) creates its own thread pool.";
-
     public static final String NUM_IO_THREADS_CONFIG = "num.io.threads";
     public static final int NUM_IO_THREADS_DEFAULT = 8;
     public static final String NUM_IO_THREADS_DOC = "The number of threads that the server uses for processing requests, which may include disk I/O";
@@ -54,14 +67,6 @@ public class ServerConfigs {
 
     public static final String NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG = "num.replica.alter.log.dirs.threads";
     public static final String NUM_REPLICA_ALTER_LOG_DIRS_THREADS_DOC = "The number of threads that can move replicas between log directories, which may include disk I/O";
-
-    public static final String QUEUED_MAX_REQUESTS_CONFIG = "queued.max.requests";
-    public static final int QUEUED_MAX_REQUESTS_DEFAULT = 500;
-    public static final String QUEUED_MAX_REQUESTS_DOC = "The number of queued requests allowed for data-plane, before blocking the network threads";
-
-    public static final String QUEUED_MAX_BYTES_CONFIG = "queued.max.request.bytes";
-    public static final int QUEUED_MAX_REQUEST_BYTES_DEFAULT = -1;
-    public static final String QUEUED_MAX_REQUEST_BYTES_DOC = "The number of queued bytes allowed before no more requests are read";
 
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
     public static final int REQUEST_TIMEOUT_MS_DEFAULT = 30000;
@@ -136,4 +141,40 @@ public class ServerConfigs {
             "initialization. This is useful when the authorizer is dependent on the cluster itself for bootstrapping, as is the case for " +
             "the StandardAuthorizer (which stores ACLs in the metadata log.) By default, all listeners included in controller.listener.names " +
             "will also be early start listeners. A listener should not appear in this list if it accepts external traffic.";
+    public static final ConfigDef CONFIG_DEF =  new ConfigDef()
+            .define(BROKER_ID_GENERATION_ENABLE_CONFIG, BOOLEAN, BROKER_ID_GENERATION_ENABLE_DEFAULT, MEDIUM, BROKER_ID_GENERATION_ENABLE_DOC)
+            .define(RESERVED_BROKER_MAX_ID_CONFIG, INT, RESERVED_BROKER_MAX_ID_DEFAULT, atLeast(0), MEDIUM, RESERVED_BROKER_MAX_ID_DOC)
+            .define(BROKER_ID_CONFIG, INT, BROKER_ID_DEFAULT, HIGH, BROKER_ID_DOC)
+            .define(MESSAGE_MAX_BYTES_CONFIG, INT, LogConfig.DEFAULT_MAX_MESSAGE_BYTES, atLeast(0), HIGH, MESSAGE_MAX_BYTES_DOC)
+            .define(NUM_IO_THREADS_CONFIG, INT, NUM_IO_THREADS_DEFAULT, atLeast(1), HIGH, NUM_IO_THREADS_DOC)
+            .define(NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG, INT, null, HIGH, NUM_REPLICA_ALTER_LOG_DIRS_THREADS_DOC)
+            .define(BACKGROUND_THREADS_CONFIG, INT, BACKGROUND_THREADS_DEFAULT, atLeast(1), HIGH, BACKGROUND_THREADS_DOC)
+            .define(REQUEST_TIMEOUT_MS_CONFIG, INT, REQUEST_TIMEOUT_MS_DEFAULT, HIGH, REQUEST_TIMEOUT_MS_DOC)
+            .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, LONG, DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS, MEDIUM, SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
+            .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, LONG, SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS, MEDIUM, SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
+            /************* Authorizer Configuration ***********/
+            .define(AUTHORIZER_CLASS_NAME_CONFIG, STRING, AUTHORIZER_CLASS_NAME_DEFAULT, new ConfigDef.NonNullValidator(), LOW, AUTHORIZER_CLASS_NAME_DOC)
+            .define(EARLY_START_LISTENERS_CONFIG, STRING, null,  HIGH, EARLY_START_LISTENERS_DOC)
+            /************ Rack Configuration ******************/
+            .define(BROKER_RACK_CONFIG, STRING, null, MEDIUM, BROKER_RACK_DOC)
+            /** ********* Controlled shutdown configuration ***********/
+            .define(CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG, INT, CONTROLLED_SHUTDOWN_MAX_RETRIES_DEFAULT, MEDIUM, CONTROLLED_SHUTDOWN_MAX_RETRIES_DOC)
+            .define(CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG, LONG, CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_DEFAULT, MEDIUM, CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_DOC)
+            .define(CONTROLLED_SHUTDOWN_ENABLE_CONFIG, BOOLEAN, CONTROLLED_SHUTDOWN_ENABLE_DEFAULT, MEDIUM, CONTROLLED_SHUTDOWN_ENABLE_DOC)
+            .define(DELETE_TOPIC_ENABLE_CONFIG, BOOLEAN, DELETE_TOPIC_ENABLE_DEFAULT, HIGH, DELETE_TOPIC_ENABLE_DOC)
+            .define(COMPRESSION_TYPE_CONFIG, STRING, LogConfig.DEFAULT_COMPRESSION_TYPE, ConfigDef.ValidString.in(BrokerCompressionType.names().toArray(new String[0])), HIGH, COMPRESSION_TYPE_DOC)
+            .define(COMPRESSION_GZIP_LEVEL_CONFIG, INT, GzipCompression.DEFAULT_LEVEL, new GzipCompression.LevelValidator(), MEDIUM, COMPRESSION_GZIP_LEVEL_DOC)
+            .define(COMPRESSION_LZ4_LEVEL_CONFIG, INT, Lz4Compression.DEFAULT_LEVEL, between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, COMPRESSION_LZ4_LEVEL_DOC)
+            .define(COMPRESSION_ZSTD_LEVEL_CONFIG, INT, ZstdCompression.DEFAULT_LEVEL, between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), MEDIUM, COMPRESSION_ZSTD_LEVEL_DOC)
+            /** ********* Fetch Configuration **************/
+            .define(MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG, INT, MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_DEFAULT, atLeast(0), MEDIUM, MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_DOC)
+            .define(FETCH_MAX_BYTES_CONFIG, INT, FETCH_MAX_BYTES_DEFAULT, atLeast(1024), MEDIUM, FETCH_MAX_BYTES_DOC)
+
+            /** ********* Request Limit Configuration ***********/
+            .define(MAX_REQUEST_PARTITION_SIZE_LIMIT_CONFIG, INT, MAX_REQUEST_PARTITION_SIZE_LIMIT_DEFAULT, atLeast(1), MEDIUM, MAX_REQUEST_PARTITION_SIZE_LIMIT_DOC)
+            /** Internal Configurations **/
+            // This indicates whether unreleased APIs should be advertised by this node.
+            .defineInternal(UNSTABLE_API_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH)
+            // This indicates whether unreleased MetadataVersions should be enabled on this node.
+            .defineInternal(UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH);
 }

@@ -17,12 +17,13 @@
 
 package org.apache.kafka.image.loader.metrics;
 
-import com.yammer.metrics.core.Gauge;
-import com.yammer.metrics.core.MetricName;
-import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
+import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.MetricsRegistry;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -72,7 +73,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         registry.ifPresent(r -> r.newGauge(CURRENT_METADATA_VERSION, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return Integer.valueOf(currentMetadataVersion().featureLevel());
+                return (int) currentMetadataVersion().featureLevel();
             }
         }));
         registry.ifPresent(r -> r.newGauge(CURRENT_CONTROLLER_ID, new Gauge<Integer>() {

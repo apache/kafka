@@ -18,8 +18,8 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
@@ -257,11 +257,10 @@ public class BrokersToIsrs {
             }
         } else {
             int[] newPartitions = new int[partitions.length - 1];
-            int j = 0;
-            for (int i = 0; i < partitions.length; i++) {
-                int partition = partitions[i];
+            int i = 0;
+            for (int partition : partitions) {
                 if (partition != removedPartition) {
-                    newPartitions[j++] = partition;
+                    newPartitions[i++] = partition;
                 }
             }
             topicMap.put(topicId, newPartitions);

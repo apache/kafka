@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.Map;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
+
+import java.util.Map;
 
 /**
  * {@code MaterializedStoreFactory} is the base class for any {@link StoreFactory} that

@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.connect.cli;
 
-import com.fasterxml.jackson.core.exc.StreamReadException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DatabindException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -41,6 +36,13 @@ import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.connect.storage.FileOffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.util.FutureCallback;
+
+import com.fasterxml.jackson.core.exc.StreamReadException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DatabindException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +65,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
  * since it uses file storage (configurable via {@link StandaloneConfig#OFFSET_STORAGE_FILE_FILENAME_CONFIG})
  * </p>
  */
-public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
+public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, StandaloneConfig> {
     private static final Logger log = LoggerFactory.getLogger(ConnectStandalone.class);
 
     public ConnectStandalone(String... args) {
@@ -76,7 +78,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
     }
 
     @Override
-    protected void processExtraArgs(Herder herder, Connect connect, String[] extraArgs) {
+    public void processExtraArgs(Connect<StandaloneHerder> connect, String[] extraArgs) {
         try {
             for (final String connectorConfigFile : extraArgs) {
                 CreateConnectorRequest createConnectorRequest = parseConnectorConfigurationFile(connectorConfigFile);
@@ -86,12 +88,13 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
                     else
                         log.info("Created connector {}", info.result().name());
                 });
-                herder.putConnectorConfig(
+                connect.herder().putConnectorConfig(
                     createConnectorRequest.name(), createConnectorRequest.config(),
                     createConnectorRequest.initialTargetState(),
                     false, cb);
                 cb.get();
             }
+            connect.herder().ready();
         } catch (Throwable t) {
             log.error("Stopping after connector error", t);
             connect.stop();
@@ -158,7 +161,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
     }
 
     @Override
-    protected Herder createHerder(StandaloneConfig config, String workerId, Plugins plugins,
+    protected StandaloneHerder createHerder(StandaloneConfig config, String workerId, Plugins plugins,
                                   ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                                   RestServer restServer, RestClient restClient) {
 

@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.Optional;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+
+import java.util.Optional;
 
 public interface ReplicatedLog extends AutoCloseable {
 
@@ -213,7 +214,7 @@ public interface ReplicatedLog extends AutoCloseable {
         final long truncationOffset;
         int leaderEpoch = endOffset.epoch();
         if (leaderEpoch == 0) {
-            truncationOffset = Math.min(endOffset.offset(), endOffset().offset);
+            truncationOffset = Math.min(endOffset.offset(), endOffset().offset());
         } else {
             OffsetAndEpoch localEndOffset = endOffsetForEpoch(leaderEpoch);
             if (localEndOffset.epoch() == leaderEpoch) {

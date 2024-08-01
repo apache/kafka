@@ -17,11 +17,12 @@
 
 package org.apache.kafka.controller.metrics;
 
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -34,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * All of these except MetadataErrorCount are managed by ControllerMetadataMetricsPublisher.
  *
  * IMPORTANT: Metrics which are managed by the QuorumController class itself should go in
- * @link{org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
+ * {@link org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
  */
 public final class ControllerMetadataMetrics implements AutoCloseable {
     private static final MetricName FENCED_BROKER_COUNT = getMetricName(

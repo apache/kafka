@@ -26,12 +26,14 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -109,7 +111,7 @@ public class BrokerRegistrationTrackerTest {
         delta.replay(new RegisterBrokerRecord().
             setBrokerId(1).
             setIncarnationId(INCARNATION_ID).
-            setLogDirs(Arrays.asList()));
+            setLogDirs(Collections.emptyList()));
         delta.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
             setFeatureLevel(jbodMv ? MetadataVersion.IBP_3_7_IV2.featureLevel() :
@@ -130,7 +132,7 @@ public class BrokerRegistrationTrackerTest {
         delta.replay(new RegisterBrokerRecord().
             setBrokerId(1).
             setIncarnationId(INCARNATION_ID).
-            setLogDirs(Arrays.asList()));
+            setLogDirs(Collections.emptyList()));
         ctx.onMetadataUpdate(delta);
         // No calls are made because MetadataVersion is 3.0-IV1 initially
         assertEquals(0, ctx.numCalls.get());

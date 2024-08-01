@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.snapshot;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.raft.OffsetAndEpoch;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -83,7 +86,7 @@ final class NotifyingRawSnapshotWriterTest {
         assertTrue(rawWriter.closed);
     }
 
-    class NoopRawSnapshotWriter implements RawSnapshotWriter {
+    static class NoopRawSnapshotWriter implements RawSnapshotWriter {
         boolean frozen = false;
         boolean closed = false;
 

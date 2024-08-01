@@ -18,9 +18,12 @@ package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.stubbing.OngoingStubbing;
 
 import java.io.Closeable;
@@ -32,8 +35,15 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
+import java.nio.file.FileSystem;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.spi.FileSystemProvider;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -43,8 +53,11 @@ import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
@@ -71,6 +84,7 @@ import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -83,11 +97,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
 public class UtilsTest {
 
@@ -106,31 +118,35 @@ public class UtilsTest {
         }
     }
 
-    @Test
-    public void testGetHost() {
-        // valid
+    @ParameterizedTest
+    @CsvSource(value = {"PLAINTEXT", "SASL_PLAINTEXT", "SSL", "SASL_SSL"})
+    public void testGetHostValid(String protocol) {
+        assertEquals("mydomain.com", getHost(protocol + "://mydomain.com:8080"));
+        assertEquals("MyDomain.com", getHost(protocol + "://MyDomain.com:8080"));
+        assertEquals("My_Domain.com", getHost(protocol + "://My_Domain.com:8080"));
+        assertEquals("::1", getHost(protocol + "://[::1]:1234"));
+        assertEquals("2001:db8:85a3:8d3:1319:8a2e:370:7348", getHost(protocol + "://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertEquals("2001:DB8:85A3:8D3:1319:8A2E:370:7348", getHost(protocol + "://[2001:DB8:85A3:8D3:1319:8A2E:370:7348]:5678"));
+        assertEquals("fe80::b1da:69ca:57f7:63d8%3", getHost(protocol + "://[fe80::b1da:69ca:57f7:63d8%3]:5678"));
         assertEquals("127.0.0.1", getHost("127.0.0.1:8000"));
-        assertEquals("mydomain.com", getHost("PLAINTEXT://mydomain.com:8080"));
-        assertEquals("MyDomain.com", getHost("PLAINTEXT://MyDomain.com:8080"));
-        assertEquals("My_Domain.com", getHost("PLAINTEXT://My_Domain.com:8080"));
         assertEquals("::1", getHost("[::1]:1234"));
-        assertEquals("2001:db8:85a3:8d3:1319:8a2e:370:7348", getHost("PLAINTEXT://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678"));
-        assertEquals("2001:DB8:85A3:8D3:1319:8A2E:370:7348", getHost("PLAINTEXT://[2001:DB8:85A3:8D3:1319:8A2E:370:7348]:5678"));
-        assertEquals("fe80::b1da:69ca:57f7:63d8%3", getHost("PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:5678"));
+    }
 
-        // invalid
-        assertNull(getHost("PLAINTEXT://mydo)main.com:8080"));
-        assertNull(getHost("PLAINTEXT://mydo(main.com:8080"));
-        assertNull(getHost("PLAINTEXT://mydo()main.com:8080"));
-        assertNull(getHost("PLAINTEXT://mydo(main).com:8080"));
+    @ParameterizedTest
+    @CsvSource(value = {"PLAINTEXT", "SASL_PLAINTEXT", "SSL", "SASL_SSL"})
+    public void testGetHostInvalid(String protocol) {
+        assertNull(getHost(protocol + "://mydo)main.com:8080"));
+        assertNull(getHost(protocol + "://mydo(main.com:8080"));
+        assertNull(getHost(protocol + "://mydo()main.com:8080"));
+        assertNull(getHost(protocol + "://mydo(main).com:8080"));
+        assertNull(getHost(protocol + "://[2001:db)8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost(protocol + "://[2001:db(8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost(protocol + "://[2001:db()8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost(protocol + "://[2001:db(8:85a3:)8d3:1319:8a2e:370:7348]:5678"));
         assertNull(getHost("ho)st:9092"));
         assertNull(getHost("ho(st:9092"));
         assertNull(getHost("ho()st:9092"));
         assertNull(getHost("ho(st):9092"));
-        assertNull(getHost("PLAINTEXT://[2001:db)8:85a3:8d3:1319:8a2e:370:7348]:5678"));
-        assertNull(getHost("PLAINTEXT://[2001:db(8:85a3:8d3:1319:8a2e:370:7348]:5678"));
-        assertNull(getHost("PLAINTEXT://[2001:db()8:85a3:8d3:1319:8a2e:370:7348]:5678"));
-        assertNull(getHost("PLAINTEXT://[2001:db(8:85a3:)8d3:1319:8a2e:370:7348]:5678"));
     }
 
     @Test
@@ -434,6 +450,65 @@ public class UtilsTest {
     }
 
     @Test
+    public void testMax() {
+        assertEquals(1, Utils.max(1));
+        assertEquals(3, Utils.max(1, 2, 3));
+        assertEquals(3, Utils.max(2, 1, 3, 3));
+        assertEquals(100, Utils.max(0, 2, 2, 100));
+        assertEquals(-1, Utils.max(-1, -2, -2, -10, -100, -1000));
+        assertEquals(0, Utils.max(-1, -2, -2, -10, -150, -1800, 0));
+    }
+
+    @Test
+    public void mkStringTest() {
+        Map<String, String> map = new LinkedHashMap<>();
+        map.put("key1", "val1");
+        map.put("key2", "val2");
+        map.put("key3", "val3");
+        String result = Utils.mkString(map, "__begin__", "__end__", "=", ",");
+        assertEquals("__begin__key1=val1,key2=val2,key3=val3__end__", result);
+
+        String result2 = Utils.mkString(Collections.emptyMap(), "__begin__", "__end__", "=", ",");
+        assertEquals("__begin____end__", result2);
+    }
+
+    @Test
+    public void parseMapTest() {
+        Map<String, String> map1 = Utils.parseMap("k1=v1,k2=v2,k3=v3", "=", ",");
+        assertEquals(3, map1.size());
+        assertEquals("v1", map1.get("k1"));
+        assertEquals("v2", map1.get("k2"));
+        assertEquals("v3", map1.get("k3"));
+
+        Map<String, String> map3 = Utils.parseMap("k4=v4,k5=v5=vv5=vvv5", "=", ",");
+        assertEquals(2, map3.size());
+        assertEquals("v4", map3.get("k4"));
+        assertEquals("v5=vv5=vvv5", map3.get("k5"));
+    }
+
+    @Test
+    public void ensureCapacityTest() {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(10);
+        ByteBuffer newByteBuffer = Utils.ensureCapacity(byteBuffer, 5);
+        assertEquals(10, newByteBuffer.capacity());
+
+        ByteBuffer byteBuffer2 = ByteBuffer.allocate(10);
+        ByteBuffer newByteBuffer2 = Utils.ensureCapacity(byteBuffer2, 15);
+        assertEquals(15, newByteBuffer2.capacity());
+
+        ByteBuffer byteBuffer3 = ByteBuffer.allocate(10);
+        for (int i = 1; i <= 10; i++) {
+            byteBuffer3.put((byte) i);
+        }
+        ByteBuffer newByteBuffer3 = Utils.ensureCapacity(byteBuffer3, 15);
+        newByteBuffer3.flip();
+        assertEquals(15, newByteBuffer3.capacity());
+        assertEquals(1, newByteBuffer3.get());
+        assertEquals(2, newByteBuffer3.get());
+        assertEquals(3, newByteBuffer3.get());
+    }
+
+    @Test
     public void testCloseAll() {
         TestCloseable[] closeablesWithoutException = TestCloseable.createCloseables(false, false, false);
         try {
@@ -667,6 +742,40 @@ public class UtilsTest {
         // Test that deleting a non-existent directory hierarchy works.
         Utils.delete(tempDir);
         assertFalse(Files.exists(tempDir.toPath()));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testRecursiveDeleteWithDeletedFile() throws IOException {
+        // Test recursive deletes, where the FileWalk is supplied with a deleted file path.
+        File rootDir = TestUtils.tempDirectory();
+        File subDir = TestUtils.tempDirectory(rootDir.toPath(), "a");
+
+        DirectoryStream<Path> mockDirectoryStream = (DirectoryStream<Path>) mock(DirectoryStream.class);
+        FileSystemProvider mockFileSystemProvider = mock(FileSystemProvider.class);
+        FileSystem mockFileSystem = mock(FileSystem.class);
+        Path mockRootPath = mock(Path.class);
+        BasicFileAttributes mockBasicFileAttributes = mock(BasicFileAttributes.class);
+        Iterator<Path> mockIterator = mock(Iterator.class);
+        File spyRootFile = spy(rootDir);
+
+        when(spyRootFile.toPath()).thenReturn(mockRootPath);
+        when(mockRootPath.getFileSystem()).thenReturn(mockFileSystem);
+        when(mockFileSystem.provider()).thenReturn(mockFileSystemProvider);
+        when(mockFileSystemProvider.readAttributes(any(), (Class<BasicFileAttributes>) any(), any())).thenReturn(mockBasicFileAttributes);
+        when(mockBasicFileAttributes.isDirectory()).thenReturn(true);
+        when(mockFileSystemProvider.newDirectoryStream(any(), any())).thenReturn(mockDirectoryStream);
+        when(mockDirectoryStream.iterator()).thenReturn(mockIterator);
+        // Here we pass the rootDir to the FileWalk which removes all Files recursively,
+        // and then we pass the subDir path again which is already deleted by this point.
+        when(mockIterator.next()).thenReturn(rootDir.toPath()).thenReturn(subDir.toPath());
+        when(mockIterator.hasNext()).thenReturn(true).thenReturn(true).thenReturn(false);
+
+        assertDoesNotThrow(() -> {
+            Utils.delete(spyRootFile);
+        });
+        assertFalse(Files.exists(rootDir.toPath()));
+        assertFalse(Files.exists(subDir.toPath()));
     }
 
     @Test

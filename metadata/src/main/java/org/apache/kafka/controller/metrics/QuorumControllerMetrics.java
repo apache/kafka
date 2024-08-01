@@ -17,12 +17,13 @@
 
 package org.apache.kafka.controller.metrics;
 
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -86,7 +87,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private Consumer<Long> newHistogram(MetricName name, boolean biased) {
         if (registry.isPresent()) {
             Histogram histogram = registry.get().newHistogram(name, biased);
-            return e -> histogram.update(e);
+            return histogram::update;
         } else {
             return __ -> { };
         }

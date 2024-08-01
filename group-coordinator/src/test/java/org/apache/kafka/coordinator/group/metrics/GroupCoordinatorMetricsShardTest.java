@@ -23,8 +23,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import com.yammer.metrics.core.MetricsRegistry;

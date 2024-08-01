@@ -25,7 +25,7 @@ import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.acl.AclOperation.{DESCRIBE, READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
@@ -73,7 +73,9 @@ object ZkMigrationIntegrationTest {
       MetadataVersion.IBP_3_7_IV2,
       MetadataVersion.IBP_3_7_IV4,
       MetadataVersion.IBP_3_8_IV0,
-      MetadataVersion.IBP_4_0_IV0
+      MetadataVersion.IBP_3_9_IV0,
+      MetadataVersion.IBP_3_9_IV1
+      // Note: ZK Migration is not supported in Apache Kafka 4.0 and beyond.
     ).map { mv =>
       val serverProperties = new util.HashMap[String, String]()
       serverProperties.put("inter.broker.listener.name", "EXTERNAL")
@@ -173,7 +175,7 @@ class ZkMigrationIntegrationTest {
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
-        setClusterId(Uuid.fromString(clusterId)).
+        setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -309,7 +311,7 @@ class ZkMigrationIntegrationTest {
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(zkCluster.config().metadataVersion()).
-        setClusterId(Uuid.fromString(clusterId)).
+        setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -447,7 +449,7 @@ class ZkMigrationIntegrationTest {
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_5_IV2).
-        setClusterId(Uuid.fromString(clusterId)).
+        setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -492,7 +494,7 @@ class ZkMigrationIntegrationTest {
     }
   }
 
-  @ClusterTest(types = Array(Type.ZK), brokers = 3, metadataVersion = MetadataVersion.IBP_3_8_IV0, serverProperties = Array(
+  @ClusterTest(types = Array(Type.ZK), brokers = 3, metadataVersion = MetadataVersion.IBP_3_9_IV1, serverProperties = Array(
     new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
     new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
     new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
@@ -514,8 +516,8 @@ class ZkMigrationIntegrationTest {
     val clusterId = zkCluster.clusterId()
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.IBP_3_8_IV0).
-        setClusterId(Uuid.fromString(clusterId)).
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_9_IV1).
+        setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -601,7 +603,7 @@ class ZkMigrationIntegrationTest {
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(zkCluster.config().metadataVersion()).
-        setClusterId(Uuid.fromString(clusterId)).
+        setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -683,7 +685,7 @@ class ZkMigrationIntegrationTest {
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_5_IV2).
-        setClusterId(Uuid.fromString(clusterId)).
+        setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -747,7 +749,7 @@ class ZkMigrationIntegrationTest {
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
-        setClusterId(Uuid.fromString(clusterId)).
+        setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -826,7 +828,7 @@ class ZkMigrationIntegrationTest {
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV0).
-        setClusterId(Uuid.fromString(clusterId)).
+        setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")

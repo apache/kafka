@@ -99,7 +99,7 @@ object DynamicBrokerConfig {
     DynamicProducerStateManagerConfig ++
     DynamicRemoteLogConfig.ReconfigurableConfigs
 
-  private val ClusterLevelListenerConfigs = Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, ServerConfigs.NUM_NETWORK_THREADS_CONFIG)
+  private val ClusterLevelListenerConfigs = Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG)
   private val PerBrokerConfigs = (DynamicSecurityConfigs ++ DynamicListenerConfig.ReconfigurableConfigs).diff(
     ClusterLevelListenerConfigs)
   private val ListenerMechanismConfigs = Set(SaslConfigs.SASL_JAAS_CONFIG,
@@ -222,7 +222,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private[server] def initialize(zkClientOpt: Option[KafkaZkClient], clientMetricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin]): Unit = {
-    currentConfig = new KafkaConfig(kafkaConfig.props, false, None)
+    currentConfig = new KafkaConfig(kafkaConfig.props, false)
     metricsReceiverPluginOpt = clientMetricsReceiverPluginOpt
 
     zkClientOpt.foreach { zkClient =>
@@ -366,7 +366,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       .foreach {
         case reconfigurable: ListenerReconfigurable =>
           val kafkaProps = validatedKafkaProps(newProps, perBrokerConfig = true)
-          val newConfig = new KafkaConfig(kafkaProps.asJava, false, None)
+          val newConfig = new KafkaConfig(kafkaProps.asJava, false)
           processListenerReconfigurable(reconfigurable, newConfig, Collections.emptyMap(), validateOnly = false, reloadOnly = true)
         case reconfigurable =>
           trace(s"Files will not be reloaded without config change for $reconfigurable")
@@ -571,7 +571,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private def processReconfiguration(newProps: Map[String, String], validateOnly: Boolean, doLog: Boolean = false): (KafkaConfig, List[BrokerReconfigurable]) = {
-    val newConfig = new KafkaConfig(newProps.asJava, doLog, None)
+    val newConfig = new KafkaConfig(newProps.asJava, doLog)
     val (changeMap, deletedKeySet) = updatedConfigs(newConfig.originalsFromThisConfig, currentConfig.originals)
     if (changeMap.nonEmpty || deletedKeySet.nonEmpty) {
       try {
@@ -683,7 +683,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
 
     def validateLogLocalRetentionMs(): Unit = {
       val logRetentionMs = newConfig.logRetentionTimeMillis
-      val logLocalRetentionMs: java.lang.Long = newConfig.logLocalRetentionMs
+      val logLocalRetentionMs: java.lang.Long = newConfig.remoteLogManagerConfig.logLocalRetentionMs
       if (logRetentionMs != -1L && logLocalRetentionMs != -2L) {
         if (logLocalRetentionMs == -1L) {
           throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs,
@@ -698,7 +698,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
 
     def validateLogLocalRetentionBytes(): Unit = {
       val logRetentionBytes = newConfig.logRetentionBytes
-      val logLocalRetentionBytes: java.lang.Long = newConfig.logLocalRetentionBytes
+      val logLocalRetentionBytes: java.lang.Long = newConfig.remoteLogManagerConfig.logLocalRetentionBytes
       if (logRetentionBytes > -1 && logLocalRetentionBytes != -2) {
         if (logLocalRetentionBytes == -1) {
           throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes,
@@ -999,7 +999,7 @@ object DynamicListenerConfig {
     SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
 
     // Network threads
-    ServerConfigs.NUM_NETWORK_THREADS_CONFIG
+    SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG
   )
 }
 
@@ -1069,7 +1069,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     val oldConfig = server.config
     val newListeners = listenersToMap(newConfig.listeners)
-    val newAdvertisedListeners = listenersToMap(newConfig.effectiveAdvertisedListeners)
+    val newAdvertisedListeners = listenersToMap(newConfig.effectiveAdvertisedBrokerListeners)
     val oldListeners = listenersToMap(oldConfig.listeners)
     if (!newAdvertisedListeners.keySet.subsetOf(newListeners.keySet))
       throw new ConfigException(s"Advertised listeners '$newAdvertisedListeners' must be a subset of listeners '$newListeners'")
@@ -1093,8 +1093,8 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
 
     // Currently, we do not support adding or removing listeners when in KRaft mode.
     // However, we support changing other listener configurations (max connections, etc.)
-    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedListeners),
-        listenersToMap(newConfig.effectiveAdvertisedListeners))) {
+    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedBrokerListeners),
+        listenersToMap(newConfig.effectiveAdvertisedBrokerListeners))) {
       verifyListenerRegistrationAlterationSupported()
     }
   }
@@ -1111,8 +1111,8 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
       if (listenersRemoved.nonEmpty) server.socketServer.removeListeners(listenersRemoved)
       if (listenersAdded.nonEmpty) server.socketServer.addListeners(listenersAdded)
     }
-    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedListeners),
-        listenersToMap(newConfig.effectiveAdvertisedListeners))) {
+    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedBrokerListeners),
+        listenersToMap(newConfig.effectiveAdvertisedBrokerListeners))) {
       verifyListenerRegistrationAlterationSupported()
       server match {
         case kafkaServer: KafkaServer => kafkaServer.kafkaController.updateBrokerInfo(kafkaServer.createBrokerInfo)

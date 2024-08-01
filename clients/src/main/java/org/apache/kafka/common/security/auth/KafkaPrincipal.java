@@ -97,4 +97,3 @@ public class KafkaPrincipal implements Principal {
         return tokenAuthenticated;
     }
 }
-

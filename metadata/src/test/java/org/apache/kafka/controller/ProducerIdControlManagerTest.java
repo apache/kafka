@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Collections;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
@@ -27,10 +26,13 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.controller.ClusterControlManagerTest.CONTROLLER_ID;
+import java.util.Collections;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -98,20 +100,20 @@ public class ProducerIdControlManagerTest {
         assertEquals(42, range.firstProducerId());
 
         // Can't go backwards in Producer IDs
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(RuntimeException.class, () ->
             producerIdControlManager.replay(
                 new ProducerIdsRecord()
                     .setBrokerId(1)
                     .setBrokerEpoch(100)
-                    .setNextProducerId(40));
-        }, "Producer ID range must only increase");
-        assertThrows(RuntimeException.class, () -> {
+                    .setNextProducerId(40)),
+            "Producer ID range must only increase");
+        assertThrows(RuntimeException.class, () ->
             producerIdControlManager.replay(
                 new ProducerIdsRecord()
                     .setBrokerId(2)
                     .setBrokerEpoch(100)
-                    .setNextProducerId(42));
-        }, "Producer ID range must only increase");
+                    .setNextProducerId(42)),
+            "Producer ID range must only increase");
         range = producerIdControlManager.generateNextProducerId(3, 100).response();
         assertEquals(42, range.firstProducerId());
 

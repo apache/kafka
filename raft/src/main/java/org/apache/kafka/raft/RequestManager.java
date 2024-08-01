@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -24,7 +26,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Random;
-import org.apache.kafka.common.Node;
 
 /**
  * The request manager keeps tracks of the connection with remote replicas.
@@ -37,7 +38,7 @@ import org.apache.kafka.common.Node;
  * When a request times out or completes successfully the collection will transition back to the
  * ready state.
  *
- * When a request completes with an error it still transition to the backoff state until
+ * When a request completes with an error it still transitions to the backoff state until
  * {@code retryBackoffMs}.
  */
 public class RequestManager {
@@ -61,7 +62,7 @@ public class RequestManager {
     }
 
     /**
-     * Returns true if there any connection with pending requests.
+     * Returns true if there are any connections with pending requests.
      *
      * This is useful for satisfying the invariant that there is only one pending Fetch request.
      * If there are more than one pending fetch request, it is possible for the follower to write
@@ -104,7 +105,7 @@ public class RequestManager {
      * @return a random ready bootstrap node
      */
     public Optional<Node> findReadyBootstrapServer(long currentTimeMs) {
-        // Check that there are no infilght requests accross any of the known nodes not just
+        // Check that there are no inflight requests across any of the known nodes not just
         // the bootstrap servers
         if (hasAnyInflightRequest(currentTimeMs)) {
             return Optional.empty();
@@ -132,7 +133,7 @@ public class RequestManager {
      * If there is a connection with a pending request it returns the amount of time to wait until
      * the request times out.
      *
-     * Returns zero, if there are no pending request and at least one of the boorstrap servers is
+     * Returns zero, if there are no pending requests and at least one of the bootstrap servers is
      * ready.
      *
      * If all of the bootstrap servers are backing off and there are no pending requests, return
@@ -219,7 +220,7 @@ public class RequestManager {
             return 0;
         }
 
-        return  state.remainingBackoffMs(timeMs);
+        return state.remainingBackoffMs(timeMs);
     }
 
     public boolean isResponseExpected(Node node, long correlationId) {
@@ -242,7 +243,7 @@ public class RequestManager {
     public void onResponseResult(Node node, long correlationId, boolean success, long timeMs) {
         if (isResponseExpected(node, correlationId)) {
             if (success) {
-                // Mark the connection as ready by reseting it
+                // Mark the connection as ready by resetting it
                 reset(node);
             } else {
                 // Backoff the connection
@@ -371,12 +372,12 @@ public class RequestManager {
         @Override
         public String toString() {
             return String.format(
-                "ConnectionState(node=%s, state=%s, lastSendTimeMs=%d, lastFailTimeMs=%d, inFlightCorrelationId=%d)",
+                "ConnectionState(node=%s, state=%s, lastSendTimeMs=%d, lastFailTimeMs=%d, inFlightCorrelationId=%s)",
                 node,
                 state,
                 lastSendTimeMs,
                 lastFailTimeMs,
-                inFlightCorrelationId
+                inFlightCorrelationId.isPresent() ? inFlightCorrelationId.getAsLong() : "undefined"
             );
         }
     }

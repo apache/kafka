@@ -20,6 +20,7 @@ package org.apache.kafka.common.utils;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

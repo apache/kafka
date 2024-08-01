@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A SampledStat records a single scalar value measured over one or more samples. Each sample is recorded over a

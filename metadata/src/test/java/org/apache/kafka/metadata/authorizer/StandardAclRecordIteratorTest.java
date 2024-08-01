@@ -18,6 +18,7 @@
 package org.apache.kafka.metadata.authorizer;
 
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -61,6 +62,6 @@ public class StandardAclRecordIteratorTest {
         iterator.next();
         iterator.next();
         iterator.next();
-        assertThrows(NoSuchElementException.class, () -> iterator.next());
+        assertThrows(NoSuchElementException.class, iterator::next);
     }
 }

@@ -93,6 +93,8 @@ class KafkaRaftServer(
 
   override def startup(): Unit = {
     Mx4jLoader.maybeLoad()
+    // Controller component must be started before the broker component so that
+    // the controller endpoints are passed to the KRaft manager
     controller.foreach(_.startup())
     broker.foreach(_.startup())
     AppInfoParser.registerAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics, time.milliseconds())
@@ -136,7 +138,7 @@ object KafkaRaftServer {
     // Load and verify the original ensemble.
     val loader = new MetaPropertiesEnsemble.Loader()
     loader.addMetadataLogDir(config.metadataLogDir)
-    config.logDirs.foreach(loader.addLogDir)
+          .addLogDirs(config.logDirs.asJava)
     val initialMetaPropsEnsemble = loader.load()
     val verificationFlags = util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR)
     initialMetaPropsEnsemble.verify(Optional.empty(), OptionalInt.of(config.nodeId), verificationFlags)

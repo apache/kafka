@@ -26,14 +26,15 @@ import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.MockQuorumStateStore;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
+import org.apache.kafka.server.common.KRaftVersion;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mockito;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
@@ -63,13 +64,24 @@ public class KafkaRaftMetricsTest {
         metrics.close();
     }
 
-    private QuorumState buildQuorumState(VoterSet voterSet, short kraftVersion) {
+    private QuorumState buildQuorumState(VoterSet voterSet, KRaftVersion kraftVersion) {
+        KRaftControlRecordStateMachine mockPartitionState = Mockito.mock(KRaftControlRecordStateMachine.class);
+
+        Mockito
+            .when(mockPartitionState.lastVoterSet())
+            .thenReturn(voterSet);
+        Mockito
+            .when(mockPartitionState.lastVoterSetOffset())
+            .thenReturn(kraftVersion.isReconfigSupported() ? OptionalLong.of(0) : OptionalLong.empty());
+        Mockito
+            .when(mockPartitionState.lastKraftVersion())
+            .thenReturn(kraftVersion);
+
         return new QuorumState(
             OptionalInt.of(localId),
             localDirectoryId,
-            VoterSetTest.DEFAULT_LISTENER_NAME,
-            () -> voterSet,
-            () -> kraftVersion,
+            mockPartitionState,
+            voterSet.listeners(localId),
             electionTimeoutMs,
             fetchTimeoutMs,
             new MockQuorumStateStore(),
@@ -79,15 +91,15 @@ public class KafkaRaftMetricsTest {
         );
     }
 
-    private VoterSet localStandaloneVoterSet(short kraftVersion) {
-        boolean withDirectoryId = kraftVersion > 0;
+    private VoterSet localStandaloneVoterSet(KRaftVersion kraftVersion) {
+        boolean withDirectoryId = kraftVersion.featureLevel() > 0;
         return VoterSetTest.voterSet(
             Collections.singletonMap(
                 localId,
                 VoterSetTest.voterNode(
                     ReplicaKey.of(
                         localId,
-                        withDirectoryId ? Optional.of(localDirectoryId) : Optional.empty()
+                        withDirectoryId ? localDirectoryId : ReplicaKey.NO_DIRECTORY_ID
                     )
                 )
             )
@@ -95,16 +107,16 @@ public class KafkaRaftMetricsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(shorts = {0, 1})
-    public void shouldRecordVoterQuorumState(short kraftVersion) {
-        boolean withDirectoryId = kraftVersion > 0;
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordVoterQuorumState(KRaftVersion kraftVersion) {
+        boolean withDirectoryId = kraftVersion.featureLevel() > 0;
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(IntStream.of(1, 2), withDirectoryId);
         voterMap.put(
             localId,
             VoterSetTest.voterNode(
                 ReplicaKey.of(
                     localId,
-                    withDirectoryId ? Optional.of(localDirectoryId) : Optional.empty()
+                    withDirectoryId ? localDirectoryId : ReplicaKey.NO_DIRECTORY_ID
                 )
             )
         );
@@ -147,11 +159,15 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 1, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(5L), voters.voters());
-        state.leaderStateOrThrow().updateReplicaState(1, Uuid.randomUuid(), 0, new LogOffsetMetadata(5L));
+        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(5L), voters);
+        state.leaderStateOrThrow().updateReplicaState(
+            voterMap.get(1).voterKey(),
+            0,
+            new LogOffsetMetadata(5L)
+        );
         assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToFollower(2, voters.voterNode(1, VoterSetTest.DEFAULT_LISTENER_NAME).get());
+        state.transitionToFollower(2, 1, voters.listeners(1));
         assertEquals("follower", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) 1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
@@ -165,7 +181,7 @@ public class KafkaRaftMetricsTest {
         state.followerStateOrThrow().updateHighWatermark(OptionalLong.of(10L));
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToVoted(3, ReplicaKey.of(2, Optional.empty()));
+        state.transitionToVoted(3, ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID));
         assertEquals("voted", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) 2, getMetric(metrics, "current-vote").metricValue());
@@ -189,9 +205,9 @@ public class KafkaRaftMetricsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(shorts = {0, 1})
-    public void shouldRecordNonVoterQuorumState(short kraftVersion) {
-        boolean withDirectoryId = kraftVersion > 0;
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordNonVoterQuorumState(KRaftVersion kraftVersion) {
+        boolean withDirectoryId = kraftVersion.featureLevel() > 0;
         VoterSet voters = VoterSetTest.voterSet(
             VoterSetTest.voterMap(IntStream.of(1, 2, 3), withDirectoryId)
         );
@@ -209,7 +225,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 0, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToFollower(2, voters.voterNode(1, VoterSetTest.DEFAULT_LISTENER_NAME).get());
+        state.transitionToFollower(2, 1, voters.listeners(1));
         assertEquals("observer", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) 1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
@@ -236,8 +252,8 @@ public class KafkaRaftMetricsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(shorts = {0, 1})
-    public void shouldRecordLogEnd(short kraftVersion) {
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordLogEnd(KRaftVersion kraftVersion) {
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
@@ -252,8 +268,8 @@ public class KafkaRaftMetricsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(shorts = {0, 1})
-    public void shouldRecordNumUnknownVoterConnections(short kraftVersion) {
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordNumUnknownVoterConnections(KRaftVersion kraftVersion) {
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
@@ -266,8 +282,8 @@ public class KafkaRaftMetricsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(shorts = {0, 1})
-    public void shouldRecordPollIdleRatio(short kraftVersion) {
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordPollIdleRatio(KRaftVersion kraftVersion) {
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
@@ -339,8 +355,8 @@ public class KafkaRaftMetricsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(shorts = {0, 1})
-    public void shouldRecordLatency(short kraftVersion) {
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordLatency(KRaftVersion kraftVersion) {
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
@@ -371,8 +387,8 @@ public class KafkaRaftMetricsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(shorts = {0, 1})
-    public void shouldRecordRate(short kraftVersion) {
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordRate(KRaftVersion kraftVersion) {
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);

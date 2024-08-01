@@ -53,7 +53,7 @@ import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestEx
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter, Quota}
-import org.apache.kafka.common.network.{ListenerName, Mode}
+import org.apache.kafka.common.network.{ListenerName, ConnectionMode}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.MetadataRequest
@@ -106,8 +106,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   private val trustStoreFile1 = TestUtils.tempFile("truststore", ".jks")
   private val trustStoreFile2 = TestUtils.tempFile("truststore", ".jks")
-  private val sslProperties1 = TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile1), "kafka")
-  private val sslProperties2 = TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile2), "kafka")
+  private val sslProperties1 = TestUtils.sslConfigs(ConnectionMode.SERVER, clientCert = false, Some(trustStoreFile1), "kafka")
+  private val sslProperties2 = TestUtils.sslConfigs(ConnectionMode.SERVER, clientCert = false, Some(trustStoreFile2), "kafka")
   private val invalidSslProperties = invalidSslConfigs
 
   @BeforeEach
@@ -163,7 +163,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     TestUtils.createTopicWithAdmin(adminClients.head, topic, servers, controllerServers, numPartitions, replicationFactor = numServers)
     TestUtils.createTopicWithAdmin(adminClients.head, Topic.GROUP_METADATA_TOPIC_NAME, servers, controllerServers,
-      numPartitions = servers.head.config.offsetsTopicPartitions,
+      numPartitions = servers.head.config.groupCoordinatorConfig.offsetsTopicPartitions,
       replicationFactor = numServers,
       topicConfig = servers.head.groupCoordinator.groupMetadataTopicConfigs)
 
@@ -878,7 +878,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       "kafka-scheduler-", mayReceiveDuplicates = false)
     verifyThreadPoolResize(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, config.numRecoveryThreadsPerDataDir,
       "", mayReceiveDuplicates = false)
-    verifyThreadPoolResize(ServerConfigs.NUM_NETWORK_THREADS_CONFIG, config.numNetworkThreads,
+    verifyThreadPoolResize(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG, config.numNetworkThreads,
       networkThreadPrefix, mayReceiveDuplicates = true)
     verifyThreads("data-plane-kafka-socket-acceptor-", config.listeners.size)
 
@@ -1515,7 +1515,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private def alterAdvertisedListener(adminClient: Admin, externalAdminClient: Admin, oldHost: String, newHost: String): Unit = {
     val configs = servers.map { server =>
       val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
-      val newListeners = server.config.effectiveAdvertisedListeners.map { e =>
+      val newListeners = server.config.effectiveAdvertisedBrokerListeners.map { e =>
         if (e.listenerName.value == SecureExternal)
           s"${e.listenerName.value}://$newHost:${server.boundPort(e.listenerName)}"
         else
@@ -1527,7 +1527,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     adminClient.alterConfigs(configs).all.get
     servers.foreach { server =>
       TestUtils.retry(10000) {
-        val externalListener = server.config.effectiveAdvertisedListeners.find(_.listenerName.value == SecureExternal)
+        val externalListener = server.config.effectiveAdvertisedBrokerListeners.find(_.listenerName.value == SecureExternal)
           .getOrElse(throw new IllegalStateException("External listener not found"))
         assertEquals(newHost, externalListener.host, "Config not updated")
       }

@@ -180,7 +180,7 @@ class RequestQuotaTest extends BaseRequestTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testExemptRequestTime(quorum: String): Unit = {
     // Exclude `DESCRIBE_QUORUM`, maybe it shouldn't be a cluster action
-    val actions = clusterActions -- clusterActionsWithThrottleForBroker -- RequestQuotaTest.Envelope - ApiKeys.DESCRIBE_QUORUM
+    val actions = clusterActions -- clusterActionsWithThrottleForBroker -- RequestQuotaTest.Envelope -- RequestQuotaTest.ShareGroupState - ApiKeys.DESCRIBE_QUORUM
     for (apiKey <- actions) {
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
     }
@@ -638,10 +638,10 @@ class RequestQuotaTest extends BaseRequestTest {
           new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
 
         case ApiKeys.VOTE =>
-          new VoteRequest.Builder(VoteRequest.singletonRequest(tp, 1, 2, 0, 10))
+          new VoteRequest.Builder(VoteRequest.singletonRequest(tp, null, 1, 2, 0, 10))
 
         case ApiKeys.BEGIN_QUORUM_EPOCH =>
-          new BeginQuorumEpochRequest.Builder(BeginQuorumEpochRequest.singletonRequest(tp, 2, 5))
+          new BeginQuorumEpochRequest.Builder(BeginQuorumEpochRequest.singletonRequest(tp, null, 2, 5))
 
         case ApiKeys.END_QUORUM_EPOCH =>
           new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
@@ -738,6 +738,21 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.UPDATE_RAFT_VOTER =>
           new UpdateRaftVoterRequest.Builder(new UpdateRaftVoterRequestData())
+
+        case ApiKeys.INITIALIZE_SHARE_GROUP_STATE =>
+          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData(), true)
+
+        case ApiKeys.READ_SHARE_GROUP_STATE =>
+          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData(), true)
+
+        case ApiKeys.WRITE_SHARE_GROUP_STATE =>
+          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData(), true)
+
+        case ApiKeys.DELETE_SHARE_GROUP_STATE =>
+          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData(), true)
+
+        case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY =>
+          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), true)
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
@@ -860,6 +875,8 @@ class RequestQuotaTest extends BaseRequestTest {
 object RequestQuotaTest {
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
   val Envelope = Set(ApiKeys.ENVELOPE)
+  val ShareGroupState = Set(ApiKeys.INITIALIZE_SHARE_GROUP_STATE, ApiKeys.READ_SHARE_GROUP_STATE, ApiKeys.WRITE_SHARE_GROUP_STATE,
+    ApiKeys.DELETE_SHARE_GROUP_STATE, ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY)
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which

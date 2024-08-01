@@ -38,7 +38,7 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion}
-import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
@@ -50,6 +50,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 
 trait QuorumImplementation {
   def createBroker(
@@ -103,7 +104,7 @@ class KRaftQuorumImplementation(
   ): KafkaBroker = {
     val metaPropertiesEnsemble = {
       val loader = new MetaPropertiesEnsemble.Loader()
-      config.logDirs.foreach(loader.addLogDir)
+        .addLogDirs(config.logDirs.asJava)
       loader.addMetadataLogDir(config.metadataLogDir)
       val ensemble = loader.load()
       val copier = new MetaPropertiesEnsemble.Copier(ensemble)
@@ -345,14 +346,12 @@ abstract class QuorumTestHarness extends Logging {
                         setName(MetadataVersion.FEATURE_NAME).
                         setFeatureLevel(metadataVersion.featureLevel()), 0.toShort))
 
-    if (isNewGroupCoordinatorEnabled()) {
-      metadataRecords.add(new ApiMessageAndVersion(
-        new FeatureLevelRecord()
-          .setName(Features.GROUP_VERSION.featureName)
-          .setFeatureLevel(Features.GROUP_VERSION.latestTesting),
-        0.toShort
-      ))
-    }
+    metadataRecords.add(new ApiMessageAndVersion(
+      new FeatureLevelRecord()
+        .setName(Features.TRANSACTION_VERSION.featureName)
+        .setFeatureLevel(Features.TRANSACTION_VERSION.latestTesting),
+      0.toShort
+    ))
 
     optionalMetadataRecords.foreach { metadataArguments =>
       for (record <- metadataArguments) metadataRecords.add(record)
@@ -366,6 +365,8 @@ abstract class QuorumTestHarness extends Logging {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:0")
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:0")
+    // Setting the configuration to the same value set on the brokers via TestUtils to keep KRaft based and Zk based controller configs are consistent.
+    props.setProperty(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
     val config = new KafkaConfig(props)
     val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, InetSocketAddress]]
     val metaPropertiesEnsemble = new MetaPropertiesEnsemble.Loader().

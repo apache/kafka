@@ -31,6 +31,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Task implementation for {@link SchemaSourceConnector}.
+ */
 public class SchemaSourceTask extends SourceTask {
 
     private static final Logger log = LoggerFactory.getLogger(SchemaSourceTask.class);

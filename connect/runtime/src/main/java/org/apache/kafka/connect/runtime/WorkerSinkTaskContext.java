@@ -19,9 +19,10 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
-import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkTaskContext;
+import org.apache.kafka.connect.storage.ClusterConfigState;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +35,7 @@ import java.util.Set;
 
 public class WorkerSinkTaskContext implements SinkTaskContext {
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(WorkerSinkTaskContext.class);
     private final Map<TopicPartition, Long> offsets;
     private final Consumer<byte[], byte[]> consumer;
     private final WorkerSinkTask sinkTask;

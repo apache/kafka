@@ -22,8 +22,9 @@ import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStoreTest
 import org.apache.kafka.streams.state.internals.GlobalStateStoreProviderTest;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProviderTest;
 import org.apache.kafka.streams.state.internals.WrappingStoreProviderTest;
-import org.junit.runner.RunWith;
-import org.junit.runners.Suite;
+
+import org.junit.platform.suite.api.SelectClasses;
+import org.junit.platform.suite.api.Suite;
 
 /**
  * This suite runs all the tests related to querying StateStores (IQ).
@@ -33,8 +34,8 @@ import org.junit.runners.Suite;
  * Tests ending in the word "Suite" are excluded from the gradle build because it
  * already runs the component tests individually.
  */
-@RunWith(Suite.class)
-@Suite.SuiteClasses({
+@Suite
+@SelectClasses({
                         CompositeReadOnlyKeyValueStoreTest.class,
                         CompositeReadOnlyWindowStoreTest.class,
                         CompositeReadOnlySessionStoreTest.class,
@@ -45,5 +46,3 @@ import org.junit.runners.Suite;
                     })
 public class StoreQuerySuite {
 }
-
-
