@@ -474,32 +474,16 @@ public class PluginUtils {
     
     private static Collection<URL> forClassLoader(ClassLoader classLoader) {
         final Collection<URL> result = new ArrayList<URL>();
-        final ClassLoader[] loaders = classLoaders(classLoader);
-        for (ClassLoader loader : loaders) {
-            while (loader != null) {
-                if (loader instanceof URLClassLoader) {
-                    URL[] urls = ((URLClassLoader) loader).getURLs();
-                    if (urls != null) {
-                        result.addAll(new HashSet<URL>(Arrays.asList(urls)));
-                    }
+        while (classLoader != null) {
+            if (classLoader instanceof URLClassLoader) {
+                URL[] urls = ((URLClassLoader) classLoader).getURLs();
+                if (urls != null) {
+                    result.addAll(new HashSet<URL>(Arrays.asList(urls)));
                 }
-                loader = loader.getParent();
             }
+            classLoader = classLoader.getParent();
         }
         return distinctUrls(result);
-    }
-    
-    private static ClassLoader[] classLoaders(ClassLoader classLoader) {
-        if (classLoader == null) {
-            return new ClassLoader[] {classLoader};
-        }
-        ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader(), 
-                staticClassLoader = ClassGraph.class.getClassLoader();
-        return contextClassLoader != null ?
-                staticClassLoader != null && contextClassLoader != staticClassLoader ?
-                        new ClassLoader[]{contextClassLoader, staticClassLoader} :
-                        new ClassLoader[]{contextClassLoader} :
-                new ClassLoader[] {};
     }
     
     private static Collection<URL> distinctUrls(Collection<URL> urls) {
