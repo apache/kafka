@@ -18,6 +18,7 @@ package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.VoterSetTest;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
