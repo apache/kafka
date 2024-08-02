@@ -220,7 +220,21 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      */
     @Override
     public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
-        records.add(CoordinatorRecordHelpers.newGroupEpochTombstoneRecord(groupId(), GroupType.SHARE));
+        members().forEach((memberId, member) ->
+            records.add(CoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord(groupId(), memberId))
+        );
+
+        members().forEach((memberId, member) ->
+            records.add(CoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
+        );
+        records.add(CoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+
+        members().forEach((memberId, member) ->
+            records.add(CoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord(groupId(), memberId))
+        );
+
+        records.add(CoordinatorRecordHelpers.newShareGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(CoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord(groupId()));
     }
 
     @Override

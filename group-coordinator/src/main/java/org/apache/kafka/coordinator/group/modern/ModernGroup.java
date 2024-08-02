@@ -568,7 +568,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
-     * Compute the subscription type of the consumer group.
+     * Compute the subscription type of the group.
      *
      * @param subscribedTopicNames      A map of topic names to the count of members subscribed to each topic.
      *

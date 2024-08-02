@@ -16,11 +16,11 @@
 // KIP-848 is in development. This schema is subject to non-backwards-compatible changes.
 {
   "type": "data",
-  "name": "ShareGroupPartitionMetadataKey",
-  "validVersions": "9",
-  "flexibleVersions": "none",
+  "name": "ShareGroupTargetAssignmentMetadataValue",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "4",
-      "about": "The group id." }
+    { "name": "AssignmentEpoch", "versions": "0+", "type": "int32",
+      "about": "The assignment epoch." }
   ]
 }

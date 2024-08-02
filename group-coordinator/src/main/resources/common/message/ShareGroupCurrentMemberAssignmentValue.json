@@ -16,7 +16,7 @@
 // KIP-848 is in development. This schema is subject to non-backwards-compatible changes.
 {
   "type": "data",
-  "name": "ConsumerGroupCurrentMemberAssignmentValue",
+  "name": "ShareGroupCurrentMemberAssignmentValue",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
@@ -27,9 +27,7 @@
     { "name": "State", "versions": "0+", "type": "int8",
       "about": "The member state. See MemberState for the possible values." },
     { "name": "AssignedPartitions", "versions": "0+", "type": "[]TopicPartitions",
-      "about": "The partitions assigned to (or owned by) this member." },
-    { "name": "PartitionsPendingRevocation", "versions": "0+", "type": "[]TopicPartitions",
-      "about": "The partitions that must be revoked by this member." }
+      "about": "The partitions assigned to (or owned by) this member." }
   ],
   "commonStructs": [
     { "name": "TopicPartitions", "versions": "0+", "fields": [

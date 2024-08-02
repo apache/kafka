@@ -33,8 +33,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord;
 
 /**
  * Build a new Target Assignment based on the provided parameters. As a result,
@@ -356,7 +356,7 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
             if (!newMemberAssignment.equals(oldMemberAssignment)) {
                 // If the member had no assignment or had a different assignment, we
                 // create a record for the new assignment.
-                records.add(newTargetAssignmentRecord(
+                records.add(newConsumerGroupTargetAssignmentRecord(
                     groupId,
                     memberId,
                     newMemberAssignment.partitions()
@@ -365,7 +365,7 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
         }
 
         // Bump the target assignment epoch.
-        records.add(newTargetAssignmentEpochRecord(groupId, groupEpoch));
+        records.add(newConsumerGroupTargetAssignmentEpochRecord(groupId, groupEpoch));
 
         return new TargetAssignmentResult(records, newGroupAssignment.members());
     }
