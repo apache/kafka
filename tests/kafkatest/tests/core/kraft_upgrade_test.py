@@ -42,6 +42,7 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
         self.topic = "test_topic"
         self.partitions = 3
         self.replication_factor = 3
+        self.min_isr = min(2, self.replication_factor)
 
         # Producer and consumer
         self.producer_throughput = 1000
@@ -92,7 +93,7 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
                                   version=fromKafkaVersion,
                                   topics={self.topic: {"partitions": self.partitions,
                                                        "replication-factor": self.replication_factor,
-                                                       'configs': {"min.insync.replicas": 2}}})
+                                                       'configs': {"min.insync.replicas": self.min_isr}}})
         self.kafka.start()
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
                                            self.topic, throughput=self.producer_throughput,
@@ -107,6 +108,27 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
         assert cluster_id is not None
         assert len(cluster_id) == 22
         assert self.kafka.check_protocol_errors(self)
+
+        # Ensure we can create another topic and produce/consume to/from it
+        new_topic_cfg = {
+            "topic": "test-topic-2",
+            "partitions": self.partitions,
+            "replication-factor": self.replication_factor,
+            "configs": {"min.insync.replicas": self.min_isr}
+        }
+        self.kafka.create_topic(new_topic_cfg)
+
+        self.producer.free()
+        self.consumer.free()
+        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
+                                           new_topic_cfg["topic"], throughput=self.producer_throughput,
+                                           message_validator=is_int,
+                                           compression_types=["none"],
+                                           version=KafkaVersion(from_kafka_version))
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
+                                        new_topic_cfg["topic"], new_consumer=True, consumer_timeout_ms=30000,
+                                        message_validator=is_int, version=KafkaVersion(from_kafka_version))
+        self.run_produce_consume_validate()
 
     @cluster(num_nodes=5)
     @matrix(from_kafka_version=[str(LATEST_3_1), str(LATEST_3_2), str(LATEST_3_3), str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(DEV_BRANCH)],
