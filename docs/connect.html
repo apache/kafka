@@ -442,7 +442,7 @@ errors.tolerance=all</code></pre>
 
     <h6>ACL requirements</h6>
 
-    <p>With exactly-once source support enabled, the principal for each Connect worker will require the following ACLs:</p>
+    <p>With exactly-once source support enabled, or with <code>exactly.once.source.support</code> set to <code>preparing</code>, the principal for each Connect worker will require the following ACLs:</p>
 
     <table class="data-table">
         <thead>
@@ -475,7 +475,7 @@ errors.tolerance=all</code></pre>
         </tbody>
     </table>
 
-    <p>And the principal for each individual connector will require the following ACLs:</p>
+    <p>And with exactly-once source enabled (but not if <code>exactly.once.source.support</code> is set to <code>preparing</code>), the principal for each individual connector will require the following ACLs:</p>
 
     <table class="data-table">
         <thead>

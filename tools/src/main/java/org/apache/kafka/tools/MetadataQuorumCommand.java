@@ -18,7 +18,9 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.QuorumInfo;
+import org.apache.kafka.clients.admin.RaftVoterEndpoint;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -167,7 +169,7 @@ public class MetadataQuorumCommand {
         rows.addAll(quorumInfoToRows(leader, quorumInfo.observers().stream(), "Observer", humanReadable));
 
         ToolsUtils.prettyPrintTable(
-            asList("NodeId", "LogEndOffset", "Lag", "LastFetchTimestamp", "LastCaughtUpTimestamp", "Status"),
+            asList("NodeId", "DirectoryId", "LogEndOffset", "Lag", "LastFetchTimestamp", "LastCaughtUpTimestamp", "Status"),
             rows,
             System.out
         );
@@ -186,6 +188,7 @@ public class MetadataQuorumCommand {
                     valueOf(info.lastCaughtUpTimestamp().getAsLong());
             return Stream.of(
                 info.replicaId(),
+                info.replicaDirectoryId(),
                 info.logEndOffset(),
                 leader.logEndOffset() - info.logEndOffset(),
                 lastFetchTimestamp,
@@ -232,9 +235,60 @@ public class MetadataQuorumCommand {
             "\nHighWatermark:          " + quorumInfo.highWatermark() +
             "\nMaxFollowerLag:         " + maxFollowerLag +
             "\nMaxFollowerLagTimeMs:   " + maxFollowerLagTimeMs +
-            "\nCurrentVoters:          " + quorumInfo.voters().stream().map(QuorumInfo.ReplicaState::replicaId).map(Object::toString).collect(Collectors.joining(",", "[", "]")) +
-            "\nCurrentObservers:       " + quorumInfo.observers().stream().map(QuorumInfo.ReplicaState::replicaId).map(Objects::toString).collect(Collectors.joining(",", "[", "]"))
+            "\nCurrentVoters:          " + printVoterState(quorumInfo) +
+            "\nCurrentObservers:       " + printObserverState(quorumInfo)
         );
     }
 
+    // Constructs the CurrentVoters string
+    // CurrentVoters: [{"id": 0, "directoryId": "UUID1", "endpoints": [{"name": "C", "securityProtocol": "SSL", "host": "controller-0", "port": 1234}]}, {"id": 1, ... }]}]
+    private static String printVoterState(QuorumInfo quorumInfo) {
+        return printReplicaState(quorumInfo, quorumInfo.voters());
+    }
+
+    // Constructs the CurrentObservers string
+    private static String printObserverState(QuorumInfo quorumInfo) {
+        return printReplicaState(quorumInfo, quorumInfo.observers());
+    }
+
+    private static String printReplicaState(QuorumInfo quorumInfo, List<QuorumInfo.ReplicaState> replicas) {
+        List<Node> currentVoterList = replicas.stream().map(voter -> new Node(
+            voter.replicaId(),
+            voter.replicaDirectoryId(),
+            getEndpoints(quorumInfo.nodes().get(voter.replicaId())))).collect(Collectors.toList());
+        return currentVoterList.stream().map(Objects::toString).collect(Collectors.joining(", ", "[", "]"));
+    }
+
+    private static List<RaftVoterEndpoint> getEndpoints(QuorumInfo.Node node) {
+        return node == null ? new ArrayList<>() : node.endpoints();
+    }
+
+    private static class Node {
+        private final int id;
+        private final Uuid directoryId;
+        private final List<RaftVoterEndpoint> endpoints;
+
+        private Node(int id, Uuid directoryId, List<RaftVoterEndpoint> endpoints) {
+            this.id = id;
+            this.directoryId = Objects.requireNonNull(directoryId);
+            this.endpoints = Objects.requireNonNull(endpoints);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("{");
+            sb.append("\"id\": ").append(id).append(", ");
+            sb.append("\"directoryId\": ").append("\"").append(directoryId.equals(Uuid.ZERO_UUID) ? "null" : directoryId).append("\"");
+            if (!endpoints.isEmpty()) {
+                sb.append(", \"endpoints\": ");
+                for (RaftVoterEndpoint endpoint : endpoints) {
+                    sb.append(endpoint.toString()).append(", ");
+                }
+                sb.setLength(sb.length() - 2);  // remove the last comma and space
+            }
+            sb.append("}");
+            return sb.toString();
+        }
+    }
 }

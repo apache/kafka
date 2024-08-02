@@ -1085,12 +1085,12 @@ class ControllerApis(
 
   def handleAddRaftVoter(request: RequestChannel.Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, ALTER)
-    throw new UnsupportedVersionException("handleAddRaftVoter is not supported yet.")
+    handleRaftRequest(request, response => new AddRaftVoterResponse(response.asInstanceOf[AddRaftVoterResponseData]))
   }
 
   def handleRemoveRaftVoter(request: RequestChannel.Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, ALTER)
-    throw new UnsupportedVersionException("handleRemoveRaftVoter is not supported yet.")
+    handleRaftRequest(request, response => new RemoveRaftVoterResponse(response.asInstanceOf[RemoveRaftVoterResponseData]))
   }
 
   def handleUpdateRaftVoter(request: RequestChannel.Request): CompletableFuture[Unit] = {
