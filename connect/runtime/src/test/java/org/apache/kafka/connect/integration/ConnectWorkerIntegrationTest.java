@@ -938,7 +938,11 @@ public class ConnectWorkerIntegrationTest {
         );
 
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(DistributedHerder.class)) {
-            connect.restartTask(CONNECTOR_NAME, 0);
+            try {
+                connect.restartTask(CONNECTOR_NAME, 0);
+            } catch (Exception e) {
+                log.error("Exception while restarting task", e);
+            }
             TestUtils.waitForCondition(() -> logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
                     logCaptureAppender.getEvents().stream().anyMatch(e ->
                         // Ensure that the tick thread is blocked on the stage which we expect it to be, i.e restarting the task.
@@ -1002,15 +1006,11 @@ public class ConnectWorkerIntegrationTest {
         // ICR here.
         String taskIdToVerify = new ConnectorTaskId(CONNECTOR_NAME + "-2", 1).toString();
 
-        // Restarting the task on a separate thread to not block the test thread.
-        Thread restartThread = new Thread(() -> {
-            try {
-                connect.restartTask(CONNECTOR_NAME + "-1", 0);
-            } catch (Exception e) {
-                log.error("Exception while restarting task", e);
-            }
-        });
-        restartThread.start();
+        try {
+            connect.restartTask(CONNECTOR_NAME + "-1", 0);
+        } catch (Exception e) {
+            log.error("Exception while restarting task", e);
+        }
 
         // rebalance.timeout.ms + scheduled.rebalance.delay + 5s buffer.
         Thread.sleep(Duration.ofSeconds(20).toMillis());
@@ -1029,7 +1029,7 @@ public class ConnectWorkerIntegrationTest {
                 statuses.add(value);
             }
         }
-        restartThread.interrupt();
+
         String leaderWorkerId = leader.url().getHost() + ":" + leader.url().getPort();
         String timedOutWorkerId = timingOutWorker.url().getHost() + ":" + timingOutWorker.url().getPort();
 
