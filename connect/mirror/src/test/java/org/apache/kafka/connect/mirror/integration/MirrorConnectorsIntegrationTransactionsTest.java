@@ -27,7 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeUnit;
 
 /**
  * Integration test for MirrorMaker2 in which source records are emitted with a transactional producer,
