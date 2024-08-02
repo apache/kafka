@@ -4061,7 +4061,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Creating the shareFetchContext for Share Session Handling. if context creation fails, the request is failed directly here.
       shareFetchContext = sharePartitionManagerInstance.newContext(groupId, shareFetchData, forgottenTopics, newReqMetadata, isAcknowledgeDataPresent)
     } catch {
-      case e: Exception => requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e))
+      case e:
+        Exception => requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e))
         return
     }
 
@@ -4085,9 +4086,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       topicIdPartitionSeq
     )(_.topicPartition.topic)
 
-    // Variable to store the topic partition wise result of fetching.
-    var fetchResult: CompletableFuture[Map[TopicIdPartition, ShareFetchResponseData.PartitionData]] =
-      CompletableFuture.completedFuture(mutable.Map.empty)
     // Variable to store the topic partition wise result of piggybacked acknowledgements.
     var acknowledgeResult: CompletableFuture[Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]] =
       CompletableFuture.completedFuture(mutable.Map.empty)
@@ -4108,7 +4106,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     // Handling the Fetch from the ShareFetchRequest.
-    fetchResult = handleFetchFromShareFetchRequest(
+    // Variable to store the topic partition wise result of fetching.
+    val fetchResult: CompletableFuture[Map[TopicIdPartition, ShareFetchResponseData.PartitionData]] =
+      handleFetchFromShareFetchRequest(
       request,
       erroneousAndValidPartitionData,
       sharePartitionManagerInstance,
@@ -4120,10 +4120,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                                                      ): CompletableFuture[ShareFetchResponse] = {
 
       fetchResult.thenCombine(acknowledgeResult,
-        (
-          fetchMap: Map[TopicIdPartition, ShareFetchResponseData.PartitionData],
-          acknowledgeMap: Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
-        ) => {
+        (fetchMap: Map[TopicIdPartition, ShareFetchResponseData.PartitionData],
+          acknowledgeMap: Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]) => {
           val shareFetchResponse = processShareFetchResponse(fetchMap, request, topicIdNames, shareFetchContext)
           // The outer map has topicId as the key and the inner map has partitionIndex as the key.
           val topicPartitionAcknowledgements: mutable.Map[Uuid, mutable.Map[Int, Short]] = mutable.Map()
@@ -4140,7 +4138,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
           }
 
-          shareFetchResponse.data.responses.forEach(topic => {
+          shareFetchResponse.data.responses.forEach{ topic =>
             val topicId = topic.topicId
             topicPartitionAcknowledgements.get(topicId) match {
               case Some(subMap) =>
@@ -4164,7 +4162,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 topicPartitionAcknowledgements.remove(topicId)
               case None =>
             }
-          })
+          }
           // Add the remaining acknowledgements.
           topicPartitionAcknowledgements.foreach { case (topicId, subMap) =>
             val topicData = new ShareFetchResponseData.ShareFetchableTopicResponse()
@@ -4250,7 +4248,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           request.context.principal,
           request.context.listenerName.value))
 
-      // TODO: Change the dummy values to actual values after the required implementations are completed
       val params = new FetchParams(
         versionId,
         FetchRequest.CONSUMER_REPLICA_ID,
@@ -4268,21 +4265,21 @@ class KafkaApis(val requestChannel: RequestChannel,
         shareFetchRequest.data.memberId,
         params,
         interestedWithMaxBytes
-      ).thenApply(result => {
-        var combinedResult = Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
+      ).thenApply{ result =>
+        val combinedResult = mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
         result.asScala.foreach { case (tp, data) =>
           combinedResult += (tp -> data)
         }
         erroneous.foreach { case (tp, data) =>
           combinedResult += (tp -> data)
         }
-        combinedResult
-      })
+        combinedResult.toMap
+      }
     }
   }
 
   // Visible for Testing
-  def handleAcknowledgements (acknowledgementData: mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]],
+  def handleAcknowledgements(acknowledgementData: mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]],
                               erroneous: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData],
                               sharePartitionManagerInstance: SharePartitionManager,
                               authorizedTopics: Set[String],
@@ -4292,7 +4289,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val erroneousTopicIdPartitions = validateAcknowledgementBatches(acknowledgementData, erroneous)
     erroneousTopicIdPartitions.foreach(tp => acknowledgementData.remove(tp))
 
-    val interesting = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
+    val interested = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
 
     acknowledgementData.foreach{
       case (topicIdPartition: TopicIdPartition, acknowledgeBatches: util.List[ShareAcknowledgementBatch]) =>
@@ -4303,31 +4300,28 @@ class KafkaApis(val requestChannel: RequestChannel,
           erroneous += topicIdPartition ->
             ShareAcknowledgeResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         else {
-          interesting += topicIdPartition -> acknowledgeBatches
+          interested += topicIdPartition -> acknowledgeBatches
         }
     }
 
-    val shareAcknowledgeResult = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
-    shareAcknowledgeResult ++= erroneous
-
-    if (interesting.isEmpty) {
+    if (interested.isEmpty) {
       CompletableFuture.completedFuture(erroneous)
     } else {
       // call the share partition manager to acknowledge messages in the share partition
       sharePartitionManagerInstance.acknowledge(
         memberId,
         groupId,
-        interesting.asJava
-      ).thenApply(result => {
-        var combinedResult = Map.empty[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
+        interested.asJava
+      ).thenApply{ result =>
+        val combinedResult = mutable.Map.empty[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
         result.asScala.foreach { case (tp, data) =>
           combinedResult += (tp -> data)
         }
         erroneous.foreach { case (tp, data) =>
           combinedResult += (tp -> data)
         }
-        combinedResult
-      })
+        combinedResult.toMap
+      }
     }
   }
 
@@ -4380,33 +4374,33 @@ class KafkaApis(val requestChannel: RequestChannel,
                                                 ): mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]] = {
 
     val acknowledgeBatchesMap = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
-    shareFetchRequest.data().topics().forEach ( topic =>
+    shareFetchRequest.data().topics().forEach{ topic =>
       if (!topicIdNames.containsKey(topic.topicId)) {
-        topic.partitions.forEach((partition: ShareFetchRequestData.FetchPartition) => {
+        topic.partitions.forEach{ partition: ShareFetchRequestData.FetchPartition =>
           val topicIdPartition = new TopicIdPartition(
             topic.topicId,
             new TopicPartition(null, partition.partitionIndex))
           erroneous +=
             topicIdPartition -> ShareAcknowledgeResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)
-        })
+        }
       } else {
-        topic.partitions().forEach ( partition => {
+        topic.partitions().forEach { partition =>
           val topicIdPartition = new TopicIdPartition(
             topic.topicId(),
             new TopicPartition(topicIdNames.get(topic.topicId()), partition.partitionIndex())
           )
           val acknowledgeBatches = new util.ArrayList[ShareAcknowledgementBatch]()
-          partition.acknowledgementBatches().forEach( batch =>
-              acknowledgeBatches.add(new ShareAcknowledgementBatch(
-                batch.firstOffset(),
-                batch.lastOffset(),
-                batch.acknowledgeTypes()
-              ))
-          )
+          partition.acknowledgementBatches().forEach{ batch =>
+            acknowledgeBatches.add(new ShareAcknowledgementBatch(
+              batch.firstOffset(),
+              batch.lastOffset(),
+              batch.acknowledgeTypes()
+            ))
+          }
           acknowledgeBatchesMap += topicIdPartition -> acknowledgeBatches
-        })
+        }
       }
-    )
+    }
     acknowledgeBatchesMap
   }
 
@@ -4450,13 +4444,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     erroneousTopicIdPartitions
   }
 
-  // the callback for processing a share fetch response, invoked before throttling.
-  def processShareFetchResponse(
-                                  responsePartitionData: Map[TopicIdPartition, ShareFetchResponseData.PartitionData],
-                                  request: RequestChannel.Request,
-                                  topicIdNames: util.Map[Uuid, String],
-                                  shareFetchContext: ShareFetchContext
-                                ): ShareFetchResponse = {
+  // the callback for processing a share fetch response.
+  private def processShareFetchResponse(responsePartitionData: Map[TopicIdPartition, ShareFetchResponseData.PartitionData],
+                                        request: RequestChannel.Request,
+                                        topicIdNames: util.Map[Uuid, String],
+                                        shareFetchContext: ShareFetchContext): ShareFetchResponse = {
 
     val clientId = request.header.clientId
     val versionId = request.header.apiVersion
@@ -4496,7 +4488,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      // Prepare share fetch response from converted data.
+      // Prepare share fetch response
       val response =
         ShareFetchResponse.of(shareFetchResponse.error, throttleTimeMs, responseData, nodeEndpoints.values.toList.asJava)
       // record the bytes out metrics only when the response is being sent.
@@ -4511,9 +4503,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       response
     }
-    // Share Fetch size used to determine throttle time is calculated before any down conversions.
-    // This may be slightly different from the actual response size. But since down conversions
-    // result in data being loaded into memory, we should do this only when we are not going to throttle.
+
+    // Share Fetch size used to determine throttle time is calculated here.
+    // This may be slightly different from the actual response size.
     //
     // Record both bandwidth and request quota-specific values and throttle by muting the channel if any of the
     // quotas have been violated. If both quotas have been violated, use the max throttle time between the two
@@ -4545,8 +4537,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     createResponse(maxThrottleTimeMs)
   }
 
-  def getResponsePartitionData(tp: TopicIdPartition,
-                                   partitionData: ShareFetchResponseData.PartitionData): ShareFetchResponseData.PartitionData = {
+  private def getResponsePartitionData(tp: TopicIdPartition,
+                                       partitionData: ShareFetchResponseData.PartitionData): ShareFetchResponseData.PartitionData = {
     val records = ShareFetchResponse.recordsOrFail(partitionData)
     new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(tp.partition)
