@@ -87,14 +87,14 @@ private[scala] object FunctionsCompatConversions {
   }
 
   @deprecated(
-    since="4.0.0"
+    since = "4.0.0"
   )
   implicit class TransformerSupplierFromFunction[K, V, VO](val f: () => Transformer[K, V, VO]) extends AnyVal {
     def asTransformerSupplier: TransformerSupplier[K, V, VO] = () => f()
   }
 
   @deprecated(
-    since="4.0.0"
+    since = "4.0.0"
   )
   implicit class TransformerSupplierAsJava[K, V, VO](val supplier: TransformerSupplier[K, V, Iterable[VO]])
       extends AnyVal {
@@ -109,7 +109,7 @@ private[scala] object FunctionsCompatConversions {
   }
 
   @deprecated(
-    since="4.0.0"
+    since = "4.0.0"
   )
   implicit class ValueTransformerSupplierAsJava[V, VO](val supplier: ValueTransformerSupplier[V, Iterable[VO]])
       extends AnyVal {
@@ -124,7 +124,7 @@ private[scala] object FunctionsCompatConversions {
   }
 
   @deprecated(
-    since="4.0.0"
+    since = "4.0.0"
   )
   implicit class ValueTransformerSupplierWithKeyAsJava[K, V, VO](
     val supplier: ValueTransformerWithKeySupplier[K, V, Iterable[VO]]
