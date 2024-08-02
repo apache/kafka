@@ -101,6 +101,8 @@ trait KafkaBroker extends Logging {
   def clientToControllerChannelManager: NodeToControllerChannelManager
   def tokenCache: DelegationTokenCache
 
+  // For backwards compatibility, we need to keep older metrics tied
+  // to their original name when this class was named `KafkaServer`
   private val metricsGroup = new KafkaMetricsGroup(Server.MetricsPrefix, KafkaBroker.MetricsTypeName)
 
   metricsGroup.newGauge("BrokerState", () => brokerState.value)
