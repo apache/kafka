@@ -47,8 +47,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
-import io.github.classgraph.ClassGraph;
-
 /**
  * Connect plugin utility methods.
  */
