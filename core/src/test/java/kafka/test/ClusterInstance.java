@@ -183,7 +183,7 @@ public interface ClusterInstance {
 
     //---------------------------[wait]---------------------------//
 
-    default void verifyTopicDeletion(String topic) throws InterruptedException {
+    default void waitTopicDeletion(String topic) throws InterruptedException {
         waitForTopic(topic, 0);
     }
 
