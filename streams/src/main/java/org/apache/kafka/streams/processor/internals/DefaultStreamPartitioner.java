@@ -32,10 +32,11 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
         this.keySerializer = keySerializer;
     }
 
+    @Override
     public Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final int numPartitions) {
         final byte[] keyBytes = keySerializer.serialize(topic, key);
 
-        // if the key bytes are not available, we just return null to let the producer to decide
+        // if the key bytes are not available, we just return empty optional to let the producer decide
         // which partition to send internally; otherwise stick with the same built-in partitioner
         // util functions that producer used to make sure its behavior is consistent with the producer
         if (keyBytes == null) {
