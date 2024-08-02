@@ -4019,7 +4019,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val shareFetchRequest = request.body[ShareFetchRequest]
 
     if (!isShareGroupProtocolEnabled) {
-      requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION.exception))
       return
     }
     val sharePartitionManagerInstance: SharePartitionManager = sharePartitionManager match {
@@ -4027,7 +4027,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case None =>
         // The API is not supported when the SharePartitionManager is not defined on the broker
         info("Received share fetch request for zookeeper based cluster")
-        requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+        requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION.exception))
         return
     }
 
