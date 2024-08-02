@@ -1166,17 +1166,36 @@ public final class RaftClientTestContext {
         return removeVoterResponse;
     }
 
-    UpdateRaftVoterResponseData assertSentUpdateVoterResponse(Errors error) {
+    UpdateRaftVoterResponseData assertSentUpdateVoterResponse(
+        Errors error,
+        OptionalInt leaderId,
+        int epoch
+    ) {
         List<RaftResponse.Outbound> sentResponses = drainSentResponses(ApiKeys.UPDATE_RAFT_VOTER);
         assertEquals(1, sentResponses.size());
 
         RaftResponse.Outbound response = sentResponses.get(0);
         assertInstanceOf(UpdateRaftVoterResponseData.class, response.data());
 
-        // TODO: check the leader id, leader epocha and leader endpoint
         UpdateRaftVoterResponseData updateVoterResponse = (UpdateRaftVoterResponseData) response.data();
         assertEquals(error, Errors.forCode(updateVoterResponse.errorCode()));
+        assertEquals(leaderId.orElse(-1), updateVoterResponse.currentLeader().leaderId());
+        assertEquals(epoch, updateVoterResponse.currentLeader().leaderEpoch());
 
+        if (updateVoterResponse.currentLeader().leaderId() >= 0) {
+            int id = updateVoterResponse.currentLeader().leaderId();
+            Endpoints expectedLeaderEndpoints = startingVoters.listeners(id);
+            Endpoints responseEndpoints = Endpoints.fromInetSocketAddresses(
+                Collections.singletonMap(
+                    channel.listenerName(),
+                    InetSocketAddress.createUnresolved(
+                        updateVoterResponse.currentLeader().host(),
+                        updateVoterResponse.currentLeader().port()
+                    )
+                )
+            );
+            assertEquals(expectedLeaderEndpoints, responseEndpoints);
+        }
         return updateVoterResponse;
     }
 

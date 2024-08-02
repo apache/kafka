@@ -84,7 +84,6 @@ public enum KRaftVersion implements FeatureVersion {
         throw new IllegalStateException("Unsupported KRaft feature level: " + this);
     }
 
-    // TODO: write test
     public short kraftVersionRecordVersion() {
         switch (this) {
             case KRAFT_VERSION_1:
@@ -93,7 +92,6 @@ public enum KRaftVersion implements FeatureVersion {
         throw new IllegalStateException("Unsupported KRaft feature level: " + this);
     }
 
-    // TODO: write test
     public short votersRecordVersion() {
         switch (this) {
             case KRAFT_VERSION_1:

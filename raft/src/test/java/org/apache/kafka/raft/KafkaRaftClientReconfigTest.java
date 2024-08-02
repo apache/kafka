@@ -1603,7 +1603,11 @@ public class KafkaRaftClientReconfigTest {
 
         // Expect reply for UpdateVoter request
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.NONE);
+        context.assertSentUpdateVoterResponse(
+            Errors.NONE,
+            OptionalInt.of(local.id()),
+            epoch
+        );
     }
 
     @Test
@@ -1680,7 +1684,11 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.INCONSISTENT_CLUSTER_ID);
+        context.assertSentUpdateVoterResponse(
+            Errors.INCONSISTENT_CLUSTER_ID,
+            OptionalInt.of(local.id()),
+            epoch
+        );
 
         // invalid cluster id is rejected
         context.deliverRequest(
@@ -1693,7 +1701,11 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.INCONSISTENT_CLUSTER_ID);
+        context.assertSentUpdateVoterResponse(
+            Errors.INCONSISTENT_CLUSTER_ID,
+            OptionalInt.of(local.id()),
+            epoch
+        );
     }
 
     @Test
@@ -1722,7 +1734,11 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.FENCED_LEADER_EPOCH);
+        context.assertSentUpdateVoterResponse(
+            Errors.FENCED_LEADER_EPOCH,
+            OptionalInt.of(local.id()),
+            epoch
+        );
     }
 
     @Test
@@ -1751,7 +1767,11 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.UNKNOWN_LEADER_EPOCH);
+        context.assertSentUpdateVoterResponse(
+            Errors.UNKNOWN_LEADER_EPOCH,
+            OptionalInt.of(local.id()),
+            epoch
+        );
     }
 
     @Test
@@ -1776,7 +1796,11 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.NOT_LEADER_OR_FOLLOWER);
+        context.assertSentUpdateVoterResponse(
+            Errors.NOT_LEADER_OR_FOLLOWER,
+            OptionalInt.empty(),
+            context.currentEpoch()
+        );
     }
 
     @Test
@@ -1837,7 +1861,11 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.REQUEST_TIMED_OUT);
+        context.assertSentUpdateVoterResponse(
+            Errors.REQUEST_TIMED_OUT,
+            OptionalInt.of(local.id()),
+            epoch
+        );
     }
 
     @Test
@@ -1854,6 +1882,7 @@ public class KafkaRaftClientReconfigTest {
             .build();
 
         context.becomeLeader();
+        int epoch = context.currentEpoch();
 
         // Attempt to update the follower
         InetSocketAddress defaultAddress = InetSocketAddress.createUnresolved(
@@ -1876,10 +1905,14 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.REQUEST_TIMED_OUT);
+        context.assertSentUpdateVoterResponse(
+            Errors.REQUEST_TIMED_OUT,
+            OptionalInt.of(local.id()),
+            epoch
+        );
     }
 
-    // TODO: Mentioned that a Jira is going to fix this
+    // KAFKA-16538 is going to allow UpdateVoter RPC when the kraft.version is 0
     @Test
     void testUpdateVoterWithKraftVersion0() throws Exception {
         ReplicaKey local = replicaKey(randomeReplicaId(), true);
@@ -1924,7 +1957,11 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.UNSUPPORTED_VERSION);
+        context.assertSentUpdateVoterResponse(
+            Errors.UNSUPPORTED_VERSION,
+            OptionalInt.of(local.id()),
+            epoch
+        );
     }
 
     @Test
@@ -1971,7 +2008,11 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.VOTER_NOT_FOUND);
+        context.assertSentUpdateVoterResponse(
+            Errors.VOTER_NOT_FOUND,
+            OptionalInt.of(local.id()),
+            epoch
+        );
     }
 
     @Test
@@ -2018,7 +2059,11 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.VOTER_NOT_FOUND);
+        context.assertSentUpdateVoterResponse(
+            Errors.VOTER_NOT_FOUND,
+            OptionalInt.of(local.id()),
+            epoch
+        );
     }
 
     @Test
@@ -2075,7 +2120,11 @@ public class KafkaRaftClientReconfigTest {
 
         // Expect a timeout error
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.REQUEST_TIMED_OUT);
+        context.assertSentUpdateVoterResponse(
+            Errors.REQUEST_TIMED_OUT,
+            OptionalInt.of(local.id()),
+            epoch
+        );
     }
 
     @Test
@@ -2130,7 +2179,11 @@ public class KafkaRaftClientReconfigTest {
         // Leader completes the UpdateVoter RPC when resigning
         context.client.resign(epoch);
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.NOT_LEADER_OR_FOLLOWER);
+        context.assertSentUpdateVoterResponse(
+            Errors.NOT_LEADER_OR_FOLLOWER,
+            OptionalInt.of(local.id()),
+            epoch
+        );
     }
 
     @Test
@@ -2196,7 +2249,11 @@ public class KafkaRaftClientReconfigTest {
             )
         );
         context.pollUntilResponse();
-        context.assertSentUpdateVoterResponse(Errors.REQUEST_TIMED_OUT);
+        context.assertSentUpdateVoterResponse(
+            Errors.REQUEST_TIMED_OUT,
+            OptionalInt.of(local.id()),
+            epoch
+        );
     }
 
     @Test

@@ -109,8 +109,8 @@ public final class UpdateVoterHandler {
             );
         }
 
+        // KAFKA-16538 will implement the case when the kraft.version is 0
         // Check that the cluster supports kraft.version >= 1
-        // TODO: File a jira to handle the kraft.version == 0
         KRaftVersion kraftVersion = partitionState.lastKraftVersion();
         if (!kraftVersion.isReconfigSupported()) {
             return CompletableFuture.completedFuture(

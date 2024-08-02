@@ -17,9 +17,12 @@
 
 package org.apache.kafka.server.common;
 
+import org.apache.kafka.common.record.ControlRecordUtils;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public final class KRaftVersionTest {
     @Test
@@ -56,6 +59,54 @@ public final class KRaftVersionTest {
                     break;
                 default:
                     throw new RuntimeException("Unsupported value " + i);
+            }
+        }
+    }
+
+    @Test
+    public void testKraftVersionRecordVersion() {
+        for (KRaftVersion kraftVersion : KRaftVersion.values()) {
+            switch (kraftVersion) {
+                case KRAFT_VERSION_0:
+                    assertThrows(
+                        IllegalStateException.class,
+                        () -> kraftVersion.kraftVersionRecordVersion()
+                    );
+                    break;
+
+                case KRAFT_VERSION_1:
+                    assertEquals(
+                        ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION,
+                        kraftVersion.kraftVersionRecordVersion()
+                    );
+                    break;
+
+                default:
+                    throw new RuntimeException("Unsupported value " + kraftVersion);
+            }
+        }
+    }
+
+    @Test
+    public void tesVotersRecordVersion() {
+        for (KRaftVersion kraftVersion : KRaftVersion.values()) {
+            switch (kraftVersion) {
+                case KRAFT_VERSION_0:
+                    assertThrows(
+                        IllegalStateException.class,
+                        () -> kraftVersion.votersRecordVersion()
+                    );
+                    break;
+
+                case KRAFT_VERSION_1:
+                    assertEquals(
+                        ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION,
+                        kraftVersion.votersRecordVersion()
+                    );
+                    break;
+
+                default:
+                    throw new RuntimeException("Unsupported value " + kraftVersion);
             }
         }
     }

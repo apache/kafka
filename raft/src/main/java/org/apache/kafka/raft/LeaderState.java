@@ -53,7 +53,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-// TODO: the leader needs to update itself
 /**
  * In the context of LeaderState, an acknowledged voter means one who has acknowledged the current leader by either
  * responding to a `BeginQuorumEpoch` request from the leader or by beginning to send `Fetch` requests.

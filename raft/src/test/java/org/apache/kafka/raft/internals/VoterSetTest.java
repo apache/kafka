@@ -18,6 +18,7 @@ package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.Endpoints;
@@ -114,6 +115,37 @@ public final class VoterSetTest {
             voterSet.removeVoter(voter3.voterKey())
         );
     }
+
+    @Test
+    void testUpdateVoter() {
+        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(IntStream.of(1, 2, 3), true);
+        VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
+
+        assertEquals(Optional.empty(), voterSet.updateVoter(voterNode(4, true)));
+        assertFalse(voterSet.voterNodeNeedsUpdate(voterNode(4, true)));
+        assertEquals(Optional.empty(), voterSet.updateVoter(voterNode(3, true)));
+        assertFalse(voterSet.voterNodeNeedsUpdate(voterNode(3, true)));
+
+        VoterSet.VoterNode voter3 = aVoterMap.get(3);
+        VoterSet.VoterNode newVoter3 = VoterSet.VoterNode.of(
+            voter3.voterKey(),
+            Endpoints.fromInetSocketAddresses(
+                Collections.singletonMap(
+                    ListenerName.normalised("ABC"),
+                    InetSocketAddress.createUnresolved("abc", 1234)
+                )
+            ),
+            new SupportedVersionRange((short) 1, (short) 1)
+        );
+        aVoterMap.put(3, newVoter3);
+
+        assertTrue(voterSet.voterNodeNeedsUpdate(newVoter3));
+        assertEquals(
+            Optional.of(new VoterSet(new HashMap<>(aVoterMap))),
+            voterSet.updateVoter(newVoter3)
+        );
+    }
+
 
     @Test
     void testCannotRemoveToEmptyVoterSet() {

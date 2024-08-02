@@ -545,7 +545,7 @@ public class RaftUtil {
             .setErrorCode(error.code())
             .setErrorMessage(errorMessage);
     }
-    
+
     public static RemoveRaftVoterRequestData removeVoterRequest(
         String clusterId,
         ReplicaKey voter
@@ -567,7 +567,6 @@ public class RaftUtil {
             .setErrorMessage(errorMessage);
     }
 
-    // TODO: add tests
     public static UpdateRaftVoterRequestData updateVoterRequest(
         String clusterId,
         ReplicaKey voter,
@@ -589,7 +588,6 @@ public class RaftUtil {
         return request;
     }
 
-    // TODO: add tests
     public static UpdateRaftVoterResponseData updateVoterResponse(
         Errors error,
         ListenerName listenerName,

@@ -95,7 +95,12 @@ public final class VoterSet {
             .map(address -> new Node(voterId, address.getHostString(), address.getPort()));
     }
 
-    // TODO: write documentation
+    /**
+     * Return true the provided voter node is a voter and would cause a change in the voter set.
+     *
+     * @param updatedVoterNode the updated voter node
+     * @return true if the updated voter node is different than the node in the voter set; otherwise false.
+     */
     public boolean voterNodeNeedsUpdate(VoterNode updatedVoterNode) {
         return Optional.ofNullable(voters.get(updatedVoterNode.voterKey().id()))
             .map(
@@ -219,8 +224,12 @@ public final class VoterSet {
         return Optional.empty();
     }
 
-    // TODO: write tests
-    // TODO: write documentation
+    /**
+     * Updates a voter in the voter set.
+     *
+     * @param voter the updated voter
+     * @return a new voter set if the voter was updated, otherwise {@code Optional.empty()}
+     */
     public Optional<VoterSet> updateVoter(VoterNode voter) {
         VoterNode oldVoter = voters.get(voter.voterKey().id());
         if (oldVoter != null && oldVoter.isVoter(voter.voterKey())) {
