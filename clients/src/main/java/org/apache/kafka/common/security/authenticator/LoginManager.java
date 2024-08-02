@@ -62,12 +62,14 @@ public class LoginManager {
         this.loginMetadata = loginMetadata;
         this.login = Utils.newInstance(loginMetadata.loginClass);
         loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
-        try (AutoCloseable loginResources = this::closeResources) {
+        try {
             loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
             login.configure(configs, jaasContext.name(), jaasContext.configuration(), loginCallbackHandler);
             login.login();
+        } catch (Exception e) {
+            closeResources();
+            throw e;
         }
-        // caught exception will be rethrown here
     }
 
     /**
