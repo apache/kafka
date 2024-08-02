@@ -464,12 +464,12 @@ public class ClusterControlManager {
         }
         ListenerInfo listenerInfo = ListenerInfo.fromControllerRegistrationRequest(request.listeners());
         ControllerFeatureCollection features = new ControllerFeatureCollection();
-        request.features().forEach(feature -> {
+        request.features().forEach(feature ->
             features.add(new RegisterControllerRecord.ControllerFeature().
                 setName(feature.name()).
                 setMaxSupportedVersion(feature.maxSupportedVersion()).
-                setMinSupportedVersion(feature.minSupportedVersion()));
-        });
+                setMinSupportedVersion(feature.minSupportedVersion()))
+        );
         List<ApiMessageAndVersion> records = new ArrayList<>();
         records.add(new ApiMessageAndVersion(new RegisterControllerRecord().
             setControllerId(request.controllerId()).

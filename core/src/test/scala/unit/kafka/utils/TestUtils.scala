@@ -355,7 +355,7 @@ object TestUtils extends Logging {
       props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
     rack.foreach(props.put(ServerConfigs.BROKER_RACK_CONFIG, _))
     // Reduce number of threads per broker
-    props.put(ServerConfigs.NUM_NETWORK_THREADS_CONFIG, "2")
+    props.put(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG, "2")
     props.put(ServerConfigs.BACKGROUND_THREADS_CONFIG, "2")
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })

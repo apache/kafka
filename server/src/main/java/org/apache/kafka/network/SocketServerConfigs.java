@@ -153,6 +153,19 @@ public class SocketServerConfigs {
     public static final int FAILED_AUTHENTICATION_DELAY_MS_DEFAULT = 100;
     public static final String FAILED_AUTHENTICATION_DELAY_MS_DOC = "Connection close delay on failed authentication: this is the time (in milliseconds) by which connection close will be delayed on authentication failure. " +
             String.format("This must be configured to be less than %s to prevent connection timeout.", CONNECTIONS_MAX_IDLE_MS_CONFIG);
+
+    public static final String QUEUED_MAX_REQUESTS_CONFIG = "queued.max.requests";
+    public static final int QUEUED_MAX_REQUESTS_DEFAULT = 500;
+    public static final String QUEUED_MAX_REQUESTS_DOC = "The number of queued requests allowed for data-plane, before blocking the network threads";
+
+    public static final String QUEUED_MAX_BYTES_CONFIG = "queued.max.request.bytes";
+    public static final int QUEUED_MAX_REQUEST_BYTES_DEFAULT = -1;
+    public static final String QUEUED_MAX_REQUEST_BYTES_DOC = "The number of queued bytes allowed before no more requests are read";
+
+    public static final String NUM_NETWORK_THREADS_CONFIG = "num.network.threads";
+    public static final int NUM_NETWORK_THREADS_DEFAULT = 3;
+    public static final String NUM_NETWORK_THREADS_DOC = "The number of threads that the server uses for receiving requests from the network and sending responses to the network. Noted: each listener (except for controller listener) creates its own thread pool.";
+
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             .define(LISTENERS_CONFIG, STRING, LISTENERS_DEFAULT, HIGH, LISTENERS_DOC)
             .define(ADVERTISED_LISTENERS_CONFIG, STRING, null, HIGH, ADVERTISED_LISTENERS_DOC)
@@ -167,5 +180,8 @@ public class SocketServerConfigs {
             .define(MAX_CONNECTIONS_CONFIG, INT, MAX_CONNECTIONS_DEFAULT, atLeast(0), MEDIUM, MAX_CONNECTIONS_DOC)
             .define(MAX_CONNECTION_CREATION_RATE_CONFIG, INT, MAX_CONNECTION_CREATION_RATE_DEFAULT, atLeast(0), MEDIUM, MAX_CONNECTION_CREATION_RATE_DOC)
             .define(CONNECTIONS_MAX_IDLE_MS_CONFIG, LONG, CONNECTIONS_MAX_IDLE_MS_DEFAULT, MEDIUM, CONNECTIONS_MAX_IDLE_MS_DOC)
-            .define(FAILED_AUTHENTICATION_DELAY_MS_CONFIG, INT, FAILED_AUTHENTICATION_DELAY_MS_DEFAULT, atLeast(0), LOW, FAILED_AUTHENTICATION_DELAY_MS_DOC);
+            .define(FAILED_AUTHENTICATION_DELAY_MS_CONFIG, INT, FAILED_AUTHENTICATION_DELAY_MS_DEFAULT, atLeast(0), LOW, FAILED_AUTHENTICATION_DELAY_MS_DOC)
+            .define(QUEUED_MAX_REQUESTS_CONFIG, INT, QUEUED_MAX_REQUESTS_DEFAULT, atLeast(1), HIGH, QUEUED_MAX_REQUESTS_DOC)
+            .define(QUEUED_MAX_BYTES_CONFIG, LONG, QUEUED_MAX_REQUEST_BYTES_DEFAULT, MEDIUM, QUEUED_MAX_REQUEST_BYTES_DOC)
+            .define(NUM_NETWORK_THREADS_CONFIG, INT, NUM_NETWORK_THREADS_DEFAULT, atLeast(1), HIGH, NUM_NETWORK_THREADS_DOC);
 }
