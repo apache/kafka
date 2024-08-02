@@ -956,7 +956,7 @@ public class ConnectWorkerIntegrationTest {
     }
 
     @Test
-    public void testNoDuplicateTaskAssignmentOnWorkerPollTimeoutExpiry() throws Exception {
+    public void testWorkerShouldRevokeAssignmentsOnPollTimeoutExpiry() throws Exception {
         String statusTopic = "status-topic";
         // This is a fabricated test to ensure that a poll timeout expiry happens. The tick thread awaits on
         // task#stop method which is blocked. The timeouts have been set accordingly
@@ -1006,12 +1006,15 @@ public class ConnectWorkerIntegrationTest {
         // ICR here.
         String taskIdToVerify = new ConnectorTaskId(CONNECTOR_NAME + "-2", 1).toString();
 
-        try {
-            connect.restartTask(CONNECTOR_NAME + "-1", 0);
-        } catch (Exception e) {
-            log.error("Exception while restarting task", e);
-        }
-
+        // Running the restart on a separate thread to let the rest of the steps execute in parallel.
+        Thread restartThread = new Thread(() -> {
+            try {
+                connect.restartTask(CONNECTOR_NAME + "-1", 0);
+            } catch (Exception e) {
+                log.error("Exception while restarting task", e);
+            }
+        });
+        restartThread.start();
         // rebalance.timeout.ms + scheduled.rebalance.delay + 5s buffer.
         Thread.sleep(Duration.ofSeconds(20).toMillis());
         List<Map<String, Object>> statuses = new ArrayList<>();
@@ -1061,6 +1064,7 @@ public class ConnectWorkerIntegrationTest {
             CONNECTOR_NAME + "-2", 2, "connector and tasks did not start in time"
         );
 
+        restartThread.interrupt();
         BlockingConnectorTest.Block.reset();
     }
 
