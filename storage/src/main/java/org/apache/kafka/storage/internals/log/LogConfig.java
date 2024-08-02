@@ -114,13 +114,13 @@ public class LogConfig extends AbstractConfig {
 
         public final boolean remoteStorageEnable;
         public final boolean remoteLogDeleteOnDisable;
-        public final boolean remoteCopyDisabled;
+        public final boolean remoteLogCopyDisable;
         public final long localRetentionMs;
         public final long localRetentionBytes;
 
         private RemoteLogConfig(LogConfig config) {
             this.remoteStorageEnable = config.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
-            this.remoteCopyDisabled = config.getBoolean(TopicConfig.REMOTE_COPY_DISABLED_CONFIG);
+            this.remoteLogCopyDisable = config.getBoolean(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG);
             this.remoteLogDeleteOnDisable = config.getBoolean(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG);
             this.localRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
             this.localRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
@@ -130,7 +130,7 @@ public class LogConfig extends AbstractConfig {
         public String toString() {
             return "RemoteLogConfig{" +
                     "remoteStorageEnable=" + remoteStorageEnable +
-                    ", remoteCopyDisabled=" + remoteCopyDisabled +
+                    ", remoteLogCopyDisable=" + remoteLogCopyDisable +
                     ", remoteLogDeleteOnDisable=" + remoteLogDeleteOnDisable +
                     ", localRetentionMs=" + localRetentionMs +
                     ", localRetentionBytes=" + localRetentionBytes +
@@ -208,7 +208,7 @@ public class LogConfig extends AbstractConfig {
     public static final Set<String> CONFIGS_WITH_NO_SERVER_DEFAULTS = Collections.unmodifiableSet(Utils.mkSet(
             TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG,
             TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG,
-            TopicConfig.REMOTE_COPY_DISABLED_CONFIG,
+            TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG,
             QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
             QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     ));
@@ -329,7 +329,7 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.LOCAL_LOG_RETENTION_MS_DOC)
                 .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
-                .define(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_COPY_DISABLED_DOC)
+                .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC);
     }
 
@@ -515,8 +515,8 @@ public class LogConfig extends AbstractConfig {
         return remoteLogConfig.remoteLogDeleteOnDisable;
     }
 
-    public Boolean remoteCopyDisabled() {
-        return remoteLogConfig.remoteCopyDisabled;
+    public Boolean remoteLogCopyDisable() {
+        return remoteLogConfig.remoteLogCopyDisable;
     }
 
     public long localRetentionMs() {
@@ -648,17 +648,17 @@ public class LogConfig extends AbstractConfig {
         boolean isRemoteLogDeleteOnDisable = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, false);
         if (wasRemoteLogEnabled && !isRemoteLogStorageEnabled && !isRemoteLogDeleteOnDisable) {
             throw new InvalidConfigurationException("It is invalid to disable remote storage without deleting remote data. " +
-                    "If you want to keep the remote data and turn to read only, please set `remote.storage.enable=true,remote.copy.disabled=true`. " +
+                    "If you want to keep the remote data and turn to read only, please set `remote.storage.enable=true,remote.log.copy.disable=true`. " +
                     "If you want to disable remote storage and delete all remote data, please set `remote.storage.enable=false,remote.log.delete.on.disable=true`.");
         }
     }
 
     public static void validateNoInvalidRemoteStorageConfigsInZK(Map<?, ?> newConfigs) {
         boolean isRemoteLogDeleteOnDisable = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, false);
-        boolean isRemoteLogCopyDisabled = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, false);
+        boolean isRemoteLogCopyDisabled = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, false);
         if (isRemoteLogDeleteOnDisable || isRemoteLogCopyDisabled) {
             throw new InvalidConfigurationException("It is invalid to set `remote.log.delete.on.disable` or " +
-                    "`remote.copy.disabled` under Zookeeper's mode.");
+                    "`remote.log.copy.disable` under Zookeeper's mode.");
         }
     }
 

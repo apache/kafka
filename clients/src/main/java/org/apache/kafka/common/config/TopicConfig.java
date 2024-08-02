@@ -93,8 +93,8 @@ public class TopicConfig {
             "deletes the old segments. Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
             "less than or equal to `retention.bytes` value.";
 
-    public static final String REMOTE_COPY_DISABLED_CONFIG = "remote.copy.disabled";
-    public static final String REMOTE_COPY_DISABLED_DOC = "Determines whether tiered data for a topic should become read only," +
+    public static final String REMOTE_LOG_COPY_DISABLE_CONFIG = "remote.log.copy.disable";
+    public static final String REMOTE_LOG_COPY_DISABLE_DOC = "Determines whether tiered data for a topic should become read only," +
             " and no more data uploading on a topic.";
 
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";

@@ -976,7 +976,7 @@ class LogManager(logDirs: Seq[File],
     // Otherwise we risk someone creating a tiered-topic, disabling Tiered Storage cluster-wide and the check
     // failing since the logs for the topic are non-existent.
     LogConfig.validateRemoteStorageOnlyIfSystemEnabled(newLogConfig.values(), isRemoteLogStorageSystemEnabled, true)
-    // `remote.log.delete.on.disable` and `remote.copy.disabled` are unsupported in ZK mode
+    // `remote.log.delete.on.disable` and `remote.log.copy.disable` are unsupported in ZK mode
     if (fromZK) {
       LogConfig.validateNoInvalidRemoteStorageConfigsInZK(newLogConfig.values())
     }

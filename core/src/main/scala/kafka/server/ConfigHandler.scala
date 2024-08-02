@@ -69,7 +69,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
 
     val logs = logManager.logsByTopic(topic)
     val wasRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
-    val wasCopyDisabled = logs.exists(_.config.remoteCopyDisabled())
+    val wasCopyDisabled = logs.exists(_.config.remoteLogCopyDisable())
 
     // kafkaController is only defined in Zookeeper's mode
     logManager.updateTopicConfig(topic, props, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
@@ -82,7 +82,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
                                                      wasRemoteLogEnabled: Boolean,
                                                      wasCopyDisabled: Boolean): Unit = {
     val isRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
-    val isCopyDisabled = logs.exists(_.config.remoteCopyDisabled())
+    val isCopyDisabled = logs.exists(_.config.remoteLogCopyDisable())
     val isDeleteOnDisable = logs.exists(_.config.remoteLogDeleteOnDisable())
 
     val (leaderPartitions, followerPartitions) =

@@ -61,7 +61,7 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
                 mkEntry(p0, Arrays.asList(broker0, broker1))
         );
         final Map<String, String> disableCopy = new HashMap<>();
-        disableCopy.put(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, "true");
+        disableCopy.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true");
 
         final Map<String, String> deleteOnDisable = new HashMap<>();
         deleteOnDisable.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
@@ -78,7 +78,7 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
                         new KeyValueSpec("k2", "v2"))
                 // disable remote log copy
                 .updateTopicConfig(topicA,
-                        Collections.singletonMap(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, "true"),
+                        Collections.singletonMap(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
                         Collections.emptyList())
 
                 // make sure we can still consume from the beginning of the topic to read data from local and remote storage
@@ -87,7 +87,7 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
 
                 // re-enable remote log copy
                 .updateTopicConfig(topicA,
-                        Collections.singletonMap(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, "false"),
+                        Collections.singletonMap(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "false"),
                         Collections.emptyList())
 
                 // make sure the logs can be offloaded

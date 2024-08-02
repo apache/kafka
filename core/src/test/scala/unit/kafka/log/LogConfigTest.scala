@@ -100,7 +100,7 @@ class LogConfigTest {
       case TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-2")
       case TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-1")
       case TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-0.1")
-      case TopicConfig.REMOTE_COPY_DISABLED_CONFIG => assertPropertyInvalid(name, "not_a_number", "remove", "0")
+      case TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG => assertPropertyInvalid(name, "not_a_number", "remove", "0")
       case TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG => assertPropertyInvalid(name, "not_a_number", "remove", "0")
 
       case _ => assertPropertyInvalid(name, "not_a_number", "-1")
@@ -358,7 +358,7 @@ class LogConfigTest {
         () => LogConfig.validate(Collections.singletonMap(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"),
           logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(), false))
       assertTrue(message.getMessage.contains("It is invalid to disable remote storage without deleting remote data. " +
-        "If you want to keep the remote data and turn to read only, please set `remote.storage.enable=true,remote.copy.disabled=true`. " +
+        "If you want to keep the remote data and turn to read only, please set `remote.storage.enable=true,remote.log.copy.disable=true`. " +
         "If you want to disable remote storage and delete all remote data, please set `remote.storage.enable=false,remote.log.delete.on.disable=true`."))
 
 
@@ -443,7 +443,7 @@ class LogConfigTest {
   @ValueSource(booleans = Array(true, false))
   def testValidRemoteLogCopyDisabled(copyDisabled: Boolean): Unit = {
     val logProps = new Properties
-    logProps.put(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, copyDisabled.toString)
+    logProps.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, copyDisabled.toString)
     LogConfig.validate(logProps)
   }
 
@@ -456,7 +456,7 @@ class LogConfigTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, TopicConfig.REMOTE_COPY_DISABLED_CONFIG))
+  @ValueSource(strings = Array(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG))
   def testInValidRemoteConfigsInZK(configKey: String): Unit = {
     val kafkaProps = TestUtils.createDummyBrokerConfig()
     kafkaProps.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
@@ -467,7 +467,7 @@ class LogConfigTest {
     val message = assertThrows(classOf[InvalidConfigurationException],
       () => LogConfig.validate(Collections.emptyMap(), logProps, kafkaConfig.extractLogConfigMap, true, true))
     assertTrue(message.getMessage.contains("It is invalid to set `remote.log.delete.on.disable` or " +
-      "`remote.copy.disabled` under Zookeeper's mode."))
+      "`remote.log.copy.disable` under Zookeeper's mode."))
   }
 
   /* Verify that when the deprecated config LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG has non default value the new configs

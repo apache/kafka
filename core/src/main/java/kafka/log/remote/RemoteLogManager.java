@@ -439,11 +439,11 @@ public class RemoteLogManager implements Closeable {
 
         Map<TopicIdPartition, Boolean> leaderPartitions = filterPartitions(partitionsBecomeLeader)
                 .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition()),
-                        p -> p.log().exists(log -> log.config().remoteCopyDisabled())));
+                        p -> p.log().exists(log -> log.config().remoteLogCopyDisable())));
 
         Map<TopicIdPartition, Boolean> followerPartitions = filterPartitions(partitionsBecomeFollower)
                 .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition()),
-                        p -> p.log().exists(log -> log.config().remoteCopyDisabled())));
+                        p -> p.log().exists(log -> log.config().remoteLogCopyDisable())));
 
         if (!leaderPartitions.isEmpty() || !followerPartitions.isEmpty()) {
             LOGGER.debug("Effective topic partitions after filtering compact and internal topics, leaders: {} and followers: {}",
@@ -1821,15 +1821,15 @@ public class RemoteLogManager implements Closeable {
                 new RemoteLogReader(fetchInfo, this, callback, brokerTopicStats, rlmFetchQuotaManager, remoteReadTimer));
     }
 
-    void doHandleLeaderPartition(TopicIdPartition topicPartition, Boolean remoteCopyDisabled) {
+    void doHandleLeaderPartition(TopicIdPartition topicPartition, Boolean remoteLogCopyDisable) {
         RLMTaskWithFuture followerRLMTaskWithFuture = followerRLMTasks.remove(topicPartition);
         if (followerRLMTaskWithFuture != null) {
             LOGGER.info("Cancelling the follower task: {}", followerRLMTaskWithFuture.rlmTask);
             followerRLMTaskWithFuture.cancel();
         }
 
-        // Only create copy task when remoteCopyDisabled is disabled
-        if (!remoteCopyDisabled) {
+        // Only create copy task when remoteLogCopyDisable is disabled
+        if (!remoteLogCopyDisable) {
             leaderCopyRLMTasks.computeIfAbsent(topicPartition, topicIdPartition -> {
                 RLMCopyTask task = new RLMCopyTask(topicIdPartition, this.rlmConfig.remoteLogMetadataCustomMetadataMaxBytes());
                 // set this upfront when it is getting initialized instead of doing it after scheduling.

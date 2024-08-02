@@ -156,12 +156,12 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
         topicConfig = topicConfig))
   }
 
-  // `remote.log.delete.on.disable` and `remote.copy.disabled` only works in KRaft mode.
+  // `remote.log.delete.on.disable` and `remote.log.copy.disable` only works in KRaft mode.
   @ParameterizedTest
   @CsvSource(Array("kraft,true,true", "kraft,true,false", "kraft,false,true", "kraft,false,false"))
   def testCreateRemoteTopicWithCopyDisabledAndDeleteOnDisable(quorum: String, copyDisabled: Boolean, deleteOnDisable: Boolean): Unit = {
     val topicConfig = new Properties()
-    topicConfig.put(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, copyDisabled.toString)
+    topicConfig.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, copyDisabled.toString)
     topicConfig.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, deleteOnDisable.toString)
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
@@ -316,7 +316,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   @ValueSource(strings = Array("zk"))
   def testUpdateInvalidRemoteStorageConfigUnderZK(quorum: String): Unit = {
     val admin = createAdminClient()
-    val errorMsg = "It is invalid to set `remote.log.delete.on.disable` or `remote.copy.disabled` under Zookeeper's mode."
+    val errorMsg = "It is invalid to set `remote.log.delete.on.disable` or `remote.log.copy.disable` under Zookeeper's mode."
     val topicConfig = new Properties
     topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
@@ -325,7 +325,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
       util.Arrays.asList(
-        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_COPY_DISABLED_CONFIG, "true"),
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
           AlterConfigOp.OpType.SET),
       ))
     assertThrowsException(classOf[InvalidConfigurationException],
@@ -439,10 +439,10 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
             topicConfig.getProperty(TopicConfig.RETENTION_BYTES_CONFIG).toLong ==
               logBuffer.head.config.retentionSize
         }
-        if (topicConfig.contains(TopicConfig.REMOTE_COPY_DISABLED_CONFIG)) {
+        if (topicConfig.contains(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG)) {
           result = result &&
-            topicConfig.getProperty(TopicConfig.REMOTE_COPY_DISABLED_CONFIG).toBoolean ==
-              logBuffer.head.config.remoteCopyDisabled()
+            topicConfig.getProperty(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG).toBoolean ==
+              logBuffer.head.config.remoteLogCopyDisable()
         }
         if (topicConfig.contains(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG)) {
           result = result &&
