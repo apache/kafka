@@ -17,6 +17,8 @@
 
 package org.apache.kafka.controller.metrics;
 
+import org.apache.kafka.common.utils.MockTime;
+
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
@@ -31,7 +33,6 @@ import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-import org.apache.kafka.common.utils.MockTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ControllerMetadataMetricsTest {

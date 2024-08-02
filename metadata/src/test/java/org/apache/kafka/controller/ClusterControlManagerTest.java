@@ -699,6 +699,7 @@ public class ClusterControlManagerTest {
             setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
             setFeatureControlManager(new FeatureControlManager.Builder().build()).
             setBrokerUncleanShutdownHandler((brokerId, records) -> { }).
+            setNodeId(CONTROLLER_ID).
             build();
         clusterControl.activate();
         RecordTestUtils.replayAll(clusterControl, clusterControl.registerBroker(
