@@ -959,7 +959,7 @@ rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cl
 
     @Override
     public ProcessingHandlerResponse handle(final ErrorHandlerContext context,
-                                                 final Record<?, ?> record,
+                                            final Record<?, ?> record,
                                                  final Exception exception) {
 
         log.warn("Exception caught during message processing, sending to the dead queue topic; " +
