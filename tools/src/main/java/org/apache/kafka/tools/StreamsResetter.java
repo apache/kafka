@@ -93,7 +93,6 @@ public class StreamsResetter {
     private static final String USAGE = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
             + "* This tool resets offsets of input topics to the earliest available offset (by default), or to a specific defined position"
-            + " and it skips to the end of intermediate topics (topics that are input and output topics.\n"
             + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
             + "\"<application.id>-\").\n"
             + "The tool finds these internal topics automatically. If the topics flagged automatically for deletion by "
