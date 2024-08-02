@@ -142,7 +142,7 @@ public class SharePartitionManagerTest {
                 new TopicIdPartition(topicId, new TopicPartition("foo", 0)),
                 new ShareFetchRequest.SharePartitionData(topicId, 4000));
         assertThrows(InvalidRequestException.class,
-                () -> sharePartitionManager.newContext("grp", shareFetchData, Collections.emptyList(), new ShareFetchMetadata(Uuid.ZERO_UUID, -1), true));
+                () -> sharePartitionManager.newContext("grp", shareFetchData, Collections.emptyList(), newReqMetadata, true));
 
         // shareFetchData is not empty, but the maxBytes of topic partition is 0, which means this is added only for acknowledgements.
         // New context should be created successfully

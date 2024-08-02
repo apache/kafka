@@ -4061,8 +4061,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Creating the shareFetchContext for Share Session Handling. if context creation fails, the request is failed directly here.
       shareFetchContext = sharePartitionManagerInstance.newContext(groupId, shareFetchData, forgottenTopics, newReqMetadata, isAcknowledgeDataPresent)
     } catch {
-      case e:
-        Exception => requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e))
+      case e: Exception =>
+        requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e))
         return
     }
 
@@ -4280,11 +4280,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   // Visible for Testing
   def handleAcknowledgements(acknowledgementData: mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]],
-                              erroneous: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData],
-                              sharePartitionManagerInstance: SharePartitionManager,
-                              authorizedTopics: Set[String],
-                              groupId: String,
-                              memberId: String): CompletableFuture[Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]] = {
+                             erroneous: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData],
+                             sharePartitionManagerInstance: SharePartitionManager,
+                             authorizedTopics: Set[String],
+                             groupId: String,
+                             memberId: String): CompletableFuture[Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]] = {
 
     val erroneousTopicIdPartitions = validateAcknowledgementBatches(acknowledgementData, erroneous)
     erroneousTopicIdPartitions.foreach(tp => acknowledgementData.remove(tp))
@@ -4367,11 +4367,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     CompletableFuture.completedFuture[Unit](())
   }
 
-  private def getAcknowledgeBatchesFromShareFetchRequest(
-                                                  shareFetchRequest: ShareFetchRequest,
-                                                  topicIdNames: util.Map[Uuid, String],
-                                                  erroneous: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData],
-                                                ): mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]] = {
+  private def getAcknowledgeBatchesFromShareFetchRequest(shareFetchRequest: ShareFetchRequest,
+                                                         topicIdNames: util.Map[Uuid, String],
+                                                         erroneous: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
+                                                        ): mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]] = {
 
     val acknowledgeBatchesMap = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
     shareFetchRequest.data().topics().forEach{ topic =>
@@ -4449,7 +4448,6 @@ class KafkaApis(val requestChannel: RequestChannel,
                                         request: RequestChannel.Request,
                                         topicIdNames: util.Map[Uuid, String],
                                         shareFetchContext: ShareFetchContext): ShareFetchResponse = {
-
     val clientId = request.header.clientId
     val versionId = request.header.apiVersion
     val shareFetchRequest = request.body[ShareFetchRequest]
