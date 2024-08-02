@@ -41,6 +41,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
@@ -271,6 +272,36 @@ public class GetOffsetShellTest {
             offsets.forEach(
                     row -> assertTrue(row.offset >= 0 && row.offset <= Integer.parseInt(row.name.replace("topic", "")))
             );
+        }
+    }
+
+    @ClusterTest
+    public void testGetOffsetsByEarliestLocalSpec() {
+        setUp();
+
+        for (String time : new String[] {"-4", "earliest-local"}) {
+            List<Row> offsets = executeAndParse("--topic-partitions", "topic.*:0", "--time", time);
+            // as remote log not enabled, the result should be the same as earliest offsetspec
+            List<Row> expected = Arrays.asList(
+                    new Row("topic1", 0, 0L),
+                    new Row("topic2", 0, 0L),
+                    new Row("topic3", 0, 0L),
+                    new Row("topic4", 0, 0L)
+            );
+
+            assertEquals(expected, offsets);
+        }
+    }
+
+    @ClusterTest
+    public void testGetOffsetsByLatestTieredSpec() {
+        setUp();
+
+        for (String time : new String[] {"-5", "latest-tiered"}) {
+            List<Row> offsets = executeAndParse("--topic-partitions", "topic.*:0", "--time", time);
+            // as remote log not enabled, broker return unknown offset for each topic partition and these
+            // unknown offsets are ignored by GetOffsetShell hence we have empty result here.
+            assertEquals(Collections.emptyList(), offsets);
         }
     }
 

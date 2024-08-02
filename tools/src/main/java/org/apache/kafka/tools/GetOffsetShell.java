@@ -283,6 +283,10 @@ public class GetOffsetShell {
                 return OffsetSpec.latest();
             case "max-timestamp":
                 return OffsetSpec.maxTimestamp();
+            case "earliest-local":
+                return OffsetSpec.earliestLocalSpec();
+            case "latest-tiered":
+                return OffsetSpec.latestTierSpec();
             default:
                 long timestamp;
 
@@ -299,6 +303,10 @@ public class GetOffsetShell {
                     return OffsetSpec.latest();
                 } else if (timestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
                     return OffsetSpec.maxTimestamp();
+                } else if (timestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
+                    return OffsetSpec.earliestLocalSpec();
+                } else if (timestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
+                    return OffsetSpec.latestTierSpec();
                 } else {
                     return OffsetSpec.forTimestamp(timestamp);
                 }
